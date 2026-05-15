@@ -123,8 +123,14 @@ function indexFunctionDecl(qname: string, fn: FunctionDeclaration, out: Map<stri
     }
 }
 
+// Cap is a safety bound, not a correctness limit — the loop terminates at the
+// first pass with no changes. Cap exists only to guarantee progress on a malformed
+// (cyclic) input. If a project ever hits the cap, the warning surfaces the chain
+// instead of silently truncating a half-resolved pattern.
+const CROSS_REF_PASSES_CAP = 16;
+
 function resolveCrossReferences(map: Map<string, IndexEntry>): void {
-    for (let pass = 0; pass < 3; pass++) {
+    for (let pass = 0; pass < CROSS_REF_PASSES_CAP; pass++) {
         let changed = false;
         for (const [key, entry] of map) {
             if (entry.kind !== 'pattern') continue;
@@ -157,8 +163,12 @@ function resolveCrossReferences(map: Map<string, IndexEntry>): void {
                 changed = true;
             }
         }
-        if (!changed) break;
+        if (!changed) return;
     }
+    process.stderr.write(
+        `[nats.constant-index] WARNING: cross-reference loop hit pass cap (${CROSS_REF_PASSES_CAP}); ` +
+            `some patterns may remain unresolved. Likely cause: cyclic const definitions.\n`,
+    );
 }
 
 const EXCLUDED_INDEX_SUBSTRINGS = ['/node_modules/', '/dist/', '/.claude/', '/.worktrees/'];

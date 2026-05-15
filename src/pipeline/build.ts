@@ -69,7 +69,7 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         enumerateHandlers(cfg),
         enumerateSenders(cfg),
     ]);
-    const natsValidation = buildNatsReport(cfg.id, callSites, [...handlers, ...senders]);
+    const natsValidation = buildNatsReport(callSites, [...handlers, ...senders]);
     {
         const v = natsValidation.summary;
         process.stdout.write(
@@ -95,7 +95,6 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
     process.stdout.write(`validating TypeORM against ground truth...\n`);
     const typeormGT = await enumerateTypeOrmGroundTruth(cfg);
     const typeormValidation = buildTypeOrmReport(
-        cfg.id,
         typeorm.sites,
         typeorm.entities.entries(),
         typeormGT,
@@ -108,9 +107,9 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
     }
 
     process.stdout.write(`mapping TypeORM to graph...\n`);
-    const typeormMapped = mapTypeOrmToGraph(typeorm.sites, ownership);
+    const typeormMapped = mapTypeOrmToGraph(typeorm.sites, ownership, typeorm.entities.warnings);
     process.stdout.write(
-        `  nodes: ${typeormMapped.nodes.length}, edges: ${typeormMapped.edges.length}, unresolved: ${typeormMapped.diagnostics.unresolvedEntities.length}, unowned: ${typeormMapped.diagnostics.unowned.length}\n`,
+        `  nodes: ${typeormMapped.nodes.length}, edges: ${typeormMapped.edges.length}, unresolved: ${typeormMapped.diagnostics.unresolvedEntities.length}, unowned: ${typeormMapped.diagnostics.unowned.length}, entityWarnings: ${typeormMapped.diagnostics.entityDecoratorWarnings.length}\n`,
     );
 
     // ---- Compose ----

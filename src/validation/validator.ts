@@ -10,7 +10,6 @@ import type { GroundTruthEntry, NatsCallSite, NatsValidationReport } from '../co
  * both required to be matched, not just one of them.
  */
 export function buildReport(
-    projectId: string,
     extracted: NatsCallSite[],
     groundTruth: GroundTruthEntry[],
 ): NatsValidationReport {
@@ -60,8 +59,6 @@ export function buildReport(
     );
 
     return {
-        projectId,
-        timestamp: new Date().toISOString(),
         summary: {
             recallHandlers: handlersGT > 0 ? handlersFound / handlersGT : 1,
             recallSenders: sendersGT > 0 ? sendersFound / sendersGT : 1,

@@ -27,8 +27,6 @@ export interface NatsCallSite {
     location: SourceLoc;
     via: string;
     enclosingClass?: string;
-    /** Resolved by mapper from location.file. Set during graph mapping, not extraction. */
-    owner?: GraphOwnerRef;
 }
 
 export interface WrapperApi {
@@ -123,8 +121,6 @@ export interface TypeOrmInjectionSite {
     resolvedEntity: TypeOrmEntity | null;
     location: SourceLoc;
     enclosingClass?: string;
-    /** Resolved by mapper from location.file. Set during graph mapping, not extraction. */
-    owner?: GraphOwnerRef;
 }
 
 // ============================================================================
@@ -144,15 +140,26 @@ export interface NatsDiagnostics {
     };
 }
 
+export interface TypeOrmEntityDecoratorWarning {
+    className: string;
+    file: string;
+    line: number;
+    reason: 'object-literal-missing-name' | 'non-static-argument';
+    argKind?: string;
+}
+
 export interface TypeOrmDiagnostics {
     /** `@InjectRepository(X)` where X isn't a known `@Entity` (likely external or non-entity). */
     unresolvedEntities: TypeOrmInjectionSite[];
     /** Injection sites outside apps/ and libs/. */
     unowned: TypeOrmInjectionSite[];
+    /** `@Entity(...)` decorators that fell back to snake_case or couldn't be indexed at all. */
+    entityDecoratorWarnings: TypeOrmEntityDecoratorWarning[];
     counts: {
         resolved: number;
         unresolvedEntity: number;
         unowned: number;
+        entityDecoratorWarnings: number;
     };
 }
 
@@ -175,8 +182,6 @@ export interface GroundTruthEntry {
 }
 
 export interface NatsValidationReport {
-    projectId: string;
-    timestamp: string;
     summary: {
         recallHandlers: number;
         recallSenders: number;
@@ -202,8 +207,6 @@ export interface TypeOrmGroundTruthEntry {
 }
 
 export interface TypeOrmValidationReport {
-    projectId: string;
-    timestamp: string;
     summary: {
         recallInjections: number;
         recallEntities: number;

@@ -3,6 +3,7 @@ import type {
     GraphNode,
     GraphOwnerRef,
     TypeOrmDiagnostics,
+    TypeOrmEntityDecoratorWarning,
     TypeOrmInjectionSite,
 } from '../core/types.js';
 import { OwnershipRegistry } from '../core/service-registry.js';
@@ -24,6 +25,7 @@ export interface MapTypeOrmResult {
 export function mapTypeOrmToGraph(
     sites: TypeOrmInjectionSite[],
     ownership: OwnershipRegistry,
+    entityWarnings: TypeOrmEntityDecoratorWarning[] = [],
 ): MapTypeOrmResult {
     const ownerNodes = new Map<string, GraphNode>();
     const tableNodes = new Map<string, GraphNode>();
@@ -73,7 +75,7 @@ export function mapTypeOrmToGraph(
                 meta: {
                     entityClass: s.resolvedEntity.className,
                     propertyName: s.propertyName,
-                    ...(s.enclosingClass ? { enclosingClass: s.enclosingClass } : {}),
+                    ...(s.enclosingClass !== undefined ? { enclosingClass: s.enclosingClass } : {}),
                 },
             });
         }
@@ -85,10 +87,12 @@ export function mapTypeOrmToGraph(
         diagnostics: {
             unresolvedEntities,
             unowned,
+            entityDecoratorWarnings: entityWarnings,
             counts: {
                 resolved: resolvedCount,
                 unresolvedEntity: unresolvedEntities.length,
                 unowned: unowned.length,
+                entityDecoratorWarnings: entityWarnings.length,
             },
         },
     };

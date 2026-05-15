@@ -87,7 +87,6 @@ export async function enumerateTypeOrmGroundTruth(
 }
 
 export function buildTypeOrmReport(
-    projectId: string,
     injections: TypeOrmInjectionSite[],
     entities: TypeOrmEntity[],
     groundTruth: TypeOrmGroundTruthEntry[],
@@ -124,8 +123,6 @@ export function buildTypeOrmReport(
     const resolvedCount = injections.filter((s) => s.resolvedEntity !== null).length;
 
     return {
-        projectId,
-        timestamp: new Date().toISOString(),
         summary: {
             recallInjections: gtInj.length > 0 ? (gtInj.length - missedInjections.length) / gtInj.length : 1,
             recallEntities: gtEnt.length > 0 ? (gtEnt.length - missedEntities.length) / gtEnt.length : 1,

@@ -22,11 +22,7 @@ import type { ArchGraphConfig } from '../../core/config.js';
 import type { NatsCallSite, ResolvedSubject, SourceLoc, WrapperApi } from '../../core/types.js';
 import { applyFnTemplate, buildConstantIndex, ConstantIndex } from './constant-index.js';
 
-/**
- * NATS extractor — finds publishers, subscribers, and resolves subject strings.
- * Validated in POC on 5 projects (detection 100%, classification 99.3-100%).
- * See /poc/src/extractors/nats.extractor.ts for the original.
- */
+/** NATS extractor — finds publishers, subscribers, and resolves subject strings. */
 
 const STANDARD_PUBLISH: WrapperApi[] = [
     { class: 'ClientProxy', methods: ['send', 'emit'] },
@@ -34,6 +30,8 @@ const STANDARD_PUBLISH: WrapperApi[] = [
 ];
 const STANDARD_SUBSCRIBE_DECORATORS = new Set(['MessagePattern', 'EventPattern']);
 
+// Deepest chain observed in the 5-project corpus is 4; 6 leaves headroom while
+// still terminating quickly on cycles (resolver guards both depth and visited symbols).
 const MAX_RESOLVE_DEPTH = 6;
 
 interface ExtractorCtx {
@@ -58,18 +56,59 @@ export async function extractNats(cfg: ArchGraphConfig, project: Project): Promi
         constIndex,
     };
 
+    verifyWrapperClasses(ctx);
+
+    let totalFiles = 0;
+    let droppedByImportFilter = 0;
+    let collectErrors = 0;
     const out: NatsCallSite[] = [];
     for (const sf of project.getSourceFiles()) {
         if (isExcluded(sf, cfg)) continue;
+        totalFiles += 1;
         try {
-            collectFromFile(sf, ctx, out);
+            const usedPreFilter = collectFromFile(sf, ctx, out);
+            if (!usedPreFilter) droppedByImportFilter += 1;
         } catch (err) {
+            collectErrors += 1;
             process.stderr.write(
                 `[nats.extractor] error in ${sf.getFilePath()}: ${(err as Error).message}\n`,
             );
         }
     }
+    process.stdout.write(
+        `    files: ${totalFiles}, dropped by import filter: ${droppedByImportFilter}, collect errors: ${collectErrors}\n`,
+    );
+    // Catch the compounding failure mode: silent per-file errors must not silently
+    // shrink the corpus the gate is measured against.
+    const errorRate = totalFiles > 0 ? collectErrors / totalFiles : 0;
+    if (errorRate > 0.01) {
+        throw new Error(`nats.extractor: ${collectErrors}/${totalFiles} files errored (>1%)`);
+    }
     return out;
+}
+
+function verifyWrapperClasses(ctx: ExtractorCtx): void {
+    // Misconfigured wrapper class -> zero matches -> recall=1.0 over zero ground-truth.
+    // Surface it loudly here so the gate's invariant ("zero GT => fail") has a clear cause.
+    const configured = [
+        ...(ctx.cfg.nats?.wrapperPublishApis ?? []),
+        ...(ctx.cfg.nats?.wrapperSubscribeApis ?? []),
+    ];
+    if (configured.length === 0) return;
+    const seen = new Set<string>();
+    for (const sf of ctx.project.getSourceFiles()) {
+        if (isExcluded(sf, ctx.cfg)) continue;
+        for (const cls of sf.getClasses()) {
+            const name = cls.getName();
+            if (name) seen.add(name);
+        }
+    }
+    const missing = configured.map((api) => api.class).filter((c) => !seen.has(c));
+    if (missing.length > 0) {
+        process.stderr.write(
+            `[nats.extractor] WARNING: configured wrapper classes not declared anywhere: ${[...new Set(missing)].join(', ')}\n`,
+        );
+    }
 }
 
 const EXCLUDED_SUBSTRINGS = ['/node_modules/', '/dist/', '/.claude/', '/.worktrees/'];
@@ -97,7 +136,8 @@ function escapeReg(s: string): string {
     return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function collectFromFile(sf: SourceFile, ctx: ExtractorCtx, out: NatsCallSite[]): void {
+/** Returns true if the file passed the NATS-import pre-filter (i.e. could have call sites). */
+function collectFromFile(sf: SourceFile, ctx: ExtractorCtx, out: NatsCallSite[]): boolean {
     const fileHasNats = fileHasNatsImport(sf, ctx);
 
     // Decorators are unambiguous NATS markers — always collect.
@@ -122,8 +162,8 @@ function collectFromFile(sf: SourceFile, ctx: ExtractorCtx, out: NatsCallSite[])
     });
 
     // File-import pre-filter: drops 100s of false positives where method names collide
-    // (e.g. EventEmitter.emit). Symmetric with ground-truth.
-    if (!fileHasNats) return;
+    // (e.g. EventEmitter.emit). Symmetric with sender ground-truth.
+    if (!fileHasNats) return false;
 
     sf.forEachDescendant((node) => {
         if (node.getKind() !== SyntaxKind.CallExpression) return;
@@ -167,6 +207,7 @@ function collectFromFile(sf: SourceFile, ctx: ExtractorCtx, out: NatsCallSite[])
             });
         }
     });
+    return true;
 }
 
 function pushSubscribe(
@@ -221,15 +262,13 @@ function matchApi(target: Node, methodName: string, apis: WrapperApi[]): Wrapper
         }
     }
 
-    // Text-based fallback: variable name often includes class name.
-    const text = target.getText();
-    const lower = text.toLowerCase();
+    // Text fallback: identifier name often embeds class name verbatim
+    // (`this.platformConnectionService.publish(...)`). No looser `\bclient\b` rule —
+    // it mis-typed httpClient/redisClient calls as NATS publishes.
+    const text = target.getText().toLowerCase();
     for (const api of apis) {
         if (!api.methods.includes(methodName)) continue;
-        const className = api.class.toLowerCase();
-        if (lower.includes(className)) return api;
-        if (className === 'clientproxy' && /\bclient\b/.test(lower)) return api;
-        if (className === 'clientnats' && /\bclient\b/.test(lower)) return api;
+        if (text.includes(api.class.toLowerCase())) return api;
     }
     return null;
 }
@@ -285,7 +324,9 @@ export function resolveSubject(node: Node, depth: number, idx?: ConstantIndex): 
         }
 
         case SyntaxKind.ElementAccessExpression: {
-            return { kind: 'dynamic', hint: node.getText() };
+            // `OBJ['literal']` resolves like `OBJ.literal`; runtime keys stay unresolved
+            // (treating them as `dynamic` falsely inflated classification accuracy).
+            return resolveElementAccess(node, depth, idx);
         }
 
         case SyntaxKind.Identifier: {
@@ -305,11 +346,44 @@ export function resolveSubject(node: Node, depth: number, idx?: ConstantIndex): 
         }
 
         case SyntaxKind.ConditionalExpression: {
-            return { kind: 'dynamic', hint: node.getText() };
+            // Try both branches: if both resolve to the same literal, return it;
+            // otherwise classify as unresolved (not `dynamic` — dynamic implies a
+            // runtime template, ternaries with literal branches are recoverable).
+            return resolveConditional(node, depth, idx);
         }
     }
 
     return { kind: 'unresolved', raw: node.getText(), reason: `unsupported kind: ${node.getKindName()}` };
+}
+
+function resolveElementAccess(node: Node, depth: number, idx?: ConstantIndex): ResolvedSubject {
+    const obj = (node as unknown as { getExpression: () => Node }).getExpression();
+    const arg = (node as unknown as { getArgumentExpression?: () => Node | undefined }).getArgumentExpression?.();
+    if (
+        arg &&
+        (arg.getKind() === SyntaxKind.StringLiteral ||
+            arg.getKind() === SyntaxKind.NoSubstitutionTemplateLiteral)
+    ) {
+        const key = (arg as StringLiteral).getLiteralText();
+        if (idx) {
+            const composed = idx.get(`${obj.getText()}.${key}`);
+            if (composed && (composed.kind === 'literal' || composed.kind === 'pattern')) return composed;
+        }
+    }
+    return { kind: 'unresolved', raw: node.getText(), reason: 'element-access with runtime key' };
+}
+
+function resolveConditional(node: Node, depth: number, idx?: ConstantIndex): ResolvedSubject {
+    const cond = node as unknown as {
+        getWhenTrue: () => Node;
+        getWhenFalse: () => Node;
+    };
+    const a = resolveSubject(cond.getWhenTrue(), depth + 1, idx);
+    const b = resolveSubject(cond.getWhenFalse(), depth + 1, idx);
+    if (a.kind === 'literal' && b.kind === 'literal' && a.value === b.value) {
+        return a;
+    }
+    return { kind: 'unresolved', raw: node.getText(), reason: 'conditional with differing branches' };
 }
 
 function resolveTemplate(node: TemplateExpression, depth: number, idx?: ConstantIndex): ResolvedSubject {
