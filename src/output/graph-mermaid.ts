@@ -1,0 +1,400 @@
+import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+
+import type { ArchGraph, EdgeKind, GraphEdge, GraphNode, NodeKind } from '../core/types.js';
+
+// ============================================================================
+// Public API
+// ============================================================================
+
+export type MermaidSliceMode =
+    | { kind: 'full' }
+    | { kind: 'per-service' }
+    | { kind: 'domain'; domain: DomainKey };
+
+export type DomainKey = 'nats' | 'bullmq' | 'typeorm' | 'http' | 'di' | 'ts-import' | 'lib';
+
+export interface MermaidWriteOptions {
+    /** Slicing mode. Defaults to `{ kind: 'full' }`. */
+    slice?: MermaidSliceMode;
+    /**
+     * Threshold above which a "graph is large" header comment is emitted.
+     * Mermaid Live renders ~500 nodes; we warn early at 200. Default: 200.
+     */
+    largeGraphThreshold?: number;
+}
+
+/**
+ * Write a Mermaid flowchart for `graph` to `outPath`.
+ *
+ * Behaviour by `slice`:
+ *   - `{ kind: 'full' }` (default): write the entire graph to `outPath`.
+ *   - `{ kind: 'per-service' }`: `outPath` is treated as a DIRECTORY; one file
+ *     `service-<id>.mermaid` per service is written, containing only nodes and
+ *     edges touching that service.
+ *   - `{ kind: 'domain', domain: 'nats' }`: write only edges whose kind belongs
+ *     to that domain (plus their endpoint nodes).
+ *
+ * Returns the list of files actually written.
+ */
+export async function writeGraphMermaid(
+    graph: ArchGraph,
+    outPath: string,
+    options: MermaidWriteOptions = {},
+): Promise<string[]> {
+    const slice = options.slice ?? { kind: 'full' };
+    const threshold = options.largeGraphThreshold ?? 200;
+
+    if (slice.kind === 'full') {
+        const body = renderMermaid(graph.nodes, graph.edges, threshold);
+        await ensureDir(outPath);
+        await writeFile(outPath, body, 'utf8');
+        return [outPath];
+    }
+
+    if (slice.kind === 'domain') {
+        const { nodes, edges } = sliceByDomain(graph, slice.domain);
+        const body = renderMermaid(nodes, edges, threshold);
+        await ensureDir(outPath);
+        await writeFile(outPath, body, 'utf8');
+        return [outPath];
+    }
+
+    // per-service: outPath is a directory
+    await mkdir(outPath, { recursive: true });
+    const written: string[] = [];
+    for (const svc of graph.nodes.filter((n) => n.kind === 'service')) {
+        const { nodes, edges } = sliceByService(graph, svc.id);
+        // Skip empty slices — a service with zero touching edges is uninteresting.
+        if (edges.length === 0) continue;
+        const body = renderMermaid(nodes, edges, threshold);
+        const file = join(outPath, `service-${sanitizeFilename(svc.label)}.mermaid`);
+        await writeFile(file, body, 'utf8');
+        written.push(file);
+    }
+    return written;
+}
+
+// ============================================================================
+// Rendering
+// ============================================================================
+
+/**
+ * Per-NodeKind subgraph metadata. Single source of truth — adding a NodeKind
+ * forces TS to populate `subgraphId`, `subgraphLabel`, and `cssClass` here
+ * (instead of three parallel `Record<NodeKind, ...>` maps drifting apart).
+ *
+ * `order` controls render position — services first (visual anchor), DB tables
+ * last (largest column on most graphs).
+ */
+interface NodeKindMeta {
+    subgraphId: string;
+    subgraphLabel: string;
+    /** classDef name from CLASS_DEFS — drives node fill/stroke colour. */
+    cssClass: string;
+    /** Lower number = rendered earlier (left side of `flowchart LR`). */
+    order: number;
+}
+
+const NODE_KIND_META: Record<NodeKind, NodeKindMeta> = {
+    service: { subgraphId: 'services', subgraphLabel: 'Services', cssClass: 'service', order: 1 },
+    lib: { subgraphId: 'libs', subgraphLabel: 'Libraries', cssClass: 'lib', order: 2 },
+    module: { subgraphId: 'modules', subgraphLabel: 'Modules', cssClass: 'module', order: 3 },
+    queue: { subgraphId: 'queues', subgraphLabel: 'Queues', cssClass: 'queue', order: 4 },
+    'nats-subject': {
+        subgraphId: 'nats_subjects',
+        subgraphLabel: 'NATS subjects',
+        cssClass: 'nats',
+        order: 5,
+    },
+    'db-table': { subgraphId: 'db_tables', subgraphLabel: 'DB tables', cssClass: 'db', order: 6 },
+    file: { subgraphId: 'files', subgraphLabel: 'Files', cssClass: 'file', order: 7 },
+};
+
+const SUBGRAPH_ORDER: NodeKind[] = (Object.keys(NODE_KIND_META) as NodeKind[]).sort(
+    (a, b) => NODE_KIND_META[a].order - NODE_KIND_META[b].order,
+);
+
+/**
+ * Mermaid edge syntax per EdgeKind.
+ *
+ * Design choices:
+ *  - sync RPC (HTTP, nats-request) — thick `==>` to stand out
+ *  - async fire-and-forget (publish, queue-*) — dotted `-.->`
+ *  - subscribe/reply listed for completeness — they're the from/to flipped variant
+ *    and use the same arrow as the corresponding sender. The build emits exactly one
+ *    edge per logical exchange, so duplicates are not a concern.
+ *  - db-* — open arrowhead `--o`
+ *  - DI / ts-import / lib-usage — fainter to recede visually
+ */
+const EDGE_SYNTAX: Record<EdgeKind, string> = {
+    'nats-publish': '-.->|publish|',
+    'nats-request': '==>|request|',
+    'nats-subscribe': '-.->|subscribe|',
+    'nats-reply': '==>|reply|',
+    'http-call': '==>|http|',
+    'queue-produce': '-.->|produce|',
+    'queue-consume': '-.->|consume|',
+    'db-read': '--o|read|',
+    'db-write': '--o|write|',
+    'db-access': '--o|db|',
+    // DI/import edges intentionally use the same dotted arrow as the async kinds —
+    // a longer dot syntax (`-..->`) renders identically but trips some Mermaid
+    // versions. Visual de-emphasis comes from the edge label, not extra dots.
+    'di-import': '-.->|di|',
+    'di-provides': '-.->|provides|',
+    'di-exports': '-.->|exports|',
+    'ts-import': '-.->|import|',
+    'lib-usage': '-.->|lib|',
+};
+
+/**
+ * Domain membership for `--mermaid-slice=domain:<key>` filtering.
+ * Each EdgeKind belongs to exactly one domain.
+ */
+const EDGE_DOMAIN: Record<EdgeKind, DomainKey> = {
+    'nats-publish': 'nats',
+    'nats-request': 'nats',
+    'nats-subscribe': 'nats',
+    'nats-reply': 'nats',
+    'http-call': 'http',
+    'queue-produce': 'bullmq',
+    'queue-consume': 'bullmq',
+    'db-read': 'typeorm',
+    'db-write': 'typeorm',
+    'db-access': 'typeorm',
+    'di-import': 'di',
+    'di-provides': 'di',
+    'di-exports': 'di',
+    'ts-import': 'ts-import',
+    'lib-usage': 'lib',
+};
+
+/**
+ * Mermaid node declaration with kind-appropriate shape. All class assignments
+ * happen later via bulk `class id1,id2 cls;` lines — keeping declarations and
+ * style binding separated makes the output easier to skim and to diff.
+ */
+function nodeDeclaration(node: GraphNode): string {
+    const id = sanitizeId(node.id);
+    const label = escapeMermaidLabel(node.label);
+    switch (node.kind) {
+        case 'service':
+        case 'lib':
+        case 'file':
+            return `${id}["${label}"]`;
+        case 'queue':
+            return `${id}(["${label}"])`;
+        case 'nats-subject':
+            return `${id}(("${label}"))`;
+        case 'db-table':
+            return `${id}[("${label}")]`;
+        case 'module':
+            return `${id}{{"${label}"}}`;
+    }
+}
+
+const CLASS_DEFS = [
+    'classDef service fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a;',
+    'classDef lib fill:#ede9fe,stroke:#6d28d9,color:#4c1d95;',
+    'classDef queue fill:#fef3c7,stroke:#b45309,color:#78350f;',
+    'classDef nats fill:#dcfce7,stroke:#15803d,color:#14532d;',
+    'classDef db fill:#fee2e2,stroke:#b91c1c,color:#7f1d1d;',
+    'classDef module fill:#e0f2fe,stroke:#0369a1,color:#0c4a6e;',
+    'classDef file fill:#f1f5f9,stroke:#475569,color:#0f172a;',
+].join('\n    ');
+
+export function renderMermaid(
+    nodes: GraphNode[],
+    edges: GraphEdge[],
+    largeGraphThreshold: number,
+): string {
+    const lines: string[] = [];
+
+    lines.push('flowchart LR');
+    // Header comment goes INSIDE the diagram (after the directive) — some Mermaid
+    // renderers require the first non-empty line to be the diagram directive.
+    if (nodes.length > largeGraphThreshold) {
+        lines.push(
+            `    %% graph has ${nodes.length} nodes, ${edges.length} edges — consider per-service slicing`,
+        );
+    }
+
+    // Empty-flowchart guard. Mermaid renders a diagram with zero nodes as an
+    // error ("No nodes found"). Emit a placeholder so the file is still a valid,
+    // visually unambiguous "nothing here" diagram — useful for `domain:<key>`
+    // slices that filter to an empty edge-set on a project lacking that domain.
+    if (nodes.length === 0) {
+        lines.push('    empty["(no nodes in this slice)"]');
+        lines.push('    classDef placeholder fill:#f9fafb,stroke:#9ca3af,color:#6b7280;');
+        lines.push('    class empty placeholder;');
+        return lines.join('\n') + '\n';
+    }
+
+    // Group nodes by kind, preserving deterministic SUBGRAPH_ORDER.
+    const byKind = new Map<NodeKind, GraphNode[]>();
+    for (const n of nodes) {
+        let bucket = byKind.get(n.kind);
+        if (!bucket) {
+            bucket = [];
+            byKind.set(n.kind, bucket);
+        }
+        bucket.push(n);
+    }
+
+    // Stable intra-subgraph ordering — sort by label so diffs are review-friendly.
+    for (const kind of SUBGRAPH_ORDER) {
+        const bucket = byKind.get(kind);
+        if (!bucket || bucket.length === 0) continue;
+        bucket.sort((a, b) => a.label.localeCompare(b.label));
+
+        const meta = NODE_KIND_META[kind];
+        lines.push(`    subgraph ${meta.subgraphId} [${meta.subgraphLabel}]`);
+        for (const n of bucket) {
+            lines.push(`        ${nodeDeclaration(n)}`);
+        }
+        lines.push('    end');
+    }
+
+    // Edges — also sorted for diff stability.
+    const sortedEdges = [...edges].sort((a, b) => {
+        if (a.kind !== b.kind) return a.kind.localeCompare(b.kind);
+        if (a.from !== b.from) return a.from.localeCompare(b.from);
+        return a.to.localeCompare(b.to);
+    });
+    for (const e of sortedEdges) {
+        const from = sanitizeId(e.from);
+        const to = sanitizeId(e.to);
+        lines.push(`    ${from} ${EDGE_SYNTAX[e.kind]} ${to}`);
+    }
+
+    // classDef + class assignments per node (collected after the fact for grouping).
+    lines.push(`    ${CLASS_DEFS}`);
+    const classBuckets = new Map<string, string[]>();
+    for (const n of nodes) {
+        const cls = NODE_KIND_META[n.kind].cssClass;
+        let arr = classBuckets.get(cls);
+        if (!arr) {
+            arr = [];
+            classBuckets.set(cls, arr);
+        }
+        arr.push(sanitizeId(n.id));
+    }
+    for (const [cls, ids] of [...classBuckets.entries()].sort()) {
+        // `class id1,id2 cls;` is the bulk-assign form.
+        lines.push(`    class ${ids.sort().join(',')} ${cls};`);
+    }
+
+    return lines.join('\n') + '\n';
+}
+
+// ============================================================================
+// Slicing helpers
+// ============================================================================
+
+function sliceByService(
+    graph: ArchGraph,
+    serviceId: string,
+): { nodes: GraphNode[]; edges: GraphEdge[] } {
+    const touchingEdges = graph.edges.filter((e) => e.from === serviceId || e.to === serviceId);
+    const keepIds = new Set<string>([serviceId]);
+    for (const e of touchingEdges) {
+        keepIds.add(e.from);
+        keepIds.add(e.to);
+    }
+    const nodes = graph.nodes.filter((n) => keepIds.has(n.id));
+    return { nodes, edges: touchingEdges };
+}
+
+function sliceByDomain(
+    graph: ArchGraph,
+    domain: DomainKey,
+): { nodes: GraphNode[]; edges: GraphEdge[] } {
+    const edges = graph.edges.filter((e) => EDGE_DOMAIN[e.kind] === domain);
+    const keepIds = new Set<string>();
+    for (const e of edges) {
+        keepIds.add(e.from);
+        keepIds.add(e.to);
+    }
+    const nodes = graph.nodes.filter((n) => keepIds.has(n.id));
+    return { nodes, edges };
+}
+
+// ============================================================================
+// Sanitisation
+// ============================================================================
+
+/**
+ * Mermaid node IDs must be ASCII identifiers (letters, digits, underscore).
+ * `:`, `/`, `-`, `.` all appear in our composite ids (`service:foo`,
+ * `db-table:public.users`, `lib:libs/nest-shared`). Replace them with `_` —
+ * collisions are unlikely because we prefix every id by node-kind already.
+ */
+function sanitizeId(rawId: string): string {
+    return rawId.replace(/[^A-Za-z0-9_]/g, '_');
+}
+
+/**
+ * Labels live inside `"..."` quotes in Mermaid. Escape the only problematic
+ * characters: the quote itself and HTML entities Mermaid would otherwise parse.
+ * Backslash-escape is NOT supported by Mermaid — we use the HTML entity form.
+ */
+function escapeMermaidLabel(s: string): string {
+    return s
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+/** Make a filename safe for the file system (per-service slice). */
+function sanitizeFilename(s: string): string {
+    return s.replace(/[^A-Za-z0-9_.-]/g, '_');
+}
+
+// ============================================================================
+// CLI plumbing — slice-mode parsing
+// ============================================================================
+
+/**
+ * Parse the `--mermaid-slice=<mode>` flag value.
+ * Accepts: `full`, `per-service`, `domain:<key>`.
+ * Throws on unknown input — surfaces config errors loudly rather than silently
+ * downgrading to `full` (which would be a misleading no-op).
+ */
+export function parseSliceMode(raw: string): MermaidSliceMode {
+    if (raw === 'full') return { kind: 'full' };
+    if (raw === 'per-service') return { kind: 'per-service' };
+    if (raw.startsWith('domain:')) {
+        const key = raw.slice('domain:'.length);
+        if (!isDomainKey(key)) {
+            throw new Error(
+                `unknown mermaid-slice domain '${key}'; valid: nats, bullmq, typeorm, http, di, ts-import, lib`,
+            );
+        }
+        return { kind: 'domain', domain: key };
+    }
+    throw new Error(
+        `unknown --mermaid-slice value '${raw}'; valid: full, per-service, domain:<key>`,
+    );
+}
+
+function isDomainKey(s: string): s is DomainKey {
+    return (
+        s === 'nats' ||
+        s === 'bullmq' ||
+        s === 'typeorm' ||
+        s === 'http' ||
+        s === 'di' ||
+        s === 'ts-import' ||
+        s === 'lib'
+    );
+}
+
+// ============================================================================
+// Internals
+// ============================================================================
+
+async function ensureDir(filePath: string): Promise<void> {
+    await mkdir(dirname(filePath), { recursive: true });
+}
