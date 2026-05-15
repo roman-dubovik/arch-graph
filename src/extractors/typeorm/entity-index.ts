@@ -4,11 +4,13 @@ import {
     ObjectLiteralExpression,
     Project,
     PropertyAssignment,
-    SourceFile,
     SyntaxKind,
 } from 'ts-morph';
 
 import type { TypeOrmEntity, TypeOrmEntityDecoratorWarning } from '../../core/types.js';
+import { isExcludedSourceFile } from '../shared.js';
+
+export { isExcludedSourceFile };
 
 /**
  * Pre-pass indexer: scans the project for `@Entity(...)` class declarations and
@@ -167,13 +169,3 @@ function snakeCase(s: string): string {
         .toLowerCase();
 }
 
-export function isExcludedSourceFile(sf: SourceFile): boolean {
-    const p = sf.getFilePath();
-    if (p.includes('/node_modules/')) return true;
-    if (p.includes('/dist/')) return true;
-    if (p.includes('/.claude/')) return true;
-    if (p.includes('/.worktrees/')) return true;
-    if (p.endsWith('.d.ts')) return true;
-    if (p.endsWith('.spec.ts') || p.endsWith('.test.ts')) return true;
-    return false;
-}

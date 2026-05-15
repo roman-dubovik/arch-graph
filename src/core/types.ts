@@ -263,7 +263,13 @@ export interface BuildValidation {
 // BullMQ-domain types
 // ============================================================================
 
-/** Resolved queue name + how it was derived. Mirrors `TypeOrmEntity.tableSource`. */
+/**
+ * Resolved (or failed-to-resolve) queue name + how it was derived. Similar
+ * shape to `TypeOrmEntity.tableSource`, but adds an `unresolved` variant for
+ * dynamic / non-static arguments — TypeORM's tableSource always resolves
+ * (snake_case is the last-resort default), BullMQ's queue name can't be
+ * inferred at all when the argument isn't a known constant.
+ */
 export type BullMqQueueRef =
     | { kind: 'literal'; name: string }
     | { kind: 'const'; name: string; identifier: string }
@@ -290,17 +296,26 @@ export interface BullMqProcessorSite extends BullMqSiteBase {
 /**
  * `BullModule.registerQueue({ name })` / `registerQueueAsync(...)` — declares the
  * queue boundary. Multiple registrations of the same name are allowed (per-module).
+ *
+ * `role: 'registration'` makes every BullMQ site carry a discriminant, so consumers
+ * iterating over `BullMqDiagnostics.unresolved` can branch on `role` exhaustively.
  */
 export interface BullMqQueueRegistration {
+    role: 'registration';
     queue: BullMqQueueRef;
     api: 'registerQueue' | 'registerQueueAsync';
     location: SourceLoc;
 }
 
+export type BullMqSite = BullMqInjectionSite | BullMqProcessorSite | BullMqQueueRegistration;
+
 export interface BullMqDiagnostics {
-    /** Sites whose queue name couldn't be resolved (dynamic / non-static argument). */
-    unresolved: Array<BullMqInjectionSite | BullMqProcessorSite | BullMqQueueRegistration>;
-    /** Sites outside apps/ and libs/. */
+    /**
+     * Sites whose queue name couldn't be resolved (dynamic / non-static argument).
+     * Every entry has `queue.kind === 'unresolved'` (enforced by mapper, not the type).
+     */
+    unresolved: BullMqSite[];
+    /** Producer/consumer sites outside apps/ and libs/. Registrations have no owner. */
     unowned: Array<BullMqInjectionSite | BullMqProcessorSite>;
     counts: {
         producers: number;
@@ -324,7 +339,10 @@ export interface BullMqValidationReport {
         recallProducers: number;
         recallConsumers: number;
         recallRegistrations: number;
-        /** Fraction of (producers + consumers + registrations) that resolved to a known queue name. */
+        /**
+         * Fraction of (producers + consumers + registrations) that resolved to a
+         * known queue name. Returns 0 when there are no extracted sites (not NaN).
+         */
         resolveRate: number;
         totalProducers: number;
         totalConsumers: number;
@@ -341,6 +359,8 @@ export interface BullMqValidationReport {
     missedConsumers: BullMqGroundTruthEntry[];
     missedRegistrations: BullMqGroundTruthEntry[];
     extraProducers: BullMqInjectionSite[];
+    extraConsumers: BullMqProcessorSite[];
+    extraRegistrations: BullMqQueueRegistration[];
 }
 
 export function queueNameOf(ref: BullMqQueueRef): string | null {

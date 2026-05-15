@@ -1,4 +1,5 @@
 import type { GroundTruthEntry, NatsCallSite, NatsValidationReport } from '../core/types.js';
+import { indexBy } from './line-index.js';
 
 /**
  * Matches ground-truth entries against extracted call sites.
@@ -83,13 +84,3 @@ function locKey(x: NatsCallSite | GroundTruthEntry): string {
     return `${x.location.file}:${x.location.line}`;
 }
 
-function indexBy<T>(arr: T[], keyFn: (t: T) => string): Map<string, T[]> {
-    const m = new Map<string, T[]>();
-    for (const item of arr) {
-        const k = keyFn(item);
-        const list = m.get(k);
-        if (list) list.push(item);
-        else m.set(k, [item]);
-    }
-    return m;
-}
