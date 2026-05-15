@@ -108,7 +108,9 @@ const NODE_KIND_META: Record<NodeKind, NodeKindMeta> = {
         order: 5,
     },
     'db-table': { subgraphId: 'db_tables', subgraphLabel: 'DB tables', cssClass: 'db', order: 6 },
-    file: { subgraphId: 'files', subgraphLabel: 'Files', cssClass: 'file', order: 7 },
+    provider: { subgraphId: 'providers', subgraphLabel: 'Providers', cssClass: 'module', order: 7 },
+    external: { subgraphId: 'externals', subgraphLabel: 'External hosts', cssClass: 'lib', order: 8 },
+    file: { subgraphId: 'files', subgraphLabel: 'Files', cssClass: 'file', order: 9 },
 };
 
 const SUBGRAPH_ORDER: NodeKind[] = (Object.keys(NODE_KIND_META) as NodeKind[]).sort(
@@ -133,6 +135,7 @@ const EDGE_SYNTAX: Record<EdgeKind, string> = {
     'nats-subscribe': '-.->|subscribe|',
     'nats-reply': '==>|reply|',
     'http-call': '==>|http|',
+    'http-external': '==>|http-ext|',
     'queue-produce': '-.->|produce|',
     'queue-consume': '-.->|consume|',
     'db-read': '--o|read|',
@@ -144,6 +147,7 @@ const EDGE_SYNTAX: Record<EdgeKind, string> = {
     'di-import': '-.->|di|',
     'di-provides': '-.->|provides|',
     'di-exports': '-.->|exports|',
+    'di-controller': '-.->|controller|',
     'ts-import': '-.->|import|',
     'lib-usage': '-.->|lib|',
 };
@@ -158,6 +162,7 @@ const EDGE_DOMAIN: Record<EdgeKind, DomainKey> = {
     'nats-subscribe': 'nats',
     'nats-reply': 'nats',
     'http-call': 'http',
+    'http-external': 'http',
     'queue-produce': 'bullmq',
     'queue-consume': 'bullmq',
     'db-read': 'typeorm',
@@ -166,6 +171,7 @@ const EDGE_DOMAIN: Record<EdgeKind, DomainKey> = {
     'di-import': 'di',
     'di-provides': 'di',
     'di-exports': 'di',
+    'di-controller': 'di',
     'ts-import': 'ts-import',
     'lib-usage': 'lib',
 };
@@ -182,6 +188,7 @@ function nodeDeclaration(node: GraphNode): string {
         case 'service':
         case 'lib':
         case 'file':
+        case 'external':
             return `${id}["${label}"]`;
         case 'queue':
             return `${id}(["${label}"])`;
@@ -190,6 +197,7 @@ function nodeDeclaration(node: GraphNode): string {
         case 'db-table':
             return `${id}[("${label}")]`;
         case 'module':
+        case 'provider':
             return `${id}{{"${label}"}}`;
     }
 }

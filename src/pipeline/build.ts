@@ -6,15 +6,18 @@ import { discoverOwnership } from '../core/service-registry.js';
 import type { ArchGraph, BuildValidation, DiagnosticsReport } from '../core/types.js';
 import { extractBullMq } from '../extractors/bullmq/extractor.js';
 import { extractDi } from '../extractors/di/extractor.js';
+import { extractHttp } from '../extractors/http/extractor.js';
 import { extractNats } from '../extractors/nats/extractor.js';
 import { extractTypeOrm } from '../extractors/typeorm/extractor.js';
 import { mapBullMqToGraph } from '../mapper/bullmq-to-graph.js';
 import { mapDiToGraph } from '../mapper/di-to-graph.js';
+import { mapHttpToGraph } from '../mapper/http-to-graph.js';
 import { assembleGraph, buildNatsDiagnostics, mapNatsToGraph } from '../mapper/nats-to-graph.js';
 import { mapTypeOrmToGraph } from '../mapper/typeorm-to-graph.js';
 import { enumerateBullMqGroundTruth, buildBullMqReport } from '../validation/bullmq-validator.js';
 import { enumerateDiGroundTruth, buildDiReport } from '../validation/di-validator.js';
 import { enumerateHandlers } from '../validation/handlers.js';
+import { enumerateHttpGroundTruth, buildHttpReport } from '../validation/http-validator.js';
 import { enumerateSenders } from '../validation/senders.js';
 import { enumerateTypeOrmGroundTruth, buildTypeOrmReport } from '../validation/typeorm-validator.js';
 import { buildReport as buildNatsReport } from '../validation/validator.js';
@@ -178,8 +181,30 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         `  nodes: ${diMapped.nodes.length}, edges: ${diMapped.edges.length}, unresolvedRefs: ${diMapped.diagnostics.unresolvedRefs.length}, unowned: ${diMapped.diagnostics.unowned.length}\n`,
     );
 
+    // ---- HTTP domain ----
+    process.stdout.write(`extracting HTTP...\n`);
+    t0 = Date.now();
+    const httpSites = await stage(`[${cfg.id}] http.extract`, () => extractHttp(cfg, project));
+    process.stdout.write(`  ${httpSites.length} HTTP call sites in ${Date.now() - t0}ms\n`);
+
+    process.stdout.write(`validating HTTP against ground truth...\n`);
+    const httpGT = await stage(`[${cfg.id}] http.GT`, () => enumerateHttpGroundTruth(cfg));
+    const httpValidation = buildHttpReport(httpSites, httpGT, cfg.http);
+    {
+        const v = httpValidation.summary;
+        process.stdout.write(
+            `  recallCalls=${pct(v.recallCalls)} resolve=${pct(v.resolveRate)} internal=${v.internal} external=${v.external}\n`,
+        );
+    }
+
+    process.stdout.write(`mapping HTTP to graph...\n`);
+    const httpMapped = mapHttpToGraph(httpSites, ownership, cfg.http);
+    process.stdout.write(
+        `  nodes: ${httpMapped.nodes.length}, edges: ${httpMapped.edges.length}, unresolved: ${httpMapped.diagnostics.unresolved.length}, unowned: ${httpMapped.diagnostics.unowned.length}, external: ${httpMapped.diagnostics.external.length}\n`,
+    );
+
     // ---- Compose ----
-    const graph = assembleGraph(cfg.root, [natsMapped, typeormMapped, bullmqMapped, diMapped]);
+    const graph = assembleGraph(cfg.root, [natsMapped, typeormMapped, bullmqMapped, diMapped, httpMapped]);
     const diagnostics: DiagnosticsReport = {
         projectId: cfg.id,
         timestamp: new Date().toISOString(),
@@ -187,6 +212,7 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         typeorm: typeormMapped.diagnostics,
         bullmq: bullmqMapped.diagnostics,
         di: diMapped.diagnostics,
+        http: httpMapped.diagnostics,
     };
     const validation: BuildValidation = {
         projectId: cfg.id,
@@ -195,6 +221,7 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         typeorm: typeormValidation,
         bullmq: bullmqValidation,
         di: diValidation,
+        http: httpValidation,
     };
 
     return { graph, diagnostics, validation };
