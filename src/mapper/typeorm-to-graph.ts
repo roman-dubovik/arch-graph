@@ -15,15 +15,11 @@ export interface MapTypeOrmResult {
 
 /**
  * Maps `@InjectRepository(EntityClass)` sites to graph nodes/edges.
- *
- * Decisions:
- *  - Resolved entity → `db-table:<table>` node + `db-access` edge from owner → table.
- *  - Unresolved entity (EntityClass not in @Entity index) → diagnostics, not graph.
- *  - Owner from apps/   → `service:<id>`
- *  - Owner from libs/   → `lib:<id>` (factual; consuming services attached later by dep-cruiser)
- *  - Owner unknown      → diagnostics.unowned
- *  - One edge per (owner, table) — multiple injection sites of the same entity in
- *    the same service collapse to a single edge. The first-seen location is kept.
+ *   - Resolved entity      -> `db-table:<table>` node + `db-access` edge (owner -> table)
+ *   - Unresolved entity    -> diagnostics.unresolvedEntities (not in graph)
+ *   - Owner apps/ libs/    -> `service:<id>` / `lib:<id>`
+ *   - Owner unknown        -> diagnostics.unowned
+ * One edge per (owner, table); first-seen injection site location wins.
  */
 export function mapTypeOrmToGraph(
     sites: TypeOrmInjectionSite[],
@@ -34,21 +30,16 @@ export function mapTypeOrmToGraph(
     const edges = new Map<string, GraphEdge>();
     const unresolvedEntities: TypeOrmInjectionSite[] = [];
     const unowned: TypeOrmInjectionSite[] = [];
-
     let resolvedCount = 0;
-    let unresolvedCount = 0;
-    let unownedCount = 0;
 
     for (const s of sites) {
         if (!s.resolvedEntity) {
             unresolvedEntities.push(s);
-            unresolvedCount += 1;
             continue;
         }
         const owner = ownership.findOwner(s.location.file);
         if (owner.kind === 'unknown') {
             unowned.push(s);
-            unownedCount += 1;
             continue;
         }
         resolvedCount += 1;
@@ -96,8 +87,8 @@ export function mapTypeOrmToGraph(
             unowned,
             counts: {
                 resolved: resolvedCount,
-                unresolvedEntity: unresolvedCount,
-                unowned: unownedCount,
+                unresolvedEntity: unresolvedEntities.length,
+                unowned: unowned.length,
             },
         },
     };

@@ -1,5 +1,4 @@
 import {
-    ClassDeclaration,
     Decorator,
     ObjectLiteralExpression,
     Project,
@@ -12,20 +11,16 @@ import type { TypeOrmEntity } from '../../core/types.js';
 
 /**
  * Pre-pass indexer: scans the project for `@Entity(...)` class declarations and
- * resolves them to a `{className, table}` mapping. Mirrors the role of the NATS
- * ConstantIndex — `extract()` is fast because lookups are pre-computed.
+ * resolves them to a `{className, table}` mapping. Mirrors the NATS ConstantIndex.
  *
  * Table-name resolution priority:
- *   1. `@Entity('explicit_name')`             → explicit_name
- *   2. `@Entity({ name: 'foo', schema: 'bar' })` → bar.foo (or just foo if no schema)
- *   3. `@Entity()` with no arg                 → snake_case(ClassName)  [TypeORM default]
+ *   1. `@Entity('explicit_name')`               -> explicit_name
+ *   2. `@Entity({ name: 'foo', schema: 'bar' })` -> bar.foo (or foo if no schema)
+ *   3. `@Entity()` with no arg                   -> snake_case(ClassName)
  */
 export class EntityIndex {
     private byClass = new Map<string, TypeOrmEntity>();
 
-    has(className: string): boolean {
-        return this.byClass.has(className);
-    }
     get(className: string): TypeOrmEntity | undefined {
         return this.byClass.get(className);
     }
@@ -35,10 +30,6 @@ export class EntityIndex {
     entries(): TypeOrmEntity[] {
         return [...this.byClass.values()];
     }
-    classNames(): string[] {
-        return [...this.byClass.keys()];
-    }
-
     set(className: string, entity: TypeOrmEntity): void {
         this.byClass.set(className, entity);
     }
@@ -49,36 +40,26 @@ export function buildEntityIndex(project: Project): EntityIndex {
 
     for (const sf of project.getSourceFiles()) {
         if (isExcludedForIndex(sf)) continue;
-        // Cheap text pre-filter — avoids walking every class in files that can't host an entity.
-        const text = sf.getFullText();
-        if (!text.includes('@Entity')) continue;
+        if (!sf.getFullText().includes('@Entity')) continue;
 
         for (const cls of sf.getClasses()) {
-            const decorator = findEntityDecorator(cls);
+            const decorator = cls.getDecorator('Entity');
             if (!decorator) continue;
             const className = cls.getName();
             if (!className) continue;
 
             const { table, inferred } = resolveTableName(decorator, className);
-            const loc = decorator.getStartLineNumber();
             idx.set(className, {
                 className,
                 table,
                 inferredTable: inferred,
                 file: sf.getFilePath(),
-                line: loc,
+                line: decorator.getStartLineNumber(),
             });
         }
     }
 
     return idx;
-}
-
-function findEntityDecorator(cls: ClassDeclaration): Decorator | undefined {
-    for (const dec of cls.getDecorators()) {
-        if (dec.getName() === 'Entity') return dec;
-    }
-    return undefined;
 }
 
 function resolveTableName(
@@ -106,35 +87,31 @@ function resolveTableName(
         for (const prop of obj.getProperties()) {
             if (prop.getKind() !== SyntaxKind.PropertyAssignment) continue;
             const pa = prop as PropertyAssignment;
-            const propName = pa.getName();
             const init = pa.getInitializer();
             if (!init) continue;
             const kind = init.getKind();
             if (
-                kind === SyntaxKind.StringLiteral ||
-                kind === SyntaxKind.NoSubstitutionTemplateLiteral
-            ) {
-                const lit = (init as unknown as { getLiteralText: () => string }).getLiteralText();
-                if (propName === 'name') name = lit;
-                else if (propName === 'schema') schema = lit;
-            }
+                kind !== SyntaxKind.StringLiteral &&
+                kind !== SyntaxKind.NoSubstitutionTemplateLiteral
+            ) continue;
+            const lit = (init as unknown as { getLiteralText: () => string }).getLiteralText();
+            const propName = pa.getName();
+            if (propName === 'name') name = lit;
+            else if (propName === 'schema') schema = lit;
         }
         if (name) {
             return { table: schema ? `${schema}.${name}` : name, inferred: false };
         }
-        // Object form without `name` — fall back to default heuristic but still flag for review.
         return { table: snakeCase(className), inferred: true };
     }
 
-    // Unsupported argument form (Identifier, call, etc.) — still surface a best-effort name.
     return { table: snakeCase(className), inferred: true };
 }
 
 /**
- * TypeORM's default naming strategy uses snake_case of the class name.
- * Implemented to match `typeorm/util/StringUtils.snakeCase` semantics:
- *   - lowerCase Boundary → lower_case_boundary
- *   - UPPERCase boundary → uppercase_boundary (consecutive caps collapse)
+ * Matches `typeorm/util/StringUtils.snakeCase`:
+ *   lowerCase Boundary -> lower_case_boundary
+ *   UPPERCase boundary -> uppercase_boundary (consecutive caps collapse)
  */
 function snakeCase(s: string): string {
     return s
@@ -153,7 +130,3 @@ function isExcludedForIndex(sf: SourceFile): boolean {
     if (p.endsWith('.spec.ts') || p.endsWith('.test.ts')) return true;
     return false;
 }
-
-// Exposed for the validator (it needs the same snake_case rule when reconciling
-// ground-truth entity declarations that omit an explicit table name).
-export const _internal = { snakeCase };

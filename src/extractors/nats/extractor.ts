@@ -72,16 +72,13 @@ export async function extractNats(cfg: ArchGraphConfig, project: Project): Promi
     return out;
 }
 
+const EXCLUDED_SUBSTRINGS = ['/node_modules/', '/dist/', '/.claude/', '/.worktrees/'];
+
 function isExcluded(sf: SourceFile, cfg: ArchGraphConfig): boolean {
     const path = sf.getFilePath();
-    if (path.includes('/node_modules/')) return true;
-    if (path.includes('/dist/')) return true;
-    if (path.includes('/.claude/')) return true;
-    if (path.includes('/.worktrees/')) return true;
-    if (path.endsWith('.d.ts')) return true;
-    if (path.endsWith('.spec.ts') || path.endsWith('.test.ts')) return true;
-    if (cfg.excludeGlobs?.some((g) => path.includes(g))) return true;
-    return false;
+    if (EXCLUDED_SUBSTRINGS.some((s) => path.includes(s))) return true;
+    if (path.endsWith('.d.ts') || path.endsWith('.spec.ts') || path.endsWith('.test.ts')) return true;
+    return cfg.excludeGlobs?.some((g) => path.includes(g)) ?? false;
 }
 
 function fileHasNatsImport(sf: SourceFile, ctx: ExtractorCtx): boolean {
@@ -150,7 +147,7 @@ function collectFromFile(sf: SourceFile, ctx: ExtractorCtx, out: NatsCallSite[])
                 subject: resolved,
                 location: locOf(call),
                 via: `${publishMatch.class}.${methodName}`,
-                enclosingClass: findEnclosingClassName(call) ?? undefined,
+                enclosingClass: findEnclosingClassName(call),
             });
             return;
         }
@@ -166,7 +163,7 @@ function collectFromFile(sf: SourceFile, ctx: ExtractorCtx, out: NatsCallSite[])
                 subject: resolved,
                 location: locOf(call),
                 via: `${subscribeMatch.class}.${methodName}`,
-                enclosingClass: findEnclosingClassName(call) ?? undefined,
+                enclosingClass: findEnclosingClassName(call),
             });
         }
     });
@@ -186,16 +183,14 @@ function pushSubscribe(
         subject: resolved,
         location: locOf(dec),
         via: `@${decoratorNameStr}`,
-        enclosingClass: findEnclosingClassName(dec) ?? undefined,
+        enclosingClass: findEnclosingClassName(dec),
     });
 }
 
 function decoratorName(dec: Decorator): string {
     const callExpr = dec.getExpression();
     if (callExpr.getKind() === SyntaxKind.CallExpression) {
-        const ce = callExpr as CallExpression;
-        const ident = ce.getExpression();
-        return ident.getText();
+        return (callExpr as CallExpression).getExpression().getText();
     }
     return callExpr.getText();
 }
@@ -251,13 +246,13 @@ function locOf(node: Node): SourceLoc {
     return { file: sf.getFilePath(), line, column };
 }
 
-function findEnclosingClassName(node: Node): string | null {
+function findEnclosingClassName(node: Node): string | undefined {
     let cur: Node | undefined = node;
     while (cur) {
-        if (Node.isClassDeclaration(cur)) return cur.getName() ?? null;
+        if (Node.isClassDeclaration(cur)) return cur.getName();
         cur = cur.getParent();
     }
-    return null;
+    return undefined;
 }
 
 // ============================================================================
