@@ -73,8 +73,8 @@ async function cmdInit(out: string): Promise<void> {
 }
 
 async function cmdBuild(args: ParsedArgs): Promise<void> {
-    if (args.only && args.only !== 'nats' && args.only !== 'typeorm' && args.only !== 'bullmq') {
-        process.stderr.write(`error: --only=${args.only} not yet supported; available: 'nats', 'typeorm', 'bullmq'\n`);
+    if (args.only && args.only !== 'nats' && args.only !== 'typeorm' && args.only !== 'bullmq' && args.only !== 'http') {
+        process.stderr.write(`error: --only=${args.only} not yet supported; available: 'nats', 'typeorm', 'bullmq', 'http'\n`);
         process.exit(2);
     }
     const cfg = await loadConfigWithContext(args.config);
@@ -94,9 +94,11 @@ async function cmdBuild(args: ParsedArgs): Promise<void> {
     const n = result.validation.nats.summary;
     const t = result.validation.typeorm.summary;
     const b = result.validation.bullmq.summary;
+    const h = result.validation.http.summary;
     const natsEnabled = cfg.domains?.nats !== false;
     const typeormEnabled = cfg.domains?.typeorm !== false;
     const bullmqEnabled = cfg.domains?.bullmq !== false;
+    const httpEnabled = cfg.domains?.http !== false;
     const fails: string[] = [];
 
     // Per-role zero-GT: handlers misconfig and senders misconfig fail independently
@@ -116,6 +118,17 @@ async function cmdBuild(args: ParsedArgs): Promise<void> {
         // usually a real extractor gap (alias re-exports, namespaced imports) worth gating.
         if (t.totalInjections > 0 && t.resolveRate < 0.95) {
             fails.push(`typeorm resolve ${pct(t.resolveRate)} (< 95%)`);
+        }
+    }
+    if (httpEnabled) {
+        // HTTP is opt-in via gate: a project with no HTTP at all should set `domains.http=false`.
+        // We only gate on recall (the resolve metric reflects how *interpretable* the URLs are —
+        // a project with 80% external `fetch(literal)` legitimately has low "resolve" by the spec).
+        if (h.groundTruthCalls === 0) {
+            fails.push(`http: zero ground-truth — set domains.http=false if this project has no HTTP usage`);
+        }
+        if (h.groundTruthCalls > 0 && h.recallCalls < 0.95) {
+            fails.push(`http recall ${pct(h.recallCalls)}`);
         }
     }
     if (bullmqEnabled) {
@@ -163,10 +176,12 @@ async function cmdDiagnose(args: ParsedArgs): Promise<void> {
     const n = result.diagnostics.nats;
     const t = result.diagnostics.typeorm;
     const b = result.diagnostics.bullmq;
+    const hd = result.diagnostics.http;
     process.stdout.write(`\n--- diagnostics for ${cfg.id} ---\n`);
     process.stdout.write(`[nats]    literal=${n.counts.literal} pattern=${n.counts.pattern} dynamic=${n.counts.dynamic} unresolved=${n.counts.unresolved}\n`);
     process.stdout.write(`[typeorm] resolved=${t.counts.resolved} unresolvedEntity=${t.counts.unresolvedEntity} unowned=${t.counts.unowned} entityWarnings=${t.counts.entityDecoratorWarnings}\n`);
     process.stdout.write(`[bullmq]  producers=${b.counts.producers} consumers=${b.counts.consumers} registrations=${b.counts.registrations} unresolved=${b.counts.unresolved} unowned=${b.counts.unowned}\n`);
+    process.stdout.write(`[http]    total=${hd.counts.totalSites} literal=${hd.counts.literal} envRef=${hd.counts.envRef} pattern=${hd.counts.pattern} unresolved=${hd.counts.unresolved} internal=${hd.counts.internal} external=${hd.counts.external} unowned=${hd.counts.unowned}\n`);
 
     if (n.unresolved.length > 0) {
         process.stdout.write(`\nTop 10 unresolved NATS subjects:\n`);

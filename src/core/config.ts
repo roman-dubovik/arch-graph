@@ -22,6 +22,8 @@ export interface ArchGraphConfig {
     excludeGlobs?: string[];
     /** NATS extractor settings. */
     nats?: NatsConfig;
+    /** HTTP extractor settings. */
+    http?: HttpConfig;
     /**
      * Opt-out flags per domain. When a domain is `true` (default) the CLI gate
      * treats zero ground-truth as a hard failure (regex-typo, missing glob, etc.).
@@ -31,6 +33,7 @@ export interface ArchGraphConfig {
         nats?: boolean;
         typeorm?: boolean;
         bullmq?: boolean;
+        http?: boolean;
     };
 }
 
@@ -39,6 +42,31 @@ export interface NatsConfig {
     wrapperPublishApis?: WrapperApi[];
     /** Project-specific wrapper classes around NATS subscribe API. */
     wrapperSubscribeApis?: WrapperApi[];
+}
+
+export interface HttpInternalService {
+    /** Stable service id used as graph target (e.g. `platform-api` → `service:platform-api`). */
+    id: string;
+    /**
+     * ENV-var names that resolve to this service's base URL — e.g. `['PLATFORM_API_URL']`.
+     * An `env-ref` URL whose `envVar` matches any of these is classified internal.
+     */
+    envVars?: string[];
+    /**
+     * Substring patterns matched against the literal URL form — e.g.
+     * `['http://localhost:3010', 'http://platform-api']`. Cheap substring containment,
+     * no glob/regex semantics (kept simple to mirror NATS's "exact match" rule).
+     */
+    urlPatterns?: string[];
+}
+
+export interface HttpConfig {
+    /**
+     * Internal services this project calls over HTTP. Each entry yields a
+     * `service:<id>` target node for matching `http-call` edges. Sites whose
+     * URL doesn't match any internal-service entry become `external:<hostname>`.
+     */
+    internalServices?: HttpInternalService[];
 }
 
 /**
