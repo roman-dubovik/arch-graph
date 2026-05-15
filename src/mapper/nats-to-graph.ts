@@ -1,22 +1,24 @@
 import type {
     ArchGraph,
-    DiagnosticsReport,
     GraphEdge,
     GraphNode,
     GraphOwnerRef,
     NatsCallSite,
+    NatsDiagnostics,
     ResolvedSubject,
 } from '../core/types.js';
 import { OwnershipRegistry } from '../core/service-registry.js';
 
+/** Shape produced by any extractor's mapper — assembleGraph composes these. */
+export interface GraphParts {
+    nodes: GraphNode[];
+    edges: GraphEdge[];
+}
+
 export interface MapNatsResult {
     nodes: GraphNode[];
     edges: GraphEdge[];
-    diagnostics: {
-        unresolved: NatsCallSite[];
-        dynamic: NatsCallSite[];
-        unowned: NatsCallSite[];
-    };
+    diagnostics: Omit<NatsDiagnostics, 'counts'>;
 }
 
 /**
@@ -152,18 +154,15 @@ function buildEdge(cs: NatsCallSite, ownerId: string, subjectId: string): GraphE
 // Diagnostics builder
 // ============================================================================
 
-export function buildDiagnostics(
-    projectId: string,
+export function buildNatsDiagnostics(
     callSites: NatsCallSite[],
     result: MapNatsResult,
-): DiagnosticsReport {
+): NatsDiagnostics {
     const counts = { literal: 0, pattern: 0, dynamic: 0, unresolved: 0 };
     for (const cs of callSites) {
         counts[cs.subject.kind] += 1;
     }
     return {
-        projectId,
-        timestamp: new Date().toISOString(),
         unresolved: result.diagnostics.unresolved,
         dynamic: result.diagnostics.dynamic,
         unowned: result.diagnostics.unowned,
@@ -175,7 +174,7 @@ export function buildDiagnostics(
 // Final assembly
 // ============================================================================
 
-export function assembleGraph(root: string, parts: MapNatsResult[]): ArchGraph {
+export function assembleGraph(root: string, parts: GraphParts[]): ArchGraph {
     const nodes = new Map<string, GraphNode>();
     const edges = new Map<string, GraphEdge>();
 

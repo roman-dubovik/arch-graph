@@ -99,12 +99,39 @@ export type GraphOwnerRef =
     | { kind: 'unknown'; path: string };
 
 // ============================================================================
+// TypeORM-domain types
+// ============================================================================
+
+/** @Entity decoration captured during the entity-index pre-pass. */
+export interface TypeOrmEntity {
+    className: string;
+    /** Resolved table name: explicit decorator arg, schema.name field, or snake_case(className). */
+    table: string;
+    /** True when no explicit `@Entity('name')` — name fell back to snake_case heuristic. */
+    inferredTable: boolean;
+    file: string;
+    line: number;
+}
+
+/** Single `@InjectRepository(EntityClass)` injection site. */
+export interface TypeOrmInjectionSite {
+    /** Property name on the consuming class (e.g. `blogPassportsRepo`). */
+    propertyName: string;
+    /** Identifier text used inside `@InjectRepository(...)`. */
+    entityClass: string;
+    /** Index hit; `null` if the EntityClass isn't a known `@Entity`. */
+    resolvedEntity: TypeOrmEntity | null;
+    location: SourceLoc;
+    enclosingClass?: string;
+    /** Resolved by mapper from location.file. Set during graph mapping, not extraction. */
+    owner?: GraphOwnerRef;
+}
+
+// ============================================================================
 // Diagnostics
 // ============================================================================
 
-export interface DiagnosticsReport {
-    projectId: string;
-    timestamp: string;
+export interface NatsDiagnostics {
     unresolved: NatsCallSite[];
     dynamic: NatsCallSite[];
     /** Call-sites whose owner couldn't be resolved (outside apps/ and libs/). */
@@ -117,8 +144,27 @@ export interface DiagnosticsReport {
     };
 }
 
+export interface TypeOrmDiagnostics {
+    /** `@InjectRepository(X)` where X isn't a known `@Entity` (likely external or non-entity). */
+    unresolvedEntities: TypeOrmInjectionSite[];
+    /** Injection sites outside apps/ and libs/. */
+    unowned: TypeOrmInjectionSite[];
+    counts: {
+        resolved: number;
+        unresolvedEntity: number;
+        unowned: number;
+    };
+}
+
+export interface DiagnosticsReport {
+    projectId: string;
+    timestamp: string;
+    nats: NatsDiagnostics;
+    typeorm: TypeOrmDiagnostics;
+}
+
 // ============================================================================
-// Validation (carried over from POC)
+// Validation (carried over from POC, extended for TypeORM)
 // ============================================================================
 
 export interface GroundTruthEntry {
@@ -128,7 +174,7 @@ export interface GroundTruthEntry {
     context: string;
 }
 
-export interface ValidationReport {
+export interface NatsValidationReport {
     projectId: string;
     timestamp: string;
     summary: {
@@ -145,4 +191,40 @@ export interface ValidationReport {
     missed: GroundTruthEntry[];
     extra: NatsCallSite[];
     unresolvedSamples: NatsCallSite[];
+}
+
+export interface TypeOrmGroundTruthEntry {
+    role: 'injection' | 'entity';
+    location: SourceLoc;
+    matchedText: string;
+    /** For `injection`: the EntityClass identifier text. For `entity`: the table-name text (or empty for `@Entity()`). */
+    context: string;
+}
+
+export interface TypeOrmValidationReport {
+    projectId: string;
+    timestamp: string;
+    summary: {
+        recallInjections: number;
+        recallEntities: number;
+        /** Fraction of extracted injections that resolved to a known entity. */
+        resolveRate: number;
+        totalInjections: number;
+        totalEntities: number;
+        groundTruthInjections: number;
+        groundTruthEntities: number;
+    };
+    injections: TypeOrmInjectionSite[];
+    entities: TypeOrmEntity[];
+    groundTruth: TypeOrmGroundTruthEntry[];
+    missedInjections: TypeOrmGroundTruthEntry[];
+    missedEntities: TypeOrmGroundTruthEntry[];
+    extraInjections: TypeOrmInjectionSite[];
+}
+
+export interface BuildValidation {
+    projectId: string;
+    timestamp: string;
+    nats: NatsValidationReport;
+    typeorm: TypeOrmValidationReport;
 }

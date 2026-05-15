@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
-import type { ArchGraph, DiagnosticsReport, ValidationReport } from '../core/types.js';
+import type { ArchGraph, BuildValidation, DiagnosticsReport } from '../core/types.js';
 
 export async function writeGraphJson(graph: ArchGraph, outPath: string): Promise<void> {
     await ensureDir(outPath);
@@ -14,7 +14,7 @@ export async function writeDiagnostics(diag: DiagnosticsReport, outPath: string)
 }
 
 export async function writeValidationReport(
-    report: ValidationReport,
+    report: BuildValidation,
     outPath: string,
 ): Promise<void> {
     await ensureDir(outPath);
