@@ -281,7 +281,6 @@ function walkConstValue(qname: string, node: Node, out: Map<string, IndexEntry>)
 export function applyFnTemplate(entry: FnTemplateEntry, args: string[]): ResolvedSubject {
     let out = '';
     const placeholders: string[] = [];
-    let hasPlaceholder = false;
 
     for (const frag of entry.fragments) {
         if (frag.type === 'str') {
@@ -294,17 +293,15 @@ export function applyFnTemplate(entry: FnTemplateEntry, args: string[]): Resolve
                 out += literalArg;
             } else {
                 out += '*';
-                hasPlaceholder = true;
                 placeholders.push(arg ?? frag.name);
             }
         } else {
             out += '*';
-            hasPlaceholder = true;
             placeholders.push(frag.raw);
         }
     }
 
-    if (!hasPlaceholder) return { kind: 'literal', value: out };
+    if (placeholders.length === 0) return { kind: 'literal', value: out };
     return { kind: 'pattern', pattern: out, placeholders };
 }
 

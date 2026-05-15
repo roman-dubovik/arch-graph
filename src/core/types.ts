@@ -20,14 +20,23 @@ export type ResolvedSubject =
     | { kind: 'dynamic'; hint: string }
     | { kind: 'unresolved'; raw: string; reason: string };
 
-export interface NatsCallSite {
-    role: 'sender' | 'receiver';
-    edgeKind: EdgeKindNats;
+interface NatsCallSiteBase {
     subject: ResolvedSubject;
     location: SourceLoc;
     via: string;
     enclosingClass?: string;
+    /**
+     * Inner site of a discovered indirect wrapper (Pattern F). Kept for ground-truth
+     * recall, but excluded from resolveRate and the graph — the outer caller emitted
+     * by Pass 2 carries the real (resolved) subject for the same logical edge.
+     */
+    wrapperInternal?: boolean;
 }
+
+/** Discriminated union — `role` and `edgeKind` cannot drift apart. */
+export type NatsCallSite =
+    | (NatsCallSiteBase & { role: 'sender'; edgeKind: 'nats-publish' | 'nats-request' })
+    | (NatsCallSiteBase & { role: 'receiver'; edgeKind: 'nats-subscribe' | 'nats-reply' });
 
 export interface WrapperApi {
     class: string;
@@ -177,7 +186,7 @@ export interface DiagnosticsReport {
 }
 
 // ============================================================================
-// Validation (carried over from POC, extended for TypeORM)
+// Validation
 // ============================================================================
 
 export interface GroundTruthEntry {

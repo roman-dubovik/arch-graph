@@ -19,7 +19,7 @@ import {
 } from 'ts-morph';
 
 import type { ArchGraphConfig } from '../../core/config.js';
-import type { NatsCallSite, ResolvedSubject, SourceLoc, WrapperApi } from '../../core/types.js';
+import type { EdgeKindNats, NatsCallSite, ResolvedSubject, SourceLoc, WrapperApi } from '../../core/types.js';
 import { applyFnTemplate, buildConstantIndex, ConstantIndex } from './constant-index.js';
 
 /** NATS extractor — finds publishers, subscribers, and resolves subject strings. */
@@ -42,6 +42,28 @@ interface ExtractorCtx {
     constIndex: ConstantIndex;
 }
 
+/**
+ * Indirect-publish/subscribe pattern (Pattern F from 02-extractors-design):
+ *   class FooService {
+ *     async publish(subject: string, data: unknown) {
+ *       this.client.publish(subject, data);  // <- inner site with dynamic+param subject
+ *     }
+ *   }
+ *   // ... callers ...
+ *   this.fooService.publish('exact.subject', payload);  // <- outer site with literal
+ *
+ * Pass 1 collects normal sites and registers any inner-site-with-param-subject as a
+ * "discovered wrapper". Pass 2 treats those wrappers as additional publishApis and
+ * re-scans for outer callers (now with resolvable literal subjects), suppressing the
+ * inner sites so the same logical edge isn't double-counted.
+ */
+interface DiscoveredWrapper {
+    className: string;
+    methodName: string;
+    role: 'sender' | 'receiver';
+    edgeKind: EdgeKindNats;
+}
+
 export async function extractNats(cfg: ArchGraphConfig, project: Project): Promise<NatsCallSite[]> {
     process.stdout.write(`  building constant index...\n`);
     const t0 = Date.now();
@@ -58,16 +80,57 @@ export async function extractNats(cfg: ArchGraphConfig, project: Project): Promi
 
     verifyWrapperClasses(ctx);
 
+    // Pass 1: standard collection + wrapper discovery (inner sites with dynamic+param subjects
+    // record their enclosing method as a wrapper instead of emitting the inner site).
+    const out: NatsCallSite[] = [];
+    const discovered: DiscoveredWrapper[] = [];
+    const stats = scanFiles(project, ctx, out, { kind: 'main', discovered });
+    process.stdout.write(
+        `    files: ${stats.totalFiles}, dropped by import filter: ${stats.droppedByImportFilter}, collect errors: ${stats.collectErrors}\n`,
+    );
+    if (stats.errorRate > 0.01) {
+        throw new Error(`nats.extractor: ${stats.collectErrors}/${stats.totalFiles} files errored (>1%)`);
+    }
+
+    // Pass 2 (Pattern F): if any wrappers discovered, scan outer callers.
+    const uniqueWrappers = dedupWrappers(discovered);
+    if (uniqueWrappers.length > 0) {
+        process.stdout.write(`    discovered ${uniqueWrappers.length} indirect wrapper method(s); scanning callers...\n`);
+        const wrapperKeys = new Set(uniqueWrappers.map((w) => `${w.className}.${w.methodName}`));
+        const augCtx: ExtractorCtx = {
+            ...ctx,
+            publishApis: uniqueWrappers
+                .filter((w) => w.role === 'sender')
+                .map((w) => ({ class: w.className, methods: [w.methodName] })),
+            subscribeMethodApis: uniqueWrappers
+                .filter((w) => w.role === 'receiver')
+                .map((w) => ({ class: w.className, methods: [w.methodName] })),
+        };
+        const before = out.length;
+        scanFiles(project, augCtx, out, { kind: 'indirect', wrapperKeys });
+        process.stdout.write(`    indirect pass added ${out.length - before} call sites\n`);
+    }
+
+    return out;
+}
+
+type PassMode = { kind: 'main'; discovered: DiscoveredWrapper[] } | { kind: 'indirect'; wrapperKeys: Set<string> };
+
+function scanFiles(
+    project: Project,
+    ctx: ExtractorCtx,
+    out: NatsCallSite[],
+    pass: PassMode,
+): { totalFiles: number; droppedByImportFilter: number; collectErrors: number; errorRate: number } {
     let totalFiles = 0;
     let droppedByImportFilter = 0;
     let collectErrors = 0;
-    const out: NatsCallSite[] = [];
     for (const sf of project.getSourceFiles()) {
-        if (isExcluded(sf, cfg)) continue;
+        if (isExcluded(sf, ctx.cfg)) continue;
         totalFiles += 1;
         try {
-            const usedPreFilter = collectFromFile(sf, ctx, out);
-            if (!usedPreFilter) droppedByImportFilter += 1;
+            const used = collectFromFile(sf, ctx, out, pass);
+            if (!used) droppedByImportFilter += 1;
         } catch (err) {
             collectErrors += 1;
             process.stderr.write(
@@ -75,16 +138,46 @@ export async function extractNats(cfg: ArchGraphConfig, project: Project): Promi
             );
         }
     }
-    process.stdout.write(
-        `    files: ${totalFiles}, dropped by import filter: ${droppedByImportFilter}, collect errors: ${collectErrors}\n`,
-    );
-    // Catch the compounding failure mode: silent per-file errors must not silently
-    // shrink the corpus the gate is measured against.
-    const errorRate = totalFiles > 0 ? collectErrors / totalFiles : 0;
-    if (errorRate > 0.01) {
-        throw new Error(`nats.extractor: ${collectErrors}/${totalFiles} files errored (>1%)`);
+    return {
+        totalFiles,
+        droppedByImportFilter,
+        collectErrors,
+        errorRate: totalFiles > 0 ? collectErrors / totalFiles : 0,
+    };
+}
+
+function dedupWrappers(ws: DiscoveredWrapper[]): DiscoveredWrapper[] {
+    const seen = new Set<string>();
+    const out: DiscoveredWrapper[] = [];
+    for (const w of ws) {
+        const k = `${w.className}.${w.methodName}:${w.edgeKind}`;
+        if (!seen.has(k)) {
+            seen.add(k);
+            out.push(w);
+        }
     }
     return out;
+}
+
+function findEnclosingMethodAndClass(node: Node): { className: string; methodName: string } | null {
+    let cur: Node | undefined = node;
+    let methodName: string | undefined;
+    let className: string | undefined;
+    while (cur) {
+        if (!methodName) {
+            if (Node.isMethodDeclaration(cur) || Node.isFunctionDeclaration(cur)) {
+                const n = cur.getName();
+                if (n) methodName = n;
+            }
+        }
+        if (Node.isClassDeclaration(cur)) {
+            className = cur.getName();
+            break;
+        }
+        cur = cur.getParent();
+    }
+    if (className && methodName) return { className, methodName };
+    return null;
 }
 
 function verifyWrapperClasses(ctx: ExtractorCtx): void {
@@ -137,32 +230,33 @@ function escapeReg(s: string): string {
 }
 
 /** Returns true if the file passed the NATS-import pre-filter (i.e. could have call sites). */
-function collectFromFile(sf: SourceFile, ctx: ExtractorCtx, out: NatsCallSite[]): boolean {
+function collectFromFile(sf: SourceFile, ctx: ExtractorCtx, out: NatsCallSite[], pass: PassMode): boolean {
     const fileHasNats = fileHasNatsImport(sf, ctx);
 
-    // Decorators are unambiguous NATS markers — always collect.
-    sf.forEachDescendant((node) => {
-        if (node.getKind() !== SyntaxKind.Decorator) return;
-        const dec = node as Decorator;
-        const name = decoratorName(dec);
-        if (!STANDARD_SUBSCRIBE_DECORATORS.has(name)) return;
+    // Decorators are unambiguous NATS markers — only collected on the main pass
+    // (indirect pass is purely for CallExpression wrapper callers).
+    if (pass.kind === 'main') {
+        sf.forEachDescendant((node) => {
+            if (node.getKind() !== SyntaxKind.Decorator) return;
+            const dec = node as Decorator;
+            const name = decoratorName(dec);
+            if (!STANDARD_SUBSCRIBE_DECORATORS.has(name)) return;
 
-        const args = dec.getArguments();
-        if (args.length === 0) return;
+            const args = dec.getArguments();
+            if (args.length === 0) return;
 
-        const subjectExpr = args[0]!;
-        if (subjectExpr.getKind() === SyntaxKind.ArrayLiteralExpression) {
-            const arrayLit = subjectExpr.asKindOrThrow(SyntaxKind.ArrayLiteralExpression);
-            for (const el of arrayLit.getElements()) {
-                pushSubscribe(el, dec, name, ctx, out);
+            const subjectExpr = args[0]!;
+            if (subjectExpr.getKind() === SyntaxKind.ArrayLiteralExpression) {
+                const arrayLit = subjectExpr.asKindOrThrow(SyntaxKind.ArrayLiteralExpression);
+                for (const el of arrayLit.getElements()) {
+                    pushSubscribe(el, dec, name, ctx, out);
+                }
+            } else {
+                pushSubscribe(subjectExpr, dec, name, ctx, out);
             }
-        } else {
-            pushSubscribe(subjectExpr, dec, name, ctx, out);
-        }
-    });
+        });
+    }
 
-    // File-import pre-filter: drops 100s of false positives where method names collide
-    // (e.g. EventEmitter.emit). Symmetric with sender ground-truth.
     if (!fileHasNats) return false;
 
     sf.forEachDescendant((node) => {
@@ -177,37 +271,72 @@ function collectFromFile(sf: SourceFile, ctx: ExtractorCtx, out: NatsCallSite[])
 
         const publishMatch = matchApi(target, methodName, ctx.publishApis);
         if (publishMatch) {
-            const args = call.getArguments();
-            if (args.length === 0) return;
-            const resolved = resolveSubject(args[0]!, 0, ctx.constIndex);
-            const edgeKind = methodName === 'emit' || methodName === 'publish' ? 'nats-publish' : 'nats-request';
-            out.push({
-                role: 'sender',
-                edgeKind,
-                subject: resolved,
-                location: locOf(call),
-                via: `${publishMatch.class}.${methodName}`,
-                enclosingClass: findEnclosingClassName(call),
-            });
+            handleCall(call, 'sender', methodName, publishMatch, out, ctx, pass);
             return;
         }
 
         const subscribeMatch = matchApi(target, methodName, ctx.subscribeMethodApis);
         if (subscribeMatch) {
-            const args = call.getArguments();
-            if (args.length === 0) return;
-            const resolved = resolveSubject(args[0]!, 0, ctx.constIndex);
-            out.push({
-                role: 'receiver',
-                edgeKind: 'nats-subscribe',
-                subject: resolved,
-                location: locOf(call),
-                via: `${subscribeMatch.class}.${methodName}`,
-                enclosingClass: findEnclosingClassName(call),
-            });
+            handleCall(call, 'receiver', methodName, subscribeMatch, out, ctx, pass);
         }
     });
     return true;
+}
+
+function handleCall(
+    call: CallExpression,
+    role: 'sender' | 'receiver',
+    methodName: string,
+    api: WrapperApi,
+    out: NatsCallSite[],
+    ctx: ExtractorCtx,
+    pass: PassMode,
+): void {
+    const args = call.getArguments();
+    if (args.length === 0) return;
+    const resolved = resolveSubject(args[0]!, 0, ctx.constIndex);
+
+    // Construct the role-narrowed NatsCallSite (DU enforces role↔edgeKind coherence).
+    const base = {
+        subject: resolved,
+        location: locOf(call),
+        via: `${api.class}.${methodName}`,
+        enclosingClass: findEnclosingClassName(call),
+    };
+    const site: NatsCallSite =
+        role === 'sender'
+            ? {
+                  ...base,
+                  role: 'sender',
+                  edgeKind: methodName === 'emit' || methodName === 'publish' ? 'nats-publish' : 'nats-request',
+              }
+            : {
+                  ...base,
+                  role: 'receiver',
+                  edgeKind: 'nats-subscribe',
+              };
+
+    if (pass.kind === 'main') {
+        if (resolved.kind === 'dynamic' && resolved.hint.startsWith('param:')) {
+            const enc = findEnclosingMethodAndClass(call);
+            if (enc) {
+                pass.discovered.push({
+                    className: enc.className,
+                    methodName: enc.methodName,
+                    role,
+                    edgeKind: site.edgeKind,
+                });
+                site.wrapperInternal = true;
+            }
+        }
+        out.push(site);
+    } else {
+        // Pass 2 (indirect): skip if this call lives inside a wrapper's body — that
+        // would re-emit the inner site we deliberately kept in pass 1 for GT recall.
+        const enc = findEnclosingMethodAndClass(call);
+        if (enc && pass.wrapperKeys.has(`${enc.className}.${enc.methodName}`)) return;
+        out.push(site);
+    }
 }
 
 function pushSubscribe(
