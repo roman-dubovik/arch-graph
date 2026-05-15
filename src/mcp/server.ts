@@ -91,8 +91,15 @@ function makeGraphLoader(path: string): () => Promise<ArchGraph> {
             const st = await stat(path);
             if (!handle || st.mtimeMs !== handle.mtimeMs) {
                 if (st.mtimeMs === failedMtime) {
-                    // Same broken mtime as last attempt — keep serving cache
-                    // silently (we already logged once).
+                    // Same broken mtime as last attempt. If we have a previous
+                    // good handle, keep serving it silently (we already logged
+                    // once). If not, surface a useful error — the defensive
+                    // assertion below would otherwise hide the real cause.
+                    if (!handle) {
+                        throw new Error(
+                            `arch-graph mcp: graph file is unreadable at ${path} (last reload error already logged to stderr)`,
+                        );
+                    }
                 } else {
                     try {
                         handle = await loadGraph(path, st.mtimeMs);
@@ -111,9 +118,11 @@ function makeGraphLoader(path: string): () => Promise<ArchGraph> {
             if (!handle) throw err;
         }
         if (!handle) {
-            // Unreachable: either we successfully populated `handle`, or the
-            // outer catch already rethrew. Defensive assertion for the type
-            // narrower.
+            // Reachable on the second+ call against a consistently corrupt
+            // file: stat succeeds, mtime equals failedMtime, the silent retry
+            // suppression keeps handle null, and the outer catch does NOT
+            // fire (stat didn't throw). This guard converts that into a clear
+            // error rather than a downstream `undefined.graph` access.
             throw new Error('arch-graph mcp: graph loader returned no handle');
         }
         return handle.graph;

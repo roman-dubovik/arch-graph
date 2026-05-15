@@ -25,6 +25,10 @@ export function withPrefix(prefix: string, idOrName: string): string {
     return idOrName.startsWith(`${prefix}:`) ? idOrName : `${prefix}:${idOrName}`;
 }
 
+function hasNode(graph: ArchGraph, id: string): boolean {
+    return graph.nodes.some((n) => n.id === id);
+}
+
 // ---------------------------------------------------------------------------
 // Subject queries
 // ---------------------------------------------------------------------------
@@ -82,7 +86,7 @@ export function findSubscribers(graph: ArchGraph, subject: string): EdgeAnswerLi
  */
 export function findQueueProducers(graph: ArchGraph, queue: string): EdgeAnswerList {
     const id = withPrefix('queue', queue);
-    if (!graph.nodes.some((n) => n.id === id)) return { found: false };
+    if (!hasNode(graph, id)) return { found: false };
     const sites = graph.edges
         .filter((e) => e.kind === 'queue-produce' && e.to === id)
         .map((e) => edgeAnswer(e, e.from, e.to, 'producer'));
@@ -91,7 +95,7 @@ export function findQueueProducers(graph: ArchGraph, queue: string): EdgeAnswerL
 
 export function findQueueConsumers(graph: ArchGraph, queue: string): EdgeAnswerList {
     const id = withPrefix('queue', queue);
-    if (!graph.nodes.some((n) => n.id === id)) return { found: false };
+    if (!hasNode(graph, id)) return { found: false };
     const sites = graph.edges
         .filter((e) => e.kind === 'queue-consume' && e.from === id)
         .map((e) => edgeAnswer(e, e.to, e.from, 'consumer'));
@@ -105,14 +109,14 @@ export function findQueueConsumers(graph: ArchGraph, queue: string): EdgeAnswerL
 /** Outgoing edges from `service:<id>`, grouped by kind family. */
 export function serviceDependencies(graph: ArchGraph, serviceId: string): GroupedDeps {
     const id = withPrefix('service', serviceId);
-    if (!graph.nodes.some((n) => n.id === id)) return { found: false };
+    if (!hasNode(graph, id)) return { found: false };
     return groupEdges(graph, id, 'outgoing');
 }
 
 /** Incoming edges into `service:<id>`, grouped by kind. */
 export function serviceDependents(graph: ArchGraph, serviceId: string): GroupedDeps {
     const id = withPrefix('service', serviceId);
-    if (!graph.nodes.some((n) => n.id === id)) return { found: false };
+    if (!hasNode(graph, id)) return { found: false };
     return groupEdges(graph, id, 'incoming');
 }
 
@@ -147,10 +151,10 @@ export function moduleImports(
     maxDepth: number = DEFAULT_MAX_DEPTH,
 ): ModuleImportResult {
     const startId = withPrefix('module', moduleClass);
-    if (!graph.nodes.some((n) => n.id === startId)) return { found: false };
+    if (!hasNode(graph, startId)) return { found: false };
     const seen = new Set<string>();
     const chain = walk(graph, startId, maxDepth, seen);
-    return { found: true, module: chain.module, imports: chain.imports, children: chain.children };
+    return { found: true, ...chain };
 }
 
 function walk(
@@ -176,7 +180,7 @@ function walk(
 
 export function tableUsers(graph: ArchGraph, table: string): EdgeAnswerList {
     const id = withPrefix('db-table', table);
-    if (!graph.nodes.some((n) => n.id === id)) return { found: false };
+    if (!hasNode(graph, id)) return { found: false };
     const sites = graph.edges
         .filter((e) => e.to === id && e.kind.startsWith('db-'))
         .map((e) => edgeAnswer(e, e.from, e.to, 'accessor'));

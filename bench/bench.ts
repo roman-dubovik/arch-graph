@@ -155,6 +155,19 @@ async function loadQuestions(path: string): Promise<Question[]> {
                 `bench: WARNING questions.yaml[${i}] (${q.id}): empty 'ground_truth_labels' — recall will be vacuously 1.0\n`,
             );
         }
+        // `category` / `difficulty` / `question` are required `string`s on the
+        // Question interface. Without these checks a missing field would land in
+        // `r.category` as `undefined`, render as the string "undefined" in the
+        // markdown report row, and silently corrupt the per-category aggregate.
+        if (typeof q.category !== 'string' || q.category.length === 0) {
+            throw new Error(`questions.yaml[${i}] (${q.id}): missing or empty 'category'`);
+        }
+        if (typeof q.difficulty !== 'string' || q.difficulty.length === 0) {
+            throw new Error(`questions.yaml[${i}] (${q.id}): missing or empty 'difficulty'`);
+        }
+        if (typeof q.question !== 'string' || q.question.length === 0) {
+            throw new Error(`questions.yaml[${i}] (${q.id}): missing or empty 'question'`);
+        }
         out.push(q as Question);
     }
     return out;
