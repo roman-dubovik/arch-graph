@@ -1,0 +1,26 @@
+{
+    "name": "arch-graph",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "bin": {
+        "arch-graph": "./dist/cli/index.js"
+    },
+    "scripts": {
+        "build": "tsc",
+        "dev": "tsx src/cli/index.ts",
+        "build:graph": "tsx src/cli/index.ts build",
+        "init": "tsx src/cli/index.ts init",
+        "diagnose": "tsx src/cli/index.ts diagnose"
+    },
+    "dependencies": {
+        "fast-glob": "^3.3.2",
+        "jiti": "^2.4.2",
+        "ts-morph": "^24.0.0"
+    },
+    "devDependencies": {
+        "@types/node": "^20.0.0",
+        "tsx": "^4.7.0",
+        "typescript": "^5.4.0"
+    }
+}

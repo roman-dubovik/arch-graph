@@ -15,87 +15,133 @@
 
 ## Где мы остановились
 
-POC NATS-extractor'а сделан и валидирован на 5 проектах (platform, insyra, beribuy2, unpacks, screenia).
+**Phase 1 production NATS — закончен и валидирован.** 5/5 проектов bit-exact match с POC.
 
-**Результаты**: детекция handlers+senders 100%, classification accuracy 99.3-100%, manual subject correctness 100% на выборке 25 случаев. Цель 95+% достигнута.
+| Проект | recallH | recallS | classify | resolve | graph nodes | edges |
+|---|---|---|---|---|---|---|
+| platform | 100% | 100% | 99.3% | 87.1% | 132 | 121 |
+| insyra | 100% | 100% | 99.3% | 98.0% | 492 | 533 |
+| beribuy2 | 100% | 100% | 100% | 91.4% | 21 | 32 |
+| unpacks | 100% | 100% | 100% | 97.8% | 89 | 89 |
+| screenia | 100% | 100% | 100% | 97.9% | 95 | 92 |
 
-Полный отчёт: [`03-poc-validation-results.md`](./03-poc-validation-results.md).
-POC код: [`poc/`](./poc/) — работает, отчёты в [`poc/reports/`](./poc/reports/).
+Production CLI работает:
+```bash
+cd arch-graph
+npx tsx src/cli/index.ts build --config configs/insyra.config.ts --out arch-graph-out/insyra
+```
+
+Каждый build выдаёт три файла:
+- `graph.json` — общая схема Node/Edge
+- `diagnostics.json` — unresolved/dynamic/unowned call-sites
+- `validation.json` — regression-gate (recall, classification)
+
+POC оставлен в [`poc/`](./poc/) как regression baseline; numbers идентичны bit-to-bit.
 
 ---
 
-## Следующий шаг — Phase 1 production
+## Зафиксированные решения (Phase 1)
 
-Цель: рабочая команда `arch-graph build` → `arch-graph-out/graph.json` с реальными узлами/рёбрами, не только NATS.
+1. **Layout**: `src/` рядом с `poc/`. POC — read-only golden master для regression.
+2. **Config — TS** с `defineConfig` + jiti-loader. JSON всё ещё поддержан (fallback). Per-project конфиги в [`configs/`](./configs/) (5 шт).
+3. **graph.json scope**:
+   - `literal` / `pattern` subject → реальные `nats-subject` ноды + edges
+   - `dynamic` / `unresolved` → НЕ в graph, всё в `diagnostics.json`
+4. **Ownership**: apps/X → `service:X` нода. libs/Y → `lib:Y` нода (factual; dep-cruiser в Phase 2 пристёгнет consuming services). Внешние файлы → `unowned` в diagnostics.
+5. **Validator работает на `NatsCallSite[]` до mapper'а** — это hard regression gate в `arch-graph build` (exit code 3 если recall < 95%).
+6. **CLI**: `init` | `build` | `diagnose` — все три как первоклассные команды.
 
-### Что делать (в порядке приоритета)
+---
 
-1. **Переписать POC в production layout** (`arch-graph/src/`, отдельно от `poc/`):
-   - Service registry с привязкой call-сайтов к service-нодам (POC даёт file:line, не service)
-   - Общая схема `graph.json` из [`02-extractors-design.md`](./02-extractors-design.md)
-   - CLI: `arch-graph init`, `arch-graph build`, `arch-graph diagnose`
-   - Перенести NATS extractor + ConstantIndex из POC как есть — они валидированы
+## Production layout
 
-2. **Добавить остальные extractors** (порядок по сложности, простые первыми):
-   - **TypeORM DB-access** (`@InjectRepository(Entity)` + `@Entity('table')`) — самый простой
-   - **BullMQ** (`@InjectQueue`, `@Processor`, `BullModule.registerQueue`)
-   - **NestJS DI-граф** (`@Module({imports, exports, providers})`)
-   - **HTTP inter-service** — сложный из-за URL-резолва; рассмотреть отдельно после первых трёх
-   - **dependency-cruiser** для TS import-графа
+```
+arch-graph/
+├── src/
+│   ├── core/                  types, config-loader, service-registry
+│   ├── extractors/nats/       extractor + constant-index (перенос из POC)
+│   ├── validation/            handlers, senders, validator, strip-comments
+│   ├── mapper/                NatsCallSite → {nodes, edges}
+│   ├── output/                graph.json/diagnostics.json/validation.json writers
+│   ├── pipeline/              build orchestration
+│   ├── cli/                   CLI entry-point
+│   └── index.ts               package entry (defineConfig + types + runBuild)
+├── configs/                   per-project TS configs (5 шт, мигрированы из POC JSON)
+├── poc/                       read-only regression baseline
+└── arch-graph-out/            (gitignored) build outputs
+```
 
-3. **Merger + output**:
-   - Объединить выходы extractor'ов в единый `graph.json`
-   - Mermaid output (читаемый для PR-документации)
+---
 
-4. **Validation framework**: перенести POC валидатор как обязательную часть build'а (regression tests при изменении extractor'ов).
+## Следующий шаг — Phase 1 continued: остальные extractors
 
-### НЕ Phase 1 (отложено)
+В порядке возрастания сложности:
 
+1. **TypeORM DB extractor** — самый простой, даёт плотный слой service→table рёбер
+   - `@InjectRepository(Entity)` → property → call-sites
+   - `@Entity('table')` или snake_case от имени класса
+   - Phase 1: edge `db-access`; Phase 2: split на read/write
+2. **BullMQ extractor**
+   - `@InjectQueue(NAME)` → producer
+   - `@Processor(NAME)` → consumer
+   - `BullModule.registerQueue({ name })` → owner
+3. **NestJS DI extractor** (`@Module({imports, exports, providers})`)
+4. **HTTP inter-service** — сложный из-за URL-резолва; рассмотреть отдельно
+5. **dependency-cruiser** для TS import-графа (заодно решает libs/→service attribution)
+
+После каждого нового extractor'а: regression-gate уже встроен в `arch-graph build`. Расширить validator на новый домен либо ввести отдельный смоук-тест.
+
+---
+
+## НЕ Phase 1 (отложено)
+
+- Mermaid output (зафиксируем после того как соберём 3+ extractor'а)
 - MCP server (Phase 2)
 - OpenTelemetry/Jaeger runtime layer (Phase 3)
 - 2-brain MCP-мост (Phase 4)
 - D3 HTML визуализация
+- watch-mode (отказались — rebuild 3-7s на крупных проектах достаточен)
 
 ---
 
-## Ключевые technical insights из POC (не забыть в production)
+## Ключевые technical insights из POC (актуальны для следующих extractors)
 
-1. **ConstantIndex обязателен** — без него resolve rate 0% из-за path aliases. Pre-pass всех `export const/enum/function`.
+1. **ConstantIndex обязателен** — без него resolve rate 0% из-за path aliases. Pre-pass всех `export const/enum/function`. Уже есть в production: [`src/extractors/nats/constant-index.ts`](./src/extractors/nats/constant-index.ts).
 2. **Per-project конфиг wrapper API** нужен (platform: PlatformConnectionService, JetStreamService, NatsService; insyra: JetStreamService).
-3. **Файловый pre-filter** — call-сайт учитывается только если файл импортирует `@nestjs/microservices` или wrapper-класс. Убирает 180 false positives на platform.
+3. **Файловый pre-filter** — call-сайт учитывается только если файл импортирует домен-маркер (для NATS это `@nestjs/microservices` или wrapper-класс). Убирает 180 false positives.
 4. **`getType()` от ts-morph нестабилен** без полной module resolution → text-based fallback с предусловиями.
-5. **Cross-reference resolution в template-строках** — 3 итерации для цепочек типа `\`${SUFFIX}.${SUFFIX2}.>\``.
-6. **Destructured BindingElement = dynamic** (не unresolved) — это правильная классификация для параметров.
-7. **Ground-truth должен стрипать комментарии** — иначе JSDoc и закомментированный код раздувают false metrics.
+5. **Cross-reference resolution в template-строках** — 3 итерации для цепочек.
+6. **Destructured BindingElement = dynamic** (не unresolved) — параметры функций.
+7. **Ground-truth должен стрипать комментарии** — иначе JSDoc раздувает false metrics.
 
 ---
 
 ## Открытые вопросы для обсуждения в начале новой сессии
 
-Не блокеры, но определят детали:
-
-1. **Структура production проекта**: монорепо в `arch-graph/` (с POC в `arch-graph/poc/` archive)? Или совсем отдельный layout? Что куда переносим из POC.
-2. **Конфиг проекта**: один `arch-graph.config.ts` (TS) или JSON? POC использует JSON per-project; в production может быть лучше TS для type-safety и autocompletion в wrapperApis.
-3. **Какой extractor делать первым после NATS-переноса** — DB или DI? DB даёт сразу много значимых рёбер, DI помогает понимать архитектуру.
-4. **Запуск на твоих проектах в watch-mode для dev** — нужен ли file-watch несмотря на изначальное решение "ondemand"? POC показал что full rebuild ~5-7s на platform — приемлемо.
+1. **TypeORM vs BullMQ vs DI первым** — после Phase 1 NATS все три на очереди. По плотности значимых рёбер: TypeORM > BullMQ > DI. По простоте AST: BullMQ ≈ DI > TypeORM (TypeORM требует track property → call-site flow). Рекомендация — **TypeORM**, как в roadmap.
+2. **Mermaid output** — нужен ли prototype уже сейчас, чтобы визуально проверять graph.json? Или дождёмся 3+ extractor'а?
+3. **dependency-cruiser** — подключать сейчас (решает libs/→service attribution для NATS) или вместе с DI extractor'ом?
 
 ---
 
-## Файлы для контекста (если агент захочет глубже)
+## Файлы для контекста
 
-- [`00-briefing.md`](./00-briefing.md) — изначальный entry-point всего arch-graph
-- [`01-roadmap.md`](./01-roadmap.md) — план фаз, что в каждой
-- [`02-extractors-design.md`](./02-extractors-design.md) — детальный дизайн каждого extractor'а с примерами AST
-- [`03-poc-validation-results.md`](./03-poc-validation-results.md) — что получилось в POC
-- [`poc/src/extractors/nats.extractor.ts`](./poc/src/extractors/nats.extractor.ts) — рабочий NATS resolver
-- [`poc/src/extractors/constant-index.ts`](./poc/src/extractors/constant-index.ts) — pre-pass индекс
-- [`poc/reports/`](./poc/reports/) — отчёты по 5 проектам с примерами что нашлось/не нашлось
+- [`00-briefing.md`](./00-briefing.md) — изначальный entry-point
+- [`01-roadmap.md`](./01-roadmap.md) — план фаз
+- [`02-extractors-design.md`](./02-extractors-design.md) — детальный дизайн каждого extractor'а
+- [`03-poc-validation-results.md`](./03-poc-validation-results.md) — POC validation
+- [`src/extractors/nats/extractor.ts`](./src/extractors/nats/extractor.ts) — рабочий resolver
+- [`src/extractors/nats/constant-index.ts`](./src/extractors/nats/constant-index.ts) — pre-pass индекс
+- [`src/pipeline/build.ts`](./src/pipeline/build.ts) — оркестрация
+- [`src/mapper/nats-to-graph.ts`](./src/mapper/nats-to-graph.ts) — call-sites → graph
+- [`configs/`](./configs/) — per-project TS-конфиги
+- [`poc/reports/`](./poc/reports/) — golden master отчёты POC
 
 ---
 
 ## Чего НЕ нужно делать
 
-- Заново валидировать NATS extractor — он валидирован, регрессия проверяется через `poc/`
-- Менять архитектуру `02-extractors-design.md` без обсуждения — она подтверждена POC'ом
-- Делать MCP server до того как `graph.json` стабилен (минимум 3-4 extractor'а собраны и merger работает)
-- Спрашивать заново про стек/wrapper-классы — всё зафиксировано в `poc/config/`
+- Заново валидировать NATS extractor — bit-exact match POC ↔ production на 5 проектах
+- Менять архитектуру `02-extractors-design.md` без обсуждения — она подтверждена POC и production
+- Делать MCP server до того как `graph.json` стабилен (минимум 3-4 extractor'а собраны)
+- Спрашивать заново про стек/wrapper-классы — всё в `configs/`
