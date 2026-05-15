@@ -31,14 +31,17 @@ import { stripComments } from './strip-comments.js';
 const HTTP_SERVICE_RE = /\.httpService\s*\.\s*(get|post|put|patch|delete|head|options)\s*(?:<[^<>]*>\s*)?\(/g;
 const AXIOS_RE = /\baxios\s*\.\s*(get|post|put|patch|delete|head|options)\s*(?:<[^<>]*>\s*)?\(/g;
 /**
- * `axios(<config>)` direct-call form. Restricted to `await axios(` / `= axios(` /
- * `return axios(` / standalone `axios(` so it doesn't match the `axios.<method>` cases.
+ * `axios(<config>)` direct-call form. Matches only where `axios` is preceded by
+ * line-start, whitespace, or one of `=({,;` — excludes `axios.<method>` (dot
+ * follows) and bare `axios` inside identifiers.
+ *
+ * Zero-width lookbehind, not a consuming group: the older form `(?:^|[\s=({,;])`
+ * consumed the prefix character, so on `const r =\n  axios({...})` `m.index`
+ * landed on `\n` and `offsetToLineCol` reported the previous line. The extractor
+ * anchors on the `a` of `axios` via `CallExpression.getStart()`, so keys
+ * disagreed — false recall miss on every multi-line `axios(config)` call.
+ * Lookbehind keeps `m.index` on `a` of `axios` for every prefix variant.
  */
-// Zero-width lookbehind: when the prefix is consumed (e.g. `\n`), `m.index` lands
-// on the prefix character — not on `axios` — and `offsetToLineCol` reports the
-// previous line. The extractor anchors on `axios` (CallExpression start), so keys
-// disagree on multi-line forms like `const result =\n  axios({...})`, producing
-// a false recall miss. Lookbehind ensures `m.index` always lands on `a` of `axios`.
 const AXIOS_CONFIG_RE = /(?<=^|[\s=({,;])axios\s*\(/gm;
 /**
  * `axios.create({...}).<method>(` chain — paired with the extractor's chain detection

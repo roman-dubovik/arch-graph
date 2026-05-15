@@ -23,6 +23,8 @@ Severity:
 
 - **[nice-to-have] [http] separate `HttpDiagnostics.externalCalls` is the first positive-classification array** — все остальные domain-diagnostics массивы (`unresolved`, `unowned`) — это «не получилось». `externalCalls` напротив — «получилось, но классифицировано как external». Возможно, имеет смысл выделить отдельную структуру `HttpDiagnostics.informational: { externalCalls: HttpCallSite[]; ... }` для positive-классификаций и `diagnostics: { unresolved: ...; unowned: ... }` для проблем. (type-design-reviewer, Block B merge)
 - **[feature-suggestion] [http] `axios.create()` client variable tracking** — сейчас inline `axios.create({...}).get(url)` детектится как unresolved, но `const client = axios.create({baseURL}); client.get(path)` не отслеживается. Полноценная реализация требует таинт-анализа (привязка `baseURL` к переменной). Отложено — паттерн рядкий, на корпусе пока 0 site’ов. (silent-failure-hunter, C2 fix follow-up)
+- **[nice-to-have] [http] `AXIOS_CREATE_RE` пропускает nested parens** — `[^)]*` не матчит `axios.create({ baseURL: getUrl() }).get(url)`. AST extractor ловит, regex GT нет → false `extra` в diagnostics (не recall miss, не gate failure). Документировано в комментарии. Можно поднять регулярку до brace/paren-balanced формы при необходимости. (silent-failure-hunter re-review, edge case)
+- **[nice-to-have] [http] `.endsWith('.create')` over-match** — extractor.ts ~line 135 ловит ЛЮБОЙ `foo.create().get(url)`, не только `axios.create()`. Для не-axios кейсов (`dataSource.create(...).get(id)`) сайт уйдёт в unresolved, GT не сматчит → false `extra`. Низкая частота, не влияет на recall. (code-reviewer re-review)
 
 ## Block C — TS-imports extractor
 

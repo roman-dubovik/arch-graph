@@ -28,7 +28,9 @@ import { buildDiModuleIndex, DiModuleIndex } from './module-index.js';
  *   - imports     → DiModuleRef (class | dynamic | unresolved)
  *   - providers   → DiProviderRef (class | token{providerKind} | unresolved)
  *   - exports     → DiProviderRef
- *   - controllers → DiProviderRef (always `class`-shaped in practice)
+ *   - controllers → DiControllerRef (class | unresolved) — NestJS rejects
+ *                   token/factory shapes here at module-init time, so a
+ *                   narrower union prevents phantom `provider:<token>` nodes
  *
  * Decoding rules:
  *   - Bare identifier             → class ref by that name

@@ -1,4 +1,5 @@
 import type {
+    DiControllerRef,
     DiDiagnostics,
     DiModuleRef,
     DiModuleSite,
@@ -166,7 +167,10 @@ function ensureModuleNode(
     return node;
 }
 
-function ensureProviderNode(nodes: Map<string, GraphNode>, ref: DiProviderRef): string {
+function ensureProviderNode(
+    nodes: Map<string, GraphNode>,
+    ref: DiProviderRef | DiControllerRef,
+): string {
     if (ref.kind === 'unresolved') {
         throw new Error('ensureProviderNode called with unresolved ref — caller must filter');
     }
@@ -205,7 +209,7 @@ function addEdge(
     });
 }
 
-function refMeta(ref: DiModuleRef | DiProviderRef): Record<string, unknown> {
+function refMeta(ref: DiModuleRef | DiProviderRef | DiControllerRef): Record<string, unknown> {
     if (ref.kind === 'class') return { refKind: 'class' };
     if (ref.kind === 'dynamic') return { refKind: 'dynamic', via: ref.via };
     if (ref.kind === 'token') {
