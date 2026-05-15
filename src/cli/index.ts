@@ -73,8 +73,8 @@ async function cmdInit(out: string): Promise<void> {
 }
 
 async function cmdBuild(args: ParsedArgs): Promise<void> {
-    if (args.only && args.only !== 'nats' && args.only !== 'typeorm') {
-        process.stderr.write(`error: --only=${args.only} not yet supported; available: 'nats', 'typeorm'\n`);
+    if (args.only && args.only !== 'nats' && args.only !== 'typeorm' && args.only !== 'bullmq') {
+        process.stderr.write(`error: --only=${args.only} not yet supported; available: 'nats', 'typeorm', 'bullmq'\n`);
         process.exit(2);
     }
     const cfg = await loadConfigWithContext(args.config);
@@ -93,8 +93,10 @@ async function cmdBuild(args: ParsedArgs): Promise<void> {
     // (misconfig) or dropped below 95% recall. Disable via `domains.<x> = false`.
     const n = result.validation.nats.summary;
     const t = result.validation.typeorm.summary;
+    const b = result.validation.bullmq.summary;
     const natsEnabled = cfg.domains?.nats !== false;
     const typeormEnabled = cfg.domains?.typeorm !== false;
+    const bullmqEnabled = cfg.domains?.bullmq !== false;
     const fails: string[] = [];
 
     // Per-role zero-GT: handlers misconfig and senders misconfig fail independently
@@ -114,6 +116,20 @@ async function cmdBuild(args: ParsedArgs): Promise<void> {
         // usually a real extractor gap (alias re-exports, namespaced imports) worth gating.
         if (t.totalInjections > 0 && t.resolveRate < 0.95) {
             fails.push(`typeorm resolve ${pct(t.resolveRate)} (< 95%)`);
+        }
+    }
+    if (bullmqEnabled) {
+        // Per-role zero-GT — each role gates independently. A project with @InjectQueue but
+        // no @Processor is legitimate; both being zero usually means BullMQ isn't in the project
+        // and the operator should set `domains.bullmq = false`.
+        const anyGt = b.groundTruthProducers + b.groundTruthConsumers + b.groundTruthRegistrations;
+        if (anyGt === 0) fails.push(`bullmq: zero ground-truth across producers/consumers/registrations — set domains.bullmq=false if this project has no BullMQ`);
+        if (b.groundTruthProducers > 0 && b.recallProducers < 0.95) fails.push(`bullmq producers ${pct(b.recallProducers)}`);
+        if (b.groundTruthConsumers > 0 && b.recallConsumers < 0.95) fails.push(`bullmq consumers ${pct(b.recallConsumers)}`);
+        if (b.groundTruthRegistrations > 0 && b.recallRegistrations < 0.95) fails.push(`bullmq registrations ${pct(b.recallRegistrations)}`);
+        const totalSites = b.totalProducers + b.totalConsumers + b.totalRegistrations;
+        if (totalSites > 0 && b.resolveRate < 0.95) {
+            fails.push(`bullmq resolve ${pct(b.resolveRate)} (< 95%)`);
         }
     }
 
@@ -146,9 +162,11 @@ async function cmdDiagnose(args: ParsedArgs): Promise<void> {
 
     const n = result.diagnostics.nats;
     const t = result.diagnostics.typeorm;
+    const b = result.diagnostics.bullmq;
     process.stdout.write(`\n--- diagnostics for ${cfg.id} ---\n`);
     process.stdout.write(`[nats]    literal=${n.counts.literal} pattern=${n.counts.pattern} dynamic=${n.counts.dynamic} unresolved=${n.counts.unresolved}\n`);
     process.stdout.write(`[typeorm] resolved=${t.counts.resolved} unresolvedEntity=${t.counts.unresolvedEntity} unowned=${t.counts.unowned} entityWarnings=${t.counts.entityDecoratorWarnings}\n`);
+    process.stdout.write(`[bullmq]  producers=${b.counts.producers} consumers=${b.counts.consumers} registrations=${b.counts.registrations} unresolved=${b.counts.unresolved} unowned=${b.counts.unowned}\n`);
 
     if (n.unresolved.length > 0) {
         process.stdout.write(`\nTop 10 unresolved NATS subjects:\n`);
