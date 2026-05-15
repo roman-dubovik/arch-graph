@@ -4,10 +4,13 @@ import { Project } from 'ts-morph';
 import type { ArchGraphConfig } from '../core/config.js';
 import { discoverOwnership } from '../core/service-registry.js';
 import type { ArchGraph, BuildValidation, DiagnosticsReport } from '../core/types.js';
+import { extractBullMq } from '../extractors/bullmq/extractor.js';
 import { extractNats } from '../extractors/nats/extractor.js';
 import { extractTypeOrm } from '../extractors/typeorm/extractor.js';
+import { mapBullMqToGraph } from '../mapper/bullmq-to-graph.js';
 import { assembleGraph, buildNatsDiagnostics, mapNatsToGraph } from '../mapper/nats-to-graph.js';
 import { mapTypeOrmToGraph } from '../mapper/typeorm-to-graph.js';
+import { enumerateBullMqGroundTruth, buildBullMqReport } from '../validation/bullmq-validator.js';
 import { enumerateHandlers } from '../validation/handlers.js';
 import { enumerateSenders } from '../validation/senders.js';
 import { enumerateTypeOrmGroundTruth, buildTypeOrmReport } from '../validation/typeorm-validator.js';
@@ -119,19 +122,50 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         `  nodes: ${typeormMapped.nodes.length}, edges: ${typeormMapped.edges.length}, unresolved: ${typeormMapped.diagnostics.unresolvedEntities.length}, unowned: ${typeormMapped.diagnostics.unowned.length}, entityWarnings: ${typeormMapped.diagnostics.entityDecoratorWarnings.length}\n`,
     );
 
+    // ---- BullMQ domain ----
+    process.stdout.write(`extracting BullMQ...\n`);
+    t0 = Date.now();
+    const bullmq = await stage(`[${cfg.id}] bullmq.extract`, () => extractBullMq(cfg, project));
+    process.stdout.write(
+        `  ${bullmq.producers.length} @InjectQueue, ${bullmq.consumers.length} @Processor, ${bullmq.registrations.length} registerQueue in ${Date.now() - t0}ms\n`,
+    );
+
+    process.stdout.write(`validating BullMQ against ground truth...\n`);
+    const bullmqGT = await stage(`[${cfg.id}] bullmq.GT`, () => enumerateBullMqGroundTruth(cfg));
+    const bullmqValidation = buildBullMqReport(
+        bullmq.producers,
+        bullmq.consumers,
+        bullmq.registrations,
+        bullmqGT,
+    );
+    {
+        const v = bullmqValidation.summary;
+        process.stdout.write(
+            `  recallProd=${pct(v.recallProducers)} recallCons=${pct(v.recallConsumers)} recallReg=${pct(v.recallRegistrations)} resolve=${pct(v.resolveRate)}\n`,
+        );
+    }
+
+    process.stdout.write(`mapping BullMQ to graph...\n`);
+    const bullmqMapped = mapBullMqToGraph(bullmq.producers, bullmq.consumers, bullmq.registrations, ownership);
+    process.stdout.write(
+        `  nodes: ${bullmqMapped.nodes.length}, edges: ${bullmqMapped.edges.length}, unresolved: ${bullmqMapped.diagnostics.unresolved.length}, unowned: ${bullmqMapped.diagnostics.unowned.length}\n`,
+    );
+
     // ---- Compose ----
-    const graph = assembleGraph(cfg.root, [natsMapped, typeormMapped]);
+    const graph = assembleGraph(cfg.root, [natsMapped, typeormMapped, bullmqMapped]);
     const diagnostics: DiagnosticsReport = {
         projectId: cfg.id,
         timestamp: new Date().toISOString(),
         nats: natsDiagnostics,
         typeorm: typeormMapped.diagnostics,
+        bullmq: bullmqMapped.diagnostics,
     };
     const validation: BuildValidation = {
         projectId: cfg.id,
         timestamp: new Date().toISOString(),
         nats: natsValidation,
         typeorm: typeormValidation,
+        bullmq: bullmqValidation,
     };
 
     return { graph, diagnostics, validation };

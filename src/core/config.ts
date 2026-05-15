@@ -30,6 +30,7 @@ export interface ArchGraphConfig {
     domains?: {
         nats?: boolean;
         typeorm?: boolean;
+        bullmq?: boolean;
     };
 }
 

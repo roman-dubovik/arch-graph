@@ -190,6 +190,7 @@ export interface DiagnosticsReport {
     timestamp: string;
     nats: NatsDiagnostics;
     typeorm: TypeOrmDiagnostics;
+    bullmq: BullMqDiagnostics;
 }
 
 // ============================================================================
@@ -255,4 +256,93 @@ export interface BuildValidation {
     timestamp: string;
     nats: NatsValidationReport;
     typeorm: TypeOrmValidationReport;
+    bullmq: BullMqValidationReport;
+}
+
+// ============================================================================
+// BullMQ-domain types
+// ============================================================================
+
+/** Resolved queue name + how it was derived. Mirrors `TypeOrmEntity.tableSource`. */
+export type BullMqQueueRef =
+    | { kind: 'literal'; name: string }
+    | { kind: 'const'; name: string; identifier: string }
+    | { kind: 'unresolved'; raw: string };
+
+interface BullMqSiteBase {
+    queue: BullMqQueueRef;
+    location: SourceLoc;
+    enclosingClass?: string;
+}
+
+/** `@InjectQueue(NAME)` — producer site. */
+export interface BullMqInjectionSite extends BullMqSiteBase {
+    role: 'producer';
+    propertyName: string;
+}
+
+/** `@Processor(NAME, options?)` class — consumer site. */
+export interface BullMqProcessorSite extends BullMqSiteBase {
+    role: 'consumer';
+    className: string;
+}
+
+/**
+ * `BullModule.registerQueue({ name })` / `registerQueueAsync(...)` — declares the
+ * queue boundary. Multiple registrations of the same name are allowed (per-module).
+ */
+export interface BullMqQueueRegistration {
+    queue: BullMqQueueRef;
+    api: 'registerQueue' | 'registerQueueAsync';
+    location: SourceLoc;
+}
+
+export interface BullMqDiagnostics {
+    /** Sites whose queue name couldn't be resolved (dynamic / non-static argument). */
+    unresolved: Array<BullMqInjectionSite | BullMqProcessorSite | BullMqQueueRegistration>;
+    /** Sites outside apps/ and libs/. */
+    unowned: Array<BullMqInjectionSite | BullMqProcessorSite>;
+    counts: {
+        producers: number;
+        consumers: number;
+        registrations: number;
+        unresolved: number;
+        unowned: number;
+    };
+}
+
+export interface BullMqGroundTruthEntry {
+    role: 'producer' | 'consumer' | 'registration';
+    location: SourceLoc;
+    matchedText: string;
+    /** Raw queue-name token (Identifier text or quoted literal contents). */
+    context: string;
+}
+
+export interface BullMqValidationReport {
+    summary: {
+        recallProducers: number;
+        recallConsumers: number;
+        recallRegistrations: number;
+        /** Fraction of (producers + consumers + registrations) that resolved to a known queue name. */
+        resolveRate: number;
+        totalProducers: number;
+        totalConsumers: number;
+        totalRegistrations: number;
+        groundTruthProducers: number;
+        groundTruthConsumers: number;
+        groundTruthRegistrations: number;
+    };
+    producers: BullMqInjectionSite[];
+    consumers: BullMqProcessorSite[];
+    registrations: BullMqQueueRegistration[];
+    groundTruth: BullMqGroundTruthEntry[];
+    missedProducers: BullMqGroundTruthEntry[];
+    missedConsumers: BullMqGroundTruthEntry[];
+    missedRegistrations: BullMqGroundTruthEntry[];
+    extraProducers: BullMqInjectionSite[];
+}
+
+export function queueNameOf(ref: BullMqQueueRef): string | null {
+    return ref.kind === 'unresolved' ? null : ref.name;
 }
