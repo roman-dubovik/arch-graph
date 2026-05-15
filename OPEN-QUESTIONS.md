@@ -80,6 +80,22 @@ _В работе._
 
 ---
 
+## Block H — Benchmark suite (arch-graph vs graphify)
+
+_Запланирован после Phase 2._
+
+Идея: количественное сравнение **arch-graph** и **graphify** (`~/.claude/skills/graphify/SKILL.md`) на 5 тестовых монорепо:
+
+- **Build cost**: время + диск + токен-эквивалент output'а
+- **LLM efficiency**: для каждого test-вопроса — сколько токенов нужно скормить LLM чтобы получить корректный ответ (`tiktoken`-counting через MCP-tool либо raw-graph dump'a)
+- **Quality**: precision / recall ответов против ground-truth (готовится вручную для ~15 архитектурных вопросов: "кто публикует X?", "путь от A до B", "что использует libs/Y?")
+
+Реализация — отдельный `bench/` модуль с `bench.ts` runner'ом + `questions.yaml` + per-tool adapter'ами. Отчёт — `bench/report.md` со сводной таблицей.
+
+Честный disclaimer: graphify — generic semantic-graph, arch-graph — domain-specific. Архитектурные вопросы arch-graph выиграет by design; на "объясни эту концепцию" graphify сильнее. Бенчмарк должен показать разрыв на типовых задачах разработчика монорепо.
+
+---
+
 ## Общие открытые вопросы (orchestration-level)
 
 - _будет дополнено по ходу_
