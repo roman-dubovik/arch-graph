@@ -282,7 +282,44 @@ _В работе._
 
 ## Block G — Install / Skill / Hooks / README
 
-_В работе._
+**Status**: landed (worktree `block/install`).
+
+### What shipped
+
+- `bin/arch-graph` — POSIX wrapper, resolves itself through symlinks (BSD-safe — no `readlink -f`), execs `node --enable-source-maps node_modules/tsx/dist/cli.mjs src/cli/index.ts $@`. Bypasses the `tsc` build step entirely; consumers don't need `dist/`.
+- `package.json` — `bin` пересажен с `./dist/cli/index.js` на `./bin/arch-graph`.
+- `scripts/install.sh` — POSIX-only (no bash features). Detects Node ≥ 20, clones to `~/.arch-graph` (or `git pull` if present), runs `pnpm install --frozen-lockfile` if `pnpm` + lockfile, else `npm ci` / `npm install`, symlinks `~/.local/bin/arch-graph`. Warns if `~/.local/bin` is not on PATH.
+- CLI subcommands: `claude install/uninstall [--target <CLAUDE.md>] [--skill]`, `hook install/uninstall/status [--repo <path>]`, `install-skill`, плюс новый `--quiet` для `build`.
+- `src/cli/claude.ts` — CLAUDE.md integration с маркерами `<!-- arch-graph:start -->` / `<!-- arch-graph:end -->`. Идемпотентен: повторный install заменяет блок in place. Если CLAUDE.md отсутствует — создаёт минимальный заголовок и добавляет блок.
+- `src/cli/hooks.ts` — post-commit hook с маркерами `# >>> arch-graph >>>` / `# <<< arch-graph <<<`. Запускает `arch-graph build --quiet` если в коммите есть `.ts` файлы. Использует `git diff-tree --no-commit-id --name-only -r HEAD` (работает и на initial commit, в отличие от `HEAD~1`). Если хук уже существует — appends, не перетирает. После uninstall если файл стал пустым (только shebang + comments) — удаляется целиком.
+- `src/cli/skill.ts` — копирует `skill/SKILL.md` в `~/.claude/skills/arch-graph/SKILL.md` (через `os.homedir()` — не хардкодим путь). Inline fallback на случай если template исчез.
+- `claude-md.template.md` — секция, которая внедряется в проектный CLAUDE.md. Перечисляет домены + recall gates, freshness check, диагностика, jq-recipes.
+- `skill/SKILL.md` — навык для агента: triggers `/arch-graph`, описывает freshness check (mtime newest `.ts` vs `arch-graph-out/graph.json`), MCP-first / `jq` fallback, honesty rules.
+- `README.md` — полное переписывание под distribution-audience. Diff vs graphify, install, quick start, метрики по 5 проектам, CLAUDE.md / hook / MCP / limits / deferred D1-D6.
+
+### Decisions / non-obvious
+
+- **Tsx wrapper вместо `tsc` build**: распространение упрощается (нет шага сборки), source maps работают, но `--enable-source-maps` для node нужен. Когда/если проект пойдёт в npm — `prepack` script + `tsc` можно добавить, но это not blocker.
+- **`install.sh` без `git remote`**: репозиторий пока приватный. Скрипт резолвит источник из (1) `$ARCH_GRAPH_GIT`, (2) существующего `~/.arch-graph/.git origin`, (3) self-detection если запущен из git work tree с правильным `package.json#name`. Хардкодить URL не стал — оставлен `ARCH_GRAPH_DEFAULT_GIT=""` с `TODO: set once published`. README documents this honestly.
+- **Subcommand parser**: для `claude <sub>` / `hook <sub>` нельзя через существующий `parseArgs` (тот трактует `argv[1]` как очередной флаг). Решено: `main()` ветвится на `argv[0]` ДО `parseArgs` и вызывает специализированные `parseClaudeArgs` / `parseHookArgs`.
+- **Маркеры**: разные пары на разные файлы (CLAUDE.md vs shell). Уголки HTML-комментариев для md, `# >>> ... # <<<` для shell. Это позволяет одной утилите (`replaceMarkedSection` / `stripMarkedSection` экспортируются из `claude.ts`) обслуживать оба формата без коллизий.
+- **MCP optionality**: Block F может ещё не существовать. SKILL.md, README, claude-md.template.md везде формулируют MCP как "prefer if available, otherwise read graph.json with jq". Никаких импортов / require — text only.
+- **Skill installs only via `--skill`**: чтобы `arch-graph claude install` без флага не подменял global state. Опциональное `arch-graph install-skill` standalone тоже работает.
+
+### Verified
+
+- `npx tsc --noEmit` — clean.
+- `bin/arch-graph --help` — выводит расширенный HELP с новыми командами.
+- `arch-graph claude install` → `uninstall` цикл на throwaway CLAUDE.md — content идентичен исходному. Re-install (двойной) не дублирует блок.
+- `arch-graph hook install` → `git commit` с .ts изменением — хук срабатывает, билд запускается. `hook status` показывает installed.
+
+### Defer for later
+
+- Public Git URL → обновить `ARCH_GRAPH_DEFAULT_GIT` в install.sh + curl one-liner в README.
+- `npm i -g arch-graph` route — нужен publish + `dist/` (или explicit `bin` через tsx как сейчас работает уже сегодня в global linking сценарии).
+- Skill update flow когда меняется SKILL.md template — сейчас `install-skill` просто overwrites. Достаточно для v0.
+
+---
 
 ---
 

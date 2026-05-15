@@ -9,6 +9,13 @@ import {
     type MermaidSliceMode,
 } from '../output/graph-mermaid.js';
 import { runBuild } from '../pipeline/build.js';
+import {
+    claudeInstall,
+    claudeUninstall,
+    parseClaudeArgs,
+} from './claude.js';
+import { hookInstall, hookStatus, hookUninstall, parseHookArgs } from './hooks.js';
+import { installSkill } from './skill.js';
 
 interface ParsedArgs {
     cmd: string;
@@ -17,6 +24,8 @@ interface ParsedArgs {
     only?: string;
     /** Optional extra slice; `graph.mermaid` (full) is always written. */
     mermaidSlice?: MermaidSliceMode;
+    /** Suppress non-error stdout. Used by the post-commit hook. */
+    quiet: boolean;
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
@@ -25,6 +34,7 @@ function parseArgs(argv: string[]): ParsedArgs {
     let out = './arch-graph-out';
     let only: string | undefined;
     let mermaidSlice: MermaidSliceMode | undefined;
+    let quiet = false;
 
     for (let i = 0; i < rest.length; i++) {
         const a = rest[i]!;
@@ -42,18 +52,29 @@ function parseArgs(argv: string[]): ParsedArgs {
             mermaidSlice = parseSliceMode(a.slice('--mermaid-slice='.length));
         } else if (a === '--mermaid-slice' && rest[i + 1]) {
             mermaidSlice = parseSliceMode(rest[++i]!);
+        } else if (a === '--quiet' || a === '-q') {
+            quiet = true;
         }
     }
-    return { cmd: cmd ?? '', config, out, only, mermaidSlice };
+    return { cmd: cmd ?? '', config, out, only, mermaidSlice, quiet };
 }
 
 const HELP = `
-arch-graph — static architecture graph extractor
+arch-graph — static architecture graph extractor for NestJS monorepos
 
 Usage:
-  arch-graph build      [--config <path>] [--out <dir>] [--only=<extractor>] [--mermaid-slice=<mode>]
+  arch-graph build      [--config <path>] [--out <dir>] [--only=<extractor>] [--mermaid-slice=<mode>] [--quiet]
   arch-graph diagnose   [--config <path>] [--out <dir>]
   arch-graph init       [--out <path>]
+
+  arch-graph claude install   [--target <CLAUDE.md>] [--skill]
+  arch-graph claude uninstall [--target <CLAUDE.md>]
+
+  arch-graph hook install     [--repo <path>]
+  arch-graph hook uninstall   [--repo <path>]
+  arch-graph hook status      [--repo <path>]
+
+  arch-graph install-skill    (writes ~/.claude/skills/arch-graph/SKILL.md)
 
 Defaults:
   --config  ./arch-graph.config.ts
@@ -133,16 +154,18 @@ async function cmdBuild(args: ParsedArgs): Promise<void> {
         }
     }
 
-    process.stdout.write(`\n✓ graph.json:      ${outDir}/graph.json (${result.graph.nodes.length} nodes, ${result.graph.edges.length} edges)\n`);
-    process.stdout.write(`✓ diagnostics.json: ${outDir}/diagnostics.json\n`);
-    process.stdout.write(`✓ validation.json:  ${outDir}/validation.json\n`);
-    process.stdout.write(`✓ graph.mermaid:    ${mermaidPath}\n`);
-    if (extraSliceFiles.length > 0) {
-        process.stdout.write(
-            `✓ mermaid slice (${describeSlice(args.mermaidSlice!)}): ${extraSliceFiles.length} file(s)\n`,
-        );
-        for (const f of extraSliceFiles) {
-            process.stdout.write(`    ${f}\n`);
+    if (!args.quiet) {
+        process.stdout.write(`\n✓ graph.json:      ${outDir}/graph.json (${result.graph.nodes.length} nodes, ${result.graph.edges.length} edges)\n`);
+        process.stdout.write(`✓ diagnostics.json: ${outDir}/diagnostics.json\n`);
+        process.stdout.write(`✓ validation.json:  ${outDir}/validation.json\n`);
+        process.stdout.write(`✓ graph.mermaid:    ${mermaidPath}\n`);
+        if (extraSliceFiles.length > 0) {
+            process.stdout.write(
+                `✓ mermaid slice (${describeSlice(args.mermaidSlice!)}): ${extraSliceFiles.length} file(s)\n`,
+            );
+            for (const f of extraSliceFiles) {
+                process.stdout.write(`    ${f}\n`);
+            }
         }
     }
 
@@ -315,12 +338,36 @@ async function cmdDiagnose(args: ParsedArgs): Promise<void> {
 }
 
 async function main(): Promise<void> {
-    const args = parseArgs(process.argv.slice(2));
-    if (!args.cmd || args.cmd === '-h' || args.cmd === '--help') {
+    const argv = process.argv.slice(2);
+    const cmd = argv[0];
+
+    if (!cmd || cmd === '-h' || cmd === '--help') {
         process.stdout.write(HELP);
-        process.exit(args.cmd ? 0 : 1);
+        process.exit(cmd ? 0 : 1);
     }
 
+    // Two-token subcommand groups: dispatch BEFORE the flag parser so we don't
+    // mis-interpret `install` / `uninstall` / `status` as positional config paths.
+    if (cmd === 'claude') {
+        const { sub, args } = parseClaudeArgs(argv.slice(1));
+        if (sub === 'install') return claudeInstall(args);
+        if (sub === 'uninstall') return claudeUninstall(args);
+        process.stderr.write(`unknown subcommand: claude ${sub}\n${HELP}`);
+        process.exit(1);
+    }
+    if (cmd === 'hook') {
+        const { sub, args } = parseHookArgs(argv.slice(1));
+        if (sub === 'install') return hookInstall(args);
+        if (sub === 'uninstall') return hookUninstall(args);
+        if (sub === 'status') return hookStatus(args);
+        process.stderr.write(`unknown subcommand: hook ${sub}\n${HELP}`);
+        process.exit(1);
+    }
+    if (cmd === 'install-skill') {
+        return installSkill();
+    }
+
+    const args = parseArgs(argv);
     switch (args.cmd) {
         case 'init':
             await cmdInit(args.out === './arch-graph-out' ? './arch-graph.config.ts' : args.out);
