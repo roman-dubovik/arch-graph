@@ -231,11 +231,9 @@ export function buildDiReport(
     groundTruth: DiGroundTruthEntry[],
 ): DiValidationReport {
     // Module GT match — by decorator file:line.
+    const gtModule = groundTruth.filter((g) => g.role === 'module');
     const modKeyed = indexBy(modules, (m) => `${m.location.file}:${m.location.line}`);
-    const { consumed: consumedModules, missed: missedModules } = matchByLineKey(
-        groundTruth.filter((g) => g.role === 'module'),
-        modKeyed,
-    );
+    const { consumed: consumedModules, missed: missedModules } = matchByLineKey(gtModule, modKeyed);
 
     // Field GT match — by per-field property-name file:line.
     const missedByField = {} as Record<DiField, DiGroundTruthEntry[]>;
@@ -265,7 +263,6 @@ export function buildDiReport(
         }
     }
 
-    const gtModule = groundTruth.filter((g) => g.role === 'module');
     return {
         summary: {
             recallModules: gtModule.length > 0 ? (gtModule.length - missedModules.length) / gtModule.length : 1,
