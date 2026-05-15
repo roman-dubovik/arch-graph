@@ -1,0 +1,13 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+.idea/
+.vscode/
+
+# Build outputs
+arch-graph-out/
+
+# Local config overrides
+*.local.ts
+*.local.json

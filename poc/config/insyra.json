@@ -1,0 +1,13 @@
+{
+    "id": "insyra",
+    "root": "/Users/romandubovik/Documents/Projects/insyra",
+    "appsGlob": "apps/*",
+    "libsGlob": "libs/**",
+    "wrapperPublishApis": [
+        { "class": "JetStreamService", "methods": ["publish"] }
+    ],
+    "wrapperSubscribeApis": [
+        { "class": "JetStreamService", "methods": ["subscribe"] }
+    ],
+    "excludeGlobs": ["/tmp/", "/.worktrees/"]
+}

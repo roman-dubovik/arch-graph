@@ -1,0 +1,986 @@
+{
+  "projectId": "beribuy2",
+  "timestamp": "2026-05-15T15:48:13.113Z",
+  "summary": {
+    "recallHandlers": 1,
+    "recallSenders": 1,
+    "resolveRate": 0.9142857142857143,
+    "classificationAccuracy": 1,
+    "totalExtracted": 35,
+    "totalGroundTruth": 32,
+    "bySubjectKind": {
+      "literal": 26,
+      "dynamic": 3,
+      "pattern": 6
+    }
+  },
+  "extracted": [
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "cron.register.nats"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-cron-service/src/controllers/cron.controller.ts",
+        "line": 223,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "CronController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "cron.register.internal"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-cron-service/src/controllers/cron.controller.ts",
+        "line": 237,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "CronController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "cron.delete"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-cron-service/src/controllers/cron.controller.ts",
+        "line": 259,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "CronController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "job-execution.complete.>"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-cron-service/src/controllers/cron.controller.ts",
+        "line": 269,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "CronController"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:pattern"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-cron-service/src/services/cron-scheduler.service.ts",
+        "line": 907,
+        "column": 36
+      },
+      "via": "ClientProxy.send",
+      "enclosingClass": "CronSchedulerService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "pattern",
+        "pattern": "*.*",
+        "placeholders": [
+          "pattern",
+          "NATS_PATTERNS.HEALTH_CHECK_SUFFIX"
+        ]
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-cron-service/src/services/cron-scheduler.service.ts",
+        "line": 946,
+        "column": 25
+      },
+      "via": "ClientProxy.send",
+      "enclosingClass": "CronSchedulerService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:pattern"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-cron-service/src/services/cron-scheduler.service.ts",
+        "line": 999,
+        "column": 36
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "CronSchedulerService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "SEND_VERIFICATION_EMAIL"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-mail-service/src/controllers/mail.controller.ts",
+        "line": 25,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "MailController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "SEND_PASSWORD_RESET"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-mail-service/src/controllers/mail.controller.ts",
+        "line": 37,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "MailController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "SEND_FORCED_PASSWORD_CHANGE"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-mail-service/src/controllers/mail.controller.ts",
+        "line": 49,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "MailController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "SEND_PASSWORD_CHANGED_NOTIFICATION"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-mail-service/src/controllers/mail.controller.ts",
+        "line": 61,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "MailController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "SEND_SECURITY_ALERT"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-mail-service/src/controllers/mail.controller.ts",
+        "line": 73,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "MailController"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:pattern"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/libs/nest-shared/src/utils/nats.utils.ts",
+        "line": 26,
+        "column": 13
+      },
+      "via": "ClientProxy.send"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "blog-post.check-broken-links"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/controllers/blog-post.controller.ts",
+        "line": 426,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "BlogPostController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "pattern",
+        "pattern": "*.*",
+        "placeholders": [
+          "NATS_PATTERNS.BLOG_POST_CHECK_BROKEN_LINKS",
+          "NATS_PATTERNS.HEALTH_CHECK_SUFFIX"
+        ]
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/controllers/blog-post.controller.ts",
+        "line": 445,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "BlogPostController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "feed.invalidate"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/controllers/feed.controller.ts",
+        "line": 123,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "FeedController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "guard.parse-log"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/controllers/guard-stats.controller.ts",
+        "line": 105,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "GuardStatsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "guard.create-partitions"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/controllers/guard-stats.controller.ts",
+        "line": 116,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "GuardStatsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "pattern",
+        "pattern": "*.*",
+        "placeholders": [
+          "NATS_PATTERNS.GUARD_PARSE_LOG",
+          "NATS_PATTERNS.HEALTH_CHECK_SUFFIX"
+        ]
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/controllers/guard-stats.controller.ts",
+        "line": 127,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "GuardStatsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "promocode.check-obsolete"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/controllers/promocode.controller.ts",
+        "line": 493,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "PromocodeController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "pattern",
+        "pattern": "*.*",
+        "placeholders": [
+          "NATS_PATTERNS.PROMOCODE_CHECK_OBSOLETE",
+          "NATS_PATTERNS.HEALTH_CHECK_SUFFIX"
+        ]
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/controllers/promocode.controller.ts",
+        "line": 512,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "PromocodeController"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "pattern",
+        "pattern": "*.*",
+        "placeholders": [
+          "CRON_JOB_EXECUTION_COMPLETE_SUFFIX",
+          "pattern"
+        ]
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/services/blog-post.service.ts",
+        "line": 614,
+        "column": 17
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "BlogPostService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "pattern",
+        "pattern": "*.*",
+        "placeholders": [
+          "CRON_JOB_EXECUTION_COMPLETE_SUFFIX",
+          "pattern"
+        ]
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/services/blog-post.service.ts",
+        "line": 630,
+        "column": 17
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "BlogPostService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "feed.invalidate"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/services/promocode.service.ts",
+        "line": 853,
+        "column": 9
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "PromocodeService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "feed.invalidate"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/services/promocode.service.ts",
+        "line": 972,
+        "column": 9
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "PromocodeService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "feed.invalidate"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/services/promocode.service.ts",
+        "line": 1004,
+        "column": 9
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "PromocodeService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "feed.invalidate"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/services/promocode.service.ts",
+        "line": 1029,
+        "column": 9
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "PromocodeService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "feed.invalidate"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/services/promocode.service.ts",
+        "line": 1064,
+        "column": 9
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "PromocodeService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "feed.invalidate"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/services/promocode.service.ts",
+        "line": 1095,
+        "column": 9
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "PromocodeService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "feed.invalidate"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/services/promocode.service.ts",
+        "line": 1133,
+        "column": 9
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "PromocodeService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "feed.invalidate"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/services/promocode.service.ts",
+        "line": 1166,
+        "column": 9
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "PromocodeService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "feed.invalidate"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/services/promocode.service.ts",
+        "line": 1256,
+        "column": 9
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "PromocodeService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "feed.invalidate"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/services/promocode.service.ts",
+        "line": 1370,
+        "column": 9
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "PromocodeService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "feed.invalidate"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/services/promocode.service.ts",
+        "line": 1413,
+        "column": 9
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "PromocodeService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "feed.invalidate"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/services/promocode.service.ts",
+        "line": 1450,
+        "column": 9
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "PromocodeService"
+    }
+  ],
+  "groundTruth": [
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-cron-service/src/controllers/cron.controller.ts",
+        "line": 223,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(NATS_PATTERNS.CRON_REGISTER_NATS)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-cron-service/src/controllers/cron.controller.ts",
+        "line": 237,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(NATS_PATTERNS.CRON_REGISTER_INTERNAL)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-cron-service/src/controllers/cron.controller.ts",
+        "line": 259,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(NATS_PATTERNS.CRON_DELETE)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-cron-service/src/controllers/cron.controller.ts",
+        "line": 269,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(NATS_PATTERNS.CRON_JOB_EXECUTION_COMPLETE)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-mail-service/src/controllers/mail.controller.ts",
+        "line": 25,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(EMailPattern.SEND_VERIFICATION_EMAIL)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-mail-service/src/controllers/mail.controller.ts",
+        "line": 37,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(EMailPattern.SEND_PASSWORD_RESET)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-mail-service/src/controllers/mail.controller.ts",
+        "line": 49,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(EMailPattern.SEND_FORCED_PASSWORD_CHANGE)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-mail-service/src/controllers/mail.controller.ts",
+        "line": 61,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(EMailPattern.SEND_PASSWORD_CHANGED_NOTIFICATION)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-mail-service/src/controllers/mail.controller.ts",
+        "line": 73,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(EMailPattern.SEND_SECURITY_ALERT)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/controllers/blog-post.controller.ts",
+        "line": 426,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(NATS_PATTERNS.BLOG_POST_CHECK_BROKEN_LINKS)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/controllers/blog-post.controller.ts",
+        "line": 445,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(getHealthCheckPattern(NATS_PATTERNS.BLOG_POST_CHECK_BROKEN_LINKS))",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/controllers/feed.controller.ts",
+        "line": 123,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(NATS_PATTERNS.FEED_INVALIDATE)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/controllers/guard-stats.controller.ts",
+        "line": 105,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(NATS_PATTERNS.GUARD_PARSE_LOG)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/controllers/guard-stats.controller.ts",
+        "line": 116,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(NATS_PATTERNS.GUARD_CREATE_PARTITIONS)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/controllers/guard-stats.controller.ts",
+        "line": 127,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(getHealthCheckPattern(NATS_PATTERNS.GUARD_PARSE_LOG))",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/controllers/promocode.controller.ts",
+        "line": 493,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(NATS_PATTERNS.PROMOCODE_CHECK_OBSOLETE)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/controllers/promocode.controller.ts",
+        "line": 512,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(getHealthCheckPattern(NATS_PATTERNS.PROMOCODE_CHECK_OBSOLETE))",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/services/blog-post.service.ts",
+        "line": 614,
+        "column": 17
+      },
+      "matchedText": "this.client.emit(resultPattern, {",
+      "context": "ClientProxy.emit"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/services/blog-post.service.ts",
+        "line": 630,
+        "column": 17
+      },
+      "matchedText": "this.client.emit(getResultPattern(pattern), {",
+      "context": "ClientProxy.emit"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/services/promocode.service.ts",
+        "line": 853,
+        "column": 9
+      },
+      "matchedText": "this.client.emit(NATS_PATTERNS.FEED_INVALIDATE, {});",
+      "context": "ClientProxy.emit"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/services/promocode.service.ts",
+        "line": 972,
+        "column": 9
+      },
+      "matchedText": "this.client.emit(NATS_PATTERNS.FEED_INVALIDATE, {});",
+      "context": "ClientProxy.emit"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/services/promocode.service.ts",
+        "line": 1004,
+        "column": 9
+      },
+      "matchedText": "this.client.emit(NATS_PATTERNS.FEED_INVALIDATE, {});",
+      "context": "ClientProxy.emit"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/services/promocode.service.ts",
+        "line": 1029,
+        "column": 9
+      },
+      "matchedText": "this.client.emit(NATS_PATTERNS.FEED_INVALIDATE, {});",
+      "context": "ClientProxy.emit"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/services/promocode.service.ts",
+        "line": 1064,
+        "column": 9
+      },
+      "matchedText": "this.client.emit(NATS_PATTERNS.FEED_INVALIDATE, {});",
+      "context": "ClientProxy.emit"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/services/promocode.service.ts",
+        "line": 1095,
+        "column": 9
+      },
+      "matchedText": "this.client.emit(NATS_PATTERNS.FEED_INVALIDATE, {});",
+      "context": "ClientProxy.emit"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/services/promocode.service.ts",
+        "line": 1133,
+        "column": 9
+      },
+      "matchedText": "this.client.emit(NATS_PATTERNS.FEED_INVALIDATE, {});",
+      "context": "ClientProxy.emit"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/services/promocode.service.ts",
+        "line": 1166,
+        "column": 9
+      },
+      "matchedText": "this.client.emit(NATS_PATTERNS.FEED_INVALIDATE, {});",
+      "context": "ClientProxy.emit"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/services/promocode.service.ts",
+        "line": 1256,
+        "column": 9
+      },
+      "matchedText": "this.client.emit(NATS_PATTERNS.FEED_INVALIDATE, {});",
+      "context": "ClientProxy.emit"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/services/promocode.service.ts",
+        "line": 1370,
+        "column": 9
+      },
+      "matchedText": "this.client.emit(NATS_PATTERNS.FEED_INVALIDATE, {});",
+      "context": "ClientProxy.emit"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/services/promocode.service.ts",
+        "line": 1413,
+        "column": 9
+      },
+      "matchedText": "this.client.emit(NATS_PATTERNS.FEED_INVALIDATE, {});",
+      "context": "ClientProxy.emit"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-api-beribuy/src/services/promocode.service.ts",
+        "line": 1450,
+        "column": 9
+      },
+      "matchedText": "this.client.emit(NATS_PATTERNS.FEED_INVALIDATE, {});",
+      "context": "ClientProxy.emit"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-cron-service/src/services/cron-scheduler.service.ts",
+        "line": 999,
+        "column": 36
+      },
+      "matchedText": "const observable = this.client.emit(pattern, messagePayload);",
+      "context": "ClientProxy.emit"
+    }
+  ],
+  "missed": [],
+  "extra": [
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:pattern"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-cron-service/src/services/cron-scheduler.service.ts",
+        "line": 907,
+        "column": 36
+      },
+      "via": "ClientProxy.send",
+      "enclosingClass": "CronSchedulerService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "pattern",
+        "pattern": "*.*",
+        "placeholders": [
+          "pattern",
+          "NATS_PATTERNS.HEALTH_CHECK_SUFFIX"
+        ]
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-cron-service/src/services/cron-scheduler.service.ts",
+        "line": 946,
+        "column": 25
+      },
+      "via": "ClientProxy.send",
+      "enclosingClass": "CronSchedulerService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:pattern"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/libs/nest-shared/src/utils/nats.utils.ts",
+        "line": 26,
+        "column": 13
+      },
+      "via": "ClientProxy.send"
+    }
+  ],
+  "unresolvedSamples": [
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:pattern"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-cron-service/src/services/cron-scheduler.service.ts",
+        "line": 907,
+        "column": 36
+      },
+      "via": "ClientProxy.send",
+      "enclosingClass": "CronSchedulerService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:pattern"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/apps/be-cron-service/src/services/cron-scheduler.service.ts",
+        "line": 999,
+        "column": 36
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "CronSchedulerService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:pattern"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0/libs/nest-shared/src/utils/nats.utils.ts",
+        "line": 26,
+        "column": 13
+      },
+      "via": "ClientProxy.send"
+    }
+  ]
+}
