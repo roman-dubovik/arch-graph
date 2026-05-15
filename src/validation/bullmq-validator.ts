@@ -1,7 +1,3 @@
-import fg from 'fast-glob';
-import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
-
 import type { ArchGraphConfig } from '../core/config.js';
 import type {
     BullMqGroundTruthEntry,
@@ -10,7 +6,8 @@ import type {
     BullMqQueueRegistration,
     BullMqValidationReport,
 } from '../core/types.js';
-import { buildLineStarts, indexBy, offsetToLineCol } from './line-index.js';
+import { buildLineStarts, indexBy, matchByLineKey, offsetToLineCol } from './line-index.js';
+import { iterateSourceFiles } from './scan.js';
 import { stripComments } from './strip-comments.js';
 
 /**
@@ -40,36 +37,9 @@ const REGISTER_RE = /BullModule\s*\.\s*registerQueue(?:Async)?\s*\(/g;
 export async function enumerateBullMqGroundTruth(
     cfg: ArchGraphConfig,
 ): Promise<BullMqGroundTruthEntry[]> {
-    const root = resolve(cfg.root);
-    const files = await fg(
-        [`${cfg.appsGlob}/**/*.ts`, ...(cfg.libsGlob ? [`${cfg.libsGlob}/**/*.ts`] : [])],
-        {
-            cwd: root,
-            absolute: true,
-            ignore: [
-                '**/node_modules/**',
-                '**/dist/**',
-                '**/.claude/**',
-                '**/.worktrees/**',
-                '**/*.spec.ts',
-                '**/*.test.ts',
-                '**/*.d.ts',
-                ...(cfg.excludeGlobs?.map((g) => `**${g}**`) ?? []),
-            ],
-        },
-    );
-
     const out: BullMqGroundTruthEntry[] = [];
 
-    for (const file of files) {
-        let content: string;
-        try {
-            content = await readFile(file, 'utf8');
-        } catch (err) {
-            const e = err as NodeJS.ErrnoException;
-            if (e.code === 'ENOENT') continue;
-            throw new Error(`ground-truth read failed for ${file}: ${e.code ?? e.message}`, { cause: err });
-        }
+    for await (const { file, content } of iterateSourceFiles(cfg, 'bullmq GT')) {
         if (
             !content.includes('@InjectQueue') &&
             !content.includes('@Processor') &&
@@ -117,9 +87,9 @@ export function buildBullMqReport(
     const gtCons = groundTruth.filter((g) => g.role === 'consumer');
     const gtReg = groundTruth.filter((g) => g.role === 'registration');
 
-    const { consumed: consumedProd, missed: missedProducers } = matchGroundTruth(gtProd, prodKeyed);
-    const { consumed: consumedCons, missed: missedConsumers } = matchGroundTruth(gtCons, consKeyed);
-    const { consumed: consumedReg, missed: missedRegistrations } = matchGroundTruth(gtReg, regKeyed);
+    const { consumed: consumedProd, missed: missedProducers } = matchByLineKey(gtProd, prodKeyed);
+    const { consumed: consumedCons, missed: missedConsumers } = matchByLineKey(gtCons, consKeyed);
+    const { consumed: consumedReg, missed: missedRegistrations } = matchByLineKey(gtReg, regKeyed);
 
     const extraProducers = producers.filter((s) => !consumedProd.has(s));
     const extraConsumers = consumers.filter((s) => !consumedCons.has(s));
@@ -157,18 +127,5 @@ export function buildBullMqReport(
     };
 }
 
-function matchGroundTruth<T>(
-    gtEntries: BullMqGroundTruthEntry[],
-    keyed: Map<string, T[]>,
-): { consumed: Set<T>; missed: BullMqGroundTruthEntry[] } {
-    const consumed = new Set<T>();
-    const missed: BullMqGroundTruthEntry[] = [];
-    for (const g of gtEntries) {
-        const k = `${g.location.file}:${g.location.line}`;
-        const match = (keyed.get(k) ?? []).find((c) => !consumed.has(c));
-        if (match) consumed.add(match);
-        else missed.push(g);
-    }
-    return { consumed, missed };
-}
+
 

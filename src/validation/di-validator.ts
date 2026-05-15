@@ -1,14 +1,11 @@
-import fg from 'fast-glob';
-import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
-
 import type { ArchGraphConfig } from '../core/config.js';
 import type {
     DiGroundTruthEntry,
     DiModuleSite,
     DiValidationReport,
 } from '../core/types.js';
-import { buildLineStarts, indexBy, offsetToLineCol } from './line-index.js';
+import { buildLineStarts, indexBy, matchByLineKey, offsetToLineCol } from './line-index.js';
+import { iterateSourceFiles } from './scan.js';
 import { stripComments } from './strip-comments.js';
 
 /**
@@ -27,7 +24,9 @@ import { stripComments } from './strip-comments.js';
  * GT entries, property-name-token line for field GT entries; both are stable
  * across formatter passes).
  *
- * `s` flag enables `.` to span newlines for `@Module(\n  imports: ...,\n)` shapes.
+ * `g` flag collects all `@Module(` occurrences in a file; the brace-balanced
+ * scanner in `findModuleSpans` handles multi-line bodies without needing `.`
+ * to span newlines.
  */
 
 const MODULE_RE = /@Module\s*\(/gs;
@@ -39,36 +38,9 @@ const MODULE_RE = /@Module\s*\(/gs;
 export async function enumerateDiGroundTruth(
     cfg: ArchGraphConfig,
 ): Promise<DiGroundTruthEntry[]> {
-    const root = resolve(cfg.root);
-    const files = await fg(
-        [`${cfg.appsGlob}/**/*.ts`, ...(cfg.libsGlob ? [`${cfg.libsGlob}/**/*.ts`] : [])],
-        {
-            cwd: root,
-            absolute: true,
-            ignore: [
-                '**/node_modules/**',
-                '**/dist/**',
-                '**/.claude/**',
-                '**/.worktrees/**',
-                '**/*.spec.ts',
-                '**/*.test.ts',
-                '**/*.d.ts',
-                ...(cfg.excludeGlobs?.map((g) => `**${g}**`) ?? []),
-            ],
-        },
-    );
-
     const out: DiGroundTruthEntry[] = [];
 
-    for (const file of files) {
-        let content: string;
-        try {
-            content = await readFile(file, 'utf8');
-        } catch (err) {
-            const e = err as NodeJS.ErrnoException;
-            if (e.code === 'ENOENT') continue;
-            throw new Error(`ground-truth read failed for ${file}: ${e.code ?? e.message}`, { cause: err });
-        }
+    for await (const { file, content } of iterateSourceFiles(cfg, 'di GT')) {
         // File-level pre-filter: only scrub and match files that contain `@Module(`. Field-presence
         // regex relies on being inside a module declaration; we don't trust raw `imports:`,
         // `providers:` matches outside that context.
@@ -244,44 +216,38 @@ function isIdentPart(c: string): boolean {
     return isIdentStart(c) || (c >= '0' && c <= '9');
 }
 
+const DI_FIELDS = ['imports', 'providers', 'exports', 'controllers'] as const;
+type DiField = (typeof DI_FIELDS)[number];
+
+const FIELD_ROLE: Record<DiField, DiGroundTruthEntry['role']> = {
+    imports: 'imports-field',
+    providers: 'providers-field',
+    exports: 'exports-field',
+    controllers: 'controllers-field',
+};
+
 export function buildDiReport(
     modules: DiModuleSite[],
     groundTruth: DiGroundTruthEntry[],
 ): DiValidationReport {
     // Module GT match — by decorator file:line.
     const modKeyed = indexBy(modules, (m) => `${m.location.file}:${m.location.line}`);
+    const { consumed: consumedModules, missed: missedModules } = matchByLineKey(
+        groundTruth.filter((g) => g.role === 'module'),
+        modKeyed,
+    );
 
-    // Field GT match — by per-field property-name file:line. Separate map per field.
-    const fieldKeyed = {
-        imports: indexBy(
-            modules.filter((m) => m.fieldLocations.imports),
-            (m) => `${m.fieldLocations.imports!.file}:${m.fieldLocations.imports!.line}`,
-        ),
-        providers: indexBy(
-            modules.filter((m) => m.fieldLocations.providers),
-            (m) => `${m.fieldLocations.providers!.file}:${m.fieldLocations.providers!.line}`,
-        ),
-        exports: indexBy(
-            modules.filter((m) => m.fieldLocations.exports),
-            (m) => `${m.fieldLocations.exports!.file}:${m.fieldLocations.exports!.line}`,
-        ),
-        controllers: indexBy(
-            modules.filter((m) => m.fieldLocations.controllers),
-            (m) => `${m.fieldLocations.controllers!.file}:${m.fieldLocations.controllers!.line}`,
-        ),
-    };
-
-    const gtModule = groundTruth.filter((g) => g.role === 'module');
-    const gtImports = groundTruth.filter((g) => g.role === 'imports-field');
-    const gtProviders = groundTruth.filter((g) => g.role === 'providers-field');
-    const gtExports = groundTruth.filter((g) => g.role === 'exports-field');
-    const gtControllers = groundTruth.filter((g) => g.role === 'controllers-field');
-
-    const { consumed: consumedModules, missed: missedModules } = match(gtModule, modKeyed);
-    const { missed: missedImportsFields } = match(gtImports, fieldKeyed.imports);
-    const { missed: missedProvidersFields } = match(gtProviders, fieldKeyed.providers);
-    const { missed: missedExportsFields } = match(gtExports, fieldKeyed.exports);
-    const { missed: missedControllersFields } = match(gtControllers, fieldKeyed.controllers);
+    // Field GT match — by per-field property-name file:line.
+    const missedByField = {} as Record<DiField, DiGroundTruthEntry[]>;
+    const gtByField = {} as Record<DiField, DiGroundTruthEntry[]>;
+    for (const f of DI_FIELDS) {
+        const fieldKeyed = indexBy(
+            modules.filter((m) => m.fieldLocations[f]),
+            (m) => `${m.fieldLocations[f]!.file}:${m.fieldLocations[f]!.line}`,
+        );
+        gtByField[f] = groundTruth.filter((g) => g.role === FIELD_ROLE[f]);
+        missedByField[f] = matchByLineKey(gtByField[f], fieldKeyed).missed;
+    }
 
     const extraModules = modules.filter((m) => !consumedModules.has(m));
 
@@ -290,40 +256,34 @@ export function buildDiReport(
     let resolvedRefs = 0;
     const totals = { imports: 0, providers: 0, exports: 0, controllers: 0 };
     for (const mod of modules) {
-        for (const r of mod.imports) {
-            totalRefs++;
-            totals.imports++;
-            if (r.kind !== 'unresolved') resolvedRefs++;
-        }
-        for (const r of mod.providers) {
-            totalRefs++;
-            totals.providers++;
-            if (r.kind !== 'unresolved') resolvedRefs++;
-        }
-        for (const r of mod.exports) {
-            totalRefs++;
-            totals.exports++;
-            if (r.kind !== 'unresolved') resolvedRefs++;
-        }
-        for (const r of mod.controllers) {
-            totalRefs++;
-            totals.controllers++;
-            if (r.kind !== 'unresolved') resolvedRefs++;
+        for (const f of DI_FIELDS) {
+            for (const r of mod[f]) {
+                totalRefs++;
+                totals[f]++;
+                if (r.kind !== 'unresolved') resolvedRefs++;
+            }
         }
     }
 
+    const gtModule = groundTruth.filter((g) => g.role === 'module');
     return {
         summary: {
             recallModules: gtModule.length > 0 ? (gtModule.length - missedModules.length) / gtModule.length : 1,
             recallImportsFields:
-                gtImports.length > 0 ? (gtImports.length - missedImportsFields.length) / gtImports.length : 1,
+                gtByField.imports.length > 0
+                    ? (gtByField.imports.length - missedByField.imports.length) / gtByField.imports.length
+                    : 1,
             recallProvidersFields:
-                gtProviders.length > 0 ? (gtProviders.length - missedProvidersFields.length) / gtProviders.length : 1,
+                gtByField.providers.length > 0
+                    ? (gtByField.providers.length - missedByField.providers.length) / gtByField.providers.length
+                    : 1,
             recallExportsFields:
-                gtExports.length > 0 ? (gtExports.length - missedExportsFields.length) / gtExports.length : 1,
+                gtByField.exports.length > 0
+                    ? (gtByField.exports.length - missedByField.exports.length) / gtByField.exports.length
+                    : 1,
             recallControllersFields:
-                gtControllers.length > 0
-                    ? (gtControllers.length - missedControllersFields.length) / gtControllers.length
+                gtByField.controllers.length > 0
+                    ? (gtByField.controllers.length - missedByField.controllers.length) / gtByField.controllers.length
                     : 1,
             resolveRate: totalRefs > 0 ? resolvedRefs / totalRefs : 1,
             totalModules: modules.length,
@@ -332,33 +292,19 @@ export function buildDiReport(
             totalExports: totals.exports,
             totalControllers: totals.controllers,
             groundTruthModules: gtModule.length,
-            groundTruthImportsFields: gtImports.length,
-            groundTruthProvidersFields: gtProviders.length,
-            groundTruthExportsFields: gtExports.length,
-            groundTruthControllersFields: gtControllers.length,
+            groundTruthImportsFields: gtByField.imports.length,
+            groundTruthProvidersFields: gtByField.providers.length,
+            groundTruthExportsFields: gtByField.exports.length,
+            groundTruthControllersFields: gtByField.controllers.length,
         },
         modules,
         groundTruth,
         missedModules,
-        missedImportsFields,
-        missedProvidersFields,
-        missedExportsFields,
-        missedControllersFields,
+        missedImportsFields: missedByField.imports,
+        missedProvidersFields: missedByField.providers,
+        missedExportsFields: missedByField.exports,
+        missedControllersFields: missedByField.controllers,
         extraModules,
     };
 }
 
-function match<T>(
-    gt: DiGroundTruthEntry[],
-    keyed: Map<string, T[]>,
-): { consumed: Set<T>; missed: DiGroundTruthEntry[] } {
-    const consumed = new Set<T>();
-    const missed: DiGroundTruthEntry[] = [];
-    for (const g of gt) {
-        const k = `${g.location.file}:${g.location.line}`;
-        const hit = (keyed.get(k) ?? []).find((c) => !consumed.has(c));
-        if (hit) consumed.add(hit);
-        else missed.push(g);
-    }
-    return { consumed, missed };
-}

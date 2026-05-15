@@ -37,7 +37,8 @@ const MAX_DEPTH = 6;
 
 /**
  * Set of method names recognised on a `configService`-like object as ENV-var
- * accessors. Captures both `get` and `getOrThrow` — both appear in the corpus.
+ * accessors. Covers all three that appear in the corpus: `get`, `getOrThrow`,
+ * and the rarer `getOrDefault`.
  */
 const CONFIG_GETTER_METHODS = new Set(['get', 'getOrThrow', 'getOrDefault']);
 
@@ -146,11 +147,13 @@ function resolveTemplate(
                 }
                 suffix += r.literal;
             }
+            // Nested DU: `path` is present iff the template carried a tail beyond `${base}`.
+            // A bare `\`${base}\`` (no static suffix and no further spans) yields no `path`,
+            // identical to `axios.get(configService.get('X_URL'))`.
             return {
                 kind: 'env-ref',
                 envVar: first.resolved.envVar,
-                ...(suffix !== '' ? { pathSuffix: suffix } : {}),
-                ...(hasParam ? { pathHasParam: true } : {}),
+                ...(suffix !== '' ? { path: { suffix, hasParam } } : {}),
             };
         }
         if (first.resolved.kind === 'literal') {
@@ -270,6 +273,15 @@ function resolvePropertyAccess(
     depth: number,
     idx: ConstantIndex,
 ): ResolvedUrl {
+    // `process.env.X` is the second canonical env-var shape (alongside `configService.get`).
+    // Recognising it here lets bare `axios.get(process.env.PLATFORM_API_URL)` and template
+    // forms like `\`${process.env.PLATFORM_API_URL}/users/${id}\`` upgrade to env-ref —
+    // without this they'd fall through to symbol chasing (whose declaration site is in
+    // Node typings) and emerge as unresolved.
+    if (node.getExpression().getText() === 'process.env') {
+        return { kind: 'env-ref', envVar: node.getName() };
+    }
+
     // First check whole-dotted lookup in the constant index — handles `URLS.PLATFORM` patterns.
     const entry = idx.get(node.getText());
     if (entry && entry.kind === 'literal') return { kind: 'literal', value: entry.value };

@@ -27,3 +27,31 @@ export function indexBy<T>(arr: T[], keyFn: (t: T) => string): Map<string, T[]> 
     }
     return m;
 }
+
+/**
+ * Matches ground-truth entries to extracted candidates by `file:line` key,
+ * consuming one candidate per GT entry to preserve cardinality.
+ *
+ * An optional `predicate` narrows which candidates are eligible for a given
+ * GT entry (e.g. NATS uses it to require matching `role`).
+ */
+export function matchByLineKey<
+    GT extends { location: { file: string; line: number } },
+    T,
+>(
+    gt: GT[],
+    keyed: Map<string, T[]>,
+    predicate?: (candidate: T, entry: GT) => boolean,
+): { consumed: Set<T>; missed: GT[] } {
+    const consumed = new Set<T>();
+    const missed: GT[] = [];
+    for (const g of gt) {
+        const k = `${g.location.file}:${g.location.line}`;
+        const hit = (keyed.get(k) ?? []).find(
+            (c) => !consumed.has(c) && (!predicate || predicate(c, g)),
+        );
+        if (hit) consumed.add(hit);
+        else missed.push(g);
+    }
+    return { consumed, missed };
+}

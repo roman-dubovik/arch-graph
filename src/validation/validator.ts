@@ -1,5 +1,5 @@
 import type { GroundTruthEntry, NatsCallSite, NatsValidationReport } from '../core/types.js';
-import { indexBy } from './line-index.js';
+import { indexBy, matchByLineKey } from './line-index.js';
 
 /**
  * Matches ground-truth entries against extracted call sites.
@@ -15,25 +15,18 @@ export function buildReport(
     groundTruth: GroundTruthEntry[],
 ): NatsValidationReport {
     const extractedKeyed = indexBy(extracted, locKey);
-    const gtKeyed = indexBy(groundTruth, locKey);
 
-    const missed: GroundTruthEntry[] = [];
-    const consumed = new Set<NatsCallSite>();
+    const { consumed, missed } = matchByLineKey(
+        groundTruth,
+        extractedKeyed,
+        (candidate, entry) => candidate.role === entry.role,
+    );
+
     let handlersFound = 0;
     let sendersFound = 0;
-
-    for (const [k, gtList] of gtKeyed) {
-        const candidates = extractedKeyed.get(k) ?? [];
-        for (const gt of gtList) {
-            const match = candidates.find((c) => c.role === gt.role && !consumed.has(c));
-            if (match) {
-                consumed.add(match);
-                if (gt.role === 'receiver') handlersFound++;
-                else sendersFound++;
-            } else {
-                missed.push(gt);
-            }
-        }
+    for (const c of consumed) {
+        if (c.role === 'receiver') handlersFound++;
+        else sendersFound++;
     }
 
     const extra = extracted.filter((e) => !consumed.has(e));

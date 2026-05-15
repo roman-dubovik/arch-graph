@@ -1,7 +1,3 @@
-import fg from 'fast-glob';
-import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
-
 import type { ArchGraphConfig, HttpConfig } from '../core/config.js';
 import type {
     HttpCallSite,
@@ -9,7 +5,8 @@ import type {
     HttpValidationReport,
     ResolvedUrl,
 } from '../core/types.js';
-import { buildLineStarts, indexBy, offsetToLineCol } from './line-index.js';
+import { buildLineStarts, indexBy, matchByLineKey, offsetToLineCol } from './line-index.js';
+import { iterateSourceFiles } from './scan.js';
 import { stripComments } from './strip-comments.js';
 
 /**
@@ -39,6 +36,15 @@ const AXIOS_RE = /\baxios\s*\.\s*(get|post|put|patch|delete|head|options)\s*(?:<
  */
 const AXIOS_CONFIG_RE = /(?:^|[\s=({,;])axios\s*\(/g;
 /**
+ * `axios.create({...}).<method>(` chain — paired with the extractor's chain detection
+ * so GT and extracted balance. The extractor emits an unresolved site at the outer
+ * `.get()` location; this regex matches the same offset (anchored at `axios.create`).
+ * Single-level paren matching with `[^)]*` is enough — `axios.create({...})` rarely
+ * contains nested parens inside the config arg.
+ */
+const AXIOS_CREATE_RE =
+    /\baxios\s*\.\s*create\s*\([^)]*\)\s*\.\s*(get|post|put|patch|delete|head|options)\s*\(/g;
+/**
  * Global `fetch(`. We exclude `.fetch(` (method on an object) and `<word>fetch(`
  * (identifier suffix like `prefetch`). Stripping comments first removes JSDoc noise.
  */
@@ -47,36 +53,9 @@ const FETCH_RE = /(?<![.\w])fetch\s*\(/g;
 export async function enumerateHttpGroundTruth(
     cfg: ArchGraphConfig,
 ): Promise<HttpGroundTruthEntry[]> {
-    const root = resolve(cfg.root);
-    const files = await fg(
-        [`${cfg.appsGlob}/**/*.ts`, ...(cfg.libsGlob ? [`${cfg.libsGlob}/**/*.ts`] : [])],
-        {
-            cwd: root,
-            absolute: true,
-            ignore: [
-                '**/node_modules/**',
-                '**/dist/**',
-                '**/.claude/**',
-                '**/.worktrees/**',
-                '**/*.spec.ts',
-                '**/*.test.ts',
-                '**/*.d.ts',
-                ...(cfg.excludeGlobs?.map((g) => `**${g}**`) ?? []),
-            ],
-        },
-    );
-
     const out: HttpGroundTruthEntry[] = [];
 
-    for (const file of files) {
-        let content: string;
-        try {
-            content = await readFile(file, 'utf8');
-        } catch (err) {
-            const e = err as NodeJS.ErrnoException;
-            if (e.code === 'ENOENT') continue;
-            throw new Error(`http GT read failed for ${file}: ${e.code ?? e.message}`, { cause: err });
-        }
+    for await (const { file, content } of iterateSourceFiles(cfg, 'http GT')) {
         if (
             !content.includes('httpService') &&
             !content.includes('axios') &&
@@ -100,6 +79,10 @@ export async function enumerateHttpGroundTruth(
         for (const m of stripped.matchAll(HTTP_SERVICE_RE)) push(m, `httpService.${m[1]}`);
         for (const m of stripped.matchAll(AXIOS_RE)) push(m, `axios.${m[1]}`);
         for (const m of stripped.matchAll(AXIOS_CONFIG_RE)) push(m, 'axios');
+        // `axios.create({...}).<method>(` — must run before AXIOS_CREATE is shadowed
+        // by anything. AXIOS_RE only matches `axios.<method>` (not `axios.create.<method>`),
+        // so there's no double-count.
+        for (const m of stripped.matchAll(AXIOS_CREATE_RE)) push(m, `axios.create.${m[1]}`);
         for (const m of stripped.matchAll(FETCH_RE)) push(m, 'fetch');
     }
 
@@ -112,15 +95,7 @@ export function buildHttpReport(
     httpCfg: HttpConfig | undefined,
 ): HttpValidationReport {
     const siteKeyed = indexBy(sites, (s) => `${s.location.file}:${s.location.line}`);
-
-    const missed: HttpGroundTruthEntry[] = [];
-    const consumed = new Set<HttpCallSite>();
-    for (const g of groundTruth) {
-        const k = `${g.location.file}:${g.location.line}`;
-        const match = (siteKeyed.get(k) ?? []).find((c) => !consumed.has(c));
-        if (match) consumed.add(match);
-        else missed.push(g);
-    }
+    const { consumed, missed } = matchByLineKey(groundTruth, siteKeyed);
     const extra = sites.filter((s) => !consumed.has(s));
 
     // Resolve metric (spec): only `literal` + `env-ref matched to a configured

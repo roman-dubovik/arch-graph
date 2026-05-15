@@ -167,19 +167,17 @@ async function cmdBuild(args: ParsedArgs): Promise<void> {
     if (natsEnabled) {
         if (n.groundTruthHandlers === 0) fails.push(`nats: zero handler ground-truth — check subscribe decorators / wrapperSubscribeApis`);
         if (n.groundTruthSenders === 0) fails.push(`nats: zero sender ground-truth — check wrapperPublishApis (typo'd class name?)`);
-        if (n.groundTruthHandlers > 0 && n.recallHandlers < 0.95) fails.push(`nats handlers ${pct(n.recallHandlers)}`);
-        if (n.groundTruthSenders > 0 && n.recallSenders < 0.95) fails.push(`nats senders ${pct(n.recallSenders)}`);
+        gateRecall(natsEnabled, 'nats', 'handlers', n.groundTruthHandlers, n.recallHandlers, fails);
+        gateRecall(natsEnabled, 'nats', 'senders', n.groundTruthSenders, n.recallSenders, fails);
     }
     if (typeormEnabled) {
         if (t.groundTruthInjections === 0) fails.push(`typeorm: zero injection ground-truth — check appsGlob / @InjectRepository usage`);
         if (t.groundTruthEntities === 0) fails.push(`typeorm: zero entity ground-truth — check @Entity declarations in libs/`);
-        if (t.groundTruthInjections > 0 && t.recallInjections < 0.95) fails.push(`typeorm injections ${pct(t.recallInjections)}`);
-        if (t.groundTruthEntities > 0 && t.recallEntities < 0.95) fails.push(`typeorm entities ${pct(t.recallEntities)}`);
+        gateRecall(typeormEnabled, 'typeorm', 'injections', t.groundTruthInjections, t.recallInjections, fails);
+        gateRecall(typeormEnabled, 'typeorm', 'entities', t.groundTruthEntities, t.recallEntities, fails);
         // Low resolveRate = many @InjectRepository(X) didn't match a known @Entity —
         // usually a real extractor gap (alias re-exports, namespaced imports) worth gating.
-        if (t.totalInjections > 0 && t.resolveRate < 0.95) {
-            fails.push(`typeorm resolve ${pct(t.resolveRate)} (< 95%)`);
-        }
+        gateResolve(typeormEnabled, 'typeorm', t.totalInjections, t.resolveRate, fails);
     }
     if (httpEnabled) {
         // HTTP is opt-in via gate: a project with no HTTP at all should set `domains.http=false`.
@@ -188,9 +186,7 @@ async function cmdBuild(args: ParsedArgs): Promise<void> {
         if (h.groundTruthCalls === 0) {
             fails.push(`http: zero ground-truth — set domains.http=false if this project has no HTTP usage`);
         }
-        if (h.groundTruthCalls > 0 && h.recallCalls < 0.95) {
-            fails.push(`http recall ${pct(h.recallCalls)}`);
-        }
+        gateRecall(httpEnabled, 'http', 'recall', h.groundTruthCalls, h.recallCalls, fails);
     }
     if (bullmqEnabled) {
         // Per-role zero-GT — each role gates independently. A project with @InjectQueue but
@@ -198,13 +194,11 @@ async function cmdBuild(args: ParsedArgs): Promise<void> {
         // and the operator should set `domains.bullmq = false`.
         const anyGt = b.groundTruthProducers + b.groundTruthConsumers + b.groundTruthRegistrations;
         if (anyGt === 0) fails.push(`bullmq: zero ground-truth across producers/consumers/registrations — set domains.bullmq=false if this project has no BullMQ`);
-        if (b.groundTruthProducers > 0 && b.recallProducers < 0.95) fails.push(`bullmq producers ${pct(b.recallProducers)}`);
-        if (b.groundTruthConsumers > 0 && b.recallConsumers < 0.95) fails.push(`bullmq consumers ${pct(b.recallConsumers)}`);
-        if (b.groundTruthRegistrations > 0 && b.recallRegistrations < 0.95) fails.push(`bullmq registrations ${pct(b.recallRegistrations)}`);
+        gateRecall(bullmqEnabled, 'bullmq', 'producers', b.groundTruthProducers, b.recallProducers, fails);
+        gateRecall(bullmqEnabled, 'bullmq', 'consumers', b.groundTruthConsumers, b.recallConsumers, fails);
+        gateRecall(bullmqEnabled, 'bullmq', 'registrations', b.groundTruthRegistrations, b.recallRegistrations, fails);
         const totalSites = b.totalProducers + b.totalConsumers + b.totalRegistrations;
-        if (totalSites > 0 && b.resolveRate < 0.95) {
-            fails.push(`bullmq resolve ${pct(b.resolveRate)} (< 95%)`);
-        }
+        gateResolve(bullmqEnabled, 'bullmq', totalSites, b.resolveRate, fails);
     }
     if (diEnabled) {
         // `module` recall is the primary contract — every `@Module(` in source must be
@@ -213,15 +207,13 @@ async function cmdBuild(args: ParsedArgs): Promise<void> {
         if (d.groundTruthModules === 0) {
             fails.push(`di: zero @Module ground-truth — set domains.di=false if this project is not NestJS`);
         }
-        if (d.groundTruthModules > 0 && d.recallModules < 0.95) fails.push(`di modules ${pct(d.recallModules)}`);
-        if (d.groundTruthImportsFields > 0 && d.recallImportsFields < 0.95) fails.push(`di imports-fields ${pct(d.recallImportsFields)}`);
-        if (d.groundTruthProvidersFields > 0 && d.recallProvidersFields < 0.95) fails.push(`di providers-fields ${pct(d.recallProvidersFields)}`);
-        if (d.groundTruthExportsFields > 0 && d.recallExportsFields < 0.95) fails.push(`di exports-fields ${pct(d.recallExportsFields)}`);
-        if (d.groundTruthControllersFields > 0 && d.recallControllersFields < 0.95) fails.push(`di controllers-fields ${pct(d.recallControllersFields)}`);
+        gateRecall(diEnabled, 'di', 'modules', d.groundTruthModules, d.recallModules, fails);
+        gateRecall(diEnabled, 'di', 'imports-fields', d.groundTruthImportsFields, d.recallImportsFields, fails);
+        gateRecall(diEnabled, 'di', 'providers-fields', d.groundTruthProvidersFields, d.recallProvidersFields, fails);
+        gateRecall(diEnabled, 'di', 'exports-fields', d.groundTruthExportsFields, d.recallExportsFields, fails);
+        gateRecall(diEnabled, 'di', 'controllers-fields', d.groundTruthControllersFields, d.recallControllersFields, fails);
         const totalRefs = d.totalImports + d.totalProviders + d.totalExports + d.totalControllers;
-        if (totalRefs > 0 && d.resolveRate < 0.95) {
-            fails.push(`di resolve ${pct(d.resolveRate)} (< 95%)`);
-        }
+        gateResolve(diEnabled, 'di', totalRefs, d.resolveRate, fails);
     }
 
     if (importsEnabled) {
@@ -244,6 +236,33 @@ async function cmdBuild(args: ParsedArgs): Promise<void> {
 
 function pct(n: number): string {
     return `${(n * 100).toFixed(1)}%`;
+}
+
+/** Push a recall failure if `enabled`, GT is non-zero, and `recall` is below `threshold`. */
+function gateRecall(
+    enabled: boolean,
+    domain: string,
+    field: string,
+    gt: number,
+    recall: number,
+    fails: string[],
+    threshold = 0.95,
+): void {
+    if (!enabled || gt === 0) return;
+    if (recall < threshold) fails.push(`${domain} ${field} ${pct(recall)}`);
+}
+
+/** Push a resolve failure if `enabled`, total is non-zero, and `rate` is below `threshold`. */
+function gateResolve(
+    enabled: boolean,
+    domain: string,
+    total: number,
+    rate: number,
+    fails: string[],
+    threshold = 0.95,
+): void {
+    if (!enabled || total === 0) return;
+    if (rate < threshold) fails.push(`${domain} resolve ${pct(rate)} (< ${pct(threshold)})`);
 }
 
 function describeSlice(slice: MermaidSliceMode): string {
