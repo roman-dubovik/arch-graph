@@ -270,8 +270,19 @@ interface AliasResolverBundle {
  * specifier falls through to `null` (treated as external).
  */
 function buildAliasResolver(root: string): AliasResolverBundle {
-    const paths = loadTsConfigPaths(root);
+    const loaded = loadTsConfigPaths(root);
+    const paths = loaded.paths;
     if (paths.size === 0) {
+        // Two cases are silent failures here:
+        //   1. No tsconfig found at all          → loud warning (alias imports will not resolve).
+        //   2. Tsconfig found but no `compilerOptions.paths` → normal for projects without
+        //      aliases; no warning.
+        if (!loaded.foundTsconfig) {
+            process.stderr.write(
+                `[imports.extractor] WARNING: no tsconfig with compilerOptions.paths found at ${root} ` +
+                    `(tried tsconfig.base.json, tsconfig.json) — alias imports will not resolve\n`,
+            );
+        }
         return { resolve: () => null, isAliasPrefix: () => false };
     }
 
@@ -338,18 +349,22 @@ function buildAliasResolver(root: string): AliasResolverBundle {
 
 /**
  * Load `compilerOptions.paths` from the first existing tsconfig variant.
- * Returns a Map ordered by key length descending so longest-prefix wins.
+ * Returns the paths Map (ordered by key length descending so longest-prefix wins)
+ * plus a flag indicating whether any tsconfig was found at all — used to
+ * distinguish "no aliases configured" from "no tsconfig at root" in diagnostics.
  *
  * Strips JSONC comments (// and /* ... *\/) — Nx-style tsconfigs frequently
  * contain inline notes that vanilla `JSON.parse` chokes on.
  */
-function loadTsConfigPaths(root: string): Map<string, string[]> {
+function loadTsConfigPaths(root: string): { paths: Map<string, string[]>; foundTsconfig: boolean } {
     const candidates = [
         resolve(root, 'tsconfig.base.json'),
         resolve(root, 'tsconfig.json'),
     ];
+    let foundTsconfig = false;
     for (const candidate of candidates) {
         if (!existsSync(candidate)) continue;
+        foundTsconfig = true;
         let raw: string;
         try {
             raw = readFileSync(candidate, 'utf8');
@@ -379,9 +394,9 @@ function loadTsConfigPaths(root: string): Map<string, string[]> {
         if (!paths) continue;
         // Sort longest-key first so prefix matches don't shadow more specific entries.
         const entries = Object.entries(paths).sort((a, b) => b[0].length - a[0].length);
-        return new Map(entries);
+        return { paths: new Map(entries), foundTsconfig };
     }
-    return new Map();
+    return { paths: new Map(), foundTsconfig };
 }
 
 /**

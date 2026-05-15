@@ -28,7 +28,10 @@ import { resolveUrl } from './url-resolver.js';
  *
  * Out of scope (documented in OPEN-QUESTIONS Block B):
  *   - Wrapper services (`this.platformApiClient.fetchUser(id)`) — no auto-discovery.
- *   - `axios.create({ baseURL })` cross-statement tracking — emit unresolved.
+ *   - `axios.create({ baseURL })` cross-statement tracking — client variable bindings
+ *     are not traced. Inline `axios.create({...}).get(url)` chains ARE detected and
+ *     emitted as unresolved (so they balance the GT regex); the URL itself can't be
+ *     attributed to a service without resolving `baseURL`.
  *   - GraphQL / tRPC / gRPC — separate domain entirely.
  */
 
@@ -111,11 +114,39 @@ function collectFromFile(sf: SourceFile, idx: ConstantIndex, out: HttpCallSite[]
         const targetText = target.getText();
 
         // -- `axios.<method>(url, ...)` ------------------------------------------------
-        // Match exact `axios` receiver and any client variable from `axios.create()`
-        // (latter only by name — we don't trace it; flag in OPEN-QUESTIONS).
+        // `axios` receiver is matched directly. Client variables from `axios.create({...})`
+        // are NOT traced cross-statement (would need taint analysis), but the inline chain
+        // `axios.create({...}).get(url)` is detected here and emitted as unresolved so the
+        // call still appears in diagnostics (and balances the GT regex, see http-validator).
         if (targetText === 'axios') {
             pushIfArg(call, 0, method, 'axios', idx, out);
             return;
+        }
+
+        // -- `axios.create({...}).<method>(url, ...)` chain ----------------------------
+        // The receiver is itself a CallExpression. Unwrap one level and check whether the
+        // callee is `axios.create` (or `*.create` where * names an axios import). Emit
+        // unresolved — we can't statically know what `baseURL` was bound, so the URL arg
+        // alone is meaningless without the base. The GT regex sees this pattern too
+        // (AXIOS_CREATE_RE), so recall stays balanced.
+        if (target.getKind() === SyntaxKind.CallExpression) {
+            const innerCall = target as CallExpression;
+            const innerCalleeText = innerCall.getExpression().getText();
+            if (innerCalleeText === 'axios.create' || innerCalleeText.endsWith('.create')) {
+                out.push({
+                    role: 'call',
+                    url: {
+                        kind: 'unresolved',
+                        raw: call.getText().slice(0, 80),
+                        reason: 'axios.create-chain',
+                    },
+                    method,
+                    api: 'axios',
+                    location: locOf(call),
+                    enclosingClass: findEnclosingClassName(call),
+                });
+                return;
+            }
         }
 
         // -- `<something>.httpService.<method>(url, ...)` ------------------------------
@@ -149,6 +180,7 @@ function pushIfArg(
         ? resolveUrl(urlArg, idx)
         : { kind: 'unresolved', raw: '<no-arg>', reason: 'no url argument' };
     out.push({
+        role: 'call',
         url: resolved,
         method,
         api,
@@ -162,6 +194,7 @@ function handleAxiosConfigCall(call: CallExpression, idx: ConstantIndex, out: Ht
     const cfg = args[0];
     if (!cfg) {
         out.push({
+            role: 'call',
             url: { kind: 'unresolved', raw: '<axios-no-arg>', reason: 'axios called with no arg' },
             method: 'unknown',
             api: 'axios',
@@ -187,6 +220,7 @@ function handleAxiosConfigCall(call: CallExpression, idx: ConstantIndex, out: Ht
             ? resolveUrl(urlInit, idx)
             : { kind: 'unresolved', raw: '<axios-config-no-url>', reason: 'axios config missing url' };
         out.push({
+            role: 'call',
             url: resolved,
             method,
             api: 'axios',
@@ -197,6 +231,7 @@ function handleAxiosConfigCall(call: CallExpression, idx: ConstantIndex, out: Ht
     }
     // Non-literal config: can't read url field statically.
     out.push({
+        role: 'call',
         url: { kind: 'unresolved', raw: cfg.getText().slice(0, 80), reason: 'axios(config) — config not a literal object' },
         method: 'unknown',
         api: 'axios',

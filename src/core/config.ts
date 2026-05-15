@@ -155,5 +155,22 @@ function validateConfig(raw: unknown, source: string): ArchGraphConfig {
 
 function normalizeConfig(cfg: ArchGraphConfig, configDir: string): ArchGraphConfig {
     const root = isAbsolute(cfg.root) ? cfg.root : resolve(configDir, cfg.root);
+
+    // `http.internalServices` entry must carry at least one match criterion.
+    // An entry with neither `envVars` nor `urlPatterns` is structurally inert —
+    // no env-ref will match it, no literal URL will match it, so the entry exists
+    // only as configuration debt. Reject at load time rather than letting it silently
+    // contribute to nothing.
+    for (const svc of cfg.http?.internalServices ?? []) {
+        const hasEnv = (svc.envVars ?? []).length > 0;
+        const hasUrl = (svc.urlPatterns ?? []).length > 0;
+        if (!hasEnv && !hasUrl) {
+            throw new Error(
+                `config.http.internalServices[${svc.id}] has neither envVars nor urlPatterns — ` +
+                    `entry is inert; remove or add a match criterion`,
+            );
+        }
+    }
+
     return { ...cfg, root };
 }

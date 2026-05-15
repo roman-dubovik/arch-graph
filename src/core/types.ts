@@ -420,6 +420,19 @@ export type DiProviderRef =
       }
     | { kind: 'unresolved'; raw: string; reason: string };
 
+/**
+ * Reference inside `controllers: [...]`. NestJS only accepts a class identifier
+ * here — `{ provide: ..., useFactory: ... }` / `{ provide: ..., useValue: ... }`
+ * are not legal in this position (the runtime rejects them with a type error).
+ *
+ * Modelling this as a narrower union than `DiProviderRef` removes the structural
+ * possibility of emitting a `value`/`factory` controller. Anything that doesn't
+ * decode to a class identifier becomes `unresolved` with a structured reason.
+ */
+export type DiControllerRef =
+    | { kind: 'class'; name: string }
+    | { kind: 'unresolved'; raw: string; reason: string };
+
 /** One `@Module(...)` declaration. */
 export interface DiModuleSite {
     className: string;
@@ -428,7 +441,7 @@ export interface DiModuleSite {
     imports: DiModuleRef[];
     providers: DiProviderRef[];
     exports: DiProviderRef[];
-    controllers: DiProviderRef[];
+    controllers: DiControllerRef[];
     /**
      * Per-field property-name locations inside the metadata object, when present.
      * Used by the validator to match `<field>-field` GT by file:line (presence-recall).
@@ -461,7 +474,7 @@ export interface DiDiagnostics {
     unresolvedRefs: Array<{
         moduleClass: string;
         field: 'imports' | 'providers' | 'exports' | 'controllers';
-        ref: DiModuleRef | DiProviderRef;
+        ref: DiModuleRef | DiProviderRef | DiControllerRef;
         location: SourceLoc;
     }>;
     /** `@Module`-decorated classes whose owning file falls outside apps/ and libs/. */
@@ -482,10 +495,15 @@ export interface DiDiagnostics {
 // ============================================================================
 
 /**
- * Resolved HTTP URL. The `env-ref` form carries an optional `pathSuffix` so that
+ * Resolved HTTP URL. The `env-ref` form carries an optional nested `path` so that
  *   `\`${this.baseUrl}/users/${id}\`` where `baseUrl = configService.get('X_URL')`
- * resolves to `{ envVar: 'X_URL', pathSuffix: '/users/*', pathHasParam: true }` —
+ * resolves to `{ envVar: 'X_URL', path: { suffix: '/users/*', hasParam: true } }` —
  * the dominant real-world internal-call pattern.
+ *
+ * The nested DU enforces the co-invariant: previously `pathSuffix?` and `pathHasParam?`
+ * were independent optionals, but they're either both present (env-ref with a path
+ * tail) or both absent (bare env-ref like `axios.get(configService.get('X_URL'))`).
+ * Nesting them under a single `path?` makes that constraint structural.
  *
  * `literal` carries a full URL string (or, when only a path is supplied to a
  * pre-bound baseURL, just the path — that case is not auto-rejoined in v1).
@@ -495,7 +513,7 @@ export interface DiDiagnostics {
  */
 export type ResolvedUrl =
     | { kind: 'literal'; value: string }
-    | { kind: 'env-ref'; envVar: string; pathSuffix?: string; pathHasParam?: boolean }
+    | { kind: 'env-ref'; envVar: string; path?: { suffix: string; hasParam: boolean } }
     | { kind: 'pattern'; pattern: string; placeholders: string[] }
     | { kind: 'unresolved'; raw: string; reason: string };
 
@@ -507,6 +525,13 @@ export type HttpTarget =
 
 /** Single HTTP-client call site (one row of the extractor's output). */
 export interface HttpCallSite {
+    /**
+     * Discriminant matching the convention of every other domain (NATS sender/receiver,
+     * BullMQ producer/consumer/registration, Imports static). HTTP currently has a single
+     * role; the field is fixed at `'call'` to keep exhaustive switches in shape if/when
+     * additional roles appear (e.g. `'webhook-receive'`).
+     */
+    role: 'call';
     /** Resolved-or-not URL expression. */
     url: ResolvedUrl;
     /** HTTP method: 'get' | 'post' | ... | 'fetch' | 'unknown' (axios(config) etc). */
@@ -539,8 +564,12 @@ export interface HttpDiagnostics {
      * internal"), which includes env-refs that don't match any internal-service entry
      * and therefore never produce an edge. The two semantics differ by design — see
      * `HttpValidationReport.summary` for the metric-view definition.
+     *
+     * Renamed from `external` to `externalCalls` to avoid collision with the scalar
+     * count `summary.external` in `HttpValidationReport` — the array view and the
+     * count view are now textually distinguishable.
      */
-    external: HttpCallSite[];
+    externalCalls: HttpCallSite[];
     counts: {
         totalSites: number;
         literal: number;
@@ -561,9 +590,9 @@ export interface DiGroundTruthEntry {
      *
      * Field-presence GT (not entry-counting) is robust against multiline arrays,
      * nested calls, spreads, comments — count of *populated fields per module*, not
-     * the count of array entries. The extractor sets the corresponding `hasXField`
-     * flag whenever it sees the property assignment; matching is by file:line of
-     * the property-name keyword.
+     * the count of array entries. The extractor records the location in
+     * `fieldLocations.X` (non-null = present) whenever it sees the property
+     * assignment; matching is by file:line of the property-name keyword.
      */
     role: 'module' | 'imports-field' | 'providers-field' | 'exports-field' | 'controllers-field';
     location: SourceLoc;
@@ -700,6 +729,12 @@ export interface ImportsDiagnostics {
 }
 
 export interface ImportsGroundTruthEntry {
+    /**
+     * Discriminant for parity with other GT entry types (`module`/`call`/`producer`/...).
+     * Imports recall today only tracks static `import ... from '...'` declarations;
+     * dynamic `import(...)` is captured by the extractor but excluded from GT.
+     */
+    role: 'static';
     location: SourceLoc;
     matchedText: string;
     typeOnly: boolean;

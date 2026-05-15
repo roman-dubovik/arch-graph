@@ -12,6 +12,7 @@ import {
 
 import type { ArchGraphConfig } from '../../core/config.js';
 import type {
+    DiControllerRef,
     DiModuleRef,
     DiModuleSite,
     DiProviderRef,
@@ -100,11 +101,33 @@ function fillSiteFromMetadata(site: DiModuleSite, obj: ObjectLiteralExpression):
     decodeField(site, obj, 'imports', decodeModuleRef);
     decodeField(site, obj, 'providers', decodeProviderRef);
     decodeField(site, obj, 'exports', decodeProviderRef);
-    decodeField(site, obj, 'controllers', decodeProviderRef);
+    decodeField(site, obj, 'controllers', decodeControllerRef);
+}
+
+/**
+ * Decode one element of `controllers: [...]`. NestJS only accepts a class identifier
+ * here; `{ provide, useFactory }` / `{ provide, useValue }` are structurally illegal.
+ * If `decodeProviderRef` produced a non-class shape (token / object-literal), demote
+ * it to `unresolved` with a structured reason — that way the graph never emits a
+ * `provider:<token>` from controllers, and the diagnostics record carries the
+ * "wrong shape in source" signal explicitly.
+ */
+function decodeControllerRef(node: Node): DiControllerRef {
+    const decoded = decodeProviderRef(node);
+    if (decoded.kind === 'class') return decoded;
+    if (decoded.kind === 'unresolved') return decoded;
+    // `token` shape (any providerKind) in controllers position is a code smell — NestJS
+    // rejects it at module-init time. Surface it as unresolved with a structured reason
+    // rather than emitting a phantom `provider:<token>` edge.
+    return {
+        kind: 'unresolved',
+        raw: snippet(node),
+        reason: 'controllers-cannot-be-token-or-factory',
+    };
 }
 
 /** Generic field decoder — branchless over field-name; behavior diverges only in `decoder`. */
-function decodeField<R extends DiModuleRef | DiProviderRef>(
+function decodeField<R extends DiModuleRef | DiProviderRef | DiControllerRef>(
     site: DiModuleSite,
     obj: ObjectLiteralExpression,
     field: 'imports' | 'providers' | 'exports' | 'controllers',
@@ -123,7 +146,7 @@ function decodeField<R extends DiModuleRef | DiProviderRef>(
             // `imports: someConst` / `imports: someFn().concat(...)` — non-array initializer.
             // Architecturally opaque without inlining; mark dynamic and record one diagnostic entry.
             setFlagDynamic(site, field);
-            const ref: DiModuleRef | DiProviderRef = {
+            const ref: DiModuleRef | DiProviderRef | DiControllerRef = {
                 kind: 'unresolved',
                 raw: snippet(init),
                 reason: 'non-array-initializer',
@@ -156,12 +179,12 @@ function setFlagDynamic(site: DiModuleSite, field: 'imports' | 'providers' | 'ex
 function pushRef(
     site: DiModuleSite,
     field: 'imports' | 'providers' | 'exports' | 'controllers',
-    ref: DiModuleRef | DiProviderRef,
+    ref: DiModuleRef | DiProviderRef | DiControllerRef,
 ): void {
     if (field === 'imports') site.imports.push(ref as DiModuleRef);
     else if (field === 'providers') site.providers.push(ref as DiProviderRef);
     else if (field === 'exports') site.exports.push(ref as DiProviderRef);
-    else site.controllers.push(ref as DiProviderRef);
+    else site.controllers.push(ref as DiControllerRef);
 }
 
 /** Decode one element of `imports: [...]`. */
@@ -177,6 +200,13 @@ function decodeModuleRef(node: Node): DiModuleRef {
         // identifier of the callee names the producing module class; arguments configure
         // it but don't change the architectural target.
         const callee = (node as CallExpression).getExpression();
+        // Bare factory call (e.g. `imports: [createSomeModule()]`) — the callee is a free
+        // identifier, not a method on a module class. Without a receiver we can't name the
+        // architectural target; emitting `module:createSomeModule` would be a phantom node
+        // (no such class exists). Surface as unresolved with a structured reason.
+        if (callee.getKind() === SyntaxKind.Identifier) {
+            return { kind: 'unresolved', raw: snippet(node), reason: 'bare-factory-call' };
+        }
         const root = leftmostIdentifier(callee);
         if (root) {
             return { kind: 'dynamic', name: root, via: snippet(callee) };
@@ -287,11 +317,21 @@ function decodeProviderObject(obj: ObjectLiteralExpression): DiProviderRef {
     }
     const useFactory = findProp(obj, 'useFactory');
     if (useFactory) {
-        return { kind: 'token', name: provideToken ?? '<no-provide>', providerKind: 'factory' };
+        // Without a `provide:` token there's no name to attach — historically we emitted
+        // `{ kind: 'token', name: '<no-provide>' }`, which leaked the sentinel string into
+        // the graph as a `provider:<no-provide>` node. Surface as unresolved instead — the
+        // mapper already filters unresolved refs out of graph emission.
+        if (!provideToken) {
+            return { kind: 'unresolved', raw: snippet(obj), reason: 'token-provider-no-provide-key' };
+        }
+        return { kind: 'token', name: provideToken, providerKind: 'factory' };
     }
     const useValue = findProp(obj, 'useValue');
     if (useValue) {
-        return { kind: 'token', name: provideToken ?? '<no-provide>', providerKind: 'value' };
+        if (!provideToken) {
+            return { kind: 'unresolved', raw: snippet(obj), reason: 'token-provider-no-provide-key' };
+        }
+        return { kind: 'token', name: provideToken, providerKind: 'value' };
     }
     if (provideToken) {
         return { kind: 'token', name: provideToken, providerKind: 'unknown' };

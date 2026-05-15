@@ -181,8 +181,8 @@ const EDGE_DOMAIN: Record<EdgeKind, DomainKey> = {
  * happen later via bulk `class id1,id2 cls;` lines — keeping declarations and
  * style binding separated makes the output easier to skim and to diff.
  */
-function nodeDeclaration(node: GraphNode): string {
-    const id = sanitizeId(node.id);
+function nodeDeclaration(node: GraphNode, idMap: Map<string, string>): string {
+    const id = idMap.get(node.id) ?? sanitizeId(node.id);
     const label = escapeMermaidLabel(node.label);
     switch (node.kind) {
         case 'service':
@@ -218,6 +218,12 @@ export function renderMermaid(
     largeGraphThreshold: number,
 ): string {
     const lines: string[] = [];
+
+    // Per-render id map — handles `sanitizeId` collisions deterministically (first-seen wins,
+    // subsequent colliders get `_<n>` suffix) and warns once when a collision occurs so the
+    // operator can rename the offending raw ids. Used for every node declaration AND every
+    // edge endpoint in this render — that's why it's scoped here, not at module level.
+    const idMap = buildIdMap(nodes);
 
     lines.push('flowchart LR');
     // Header comment goes INSIDE the diagram (after the directive) — some Mermaid
@@ -259,20 +265,22 @@ export function renderMermaid(
         const meta = NODE_KIND_META[kind];
         lines.push(`    subgraph ${meta.subgraphId} [${meta.subgraphLabel}]`);
         for (const n of bucket) {
-            lines.push(`        ${nodeDeclaration(n)}`);
+            lines.push(`        ${nodeDeclaration(n, idMap)}`);
         }
         lines.push('    end');
     }
 
-    // Edges — also sorted for diff stability.
+    // Edges — also sorted for diff stability. Endpoint ids resolve through the same
+    // `idMap` used for declarations, so a sanitize collision can't produce a node
+    // declared under one id and referenced under another.
     const sortedEdges = [...edges].sort((a, b) => {
         if (a.kind !== b.kind) return a.kind.localeCompare(b.kind);
         if (a.from !== b.from) return a.from.localeCompare(b.from);
         return a.to.localeCompare(b.to);
     });
     for (const e of sortedEdges) {
-        const from = sanitizeId(e.from);
-        const to = sanitizeId(e.to);
+        const from = idMap.get(e.from) ?? sanitizeId(e.from);
+        const to = idMap.get(e.to) ?? sanitizeId(e.to);
         lines.push(`    ${from} ${EDGE_SYNTAX[e.kind]} ${to}`);
     }
 
@@ -286,7 +294,7 @@ export function renderMermaid(
             arr = [];
             classBuckets.set(cls, arr);
         }
-        arr.push(sanitizeId(n.id));
+        arr.push(idMap.get(n.id) ?? sanitizeId(n.id));
     }
     for (const [cls, ids] of [...classBuckets.entries()].sort()) {
         // `class id1,id2 cls;` is the bulk-assign form.
@@ -335,11 +343,62 @@ function sliceByDomain(
 /**
  * Mermaid node IDs must be ASCII identifiers (letters, digits, underscore).
  * `:`, `/`, `-`, `.` all appear in our composite ids (`service:foo`,
- * `db-table:public.users`, `lib:libs/nest-shared`). Replace them with `_` —
- * collisions are unlikely because we prefix every id by node-kind already.
+ * `db-table:public.users`, `lib:libs/nest-shared`). Replace them with `_`.
+ *
+ * Two raw ids CAN collapse to the same sanitized form when they differ only
+ * in characters that all become `_` (e.g. `lib:foo-bar` vs `lib:foo.bar`).
+ * `buildIdMap` resolves collisions with a `_<n>` suffix; this function is
+ * still useful as the seed for that map and as a fallback for unmapped ids.
  */
 function sanitizeId(rawId: string): string {
     return rawId.replace(/[^A-Za-z0-9_]/g, '_');
+}
+
+/**
+ * Build a `rawId → sanitizedId` map that guarantees uniqueness across the node set.
+ * First raw id mapping to a given sanitized form keeps the plain name; subsequent
+ * colliders get a `_2`, `_3`, … suffix. Emits one stderr warning per render when
+ * collisions occur — silent merge would produce a broken Mermaid diagram (two
+ * declarations of the same id; edges potentially attached to the wrong node).
+ */
+function buildIdMap(nodes: GraphNode[]): Map<string, string> {
+    const map = new Map<string, string>();
+    const usedSanitized = new Map<string, number>();
+    const collisions: Array<{ raw: string; sanitized: string; assigned: string }> = [];
+
+    for (const n of nodes) {
+        const base = sanitizeId(n.id);
+        const seen = usedSanitized.get(base) ?? 0;
+        if (seen === 0) {
+            usedSanitized.set(base, 1);
+            map.set(n.id, base);
+            continue;
+        }
+        // Collision — pick the next free suffix. The loop guards against compound
+        // collisions where `foo`, `foo_2`, and a third `foo`-source all coexist.
+        let suffix = seen + 1;
+        let candidate = `${base}_${suffix}`;
+        while (usedSanitized.has(candidate)) {
+            suffix++;
+            candidate = `${base}_${suffix}`;
+        }
+        usedSanitized.set(base, suffix);
+        usedSanitized.set(candidate, 1);
+        map.set(n.id, candidate);
+        collisions.push({ raw: n.id, sanitized: base, assigned: candidate });
+    }
+
+    if (collisions.length > 0) {
+        const sample = collisions
+            .slice(0, 3)
+            .map((c) => `${c.raw} → ${c.assigned}`)
+            .join('; ');
+        process.stderr.write(
+            `[mermaid] WARNING: ${collisions.length} sanitizeId collision(s); first: ${sample}\n`,
+        );
+    }
+
+    return map;
 }
 
 /**
