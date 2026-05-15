@@ -2,12 +2,12 @@ import type {
     ArchGraph,
     GraphEdge,
     GraphNode,
-    GraphOwnerRef,
     NatsCallSite,
     NatsDiagnostics,
     ResolvedSubject,
 } from '../core/types.js';
 import { OwnershipRegistry } from '../core/service-registry.js';
+import { ownerNodeFor, ownerNodeId } from './owner-node.js';
 
 /** Shape produced by any extractor's mapper — assembleGraph composes these. */
 export interface GraphParts {
@@ -87,22 +87,6 @@ export function mapNatsToGraph(
     };
 }
 
-function ownerNodeId(o: GraphOwnerRef): string {
-    if (o.kind === 'service') return `service:${o.id}`;
-    if (o.kind === 'lib') return `lib:${o.id}`;
-    return `unknown:${o.path}`;
-}
-
-function ownerNodeFor(o: GraphOwnerRef): GraphNode {
-    if (o.kind === 'service') {
-        return { id: `service:${o.id}`, kind: 'service', label: o.id };
-    }
-    if (o.kind === 'lib') {
-        return { id: `lib:${o.id}`, kind: 'lib', label: o.id, path: o.path };
-    }
-    // Should never reach here — `unknown` is filtered upstream — but keep type-complete.
-    return { id: `unknown:${o.path}`, kind: 'file', label: o.path, path: o.path };
-}
 
 function subjectNodeFor(subject: ResolvedSubject): GraphNode {
     if (subject.kind === 'literal') {

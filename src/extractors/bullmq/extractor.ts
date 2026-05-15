@@ -6,6 +6,7 @@ import {
     Project,
     PropertyAssignment,
     SourceFile,
+    StringLiteral,
     SyntaxKind,
 } from 'ts-morph';
 
@@ -16,7 +17,10 @@ import type {
     BullMqQueueRef,
     BullMqQueueRegistration,
 } from '../../core/types.js';
+import { isExcludedSourceFile } from '../shared.js';
 import { buildQueueNameIndex, QueueNameIndex } from './queue-name-index.js';
+
+export { isExcludedSourceFile };
 
 /**
  * BullMQ extractor.
@@ -30,7 +34,7 @@ import { buildQueueNameIndex, QueueNameIndex } from './queue-name-index.js';
  *   - identifier resolved via QueueNameIndex pre-pass → `{ kind: 'const', name, identifier }`
  *   - anything else                → `{ kind: 'unresolved', raw }`
  *
- * Skipped (Phase 1): per-job names (`@Process('jobName')` inside `@Processor`),
+ * Not yet handled: per-job names (`@Process('jobName')` inside `@Processor`),
  * `BullModule.forFeature()` factory variants, wrapper producer/consumer classes.
  */
 
@@ -64,8 +68,13 @@ export async function extractBullMq(
 
                 if (hasProcessor) {
                     const procDec = cls.getDecorator('Processor');
-                    if (procDec && enclosingClass) {
-                        consumers.push(buildProcessorSite(enclosingClass, procDec, queueNames));
+                    // Anonymous classes (`export default @Processor('foo') class { ... }`) have
+                    // no `cls.getName()`. We still emit the site with a sentinel className so the
+                    // GT key matches and the consumer edge is not silently dropped.
+                    if (procDec) {
+                        consumers.push(
+                            buildProcessorSite(enclosingClass ?? '<anonymous>', procDec, queueNames),
+                        );
                     }
                 }
 
@@ -135,7 +144,7 @@ function resolveDecoratorArg(dec: Decorator, queueNames: QueueNameIndex): BullMq
 function resolveQueueArg(node: Node, queueNames: QueueNameIndex): BullMqQueueRef {
     const kind = node.getKind();
     if (kind === SyntaxKind.StringLiteral || kind === SyntaxKind.NoSubstitutionTemplateLiteral) {
-        const value = (node as unknown as { getLiteralText: () => string }).getLiteralText();
+        const value = (node as StringLiteral).getLiteralText();
         return { kind: 'literal', name: value };
     }
     if (kind === SyntaxKind.Identifier) {
@@ -145,20 +154,34 @@ function resolveQueueArg(node: Node, queueNames: QueueNameIndex): BullMqQueueRef
         return { kind: 'unresolved', raw: identifier };
     }
     if (kind === SyntaxKind.PropertyAccessExpression) {
+        // Only resolve when the full dotted name is in the index. Tail-only matches
+        // (e.g. `QueueNames.PAYMENT_QUEUE` falling back to an unrelated bare const
+        // `PAYMENT_QUEUE`) would produce wrong graph edges with no diagnostic signal.
+        // Unresolved is honest — it lands in diagnostics and in the resolveRate metric.
         const text = node.getText();
-        const tail = text.split('.').pop()!;
-        const value = queueNames.get(tail);
+        const value = queueNames.get(text);
         if (value !== undefined) return { kind: 'const', name: value, identifier: text };
         return { kind: 'unresolved', raw: text };
+    }
+    if (kind === SyntaxKind.ObjectLiteralExpression) {
+        // `@nestjs/bullmq` v10+ overloads `@Processor` and `@InjectQueue` with an
+        // options-object form: `@Processor({ name: 'payments', concurrency: 3 })`.
+        // The queue name lives in the `name` property — recurse into it.
+        const nameProp = findProp(node as ObjectLiteralExpression, 'name');
+        const init = nameProp?.getInitializer();
+        if (init) return resolveQueueArg(init, queueNames);
+        return { kind: 'unresolved', raw: '<options-no-name>' };
     }
     return { kind: 'unresolved', raw: node.getText().slice(0, 80) };
 }
 
 /**
  * Find `BullModule.registerQueue(...)` / `registerQueueAsync(...)` and read the
- * `name` field of each object-literal argument. The call can take multiple args
- * (each its own queue), and `forRoot()` is intentionally skipped — it configures
- * the connection, not a queue.
+ * `name` field of each argument.
+ *
+ * `registerQueue` / `registerQueueAsync` are variadic — a single call may register
+ * multiple queues, so we iterate over all arguments rather than just `args[0]`.
+ * `forRoot()` is intentionally skipped — it configures the connection, not a queue.
  */
 function collectRegistrations(
     sf: SourceFile,
@@ -176,42 +199,29 @@ function collectRegistrations(
             ? 'registerQueueAsync'
             : 'registerQueue';
         const pos = sf.getLineAndColumnAtPos(call.getStart());
+        const location = { file: sf.getFilePath(), line: pos.line, column: pos.column };
 
         for (const arg of call.getArguments()) {
-            if (arg.getKind() !== SyntaxKind.ObjectLiteralExpression) {
-                out.push({
-                    api,
-                    queue: { kind: 'unresolved', raw: arg.getText().slice(0, 80) },
-                    location: { file: sf.getFilePath(), line: pos.line, column: pos.column },
-                });
-                continue;
-            }
-            const obj = arg as ObjectLiteralExpression;
-            const nameProp = findProp(obj, 'name');
-            if (!nameProp) {
-                out.push({
-                    api,
-                    queue: { kind: 'unresolved', raw: '<no-name>' },
-                    location: { file: sf.getFilePath(), line: pos.line, column: pos.column },
-                });
-                continue;
-            }
-            const init = nameProp.getInitializer();
-            if (!init) {
-                out.push({
-                    api,
-                    queue: { kind: 'unresolved', raw: '<shorthand>' },
-                    location: { file: sf.getFilePath(), line: pos.line, column: pos.column },
-                });
-                continue;
-            }
             out.push({
+                role: 'registration',
                 api,
-                queue: resolveQueueArg(init, queueNames),
-                location: { file: sf.getFilePath(), line: pos.line, column: pos.column },
+                queue: resolveRegistrationArg(arg, queueNames),
+                location,
             });
         }
     });
+}
+
+function resolveRegistrationArg(arg: Node, queueNames: QueueNameIndex): BullMqQueueRef {
+    if (arg.getKind() !== SyntaxKind.ObjectLiteralExpression) {
+        return { kind: 'unresolved', raw: arg.getText().slice(0, 80) };
+    }
+    const obj = arg as ObjectLiteralExpression;
+    const nameProp = findProp(obj, 'name');
+    if (!nameProp) return { kind: 'unresolved', raw: '<no-name>' };
+    const init = nameProp.getInitializer();
+    if (!init) return { kind: 'unresolved', raw: '<shorthand>' };
+    return resolveQueueArg(init, queueNames);
 }
 
 function findProp(obj: ObjectLiteralExpression, name: string): PropertyAssignment | null {
@@ -223,13 +233,3 @@ function findProp(obj: ObjectLiteralExpression, name: string): PropertyAssignmen
     return null;
 }
 
-export function isExcludedSourceFile(sf: SourceFile): boolean {
-    const p = sf.getFilePath();
-    if (p.includes('/node_modules/')) return true;
-    if (p.includes('/dist/')) return true;
-    if (p.includes('/.claude/')) return true;
-    if (p.includes('/.worktrees/')) return true;
-    if (p.endsWith('.d.ts')) return true;
-    if (p.endsWith('.spec.ts') || p.endsWith('.test.ts')) return true;
-    return false;
-}

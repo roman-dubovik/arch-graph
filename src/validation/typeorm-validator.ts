@@ -9,6 +9,7 @@ import type {
     TypeOrmInjectionSite,
     TypeOrmValidationReport,
 } from '../core/types.js';
+import { buildLineStarts, indexBy, offsetToLineCol } from './line-index.js';
 import { stripComments } from './strip-comments.js';
 
 /**
@@ -81,24 +82,6 @@ export async function enumerateTypeOrmGroundTruth(
     return out;
 }
 
-function buildLineStarts(s: string): number[] {
-    const starts = [0];
-    for (let i = 0; i < s.length; i++) if (s[i] === '\n') starts.push(i + 1);
-    return starts;
-}
-
-function offsetToLineCol(offset: number, lineStarts: number[]): { line: number; column: number } {
-    // Binary search for the largest lineStart <= offset.
-    let lo = 0;
-    let hi = lineStarts.length - 1;
-    while (lo < hi) {
-        const mid = (lo + hi + 1) >> 1;
-        if (lineStarts[mid]! <= offset) lo = mid;
-        else hi = mid - 1;
-    }
-    return { line: lo + 1, column: offset - lineStarts[lo]! + 1 };
-}
-
 export function buildTypeOrmReport(
     injections: TypeOrmInjectionSite[],
     entities: TypeOrmEntity[],
@@ -152,13 +135,3 @@ function matchGroundTruth<T>(
     return { consumed, missed };
 }
 
-function indexBy<T>(arr: T[], keyFn: (t: T) => string): Map<string, T[]> {
-    const m = new Map<string, T[]>();
-    for (const item of arr) {
-        const k = keyFn(item);
-        const list = m.get(k);
-        if (list) list.push(item);
-        else m.set(k, [item]);
-    }
-    return m;
-}

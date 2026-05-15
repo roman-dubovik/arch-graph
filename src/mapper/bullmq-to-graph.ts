@@ -8,6 +8,7 @@ import type {
     GraphOwnerRef,
 } from '../core/types.js';
 import { OwnershipRegistry } from '../core/service-registry.js';
+import { ownerNodeFor, ownerNodeId } from './owner-node.js';
 
 export interface MapBullMqResult {
     nodes: GraphNode[];
@@ -148,18 +149,3 @@ function ensureQueue(nodes: Map<string, GraphNode>, name: string): string {
     return id;
 }
 
-function ownerNodeId(o: GraphOwnerRef): string {
-    if (o.kind === 'service') return `service:${o.id}`;
-    if (o.kind === 'lib') return `lib:${o.id}`;
-    return `unknown:${o.path}`;
-}
-
-function ownerNodeFor(o: GraphOwnerRef): GraphNode {
-    if (o.kind === 'service') {
-        return { id: `service:${o.id}`, kind: 'service', label: o.id };
-    }
-    if (o.kind === 'lib') {
-        return { id: `lib:${o.id}`, kind: 'lib', label: o.id, path: o.path };
-    }
-    return { id: `unknown:${o.path}`, kind: 'file', label: o.path, path: o.path };
-}

@@ -10,6 +10,7 @@ import type {
     BullMqQueueRegistration,
     BullMqValidationReport,
 } from '../core/types.js';
+import { buildLineStarts, indexBy, offsetToLineCol } from './line-index.js';
 import { stripComments } from './strip-comments.js';
 
 /**
@@ -23,8 +24,17 @@ import { stripComments } from './strip-comments.js';
  * (`@InjectQueue(\n    QUEUE,\n)`).
  */
 
-const INJECT_RE = /@InjectQueue\s*\(\s*([A-Za-z_][\w.]*|['"`][^'"`]+['"`])/gs;
-const PROCESSOR_RE = /@Processor\s*\(\s*([A-Za-z_][\w.]*|['"`][^'"`]+['"`])/gs;
+// Decorator-call regex variants. The alternation matches three argument shapes:
+//   1. bare identifier         (`MY_QUEUE`)            — captured token in m[1]
+//   2. quoted literal          (`'my-queue'`)          — captured (with quotes) in m[1]
+//   3. options object with name (`{ name: 'my-queue' }`) — captured `name` value in m[2]
+// Shape #3 is the `@nestjs/bullmq` v10+ overload; without it, the extractor and the
+// ground-truth both miss `@Processor({ name: 'q', concurrency: 5 })` symmetrically,
+// hiding the bug behind a green recall metric.
+const INJECT_RE =
+    /@InjectQueue\s*\(\s*(?:([A-Za-z_][\w.]*|['"`][^'"`]+['"`])|\{[^}]*?\bname\s*:\s*([A-Za-z_][\w.]*|['"`][^'"`]+['"`]))/gs;
+const PROCESSOR_RE =
+    /@Processor\s*\(\s*(?:([A-Za-z_][\w.]*|['"`][^'"`]+['"`])|\{[^}]*?\bname\s*:\s*([A-Za-z_][\w.]*|['"`][^'"`]+['"`]))/gs;
 const REGISTER_RE = /BullModule\s*\.\s*registerQueue(?:Async)?\s*\(/g;
 
 export async function enumerateBullMqGroundTruth(
@@ -75,11 +85,13 @@ export async function enumerateBullMqGroundTruth(
         ): void => {
             const offset = m.index ?? 0;
             const { line, column } = offsetToLineCol(offset, lineStarts);
+            // m[1] = bare-arg form; m[2] = options-object `name:` form. One of the two is set per match.
+            const raw = m[1] ?? m[2] ?? '';
             out.push({
                 role,
                 location: { file, line, column },
                 matchedText: stripped.slice(offset, offset + 80).replace(/\n.*$/s, '').trim(),
-                context: (m[1] ?? '').replace(/^['"`]|['"`]$/g, ''),
+                context: raw.replace(/^['"`]|['"`]$/g, ''),
             });
         };
 
@@ -89,23 +101,6 @@ export async function enumerateBullMqGroundTruth(
     }
 
     return out;
-}
-
-function buildLineStarts(s: string): number[] {
-    const starts = [0];
-    for (let i = 0; i < s.length; i++) if (s[i] === '\n') starts.push(i + 1);
-    return starts;
-}
-
-function offsetToLineCol(offset: number, lineStarts: number[]): { line: number; column: number } {
-    let lo = 0;
-    let hi = lineStarts.length - 1;
-    while (lo < hi) {
-        const mid = (lo + hi + 1) >> 1;
-        if (lineStarts[mid]! <= offset) lo = mid;
-        else hi = mid - 1;
-    }
-    return { line: lo + 1, column: offset - lineStarts[lo]! + 1 };
 }
 
 export function buildBullMqReport(
@@ -123,10 +118,12 @@ export function buildBullMqReport(
     const gtReg = groundTruth.filter((g) => g.role === 'registration');
 
     const { consumed: consumedProd, missed: missedProducers } = matchGroundTruth(gtProd, prodKeyed);
-    const { missed: missedConsumers } = matchGroundTruth(gtCons, consKeyed);
-    const { missed: missedRegistrations } = matchGroundTruth(gtReg, regKeyed);
+    const { consumed: consumedCons, missed: missedConsumers } = matchGroundTruth(gtCons, consKeyed);
+    const { consumed: consumedReg, missed: missedRegistrations } = matchGroundTruth(gtReg, regKeyed);
 
     const extraProducers = producers.filter((s) => !consumedProd.has(s));
+    const extraConsumers = consumers.filter((s) => !consumedCons.has(s));
+    const extraRegistrations = registrations.filter((s) => !consumedReg.has(s));
 
     const totalSites = producers.length + consumers.length + registrations.length;
     const resolvedSites =
@@ -155,6 +152,8 @@ export function buildBullMqReport(
         missedConsumers,
         missedRegistrations,
         extraProducers,
+        extraConsumers,
+        extraRegistrations,
     };
 }
 
@@ -173,13 +172,3 @@ function matchGroundTruth<T>(
     return { consumed, missed };
 }
 
-function indexBy<T>(arr: T[], keyFn: (t: T) => string): Map<string, T[]> {
-    const m = new Map<string, T[]>();
-    for (const item of arr) {
-        const k = keyFn(item);
-        const list = m.get(k);
-        if (list) list.push(item);
-        else m.set(k, [item]);
-    }
-    return m;
-}
