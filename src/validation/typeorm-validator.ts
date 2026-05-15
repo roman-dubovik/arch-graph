@@ -18,8 +18,11 @@ import { stripComments } from './strip-comments.js';
  * Matched against extracted sites by file:line (same scheme as NATS validator).
  */
 
-const INJECT_RE = /@InjectRepository\(\s*([A-Za-z_][\w]*)/g;
-const ENTITY_RE = /@Entity\(\s*(?:['"`]([^'"`)]+)['"`])?/g;
+// `s` flag = match across newlines so multi-line decorators (`@InjectRepository(\n Foo\n)`)
+// aren't invisible to ground truth — those forms exist in real codebases and would
+// otherwise let an AST-only extractor match silently with no GT counterpart.
+const INJECT_RE = /@InjectRepository\s*\(\s*([A-Za-z_][\w]*)/gs;
+const ENTITY_RE = /@Entity\s*\(\s*(?:['"`]([^'"`)]+)['"`])?/gs;
 
 export async function enumerateTypeOrmGroundTruth(
     cfg: ArchGraphConfig,
@@ -38,7 +41,7 @@ export async function enumerateTypeOrmGroundTruth(
                 '**/*.spec.ts',
                 '**/*.test.ts',
                 '**/*.d.ts',
-                ...(cfg.excludeGlobs ?? []),
+                ...(cfg.excludeGlobs?.map((g) => `**${g}**`) ?? []),
             ],
         },
     );
@@ -54,36 +57,46 @@ export async function enumerateTypeOrmGroundTruth(
             if (e.code === 'ENOENT') continue;
             throw new Error(`ground-truth read failed for ${file}: ${e.code ?? e.message}`);
         }
-        // Cheap pre-filter — most files have neither marker.
         if (!content.includes('@InjectRepository') && !content.includes('@Entity')) continue;
 
-        const lines = stripComments(content).split('\n');
+        // strip-comments preserves line numbers, so absolute offsets still map to source lines.
+        const stripped = stripComments(content);
+        const lineStarts = buildLineStarts(stripped);
 
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i]!;
-            if (line.length === 0) continue;
+        const push = (role: 'injection' | 'entity', m: RegExpMatchArray): void => {
+            const offset = m.index ?? 0;
+            const { line, column } = offsetToLineCol(offset, lineStarts);
+            out.push({
+                role,
+                location: { file, line, column },
+                matchedText: stripped.slice(offset, offset + 80).replace(/\n.*$/s, '').trim(),
+                context: m[1] ?? '',
+            });
+        };
 
-            for (const m of line.matchAll(INJECT_RE)) {
-                out.push({
-                    role: 'injection',
-                    location: { file, line: i + 1, column: (m.index ?? 0) + 1 },
-                    matchedText: line.trim(),
-                    context: m[1] ?? '',
-                });
-            }
-
-            for (const m of line.matchAll(ENTITY_RE)) {
-                out.push({
-                    role: 'entity',
-                    location: { file, line: i + 1, column: (m.index ?? 0) + 1 },
-                    matchedText: line.trim(),
-                    context: m[1] ?? '',
-                });
-            }
-        }
+        for (const m of stripped.matchAll(INJECT_RE)) push('injection', m);
+        for (const m of stripped.matchAll(ENTITY_RE)) push('entity', m);
     }
 
     return out;
+}
+
+function buildLineStarts(s: string): number[] {
+    const starts = [0];
+    for (let i = 0; i < s.length; i++) if (s[i] === '\n') starts.push(i + 1);
+    return starts;
+}
+
+function offsetToLineCol(offset: number, lineStarts: number[]): { line: number; column: number } {
+    // Binary search for the largest lineStart <= offset.
+    let lo = 0;
+    let hi = lineStarts.length - 1;
+    while (lo < hi) {
+        const mid = (lo + hi + 1) >> 1;
+        if (lineStarts[mid]! <= offset) lo = mid;
+        else hi = mid - 1;
+    }
+    return { line: lo + 1, column: offset - lineStarts[lo]! + 1 };
 }
 
 export function buildTypeOrmReport(
@@ -99,25 +112,8 @@ export function buildTypeOrmReport(
     const gtInj = groundTruth.filter((g) => g.role === 'injection');
     const gtEnt = groundTruth.filter((g) => g.role === 'entity');
 
-    const consumedInj = new Set<TypeOrmInjectionSite>();
-    const missedInjections: TypeOrmGroundTruthEntry[] = [];
-    for (const g of gtInj) {
-        const k = `${g.location.file}:${g.location.line}`;
-        const candidates = injKeyed.get(k) ?? [];
-        const match = candidates.find((c) => !consumedInj.has(c));
-        if (match) consumedInj.add(match);
-        else missedInjections.push(g);
-    }
-
-    const consumedEnt = new Set<TypeOrmEntity>();
-    const missedEntities: TypeOrmGroundTruthEntry[] = [];
-    for (const g of gtEnt) {
-        const k = `${g.location.file}:${g.location.line}`;
-        const candidates = entKeyed.get(k) ?? [];
-        const match = candidates.find((c) => !consumedEnt.has(c));
-        if (match) consumedEnt.add(match);
-        else missedEntities.push(g);
-    }
+    const { consumed: consumedInj, missed: missedInjections } = matchGroundTruth(gtInj, injKeyed);
+    const { consumed: consumedEnt, missed: missedEntities } = matchGroundTruth(gtEnt, entKeyed);
 
     const extraInjections = injections.filter((s) => !consumedInj.has(s));
     const resolvedCount = injections.filter((s) => s.resolvedEntity !== null).length;
@@ -139,6 +135,21 @@ export function buildTypeOrmReport(
         missedEntities,
         extraInjections,
     };
+}
+
+function matchGroundTruth<T>(
+    gtEntries: TypeOrmGroundTruthEntry[],
+    keyed: Map<string, T[]>,
+): { consumed: Set<T>; missed: TypeOrmGroundTruthEntry[] } {
+    const consumed = new Set<T>();
+    const missed: TypeOrmGroundTruthEntry[] = [];
+    for (const g of gtEntries) {
+        const k = `${g.location.file}:${g.location.line}`;
+        const match = (keyed.get(k) ?? []).find((c) => !consumed.has(c));
+        if (match) consumed.add(match);
+        else missed.push(g);
+    }
+    return { consumed, missed };
 }
 
 function locKeyInj(s: TypeOrmInjectionSite): string {

@@ -10,13 +10,11 @@ import type { TypeOrmInjectionSite } from '../../core/types.js';
 import { buildEntityIndex, EntityIndex } from './entity-index.js';
 
 /**
- * Phase 1 TypeORM extractor.
+ * TypeORM extractor: `@InjectRepository(EntityClass)` (property + ctor-param)
+ * resolved against the `@Entity` pre-pass index.
  *
- * Captures `@InjectRepository(EntityClass)` decorators (property + constructor
- * parameter forms) and resolves EntityClass against the @Entity pre-pass index.
- *
- * Deliberately skipped (per 02-extractors-design §3): read/write classification,
- * multi-DataSource attribution via `forFeature([...], 'dataSourceName')`.
+ * Skipped: read/write classification, multi-DataSource attribution
+ * (`forFeature([...], 'dataSourceName')`) — both need runtime info AST lacks.
  */
 
 export interface ExtractTypeOrmResult {

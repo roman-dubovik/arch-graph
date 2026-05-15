@@ -9,7 +9,7 @@ export interface SourceLoc {
 }
 
 // ============================================================================
-// NATS-domain types (carried over from POC — validated on 5 projects)
+// NATS-domain types
 // ============================================================================
 
 export type EdgeKindNats = 'nats-publish' | 'nats-request' | 'nats-subscribe' | 'nats-reply';
@@ -35,7 +35,7 @@ export interface WrapperApi {
 }
 
 // ============================================================================
-// Common graph schema (01-roadmap + 02-extractors-design)
+// Shared graph schema
 // ============================================================================
 
 export type NodeKind =
@@ -103,12 +103,18 @@ export type GraphOwnerRef =
 /** @Entity decoration captured during the entity-index pre-pass. */
 export interface TypeOrmEntity {
     className: string;
-    /** Resolved table name: explicit decorator arg, schema.name field, or snake_case(className). */
-    table: string;
-    /** True when no explicit `@Entity('name')` — name fell back to snake_case heuristic. */
-    inferredTable: boolean;
+    /** Resolved table name + how it was derived. DU keeps `table` and origin in sync. */
+    tableSource:
+        | { kind: 'explicit'; table: string }
+        | { kind: 'inferred-no-arg'; table: string }
+        | { kind: 'inferred-object-no-name'; table: string };
     file: string;
     line: number;
+}
+
+/** Convenience accessor — most consumers only need the resolved string. */
+export function tableNameOf(e: TypeOrmEntity): string {
+    return e.tableSource.table;
 }
 
 /** Single `@InjectRepository(EntityClass)` injection site. */
@@ -140,20 +146,20 @@ export interface NatsDiagnostics {
     };
 }
 
-export interface TypeOrmEntityDecoratorWarning {
-    className: string;
-    file: string;
-    line: number;
-    reason: 'object-literal-missing-name' | 'non-static-argument';
-    argKind?: string;
-}
+export type TypeOrmEntityDecoratorWarning =
+    | { className: string; file: string; line: number; reason: 'object-literal-missing-name' }
+    | { className: string; file: string; line: number; reason: 'non-static-argument'; argKind: string };
 
 export interface TypeOrmDiagnostics {
     /** `@InjectRepository(X)` where X isn't a known `@Entity` (likely external or non-entity). */
     unresolvedEntities: TypeOrmInjectionSite[];
     /** Injection sites outside apps/ and libs/. */
     unowned: TypeOrmInjectionSite[];
-    /** `@Entity(...)` decorators that fell back to snake_case or couldn't be indexed at all. */
+    /**
+     * `@Entity(...)` decorators with ambiguous table names:
+     *   - `object-literal-missing-name`: still indexed with snake_case fallback (likely a developer typo)
+     *   - `non-static-argument`: NOT indexed; the entity class appears in `unresolvedEntities` instead
+     */
     entityDecoratorWarnings: TypeOrmEntityDecoratorWarning[];
     counts: {
         resolved: number;
@@ -189,6 +195,9 @@ export interface NatsValidationReport {
         classificationAccuracy: number;
         totalExtracted: number;
         totalGroundTruth: number;
+        /** Per-role ground-truth counts — the gate enforces non-zero per role separately. */
+        groundTruthHandlers: number;
+        groundTruthSenders: number;
         bySubjectKind: Record<string, number>;
     };
     extracted: NatsCallSite[];

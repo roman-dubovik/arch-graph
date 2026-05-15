@@ -12,11 +12,7 @@ import {
 
 import type { ResolvedSubject } from '../../core/types.js';
 
-/**
- * Pre-pass indexer: walks all `export const NAME = ...` declarations across the project
- * and builds a flat map keyed by qualified path. Validated in POC on 5 projects.
- * See: /poc/src/extractors/constant-index.ts for the original.
- */
+/** Pre-pass: indexes exported `const`/`enum`/`function` subjects by qualified name for resolveSubject. */
 
 export interface FnTemplateEntry {
     kind: 'fn-template';
@@ -268,15 +264,12 @@ function walkConstValue(qname: string, node: Node, out: Map<string, IndexEntry>)
         const tmpl = node as TemplateExpression;
         let pattern = tmpl.getHead().getLiteralText();
         const placeholders: string[] = [];
-        let hasPlaceholder = false;
         for (const span of tmpl.getTemplateSpans()) {
-            const e = span.getExpression();
             pattern += '*';
-            placeholders.push(e.getText());
-            hasPlaceholder = true;
+            placeholders.push(span.getExpression().getText());
             pattern += span.getLiteral().getLiteralText();
         }
-        if (!hasPlaceholder) {
+        if (placeholders.length === 0) {
             out.set(qname, { kind: 'literal', value: pattern });
         } else {
             out.set(qname, { kind: 'pattern', pattern, placeholders });

@@ -103,10 +103,10 @@ function verifyWrapperClasses(ctx: ExtractorCtx): void {
             if (name) seen.add(name);
         }
     }
-    const missing = configured.map((api) => api.class).filter((c) => !seen.has(c));
+    const missing = [...new Set(configured.map((api) => api.class))].filter((c) => !seen.has(c));
     if (missing.length > 0) {
         process.stderr.write(
-            `[nats.extractor] WARNING: configured wrapper classes not declared anywhere: ${[...new Set(missing)].join(', ')}\n`,
+            `[nats.extractor] WARNING: configured wrapper classes not declared anywhere: ${missing.join(', ')}\n`,
         );
     }
 }
@@ -237,40 +237,30 @@ function decoratorName(dec: Decorator): string {
 }
 
 function matchApi(target: Node, methodName: string, apis: WrapperApi[]): WrapperApi | null {
-    let methodMatchesAny = false;
-    for (const api of apis) {
-        if (api.methods.includes(methodName)) {
-            methodMatchesAny = true;
-            break;
-        }
-    }
-    if (!methodMatchesAny) return null;
+    const candidates = apis.filter((api) => api.methods.includes(methodName));
+    if (candidates.length === 0) return null;
 
     let typeName: string | undefined;
     try {
-        const t = target.getType();
-        typeName = simpleTypeName(t);
-    } catch {
-        typeName = undefined;
+        typeName = simpleTypeName(target.getType());
+    } catch (err) {
+        // ts-morph type resolution can throw on corrupt symbol state; log so a sudden
+        // recall drop has a trail. Text fallback below still runs.
+        process.stderr.write(
+            `[nats.extractor] type lookup failed at ${target.getSourceFile().getFilePath()}:${target.getStartLineNumber()}: ${(err as Error).message}\n`,
+        );
     }
 
     if (typeName) {
-        for (const api of apis) {
-            if (!api.methods.includes(methodName)) continue;
-            if (typeName === api.class) return api;
-            if (typeName.includes(api.class)) return api;
-        }
+        const byType = candidates.find((api) => typeName === api.class || typeName.includes(api.class));
+        if (byType) return byType;
     }
 
     // Text fallback: identifier name often embeds class name verbatim
     // (`this.platformConnectionService.publish(...)`). No looser `\bclient\b` rule —
     // it mis-typed httpClient/redisClient calls as NATS publishes.
     const text = target.getText().toLowerCase();
-    for (const api of apis) {
-        if (!api.methods.includes(methodName)) continue;
-        if (text.includes(api.class.toLowerCase())) return api;
-    }
-    return null;
+    return candidates.find((api) => text.includes(api.class.toLowerCase())) ?? null;
 }
 
 function simpleTypeName(t: Type): string {
@@ -360,17 +350,33 @@ function resolveElementAccess(node: Node, depth: number, idx?: ConstantIndex): R
     const obj = (node as unknown as { getExpression: () => Node }).getExpression();
     const arg = (node as unknown as { getArgumentExpression?: () => Node | undefined }).getArgumentExpression?.();
     if (
-        arg &&
-        (arg.getKind() === SyntaxKind.StringLiteral ||
-            arg.getKind() === SyntaxKind.NoSubstitutionTemplateLiteral)
+        !arg ||
+        (arg.getKind() !== SyntaxKind.StringLiteral &&
+            arg.getKind() !== SyntaxKind.NoSubstitutionTemplateLiteral)
     ) {
-        const key = (arg as StringLiteral).getLiteralText();
-        if (idx) {
-            const composed = idx.get(`${obj.getText()}.${key}`);
-            if (composed && (composed.kind === 'literal' || composed.kind === 'pattern')) return composed;
-        }
+        return { kind: 'unresolved', raw: node.getText(), reason: 'element-access with runtime key' };
     }
-    return { kind: 'unresolved', raw: node.getText(), reason: 'element-access with runtime key' };
+    const key = (arg as StringLiteral).getLiteralText();
+    if (!idx) {
+        return { kind: 'unresolved', raw: node.getText(), reason: 'element-access without index' };
+    }
+    // First try the literal text key (cheap path, handles SUBJECTS['FOO'] when SUBJECTS is indexed).
+    const direct = idx.get(`${obj.getText()}.${key}`);
+    if (direct && (direct.kind === 'literal' || direct.kind === 'pattern')) return direct;
+    // Recurse into obj — handles aliased or imported namespaces where obj is itself
+    // an Identifier/PropertyAccess that needs resolving before the key can be appended.
+    const objResolved = resolveSubject(obj, depth + 1, idx);
+    if (objResolved.kind === 'literal') {
+        return { kind: 'literal', value: `${objResolved.value}.${key}` };
+    }
+    if (objResolved.kind === 'pattern') {
+        return {
+            kind: 'pattern',
+            pattern: `${objResolved.pattern}.${key}`,
+            placeholders: objResolved.placeholders,
+        };
+    }
+    return { kind: 'unresolved', raw: node.getText(), reason: 'element-access obj not resolvable' };
 }
 
 function resolveConditional(node: Node, depth: number, idx?: ConstantIndex): ResolvedSubject {

@@ -32,7 +32,6 @@ export function mapTypeOrmToGraph(
     const edges = new Map<string, GraphEdge>();
     const unresolvedEntities: TypeOrmInjectionSite[] = [];
     const unowned: TypeOrmInjectionSite[] = [];
-    let resolvedCount = 0;
 
     for (const s of sites) {
         if (!s.resolvedEntity) {
@@ -44,21 +43,21 @@ export function mapTypeOrmToGraph(
             unowned.push(s);
             continue;
         }
-        resolvedCount += 1;
 
         const ownerId = ownerNodeId(owner);
         if (!ownerNodes.has(ownerId)) ownerNodes.set(ownerId, ownerNodeFor(owner));
 
-        const tableId = `db-table:${s.resolvedEntity.table}`;
+        const table = s.resolvedEntity.tableSource.table;
+        const tableId = `db-table:${table}`;
         if (!tableNodes.has(tableId)) {
             tableNodes.set(tableId, {
                 id: tableId,
                 kind: 'db-table',
-                label: s.resolvedEntity.table,
+                label: table,
                 meta: {
                     entityClass: s.resolvedEntity.className,
                     declaredAt: `${s.resolvedEntity.file}:${s.resolvedEntity.line}`,
-                    ...(s.resolvedEntity.inferredTable ? { inferredTable: true } : {}),
+                    tableSource: s.resolvedEntity.tableSource.kind,
                 },
             });
         }
@@ -89,7 +88,7 @@ export function mapTypeOrmToGraph(
             unowned,
             entityDecoratorWarnings: entityWarnings,
             counts: {
-                resolved: resolvedCount,
+                resolved: sites.length - unresolvedEntities.length - unowned.length,
                 unresolvedEntity: unresolvedEntities.length,
                 unowned: unowned.length,
                 entityDecoratorWarnings: entityWarnings.length,
