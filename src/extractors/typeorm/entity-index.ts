@@ -43,7 +43,7 @@ export function buildEntityIndex(project: Project): EntityIndex {
     const idx = new EntityIndex();
 
     for (const sf of project.getSourceFiles()) {
-        if (isExcludedForIndex(sf)) continue;
+        if (isExcludedSourceFile(sf)) continue;
         if (!sf.getFullText().includes('@Entity')) continue;
 
         for (const cls of sf.getClasses()) {
@@ -138,7 +138,7 @@ function snakeCase(s: string): string {
         .toLowerCase();
 }
 
-function isExcludedForIndex(sf: SourceFile): boolean {
+export function isExcludedSourceFile(sf: SourceFile): boolean {
     const p = sf.getFilePath();
     if (p.includes('/node_modules/')) return true;
     if (p.includes('/dist/')) return true;

@@ -50,50 +50,50 @@ export async function enumerateSenders(cfg: ArchGraphConfig): Promise<GroundTrut
         } catch (err) {
             const e = err as NodeJS.ErrnoException;
             if (e.code === 'ENOENT') continue;
-            throw new Error(`ground-truth read failed for ${file}: ${e.code ?? e.message}`);
+            throw new Error(`ground-truth read failed for ${file}: ${e.code ?? e.message}`, { cause: err });
         }
 
-        const hasNestMs = importNestjsMicroservices.test(content);
+        // Strip comments first so a commented-out import line doesn't false-positive
+        // the file as a NATS sender (drives phantom GT entries with no extractor match).
+        const stripped = stripComments(content);
+        const hasNestMs = importNestjsMicroservices.test(stripped);
         const hasWrapperImport = wrappers.some((api) =>
-            new RegExp(`\\b${escapeReg(api.class)}\\b`).test(content),
+            new RegExp(`\\b${escapeReg(api.class)}\\b`).test(stripped),
         );
         if (!hasNestMs && !hasWrapperImport) continue;
 
         const idToType = new Map<string, string>();
 
         for (const typeName of natsTypes) {
-            // Accept any sequence of decorators (`@Inject() @Optional()`) before the access modifier,
-            // and allow the modifier itself to be absent when decorators are present
-            // (NestJS DI doesn't require `private` on @Inject-prefixed properties).
+            // Properties with explicit access modifier (optional decorator prefix).
             const decorPrefix = `(?:@[A-Za-z_][\\w]*\\s*(?:\\([^)]*\\))?\\s*)*`;
-            const re1 = new RegExp(
-                `${decorPrefix}(?:(?:private|readonly|public|protected)\\s+)+(?:readonly\\s+)?(\\w+)\\s*:\\s*${escapeReg(typeName)}\\b`,
+            const reModifier = new RegExp(
+                `${decorPrefix}(?:private|readonly|public|protected)\\s+(?:readonly\\s+)?(\\w+)\\s*:\\s*${escapeReg(typeName)}\\b`,
                 'g',
             );
-            for (const m of content.matchAll(re1)) {
+            for (const m of stripped.matchAll(reModifier)) {
                 idToType.set(m[1]!, typeName);
             }
-            // Decorator-only properties without explicit access modifier.
-            const re1b = new RegExp(
+            // Decorator-only properties (require at least one decorator, no modifier).
+            const reDecoratorOnly = new RegExp(
                 `(?:@[A-Za-z_][\\w]*\\s*(?:\\([^)]*\\))?\\s*)+(?:readonly\\s+)?(\\w+)\\s*:\\s*${escapeReg(typeName)}\\b`,
                 'g',
             );
-            for (const m of content.matchAll(re1b)) {
+            for (const m of stripped.matchAll(reDecoratorOnly)) {
                 idToType.set(m[1]!, typeName);
             }
-            const re2 = new RegExp(
+            const reLocal = new RegExp(
                 `(?:const|let|var)\\s+(\\w+)\\s*:\\s*${escapeReg(typeName)}\\b`,
                 'g',
             );
-            for (const m of content.matchAll(re2)) {
+            for (const m of stripped.matchAll(reLocal)) {
                 idToType.set(m[1]!, typeName);
             }
         }
 
         if (idToType.size === 0) continue;
 
-        const codeContent = stripComments(content);
-        const lines = codeContent.split('\n');
+        const lines = stripped.split('\n');
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i]!;
             if (line.trim().length === 0) continue;

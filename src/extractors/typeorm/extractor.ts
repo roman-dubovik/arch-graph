@@ -1,13 +1,12 @@
 import {
     Decorator,
     Project,
-    SourceFile,
     SyntaxKind,
 } from 'ts-morph';
 
 import type { ArchGraphConfig } from '../../core/config.js';
 import type { TypeOrmInjectionSite } from '../../core/types.js';
-import { buildEntityIndex, EntityIndex } from './entity-index.js';
+import { buildEntityIndex, EntityIndex, isExcludedSourceFile } from './entity-index.js';
 
 /**
  * TypeORM extractor: `@InjectRepository(EntityClass)` (property + ctor-param)
@@ -30,7 +29,7 @@ export async function extractTypeOrm(
     const sites: TypeOrmInjectionSite[] = [];
 
     for (const sf of project.getSourceFiles()) {
-        if (isExcludedFile(sf)) continue;
+        if (isExcludedSourceFile(sf)) continue;
         if (!sf.getFullText().includes('@InjectRepository')) continue;
 
         for (const cls of sf.getClasses()) {
@@ -87,15 +86,4 @@ function readEntityIdentifier(dec: Decorator): string | null {
         return first.getText().split('.').pop() ?? null;
     }
     return null;
-}
-
-function isExcludedFile(sf: SourceFile): boolean {
-    const p = sf.getFilePath();
-    if (p.includes('/node_modules/')) return true;
-    if (p.includes('/dist/')) return true;
-    if (p.includes('/.claude/')) return true;
-    if (p.includes('/.worktrees/')) return true;
-    if (p.endsWith('.d.ts')) return true;
-    if (p.endsWith('.spec.ts') || p.endsWith('.test.ts')) return true;
-    return false;
 }

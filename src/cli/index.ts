@@ -77,7 +77,7 @@ async function cmdBuild(args: ParsedArgs): Promise<void> {
         process.stderr.write(`error: --only=${args.only} not yet supported; available: 'nats', 'typeorm'\n`);
         process.exit(2);
     }
-    const cfg = await loadConfig(args.config);
+    const cfg = await loadConfigWithContext(args.config);
     const result = await runBuild(cfg);
 
     const outDir = resolve(args.out);
@@ -127,8 +127,21 @@ function pct(n: number): string {
     return `${(n * 100).toFixed(1)}%`;
 }
 
+async function loadConfigWithContext(path: string): Promise<Awaited<ReturnType<typeof loadConfig>>> {
+    const absolute = resolve(path);
+    try {
+        return await loadConfig(absolute);
+    } catch (err) {
+        const e = err as Error;
+        throw new Error(
+            `failed to load config '${absolute}': ${e.message}\n  Run 'arch-graph init' to create a starter config.`,
+            { cause: err },
+        );
+    }
+}
+
 async function cmdDiagnose(args: ParsedArgs): Promise<void> {
-    const cfg = await loadConfig(args.config);
+    const cfg = await loadConfigWithContext(args.config);
     const result = await runBuild(cfg);
 
     const n = result.diagnostics.nats;

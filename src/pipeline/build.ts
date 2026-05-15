@@ -68,13 +68,13 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
     // ---- NATS domain ----
     process.stdout.write(`extracting NATS...\n`);
     let t0 = Date.now();
-    const callSites = await extractNats(cfg, project);
+    const callSites = await stage(`[${cfg.id}] nats.extract`, () => extractNats(cfg, project));
     process.stdout.write(`  ${callSites.length} call sites in ${Date.now() - t0}ms\n`);
 
     process.stdout.write(`validating NATS against ground truth...\n`);
     const [handlers, senders] = await Promise.all([
-        enumerateHandlers(cfg),
-        enumerateSenders(cfg),
+        stage(`[${cfg.id}] nats.handlersGT`, () => enumerateHandlers(cfg)),
+        stage(`[${cfg.id}] nats.sendersGT`, () => enumerateSenders(cfg)),
     ]);
     const natsValidation = buildNatsReport(callSites, [...handlers, ...senders]);
     {
@@ -94,13 +94,13 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
     // ---- TypeORM domain ----
     process.stdout.write(`extracting TypeORM...\n`);
     t0 = Date.now();
-    const typeorm = await extractTypeOrm(cfg, project);
+    const typeorm = await stage(`[${cfg.id}] typeorm.extract`, () => extractTypeOrm(cfg, project));
     process.stdout.write(
         `  ${typeorm.sites.length} @InjectRepository sites, ${typeorm.entities.size()} @Entity classes in ${Date.now() - t0}ms\n`,
     );
 
     process.stdout.write(`validating TypeORM against ground truth...\n`);
-    const typeormGT = await enumerateTypeOrmGroundTruth(cfg);
+    const typeormGT = await stage(`[${cfg.id}] typeorm.GT`, () => enumerateTypeOrmGroundTruth(cfg));
     const typeormValidation = buildTypeOrmReport(
         typeorm.sites,
         typeorm.entities.entries(),
@@ -139,4 +139,18 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
 
 function pct(n: number): string {
     return `${(n * 100).toFixed(1)}%`;
+}
+
+/**
+ * Wrap a stage so any thrown error carries the stage name in its message.
+ * Otherwise a fatal NATS-grep failure surfaces as a bare `ENOENT: ...` with
+ * no indication of which pipeline phase produced it.
+ */
+async function stage<T>(label: string, fn: () => Promise<T>): Promise<T> {
+    try {
+        return await fn();
+    } catch (err) {
+        const e = err as Error;
+        throw new Error(`${label} failed: ${e.message}`, { cause: err });
+    }
 }

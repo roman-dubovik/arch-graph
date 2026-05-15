@@ -55,7 +55,7 @@ export async function enumerateTypeOrmGroundTruth(
         } catch (err) {
             const e = err as NodeJS.ErrnoException;
             if (e.code === 'ENOENT') continue;
-            throw new Error(`ground-truth read failed for ${file}: ${e.code ?? e.message}`);
+            throw new Error(`ground-truth read failed for ${file}: ${e.code ?? e.message}`, { cause: err });
         }
         if (!content.includes('@InjectRepository') && !content.includes('@Entity')) continue;
 
@@ -107,8 +107,8 @@ export function buildTypeOrmReport(
     // Cardinality matching: when N decorators land on one line (e.g. compact
     // constructor params), each GT entry consumes one extracted site so partial
     // misses can't hide behind a single matched sibling.
-    const injKeyed = indexBy(injections, locKeyInj);
-    const entKeyed = indexBy(entities, locKeyEnt);
+    const injKeyed = indexBy(injections, (s) => `${s.location.file}:${s.location.line}`);
+    const entKeyed = indexBy(entities, (e) => `${e.file}:${e.line}`);
     const gtInj = groundTruth.filter((g) => g.role === 'injection');
     const gtEnt = groundTruth.filter((g) => g.role === 'entity');
 
@@ -150,14 +150,6 @@ function matchGroundTruth<T>(
         else missed.push(g);
     }
     return { consumed, missed };
-}
-
-function locKeyInj(s: TypeOrmInjectionSite): string {
-    return `${s.location.file}:${s.location.line}`;
-}
-
-function locKeyEnt(e: TypeOrmEntity): string {
-    return `${e.file}:${e.line}`;
 }
 
 function indexBy<T>(arr: T[], keyFn: (t: T) => string): Map<string, T[]> {

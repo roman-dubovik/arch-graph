@@ -40,7 +40,7 @@ export async function enumerateHandlers(cfg: ArchGraphConfig): Promise<GroundTru
         } catch (err) {
             const e = err as NodeJS.ErrnoException;
             if (e.code === 'ENOENT') continue;
-            throw new Error(`ground-truth read failed for ${file}: ${e.code ?? e.message}`);
+            throw new Error(`ground-truth read failed for ${file}: ${e.code ?? e.message}`, { cause: err });
         }
         const stripped = stripComments(content);
         const lines = stripped.split('\n');

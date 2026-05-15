@@ -40,10 +40,15 @@ export function buildReport(
     const handlersGT = groundTruth.filter((g) => g.role === 'receiver').length;
     const sendersGT = groundTruth.filter((g) => g.role === 'sender').length;
 
-    const resolvedCount = extracted.filter(
+    // resolveRate/classify exclude wrapper-internal sites (Pattern F): those are
+    // inner `this.client.publish(<param>)` calls whose actual subject lives on the
+    // outer Pass-2 site, not at the inner location. Counting them would punish a
+    // codebase for being properly factored.
+    const realSites = extracted.filter((e) => !e.wrapperInternal);
+    const resolvedCount = realSites.filter(
         (e) => e.subject.kind === 'literal' || e.subject.kind === 'pattern',
     ).length;
-    const classifiedCount = extracted.filter((e) => e.subject.kind !== 'unresolved').length;
+    const classifiedCount = realSites.filter((e) => e.subject.kind !== 'unresolved').length;
 
     const bySubjectKind: Record<string, number> = {};
     for (const e of extracted) {
@@ -58,8 +63,8 @@ export function buildReport(
         summary: {
             recallHandlers: handlersGT > 0 ? handlersFound / handlersGT : 1,
             recallSenders: sendersGT > 0 ? sendersFound / sendersGT : 1,
-            resolveRate: extracted.length > 0 ? resolvedCount / extracted.length : 0,
-            classificationAccuracy: extracted.length > 0 ? classifiedCount / extracted.length : 0,
+            resolveRate: realSites.length > 0 ? resolvedCount / realSites.length : 0,
+            classificationAccuracy: realSites.length > 0 ? classifiedCount / realSites.length : 0,
             totalExtracted: extracted.length,
             totalGroundTruth: groundTruth.length,
             groundTruthHandlers: handlersGT,
