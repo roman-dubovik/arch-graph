@@ -1,0 +1,35 @@
+#!/bin/sh
+# arch-graph — portable CLI launcher.
+#
+# Always runs `src/cli/index.ts` through tsx so the published bin works
+# without a separate `tsc` build step. Resolves its own install location
+# even when invoked via symlink (BSD `readlink` on macOS has no `-f`).
+
+set -e
+
+SCRIPT="$0"
+while [ -L "$SCRIPT" ]; do
+    DIR=$(cd -P "$(dirname "$SCRIPT")" && pwd)
+    LINK=$(readlink "$SCRIPT")
+    case "$LINK" in
+        /*) SCRIPT="$LINK" ;;
+        *)  SCRIPT="$DIR/$LINK" ;;
+    esac
+done
+BIN_DIR=$(cd -P "$(dirname "$SCRIPT")" && pwd)
+ROOT=$(cd -P "$BIN_DIR/.." && pwd)
+
+TSX="$ROOT/node_modules/tsx/dist/cli.mjs"
+ENTRY="$ROOT/src/cli/index.ts"
+
+if [ ! -f "$TSX" ]; then
+    echo "arch-graph: tsx not found at $TSX" >&2
+    echo "  Run \`npm install\` in $ROOT (or re-run scripts/install.sh)." >&2
+    exit 1
+fi
+if [ ! -f "$ENTRY" ]; then
+    echo "arch-graph: entry point not found at $ENTRY" >&2
+    exit 1
+fi
+
+exec node --enable-source-maps "$TSX" "$ENTRY" "$@"
