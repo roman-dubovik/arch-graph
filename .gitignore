@@ -11,3 +11,6 @@ arch-graph-out/
 # Local config overrides
 *.local.ts
 *.local.json
+
+# Orchestration worktrees (Phase 2 delegation)
+.worktrees/
