@@ -18,3 +18,10 @@ export type {
     WrapperApi,
 } from './core/types.js';
 export { runBuild } from './pipeline/build.js';
+export {
+    parseSliceMode,
+    writeGraphMermaid,
+    type DomainKey,
+    type MermaidSliceMode,
+    type MermaidWriteOptions,
+} from './output/graph-mermaid.js';
