@@ -367,17 +367,31 @@ path({from:"service:platform-api", to:"db-table:platform_chats"})
 
 ## Block H — Benchmark suite (arch-graph vs graphify)
 
-_Запланирован после Phase 2._
+**Status**: landed. `bench/` модуль, 15 вопросов, 5 проектов. arch-graph 100 % recall на 688K токенов (15Q), graphify 39 % recall на 5.2M токенов (7.6× больше) для двух проектов с готовым `graphify-out/`.
 
-Идея: количественное сравнение **arch-graph** и **graphify** (`~/.claude/skills/graphify/SKILL.md`) на 5 тестовых монорепо:
+**Decisions (агент сам принял)**:
 
-- **Build cost**: время + диск + токен-эквивалент output'а
-- **LLM efficiency**: для каждого test-вопроса — сколько токенов нужно скормить LLM чтобы получить корректный ответ (`tiktoken`-counting через MCP-tool либо raw-graph dump'a)
-- **Quality**: precision / recall ответов против ground-truth (готовится вручную для ~15 архитектурных вопросов: "кто публикует X?", "путь от A до B", "что использует libs/Y?")
+1. **`graphify` не запускается из `run.sh`.** graphify — это Claude skill, а не one-shot CLI: внутри он диспатчит general-purpose subagent'ов и просит ручного labeling'а сообществ. Запуск из скрипта невозможен. `run.sh` детектит наличие `<project_root>/graphify-out/graph.json` (либо `bench/cache/<project>/graphify-out/graph.json`) и пропускает leg если файла нет. README документирует: `/graphify <root>` нужно запустить из Claude-сессии вручную, после чего пере-запустить `bash bench/run.sh`.
 
-Реализация — отдельный `bench/` модуль с `bench.ts` runner'ом + `questions.yaml` + per-tool adapter'ами. Отчёт — `bench/report.md` со сводной таблицей.
+2. **ID schemes несравнимы — ground truth выражается labels, не IDs.** arch-graph IDs: `service:platform-api`, `nats:platform.events.message.received`. graphify IDs: `apps_platform_api`, lowercase + underscore. Подстрочный поиск `service:platform-api` в graphify-контексте дал бы 0% recall by construction. Решение: `questions.yaml` хранит `ground_truth_ids` (canonical, для дебага) и `ground_truth_labels` (что реально ищем — `"platform-api"`, `"platform.events.message.received"`, `"PlatformConnectionService"`). Эвристика бьёт labels по обоим контекстам — fair comparison.
 
-Честный disclaimer: graphify — generic semantic-graph, arch-graph — domain-specific. Архитектурные вопросы arch-graph выиграет by design; на "объясни эту концепцию" graphify сильнее. Бенчмарк должен показать разрыв на типовых задачах разработчика монорепо.
+3. **Идентичная компрессия обоих графов.** Оба adapter'а сжимают до `{id, k, label?}` для нод и `{f, t, k, at?}` для эджей. Если изменить агрессивность одного — нужно зеркалить второго, иначе token-counts несравнимы. Прокомментировано в README.
+
+4. **Heuristic = substring presence, не LLM-eval.** "Did the context even contain the answer?" — necessary-condition check. Documented в `report.md` (`Heuristic` section). Precision стабильно 100 % by construction (мы ищем только GT labels, любой match — корректный); интересная ось — recall × tokens.
+
+5. **Token encoding = `cl100k_base`** (gpt-4 family). Самый распространённый industry-стандарт для context-token measurement.
+
+6. **Build-time для graphify не измеряется.** graphify-build живёт минутами + жжёт LLM-токены; включить в `run.sh` = burn $$$. Документировано в README.
+
+7. **Question category mix**: 4× NATS, 2× BullMQ, 2× TypeORM, 3× DI (incl. lib), 1× HTTP, 1× lib-usage, 2× multi-hop. Уважает `domains.bullmq=false` / `http=false` в `beribuy2.config.ts` (для beribuy2 BullMQ/HTTP вопросов нет).
+
+**Deferred**:
+
+- **Per-question subgraph retrieval.** Сейчас bench feed-ит весь compact graph как контекст. Реалистичнее: per-question retrieval (BFS от matched node, depth 2). Это уменьшит arch-graph tokens на порядок, но не изменит головной вывод (graphify останется крупнее + хуже recall на architectural questions). Отложено до Block I.
+- **LLM-judge eval** вместо substring-heuristic. Дорого, недетерминированно, requires API key — но более fair для graphify (label может быть на graph через `conceptually_related_to` без явного substring-match). Также Block I.
+- **graphify legs для insyra/beribuy2/unpacks.** Каждый — отдельная Claude-сессия с `/graphify <root>` + manual community labeling. Документировано в `report.md` `Skipped legs`.
+
+Disclaimer-секция в report.md явно признаёт bias в сторону arch-graph (selection + ground-truth derivation). Это и было задачей — показать ценность domain-specific графа на domain-specific вопросах.
 
 ---
 
