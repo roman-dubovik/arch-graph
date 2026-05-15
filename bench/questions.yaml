@@ -1,0 +1,219 @@
+# Benchmark questions — head-to-head: arch-graph vs graphify
+#
+# Each question is an architecture-grade query an engineer would ask their LLM
+# while working on the project. Ground truth is derived from arch-graph's
+# `graph.json` for each project — so questions express things arch-graph
+# *can* answer by design. We track:
+#
+#   - `ground_truth_ids`   — canonical arch-graph node IDs
+#   - `ground_truth_labels`— plain-text labels we expect to see in the answer
+#                            (these are what we actually look for in the LLM
+#                            context, because graphify uses a different ID
+#                            scheme — see report.md `Heuristic`).
+#
+# Categories (count): nats-pubsub (4), bullmq (2), typeorm (2), di (2),
+# http (1), ts-imports / libs (2), multi-hop (2).
+
+# ─── NATS pub/sub paths ────────────────────────────────────────────────────
+- id: q01
+  project: platform
+  category: nats
+  difficulty: easy
+  question: "Which components publish on the NATS subject 'platform.events.message.received'?"
+  ground_truth_ids:
+    - lib:libs/platform/messaging
+  ground_truth_labels:
+    - libs/platform/messaging
+    - platform.events.message.received
+
+- id: q02
+  project: platform
+  category: nats
+  difficulty: medium
+  question: "Which services or libraries subscribe to 'platform.events.message.received'?"
+  ground_truth_ids:
+    - service:platform-api
+    - lib:libs/platform/messaging
+  ground_truth_labels:
+    - platform-api
+    - libs/platform/messaging
+    - platform.events.message.received
+
+- id: q03
+  project: insyra
+  category: nats
+  difficulty: easy
+  question: "Which service replies to the NATS subject 'cron.register.nats'?"
+  ground_truth_ids:
+    - service:be-cron-service
+  ground_truth_labels:
+    - be-cron-service
+    - cron.register.nats
+
+- id: q04
+  project: screenia
+  category: nats
+  difficulty: easy
+  question: "Which service handles requests on 'cron.register.nats'?"
+  ground_truth_ids:
+    - service:be-cron-service
+  ground_truth_labels:
+    - be-cron-service
+    - cron.register.nats
+
+# ─── BullMQ producer/consumer ─────────────────────────────────────────────
+- id: q05
+  project: platform
+  category: bullmq
+  difficulty: easy
+  question: "Which service produces jobs on the 'billing-cleanup-orphans' BullMQ queue?"
+  ground_truth_ids:
+    - service:ident
+  ground_truth_labels:
+    - ident
+    - billing-cleanup-orphans
+
+- id: q06
+  project: unpacks
+  category: bullmq
+  difficulty: easy
+  question: "Which service consumes from the 'instagram-scraping' BullMQ queue?"
+  ground_truth_ids:
+    - service:be-instagram-scraper
+  ground_truth_labels:
+    - be-instagram-scraper
+    - instagram-scraping
+
+# ─── TypeORM entity / table usage ─────────────────────────────────────────
+- id: q07
+  project: insyra
+  category: typeorm
+  difficulty: medium
+  question: "Which services access the 'blog_posts' TypeORM table?"
+  ground_truth_ids:
+    - service:be-ai
+    - service:be-cron-service
+  ground_truth_labels:
+    - be-ai
+    - be-cron-service
+    - blog_posts
+
+- id: q08
+  project: beribuy2
+  category: typeorm
+  difficulty: medium
+  question: "Which services use the 'promocodes' TypeORM table?"
+  ground_truth_ids:
+    - service:be-api-beribuy
+    - service:be-data-integration
+  ground_truth_labels:
+    - be-api-beribuy
+    - be-data-integration
+    - promocodes
+
+# ─── DI module/provider lookups ───────────────────────────────────────────
+- id: q09
+  project: beribuy2
+  category: di
+  difficulty: easy
+  question: "Which NestJS modules import 'NatsClientModule' in beribuy2?"
+  ground_truth_ids:
+    - module:ApiModule
+    - module:CronModule
+    - module:MailModule
+  ground_truth_labels:
+    - NatsClientModule
+    - ApiModule
+    - CronModule
+    - MailModule
+
+- id: q10
+  project: screenia
+  category: di
+  difficulty: easy
+  question: "Which Nest modules import 'RedisModule' in screenia?"
+  ground_truth_ids:
+    - module:AiModule
+    - module:CronModule
+    - module:NatsModule
+    - module:NotificationModule
+  ground_truth_labels:
+    - RedisModule
+    - AiModule
+    - NotificationModule
+    - NatsModule
+
+# ─── HTTP inter-service ───────────────────────────────────────────────────
+- id: q11
+  project: platform
+  category: http
+  difficulty: medium
+  question: "Which platform components make HTTP calls to the 'deployer' service?"
+  ground_truth_ids:
+    - service:platform-cron
+    - lib:libs/platform/saas-admin
+  ground_truth_labels:
+    - platform-cron
+    - libs/platform/saas-admin
+    - deployer
+
+# ─── ts-imports / lib-usage ───────────────────────────────────────────────
+- id: q12
+  project: platform
+  category: lib
+  difficulty: medium
+  question: "Which libraries use 'libs/platform/core'?"
+  # We treat a handful of well-known users as the GT subset (recall need not be 100%).
+  ground_truth_ids:
+    - lib:libs/platform/agents
+    - lib:libs/platform/ai
+    - lib:libs/platform/app-sdk
+  ground_truth_labels:
+    - libs/platform/agents
+    - libs/platform/ai
+    - libs/platform/app-sdk
+    - libs/platform/core
+
+- id: q13
+  project: insyra
+  category: di
+  difficulty: medium
+  question: "Which Nest modules import the global 'ConfigModule' in insyra?"
+  ground_truth_ids:
+    - module:AiModule
+    - module:ConfigDiagnosticsModule
+    - module:CronModule
+  ground_truth_labels:
+    - AiModule
+    - ConfigDiagnosticsModule
+    - CronModule
+    - ConfigModule
+
+# ─── Multi-hop ────────────────────────────────────────────────────────────
+- id: q14
+  project: platform
+  category: multi-hop
+  difficulty: hard
+  question: >-
+    Which service both produces and consumes jobs on the 'ident-crm-sync' BullMQ queue
+    (a self-loop)?
+  ground_truth_ids:
+    - service:ident
+  ground_truth_labels:
+    - ident
+    - ident-crm-sync
+
+- id: q15
+  project: screenia
+  category: multi-hop
+  difficulty: hard
+  question: >-
+    Which component writes to the 'outbox_events' table — this is the outbox
+    pattern producer side?
+  ground_truth_ids:
+    - service:be-api-main
+    - lib:libs/nest-shared
+  ground_truth_labels:
+    - be-api-main
+    - libs/nest-shared
+    - outbox_events

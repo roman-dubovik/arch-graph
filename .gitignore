@@ -14,3 +14,8 @@ arch-graph-out/
 
 # Orchestration worktrees (Phase 2 delegation)
 .worktrees/
+
+# Bench artifacts — generated outputs (we commit report.md so reviewers
+# can see numbers without re-running). build-times and cache stay local.
+bench/.build-times.json
+bench/cache/
