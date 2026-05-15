@@ -5,13 +5,16 @@ import type { ArchGraphConfig } from '../core/config.js';
 import { discoverOwnership } from '../core/service-registry.js';
 import type { ArchGraph, BuildValidation, DiagnosticsReport } from '../core/types.js';
 import { extractBullMq } from '../extractors/bullmq/extractor.js';
+import { extractImports } from '../extractors/imports/extractor.js';
 import { extractNats } from '../extractors/nats/extractor.js';
 import { extractTypeOrm } from '../extractors/typeorm/extractor.js';
 import { mapBullMqToGraph } from '../mapper/bullmq-to-graph.js';
+import { mapImportsToGraph } from '../mapper/imports-to-graph.js';
 import { assembleGraph, buildNatsDiagnostics, mapNatsToGraph } from '../mapper/nats-to-graph.js';
 import { mapTypeOrmToGraph } from '../mapper/typeorm-to-graph.js';
 import { enumerateBullMqGroundTruth, buildBullMqReport } from '../validation/bullmq-validator.js';
 import { enumerateHandlers } from '../validation/handlers.js';
+import { buildImportsReport, enumerateImportsGroundTruth } from '../validation/imports-validator.js';
 import { enumerateSenders } from '../validation/senders.js';
 import { enumerateTypeOrmGroundTruth, buildTypeOrmReport } from '../validation/typeorm-validator.js';
 import { buildReport as buildNatsReport } from '../validation/validator.js';
@@ -151,14 +154,41 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         `  nodes: ${bullmqMapped.nodes.length}, edges: ${bullmqMapped.edges.length}, unresolved: ${bullmqMapped.diagnostics.unresolved.length}, unowned: ${bullmqMapped.diagnostics.unowned.length}\n`,
     );
 
+    // ---- TS-imports domain ----
+    process.stdout.write(`extracting imports...\n`);
+    t0 = Date.now();
+    const imports = await stage(`[${cfg.id}] imports.extract`, () => extractImports(cfg, project));
+    process.stdout.write(
+        `  ${imports.sites.length} import sites in ${Date.now() - t0}ms\n`,
+    );
+
+    process.stdout.write(`validating imports against ground truth...\n`);
+    const importsGT = await stage(`[${cfg.id}] imports.GT`, () => enumerateImportsGroundTruth(cfg));
+    const importsValidation = buildImportsReport(imports.sites, importsGT);
+    {
+        const v = importsValidation.summary;
+        process.stdout.write(
+            `  recall=${pct(v.recallStatic)} minPerFile=${pct(v.minPerFileRecall)} files=${v.filesWithImports} GT=${v.groundTruthStatic} extracted=${v.totalStatic}\n`,
+        );
+    }
+
+    process.stdout.write(`mapping imports to graph...\n`);
+    const importsMapped = mapImportsToGraph(imports.sites, ownership, {
+        fileLevel: cfg.imports?.fileLevel === true,
+    });
+    process.stdout.write(
+        `  nodes: ${importsMapped.nodes.length}, edges: ${importsMapped.edges.length}, unresolvedInternal: ${importsMapped.diagnostics.counts.unresolvedInternal}, externalOrUnresolved: ${importsMapped.diagnostics.counts.externalOrUnresolved}, dynamic: ${importsMapped.diagnostics.counts.totalDynamic}\n`,
+    );
+
     // ---- Compose ----
-    const graph = assembleGraph(cfg.root, [natsMapped, typeormMapped, bullmqMapped]);
+    const graph = assembleGraph(cfg.root, [natsMapped, typeormMapped, bullmqMapped, importsMapped]);
     const diagnostics: DiagnosticsReport = {
         projectId: cfg.id,
         timestamp: new Date().toISOString(),
         nats: natsDiagnostics,
         typeorm: typeormMapped.diagnostics,
         bullmq: bullmqMapped.diagnostics,
+        imports: importsMapped.diagnostics,
     };
     const validation: BuildValidation = {
         projectId: cfg.id,
@@ -166,6 +196,7 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         nats: natsValidation,
         typeorm: typeormValidation,
         bullmq: bullmqValidation,
+        imports: importsValidation,
     };
 
     return { graph, diagnostics, validation };
