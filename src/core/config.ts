@@ -22,6 +22,8 @@ export interface ArchGraphConfig {
     excludeGlobs?: string[];
     /** NATS extractor settings. */
     nats?: NatsConfig;
+    /** TS-imports extractor settings. */
+    imports?: ImportsConfig;
     /**
      * Opt-out flags per domain. When a domain is `true` (default) the CLI gate
      * treats zero ground-truth as a hard failure (regex-typo, missing glob, etc.).
@@ -31,7 +33,17 @@ export interface ArchGraphConfig {
         nats?: boolean;
         typeorm?: boolean;
         bullmq?: boolean;
+        imports?: boolean;
     };
+}
+
+export interface ImportsConfig {
+    /**
+     * Emit file-level `ts-import` edges (one per resolved import). Off by default —
+     * even a medium monorepo produces 10k+ edges, which drowns the service-level
+     * graph in noise. Turn on only when explicitly inspecting file-graph topology.
+     */
+    fileLevel?: boolean;
 }
 
 export interface NatsConfig {
