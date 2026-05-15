@@ -40,7 +40,7 @@ Severity:
 
 ## Cross-cutting
 
-_заполняется по ходу ревью_
+- **[nice-to-have] [cli] `replaceMarkedSection`/`stripMarkedSection`/`appendBlock` живут в `claude.ts` и реэкспортируются в `hooks.ts`** — зависимость `hooks.ts → claude.ts` по чисто утилитарным хелперам выглядит странно (оба экспортируются с явным комментарием `// exported for reuse by hooks.ts`). Было бы чище вынести их в `src/cli/marker-block.ts`. Отложено — текущее состояние работает, комментарий документирует намерение, blast radius минимален. (simplifier pass, Block G review)
 
 ---
 

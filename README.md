@@ -49,7 +49,7 @@ arch-graph build         # writes arch-graph-out/
 
 Outputs land in `arch-graph-out/`:
 
-- `graph.json` — nodes (services, NATS subjects, BullMQ queues, TypeORM entities, NestJS modules, HTTP endpoints, libs) + edges (publishes, subscribes, depends-on, http-call, module-import/provide/export, ts-import, lib-usage).
+- `graph.json` — nodes (services, NATS subjects, BullMQ queues, TypeORM entities, NestJS modules, HTTP endpoints, libs) + edges (`nats-publish`/`nats-subscribe`/`nats-request`/`nats-reply`, `queue-produce`/`queue-consume`, `db-read`/`db-write`/`db-access`, `di-import`/`di-provides`/`di-exports`/`di-controller`, `http-call`/`http-external`, `ts-import`, `lib-usage`).
 - `diagnostics.json` — every unresolved / dynamic call-site, with source location.
 - `validation.json` — per-domain recall, resolveRate, and ground-truth counts. Build fails (exit code 3) if any enabled domain drops below its gate.
 - `graph.mermaid` — full flowchart. Add `--mermaid-slice=per-service` or `--mermaid-slice=domain:nats` for focused views.
@@ -102,7 +102,7 @@ The hook is a small marker-delimited block — if you already have a `post-commi
 
 ## MCP server
 
-If the MCP server is installed (`arch-graph mcp` — see the MCP block in `OPEN-QUESTIONS.md`), prefer it over reading `graph.json` directly. It exposes typed tools (`subject-publishers`, `subject-subscribers`, `service-dependencies`, `paths-between`, `unresolved-sites`) so agents can ask targeted questions instead of dumping the whole graph.
+If the MCP server is installed (`arch-graph mcp` — see the MCP block in `OPEN-QUESTIONS.md`), prefer it over reading `graph.json` directly. It exposes typed tools (`subject_publishers`, `subject_subscribers`, `queue_producers`, `queue_consumers`, `service_dependencies`, `service_dependents`, `module_imports`, `table_users`, `path`, `explain`, `query`, `stats`) so agents can ask targeted questions instead of dumping the whole graph. For unresolved / dynamic call-sites the extractor couldn't pin down, read `arch-graph-out/diagnostics.json` (there is no MCP tool for it — diagnostics are static facts, not graph queries).
 
 Without MCP, `graph.json` is a single file you can read directly. See the `## arch-graph` section of `CLAUDE.md` after `arch-graph claude install` for `jq` recipes.
 
@@ -121,7 +121,7 @@ To extend coverage, add an extractor under `src/extractors/<domain>/` and wire i
 
 ## Benchmark
 
-Quantitative comparison with graphify across 5 reference monorepos (build cost, LLM token efficiency per architectural question, precision/recall on a ground-truth Q&A set) lives in `bench/report.md` once Block H lands.
+Quantitative comparison with graphify across 5 reference monorepos (build cost, LLM token efficiency per architectural question, precision/recall on a ground-truth Q&A set) lives in `bench/report.md` — run `bash bench/run.sh` to rebuild it.
 
 ## Development
 

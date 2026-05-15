@@ -1,6 +1,6 @@
 # arch-graph vs graphify — head-to-head benchmark
 
-_Generated: 2026-05-15T19:55:35.626Z_
+_Generated: 2026-05-15T20:47:24.567Z_
 
 ## What this measures
 
@@ -50,11 +50,11 @@ truth each tool delivers per token of LLM context.
 
 | project | arch nodes/edges | arch size | arch build | arch avg tokens | arch recall | graphify nodes/edges | graphify size | graphify avg tokens | graphify recall |
 |---|---|---|---|---|---|---|---|---|---|
-| platform | 894n / 1532e | 892.8 KB | 8.3 s | 65763 | 100% | 11440n / 10588e | 9.07 MB | 718155 | 42% |
-| insyra | 898n / 1222e | 770.9 KB | 8.2 s | 63101 | 100% | unavailable | — | — | — |
-| screenia | 358n / 552e | 332.9 KB | 6.6 s | 23679 | 100% | 5163n / 4664e | 4.42 MB | 302999 | 33% |
-| unpacks | 245n / 352e | 219.3 KB | 3.6 s | 16391 | 100% | unavailable | — | — | — |
-| beribuy2 | 144n / 189e | 117.8 KB | 3.9 s | 8570 | 100% | unavailable | — | — | — |
+| platform | 894n / 1532e | 892.8 KB | — | 65763 | 100% | 11440n / 10588e | 9.07 MB | 718155 | 42% |
+| insyra | 898n / 1222e | 770.9 KB | — | 63101 | 100% | unavailable | — | — | — |
+| screenia | 358n / 552e | 332.9 KB | — | 23679 | 100% | 5163n / 4664e | 4.42 MB | 302999 | 33% |
+| unpacks | 245n / 352e | 219.3 KB | — | 16391 | 100% | unavailable | — | — | — |
+| beribuy2 | 144n / 189e | 117.8 KB | — | 8570 | 100% | unavailable | — | — | — |
 
 ## Per-question breakdown
 

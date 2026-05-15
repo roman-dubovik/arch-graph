@@ -13,6 +13,8 @@ import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { basename } from 'node:path';
 
+import { type BenchAdapter, type CompactGraph, serializeContext as serializeCompact } from './compact.js';
+
 interface GraphifyNode {
     id: string;
     label?: string;
@@ -45,11 +47,7 @@ interface GraphifyGraph {
     hyperedges?: unknown[];
 }
 
-export interface CompactGraph {
-    schema: string;
-    nodes: Array<{ id: string; k: string; label?: string }>;
-    edges: Array<{ f: string; t: string; k: string; at?: string }>;
-}
+export type { CompactGraph };
 
 export async function loadGraphifyGraph(path: string): Promise<GraphifyGraph> {
     const raw = await readFile(path, 'utf8');
@@ -91,7 +89,7 @@ export function compactGraphifyGraph(g: GraphifyGraph): CompactGraph {
 }
 
 export function serializeContext(g: CompactGraph): string {
-    return `# graphify context\n${g.schema}\n\n${JSON.stringify({ nodes: g.nodes, edges: g.edges })}`;
+    return serializeCompact(g, 'graphify');
 }
 
 /**
@@ -119,3 +117,21 @@ export function findGraphifyOutput(
     }
     return null;
 }
+
+/** `BenchAdapter` view onto graphify — same contract as `archGraphAdapter`. */
+export const graphifyAdapter: BenchAdapter = {
+    name: 'graphify',
+    async load(path) {
+        const g = await loadGraphifyGraph(path);
+        return { raw: g, nodeCount: g.nodes.length, edgeCount: g.links.length };
+    },
+    compact(raw) {
+        return compactGraphifyGraph(raw as GraphifyGraph);
+    },
+    serialize(g) {
+        return serializeContext(g);
+    },
+    findOutput(projectId, projectRoot, cacheRoot) {
+        return findGraphifyOutput(projectId, projectRoot, cacheRoot);
+    },
+};
