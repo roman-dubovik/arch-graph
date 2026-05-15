@@ -23,13 +23,9 @@ export interface MapNatsResult {
 
 /**
  * Maps validated NatsCallSite[] to graph nodes/edges + diagnostics.
- *
- * Decisions (locked here, see 04-next-session-start notes):
- *  - literal/pattern subjects → real `nats-subject` nodes + edges
- *  - dynamic/unresolved subjects → NOT in graph, captured in diagnostics
- *  - call-sites in apps/   → owner = `service:<id>`
- *  - call-sites in libs/   → owner = `lib:<path>` (factual; dep-cruiser later attaches users)
- *  - call-sites elsewhere  → `unknown` owner → diagnostics.unowned, dropped from graph
+ *  - literal/pattern subjects → `nats-subject` node + edge
+ *  - dynamic/unresolved subjects → diagnostics only (no node)
+ *  - owner apps/ libs/ → `service:` / `lib:`; unknown → diagnostics.unowned
  */
 export function mapNatsToGraph(
     callSites: NatsCallSite[],

@@ -35,11 +35,7 @@ export function buildReport(
         }
     }
 
-    const extra: NatsCallSite[] = [];
-    for (const e of extracted) {
-        if (consumed.has(e)) continue;
-        extra.push(e);
-    }
+    const extra = extracted.filter((e) => !consumed.has(e));
 
     const handlersGT = groundTruth.filter((g) => g.role === 'receiver').length;
     const sendersGT = groundTruth.filter((g) => g.role === 'sender').length;
@@ -66,6 +62,8 @@ export function buildReport(
             classificationAccuracy: extracted.length > 0 ? classifiedCount / extracted.length : 0,
             totalExtracted: extracted.length,
             totalGroundTruth: groundTruth.length,
+            groundTruthHandlers: handlersGT,
+            groundTruthSenders: sendersGT,
             bySubjectKind,
         },
         extracted,

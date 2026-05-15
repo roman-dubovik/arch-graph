@@ -44,6 +44,12 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         join(cfg.root, cfg.appsGlob, '**/*.ts'),
         ...(cfg.libsGlob ? [join(cfg.root, cfg.libsGlob, '**/*.ts')] : []),
     ];
+    // cfg.excludeGlobs MUST be applied here too — otherwise extractor and validator
+    // disagree on the file set, and excluded paths become phantom `extra` matches
+    // that mask real regressions in the gate. Convention: `cfg.excludeGlobs` entries
+    // are path substrings (e.g. `/dist-poc/`) — wrapped with `**` to behave as
+    // anywhere-in-path matchers, consistent with the validators.
+    const extraExcludes = (cfg.excludeGlobs ?? []).map((g) => `!**${g}**`);
     for (const g of globs) {
         project.addSourceFilesAtPaths([
             g,
@@ -54,6 +60,7 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
             '!**/*.spec.ts',
             '!**/*.test.ts',
             '!**/*.d.ts',
+            ...extraExcludes,
         ]);
     }
     process.stdout.write(`source files: ${project.getSourceFiles().length}\n`);

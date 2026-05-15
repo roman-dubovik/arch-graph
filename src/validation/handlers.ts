@@ -25,7 +25,7 @@ export async function enumerateHandlers(cfg: ArchGraphConfig): Promise<GroundTru
                 '**/*.spec.ts',
                 '**/*.test.ts',
                 '**/*.d.ts',
-                ...(cfg.excludeGlobs ?? []),
+                ...(cfg.excludeGlobs?.map((g) => `**${g}**`) ?? []),
             ],
         },
     );

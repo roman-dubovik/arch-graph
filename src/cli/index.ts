@@ -97,26 +97,23 @@ async function cmdBuild(args: ParsedArgs): Promise<void> {
     const typeormEnabled = cfg.domains?.typeorm !== false;
     const fails: string[] = [];
 
+    // Per-role zero-GT: handlers misconfig and senders misconfig fail independently
+    // (otherwise a zero on one side hides behind a non-zero on the other).
     if (natsEnabled) {
-        if (n.totalGroundTruth === 0) {
-            fails.push(`nats: zero ground-truth — extractor or globs misconfigured (set domains.nats=false to disable)`);
-        } else {
-            if (n.recallHandlers < 0.95) fails.push(`nats handlers ${pct(n.recallHandlers)}`);
-            if (n.recallSenders < 0.95) fails.push(`nats senders ${pct(n.recallSenders)}`);
-        }
+        if (n.groundTruthHandlers === 0) fails.push(`nats: zero handler ground-truth — check subscribe decorators / wrapperSubscribeApis`);
+        if (n.groundTruthSenders === 0) fails.push(`nats: zero sender ground-truth — check wrapperPublishApis (typo'd class name?)`);
+        if (n.groundTruthHandlers > 0 && n.recallHandlers < 0.95) fails.push(`nats handlers ${pct(n.recallHandlers)}`);
+        if (n.groundTruthSenders > 0 && n.recallSenders < 0.95) fails.push(`nats senders ${pct(n.recallSenders)}`);
     }
     if (typeormEnabled) {
-        if (t.groundTruthInjections === 0 && t.groundTruthEntities === 0) {
-            fails.push(`typeorm: zero ground-truth — extractor or globs misconfigured (set domains.typeorm=false to disable)`);
-        } else {
-            if (t.recallInjections < 0.95) fails.push(`typeorm injections ${pct(t.recallInjections)}`);
-            if (t.recallEntities < 0.95) fails.push(`typeorm entities ${pct(t.recallEntities)}`);
-            // Low resolveRate means many @InjectRepository(X) couldn't be matched to an
-            // @Entity — typically a real extractor gap (alias re-exports, etc.) worth gating.
-            // Threshold 0.95 is conservative against current baseline (min observed 98.3% on screenia).
-            if (t.totalInjections > 0 && t.resolveRate < 0.95) {
-                fails.push(`typeorm resolve ${pct(t.resolveRate)} (< 95%)`);
-            }
+        if (t.groundTruthInjections === 0) fails.push(`typeorm: zero injection ground-truth — check appsGlob / @InjectRepository usage`);
+        if (t.groundTruthEntities === 0) fails.push(`typeorm: zero entity ground-truth — check @Entity declarations in libs/`);
+        if (t.groundTruthInjections > 0 && t.recallInjections < 0.95) fails.push(`typeorm injections ${pct(t.recallInjections)}`);
+        if (t.groundTruthEntities > 0 && t.recallEntities < 0.95) fails.push(`typeorm entities ${pct(t.recallEntities)}`);
+        // Low resolveRate = many @InjectRepository(X) didn't match a known @Entity —
+        // usually a real extractor gap (alias re-exports, namespaced imports) worth gating.
+        if (t.totalInjections > 0 && t.resolveRate < 0.95) {
+            fails.push(`typeorm resolve ${pct(t.resolveRate)} (< 95%)`);
         }
     }
 

@@ -7,7 +7,7 @@ import {
     SyntaxKind,
 } from 'ts-morph';
 
-import type { TypeOrmEntity } from '../../core/types.js';
+import type { TypeOrmEntity, TypeOrmEntityDecoratorWarning } from '../../core/types.js';
 
 /**
  * Pre-pass indexer: scans the project for `@Entity(...)` class declarations and
@@ -21,17 +21,9 @@ import type { TypeOrmEntity } from '../../core/types.js';
  *   5. `@Entity(NON_STATIC_ARG)`                 -> warning, NOT indexed       (Identifier / Call — extractor can't resolve)
  */
 
-export interface EntityIndexWarning {
-    className: string;
-    file: string;
-    line: number;
-    reason: 'object-literal-missing-name' | 'non-static-argument';
-    argKind?: string;
-}
-
 export class EntityIndex {
     private byClass = new Map<string, TypeOrmEntity>();
-    readonly warnings: EntityIndexWarning[] = [];
+    readonly warnings: TypeOrmEntityDecoratorWarning[] = [];
 
     get(className: string): TypeOrmEntity | undefined {
         return this.byClass.get(className);
@@ -61,32 +53,23 @@ export function buildEntityIndex(project: Project): EntityIndex {
             if (!className) continue;
 
             const resolution = resolveTableName(decorator, className);
+            const line = decorator.getStartLineNumber();
+            const file = sf.getFilePath();
+
             if (resolution.kind === 'non-static') {
-                // Don't index — `@InjectRepository(Foo)` for this class will land in
-                // `diagnostics.unresolvedEntities` (the right bucket; we never knew the table).
-                idx.warnings.push({
-                    className,
-                    file: sf.getFilePath(),
-                    line: decorator.getStartLineNumber(),
-                    reason: 'non-static-argument',
-                    argKind: resolution.argKind,
-                });
+                // Don't index — `@InjectRepository(Foo)` for this class lands in
+                // `diagnostics.unresolvedEntities` (right bucket; we never knew the table).
+                idx.warnings.push({ className, file, line, reason: 'non-static-argument', argKind: resolution.argKind });
                 continue;
             }
-            if (resolution.kind === 'object-no-name') {
-                idx.warnings.push({
-                    className,
-                    file: sf.getFilePath(),
-                    line: decorator.getStartLineNumber(),
-                    reason: 'object-literal-missing-name',
-                });
+            if (resolution.kind === 'inferred-object-no-name') {
+                idx.warnings.push({ className, file, line, reason: 'object-literal-missing-name' });
             }
             idx.set(className, {
                 className,
-                table: resolution.table,
-                inferredTable: resolution.kind !== 'explicit',
-                file: sf.getFilePath(),
-                line: decorator.getStartLineNumber(),
+                tableSource: { kind: resolution.kind, table: resolution.table },
+                file,
+                line,
             });
         }
     }
@@ -97,7 +80,7 @@ export function buildEntityIndex(project: Project): EntityIndex {
 type Resolution =
     | { kind: 'explicit'; table: string }
     | { kind: 'inferred-no-arg'; table: string }
-    | { kind: 'object-no-name'; table: string }
+    | { kind: 'inferred-object-no-name'; table: string }
     | { kind: 'non-static'; argKind: string };
 
 function resolveTableName(decorator: Decorator, className: string): Resolution {
@@ -137,7 +120,7 @@ function resolveTableName(decorator: Decorator, className: string): Resolution {
         if (name) {
             return { kind: 'explicit', table: schema ? `${schema}.${name}` : name };
         }
-        return { kind: 'object-no-name', table: snakeCase(className) };
+        return { kind: 'inferred-object-no-name', table: snakeCase(className) };
     }
 
     return { kind: 'non-static', argKind: first.getKindName() };

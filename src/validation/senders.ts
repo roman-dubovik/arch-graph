@@ -29,7 +29,7 @@ export async function enumerateSenders(cfg: ArchGraphConfig): Promise<GroundTrut
                 '**/*.spec.ts',
                 '**/*.test.ts',
                 '**/*.d.ts',
-                ...(cfg.excludeGlobs ?? []),
+                ...(cfg.excludeGlobs?.map((g) => `**${g}**`) ?? []),
             ],
         },
     );
@@ -62,11 +62,23 @@ export async function enumerateSenders(cfg: ArchGraphConfig): Promise<GroundTrut
         const idToType = new Map<string, string>();
 
         for (const typeName of natsTypes) {
+            // Accept any sequence of decorators (`@Inject() @Optional()`) before the access modifier,
+            // and allow the modifier itself to be absent when decorators are present
+            // (NestJS DI doesn't require `private` on @Inject-prefixed properties).
+            const decorPrefix = `(?:@[A-Za-z_][\\w]*\\s*(?:\\([^)]*\\))?\\s*)*`;
             const re1 = new RegExp(
-                `(?:private|readonly|public|protected)\\s+(?:readonly\\s+)?(\\w+)\\s*:\\s*${escapeReg(typeName)}\\b`,
+                `${decorPrefix}(?:(?:private|readonly|public|protected)\\s+)+(?:readonly\\s+)?(\\w+)\\s*:\\s*${escapeReg(typeName)}\\b`,
                 'g',
             );
             for (const m of content.matchAll(re1)) {
+                idToType.set(m[1]!, typeName);
+            }
+            // Decorator-only properties without explicit access modifier.
+            const re1b = new RegExp(
+                `(?:@[A-Za-z_][\\w]*\\s*(?:\\([^)]*\\))?\\s*)+(?:readonly\\s+)?(\\w+)\\s*:\\s*${escapeReg(typeName)}\\b`,
+                'g',
+            );
+            for (const m of content.matchAll(re1b)) {
                 idToType.set(m[1]!, typeName);
             }
             const re2 = new RegExp(
