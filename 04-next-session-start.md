@@ -109,6 +109,12 @@ EntityIndex индексирует декларацию класса по его
 
 ---
 
+## Design guideline для следующих extractors
+
+**Service seeding в mapper.** Сейчас NATS mapper seed-ит все services из ownership (даже без рёбер), TypeORM — только тех, к кому есть injection sites. `assembleGraph` мержит частичные nodes через `{...a, ...b}`, поэтому пока порядок `[natsMapped, typeormMapped]` сохраняет `path` от NATS. При добавлении BullMQ/DI правило: **либо все mappers seed-ят services, либо merge должен быть устойчив к порядку**. Перед BullMQ зафиксировать.
+
+---
+
 ## Ключевые technical insights из POC (актуальны для следующих extractors)
 
 1. **ConstantIndex обязателен** — без него resolve rate 0% из-за path aliases. Pre-pass всех `export const/enum/function`. Уже есть в production: [`src/extractors/nats/constant-index.ts`](./src/extractors/nats/constant-index.ts).
