@@ -111,6 +111,12 @@ async function cmdBuild(args: ParsedArgs): Promise<void> {
         } else {
             if (t.recallInjections < 0.95) fails.push(`typeorm injections ${pct(t.recallInjections)}`);
             if (t.recallEntities < 0.95) fails.push(`typeorm entities ${pct(t.recallEntities)}`);
+            // Low resolveRate means many @InjectRepository(X) couldn't be matched to an
+            // @Entity — typically a real extractor gap (alias re-exports, etc.) worth gating.
+            // Threshold 0.95 is conservative against current baseline (min observed 98.3% on screenia).
+            if (t.totalInjections > 0 && t.resolveRate < 0.95) {
+                fails.push(`typeorm resolve ${pct(t.resolveRate)} (< 95%)`);
+            }
         }
     }
 
@@ -132,7 +138,7 @@ async function cmdDiagnose(args: ParsedArgs): Promise<void> {
     const t = result.diagnostics.typeorm;
     process.stdout.write(`\n--- diagnostics for ${cfg.id} ---\n`);
     process.stdout.write(`[nats]    literal=${n.counts.literal} pattern=${n.counts.pattern} dynamic=${n.counts.dynamic} unresolved=${n.counts.unresolved}\n`);
-    process.stdout.write(`[typeorm] resolved=${t.counts.resolved} unresolvedEntity=${t.counts.unresolvedEntity} unowned=${t.counts.unowned}\n`);
+    process.stdout.write(`[typeorm] resolved=${t.counts.resolved} unresolvedEntity=${t.counts.unresolvedEntity} unowned=${t.counts.unowned} entityWarnings=${t.counts.entityDecoratorWarnings}\n`);
 
     if (n.unresolved.length > 0) {
         process.stdout.write(`\nTop 10 unresolved NATS subjects:\n`);

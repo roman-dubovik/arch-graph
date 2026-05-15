@@ -141,7 +141,7 @@ function buildEdge(cs: NatsCallSite, ownerId: string, subjectId: string): GraphE
         kind: cs.edgeKind,
         file: cs.location.file,
         line: cs.location.line,
-        meta: { via: cs.via, ...(cs.enclosingClass ? { enclosingClass: cs.enclosingClass } : {}) },
+        meta: { via: cs.via, ...(cs.enclosingClass !== undefined ? { enclosingClass: cs.enclosingClass } : {}) },
     };
     if (cs.subject.kind === 'pattern') {
         edge.dynamic = true;

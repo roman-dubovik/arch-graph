@@ -14,12 +14,24 @@ import type { TypeOrmEntity } from '../../core/types.js';
  * resolves them to a `{className, table}` mapping. Mirrors the NATS ConstantIndex.
  *
  * Table-name resolution priority:
- *   1. `@Entity('explicit_name')`               -> explicit_name
- *   2. `@Entity({ name: 'foo', schema: 'bar' })` -> bar.foo (or foo if no schema)
- *   3. `@Entity()` with no arg                   -> snake_case(ClassName)
+ *   1. `@Entity('explicit_name')`                -> explicit_name             (explicit)
+ *   2. `@Entity({ name: 'foo', schema: 'bar' })` -> bar.foo                   (explicit)
+ *   3. `@Entity()` with no arg                   -> snake_case(ClassName)     (inferred — TypeORM default)
+ *   4. `@Entity({ schema: 'public' })` (no name) -> snake_case(ClassName) + WARN (likely a developer typo)
+ *   5. `@Entity(NON_STATIC_ARG)`                 -> warning, NOT indexed       (Identifier / Call — extractor can't resolve)
  */
+
+export interface EntityIndexWarning {
+    className: string;
+    file: string;
+    line: number;
+    reason: 'object-literal-missing-name' | 'non-static-argument';
+    argKind?: string;
+}
+
 export class EntityIndex {
     private byClass = new Map<string, TypeOrmEntity>();
+    readonly warnings: EntityIndexWarning[] = [];
 
     get(className: string): TypeOrmEntity | undefined {
         return this.byClass.get(className);
@@ -48,11 +60,31 @@ export function buildEntityIndex(project: Project): EntityIndex {
             const className = cls.getName();
             if (!className) continue;
 
-            const { table, inferred } = resolveTableName(decorator, className);
+            const resolution = resolveTableName(decorator, className);
+            if (resolution.kind === 'non-static') {
+                // Don't index — `@InjectRepository(Foo)` for this class will land in
+                // `diagnostics.unresolvedEntities` (the right bucket; we never knew the table).
+                idx.warnings.push({
+                    className,
+                    file: sf.getFilePath(),
+                    line: decorator.getStartLineNumber(),
+                    reason: 'non-static-argument',
+                    argKind: resolution.argKind,
+                });
+                continue;
+            }
+            if (resolution.kind === 'object-no-name') {
+                idx.warnings.push({
+                    className,
+                    file: sf.getFilePath(),
+                    line: decorator.getStartLineNumber(),
+                    reason: 'object-literal-missing-name',
+                });
+            }
             idx.set(className, {
                 className,
-                table,
-                inferredTable: inferred,
+                table: resolution.table,
+                inferredTable: resolution.kind !== 'explicit',
                 file: sf.getFilePath(),
                 line: decorator.getStartLineNumber(),
             });
@@ -62,13 +94,16 @@ export function buildEntityIndex(project: Project): EntityIndex {
     return idx;
 }
 
-function resolveTableName(
-    decorator: Decorator,
-    className: string,
-): { table: string; inferred: boolean } {
+type Resolution =
+    | { kind: 'explicit'; table: string }
+    | { kind: 'inferred-no-arg'; table: string }
+    | { kind: 'object-no-name'; table: string }
+    | { kind: 'non-static'; argKind: string };
+
+function resolveTableName(decorator: Decorator, className: string): Resolution {
     const args = decorator.getArguments();
     if (args.length === 0) {
-        return { table: snakeCase(className), inferred: true };
+        return { kind: 'inferred-no-arg', table: snakeCase(className) };
     }
 
     const first = args[0]!;
@@ -77,7 +112,7 @@ function resolveTableName(
         first.getKind() === SyntaxKind.NoSubstitutionTemplateLiteral
     ) {
         const lit = (first as unknown as { getLiteralText: () => string }).getLiteralText();
-        return { table: lit, inferred: false };
+        return { kind: 'explicit', table: lit };
     }
 
     if (first.getKind() === SyntaxKind.ObjectLiteralExpression) {
@@ -100,12 +135,12 @@ function resolveTableName(
             else if (propName === 'schema') schema = lit;
         }
         if (name) {
-            return { table: schema ? `${schema}.${name}` : name, inferred: false };
+            return { kind: 'explicit', table: schema ? `${schema}.${name}` : name };
         }
-        return { table: snakeCase(className), inferred: true };
+        return { kind: 'object-no-name', table: snakeCase(className) };
     }
 
-    return { table: snakeCase(className), inferred: true };
+    return { kind: 'non-static', argKind: first.getKindName() };
 }
 
 /**
