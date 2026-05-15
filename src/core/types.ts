@@ -61,6 +61,7 @@ export type NodeKind =
     | 'db-table'
     | 'queue'
     | 'module'
+    | 'provider'
     | 'file';
 
 export type EdgeKind =
@@ -74,6 +75,7 @@ export type EdgeKind =
     | 'di-import'
     | 'di-provides'
     | 'di-exports'
+    | 'di-controller'
     | 'ts-import'
     | 'lib-usage';
 
@@ -191,6 +193,7 @@ export interface DiagnosticsReport {
     nats: NatsDiagnostics;
     typeorm: TypeOrmDiagnostics;
     bullmq: BullMqDiagnostics;
+    di: DiDiagnostics;
 }
 
 // ============================================================================
@@ -257,6 +260,7 @@ export interface BuildValidation {
     nats: NatsValidationReport;
     typeorm: TypeOrmValidationReport;
     bullmq: BullMqValidationReport;
+    di: DiValidationReport;
 }
 
 // ============================================================================
@@ -365,4 +369,156 @@ export interface BullMqValidationReport {
 
 export function queueNameOf(ref: BullMqQueueRef): string | null {
     return ref.kind === 'unresolved' ? null : ref.name;
+}
+
+// ============================================================================
+// DI-domain types (NestJS @Module)
+// ============================================================================
+
+/**
+ * Resolved reference inside `imports: [...]`. Three shapes:
+ *   - bare identifier `OtherModule`            → `class` (module class name)
+ *   - call expression `Foo.forRoot(...)`       → `dynamic` (callee root identifier; arguments ignored)
+ *   - anything else (spread, ternary, etc.)    → `unresolved` (skip + diagnostic)
+ *
+ * The `class` form is the common case; the resulting graph edge points at
+ * `module:<name>`. The `dynamic` form is what NestJS calls a "dynamic module"
+ * factory — we record the producing module class as the edge target, which is
+ * the natural unit of architectural dependency.
+ */
+export type DiModuleRef =
+    | { kind: 'class'; name: string }
+    | { kind: 'dynamic'; name: string; via: string }
+    | { kind: 'unresolved'; raw: string; reason: string };
+
+/**
+ * Resolved reference inside `providers: [...]` / `exports: [...]`.
+ *
+ *   - bare identifier `FooService`             → `class` (provider class name)
+ *   - object literal `{ provide, useClass }`   → `useClass`, `useValue`, `useFactory`, `useExisting`
+ *       - `useClass: Foo`     → name = `Foo`,    providerKind = 'class'
+ *       - `useExisting: Foo`  → name = `Foo`,    providerKind = 'existing'
+ *       - `useValue: ...`     → name = provideTokenText, providerKind = 'value'
+ *       - `useFactory: ...`   → name = provideTokenText, providerKind = 'factory'
+ *       - (none of the above) → providerKind = 'unknown'
+ *   - anything else (spread, ternary)          → `unresolved`
+ */
+export type DiProviderRef =
+    | { kind: 'class'; name: string }
+    | {
+          kind: 'token';
+          name: string;
+          providerKind: 'class' | 'existing' | 'value' | 'factory' | 'unknown';
+          /** Original `provide:` token text when it differs from `name` (e.g. `provide: TOKEN, useClass: FooImpl`). */
+          provideToken?: string;
+      }
+    | { kind: 'unresolved'; raw: string; reason: string };
+
+/** One `@Module(...)` declaration. */
+export interface DiModuleSite {
+    className: string;
+    /** Position of the `@Module` decorator itself — used by `module` GT matching. */
+    location: SourceLoc;
+    imports: DiModuleRef[];
+    providers: DiProviderRef[];
+    exports: DiProviderRef[];
+    controllers: DiProviderRef[];
+    /**
+     * Per-field property-name locations inside the metadata object, when present.
+     * Used by the validator to match `<field>-field` GT by file:line (presence-recall).
+     */
+    fieldLocations: {
+        imports: SourceLoc | null;
+        providers: SourceLoc | null;
+        exports: SourceLoc | null;
+        controllers: SourceLoc | null;
+    };
+    /**
+     * Flags signalling that a field contained spread, ternary, or other dynamic
+     * expressions we couldn't enumerate. Downstream tooling uses these to decide
+     * whether to trust the resolved ref list as "complete" for that field —
+     * a single unresolved entry breaks that contract.
+     *
+     * Field-presence (was a `<field>:` written at all?) is encoded by `fieldLocations.X !== null`;
+     * no separate boolean is needed.
+     */
+    flags: {
+        hasDynamicImports: boolean;
+        hasDynamicProviders: boolean;
+        hasDynamicExports: boolean;
+        hasDynamicControllers: boolean;
+    };
+}
+
+export interface DiDiagnostics {
+    /** Refs (across all four arrays) that couldn't be resolved to a class name. */
+    unresolvedRefs: Array<{
+        moduleClass: string;
+        field: 'imports' | 'providers' | 'exports' | 'controllers';
+        ref: DiModuleRef | DiProviderRef;
+        location: SourceLoc;
+    }>;
+    /** `@Module`-decorated classes whose owning file falls outside apps/ and libs/. */
+    unowned: DiModuleSite[];
+    counts: {
+        modules: number;
+        imports: number;
+        providers: number;
+        exports: number;
+        controllers: number;
+        unresolvedRefs: number;
+        unowned: number;
+    };
+}
+
+export interface DiGroundTruthEntry {
+    /**
+     * `module`         — one `@Module(` decorator.
+     * `imports-field`  — one `imports:` property inside any `@Module({...})`.
+     * `providers-field`/`exports-field`/`controllers-field` — analogous.
+     *
+     * Field-presence GT (not entry-counting) is robust against multiline arrays,
+     * nested calls, spreads, comments — count of *populated fields per module*, not
+     * the count of array entries. The extractor sets the corresponding `hasXField`
+     * flag whenever it sees the property assignment; matching is by file:line of
+     * the property-name keyword.
+     */
+    role: 'module' | 'imports-field' | 'providers-field' | 'exports-field' | 'controllers-field';
+    location: SourceLoc;
+    matchedText: string;
+}
+
+export interface DiValidationReport {
+    summary: {
+        /** Fraction of `@Module(` occurrences in source that correspond to an extracted module site. */
+        recallModules: number;
+        recallImportsFields: number;
+        recallProvidersFields: number;
+        recallExportsFields: number;
+        recallControllersFields: number;
+        /**
+         * Fraction of (imports + providers + exports + controllers) refs that resolved
+         * to a class/token name (not `unresolved`). Returns 1 (vacuously perfect) when
+         * there are no refs at all, matching the convention used by other domain reports.
+         */
+        resolveRate: number;
+        totalModules: number;
+        totalImports: number;
+        totalProviders: number;
+        totalExports: number;
+        totalControllers: number;
+        groundTruthModules: number;
+        groundTruthImportsFields: number;
+        groundTruthProvidersFields: number;
+        groundTruthExportsFields: number;
+        groundTruthControllersFields: number;
+    };
+    modules: DiModuleSite[];
+    groundTruth: DiGroundTruthEntry[];
+    missedModules: DiGroundTruthEntry[];
+    missedImportsFields: DiGroundTruthEntry[];
+    missedProvidersFields: DiGroundTruthEntry[];
+    missedExportsFields: DiGroundTruthEntry[];
+    missedControllersFields: DiGroundTruthEntry[];
+    extraModules: DiModuleSite[];
 }
