@@ -25,7 +25,13 @@ async function loadTemplate(): Promise<string> {
     const p = templatePath();
     if (!existsSync(p)) {
         // Fallback inline template — keeps install working even if the package
-        // tree was relocated without copying the template file along.
+        // tree was relocated without copying the template file along. We warn
+        // explicitly because the canonical template is significantly richer
+        // (edge-kind tables, jq recipes, honesty rules) than this fallback.
+        process.stderr.write(
+            `⚠ claude-md template not found at ${p}; using built-in fallback (no jq recipes / edge-kind table).\n` +
+                `  Re-clone or re-install arch-graph if you want the full block.\n`,
+        );
         return DEFAULT_TEMPLATE;
     }
     return readFile(p, 'utf8');
@@ -143,7 +149,7 @@ This project uses **arch-graph** — a static analysis tool that extracts the Ne
 
 **Before answering any architecture question** (e.g. "who publishes on this NATS subject?", "what depends on this table?", "how does service A reach service B?"), check:
 
-1. \`arch-graph-out/graph.json\` — the structural graph (nodes: services, NATS subjects, BullMQ queues, TypeORM entities, NestJS modules, HTTP endpoints; edges: publishes, subscribes, depends-on, imports-module, http-call, ts-import).
+1. \`arch-graph-out/graph.json\` — the structural graph (nodes: services, NATS subjects, BullMQ queues, TypeORM entities, NestJS modules, HTTP endpoints; edges: \`nats-publish\`/\`nats-subscribe\`/\`nats-request\`/\`nats-reply\`, \`queue-produce\`/\`queue-consume\`, \`db-read\`/\`db-write\`/\`db-access\`, \`di-import\`/\`di-provides\`/\`di-exports\`/\`di-controller\`, \`http-call\`/\`http-external\`, \`ts-import\`, \`lib-usage\`).
 2. \`arch-graph-out/diagnostics.json\` — unresolved / dynamic call-sites the extractor couldn't pin down.
 
 If \`arch-graph mcp\` is available, prefer the MCP server (richer query API: shortest paths, neighbors, full-text node search). Otherwise read \`graph.json\` directly.

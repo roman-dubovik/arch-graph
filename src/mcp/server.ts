@@ -34,27 +34,32 @@ import {
 const SERVER_NAME = 'arch-graph';
 const SERVER_VERSION = '0.1.0';
 
-const EDGE_KIND_VALUES: readonly EdgeKind[] = [
-    'nats-publish',
-    'nats-request',
-    'nats-subscribe',
-    'nats-reply',
-    'http-call',
-    'http-external',
-    'queue-produce',
-    'queue-consume',
-    'db-read',
-    'db-write',
-    'db-access',
-    'di-import',
-    'di-provides',
-    'di-exports',
-    'di-controller',
-    'ts-import',
-    'lib-usage',
-] as const;
+// Exhaustiveness gate: `Record<EdgeKind, null>` forces TS to error here when
+// a new `EdgeKind` is added to `src/core/types.ts` but not listed below. Casts
+// (`as [EdgeKind, ...EdgeKind[]]`) silently lose this guarantee — the Record
+// form makes the contract structural.
+const EDGE_KIND_CHECK: Record<EdgeKind, null> = {
+    'nats-publish': null,
+    'nats-request': null,
+    'nats-subscribe': null,
+    'nats-reply': null,
+    'http-call': null,
+    'http-external': null,
+    'queue-produce': null,
+    'queue-consume': null,
+    'db-read': null,
+    'db-write': null,
+    'db-access': null,
+    'di-import': null,
+    'di-provides': null,
+    'di-exports': null,
+    'di-controller': null,
+    'ts-import': null,
+    'lib-usage': null,
+};
+const EDGE_KIND_VALUES = Object.keys(EDGE_KIND_CHECK) as [EdgeKind, ...EdgeKind[]];
 
-const edgeKindSchema = z.enum(EDGE_KIND_VALUES as unknown as [EdgeKind, ...EdgeKind[]]);
+const edgeKindSchema = z.enum(EDGE_KIND_VALUES);
 
 interface GraphHandle {
     path: string;
@@ -62,25 +67,54 @@ interface GraphHandle {
     graph: ArchGraph;
 }
 
-async function loadGraph(path: string): Promise<GraphHandle> {
+async function loadGraph(path: string, mtimeMs: number): Promise<GraphHandle> {
     const buf = await readFile(path, 'utf8');
     const graph = JSON.parse(buf) as ArchGraph;
-    const st = await stat(path);
-    return { path, mtimeMs: st.mtimeMs, graph };
+    return { path, mtimeMs, graph };
 }
 
-/** Returns a cached graph, reloading lazily if `graph.json` changed on disk. */
+/**
+ * Returns a cached graph, reloading lazily if `graph.json` changed on disk.
+ *
+ * Robustness: stat and load are split so a mid-write torn JSON (`JSON.parse`
+ * throws on a partial file) does NOT silently keep serving the old cached
+ * graph forever. We track the mtime that failed; subsequent ticks at the same
+ * mtime suppress the retry log but still continue serving cached data. On the
+ * next *successful* write the mtime advances, we retry, and `failedMtime`
+ * clears.
+ */
 function makeGraphLoader(path: string): () => Promise<ArchGraph> {
     let handle: GraphHandle | null = null;
+    let failedMtime: number | null = null;
     return async () => {
         try {
             const st = await stat(path);
             if (!handle || st.mtimeMs !== handle.mtimeMs) {
-                handle = await loadGraph(path);
+                if (st.mtimeMs === failedMtime) {
+                    // Same broken mtime as last attempt — keep serving cache
+                    // silently (we already logged once).
+                } else {
+                    try {
+                        handle = await loadGraph(path, st.mtimeMs);
+                        failedMtime = null;
+                    } catch (loadErr) {
+                        failedMtime = st.mtimeMs;
+                        process.stderr.write(
+                            `arch-graph mcp: reload error (corrupt write?): ${(loadErr as Error).message}\n`,
+                        );
+                        if (!handle) throw loadErr;
+                    }
+                }
             }
         } catch (err) {
             // If stat fails but we have a cached copy, keep serving it.
             if (!handle) throw err;
+        }
+        if (!handle) {
+            // Unreachable: either we successfully populated `handle`, or the
+            // outer catch already rethrew. Defensive assertion for the type
+            // narrower.
+            throw new Error('arch-graph mcp: graph loader returned no handle');
         }
         return handle.graph;
     };
@@ -245,10 +279,8 @@ export async function startMcpServer(opts: { out: string }): Promise<void> {
                 maxDepth: z.number().int().positive().max(20).optional(),
             },
         },
-        async ({ moduleClass, maxDepth }) => {
-            const result = moduleImports(await loadGraphFn(), moduleClass, maxDepth ?? 5);
-            return jsonResult(result ?? { found: false });
-        },
+        async ({ moduleClass, maxDepth }) =>
+            jsonResult(moduleImports(await loadGraphFn(), moduleClass, maxDepth ?? 5)),
     );
 
     server.registerTool(
@@ -280,10 +312,7 @@ export async function startMcpServer(opts: { out: string }): Promise<void> {
             description: 'Node details + first-degree neighbours grouped by edge kind.',
             inputSchema: { nodeId: z.string().describe('Full node id including prefix.') },
         },
-        async ({ nodeId }) => {
-            const result = explain(await loadGraphFn(), nodeId);
-            return jsonResult(result ?? { found: false });
-        },
+        async ({ nodeId }) => jsonResult(explain(await loadGraphFn(), nodeId)),
     );
 
     server.registerTool(
@@ -312,7 +341,7 @@ export async function startMcpServer(opts: { out: string }): Promise<void> {
                 case 'module_imports':
                     return jsonResult({
                         via: action.tool,
-                        result: moduleImports(graph, action.moduleClass) ?? { found: false },
+                        result: moduleImports(graph, action.moduleClass),
                     });
                 case 'table_users':
                     return jsonResult({ via: action.tool, result: tableUsers(graph, action.table) });

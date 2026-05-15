@@ -65,37 +65,44 @@ If the build's regression gate fails (exit code 3), surface the message but cont
 
 ### Step 3 — Answer using the graph
 
-Prefer **the MCP server** if it's installed and configured (`arch-graph mcp` — see `arch-graph mcp --help`). MCP exposes typed tools: `subject-publishers`, `subject-subscribers`, `service-dependencies`, `paths-between`, `unresolved-sites`. They're cheap and structured.
+Prefer **the MCP server** if it's installed and configured (`arch-graph mcp` — see `arch-graph mcp --help`). MCP exposes typed tools: `subject_publishers`, `subject_subscribers`, `queue_producers`, `queue_consumers`, `service_dependencies`, `service_dependents`, `module_imports`, `table_users`, `path`, `explain`, `query`, `stats`. They're cheap and structured. For diagnostics (unresolved / dynamic call-sites the extractor couldn't pin down) read `arch-graph-out/diagnostics.json` directly — no MCP tool for it.
 
-Otherwise read `arch-graph-out/graph.json` directly with `jq`. Common shapes:
+Otherwise read `arch-graph-out/graph.json` directly with `jq`. Edges are `{id, from, to, kind, file?, line?, dynamic?, subjectPattern?, meta?}` — not `source`/`target`/`label`/`location`. Common shapes:
 
 **"Who publishes / subscribes to a subject?"**
 ```bash
-jq --arg s 'user.created' '
+# subjects are nodes with kind=nats-subject and id `nats:<subject>` — edges
+# point from owner (service/lib) to subject for senders, subject to owner for
+# subscribers.
+jq --arg s 'nats:user.created' '
   .edges[] | select(
-    (.kind=="nats-publish" or .kind=="nats-subscribe")
-    and ((.label // "") | contains($s))
-  ) | {kind, source, target, file: .location.file, line: .location.line}
+    ((.kind=="nats-publish" or .kind=="nats-request") and .to==$s)
+    or ((.kind=="nats-subscribe" or .kind=="nats-reply") and .from==$s)
+  ) | {kind, from, to, file, line}
 ' arch-graph-out/graph.json
 ```
 
 **"What does service X depend on?"**
 ```bash
-jq --arg s 'service:platform-api' '.edges[] | select(.source==$s) | {kind, target}' arch-graph-out/graph.json
+jq --arg s 'service:platform-api' '.edges[] | select(.from==$s) | {kind, to, file, line}' arch-graph-out/graph.json
 ```
 
 **"Shortest path between two services?"**
-Without MCP, load both nodes and do a BFS in Python or just walk edges in jq. With MCP, call `paths-between(a, b)`.
+Without MCP, load both nodes and do a BFS in Python or just walk edges in jq. With MCP, call the `path` tool (`{from, to, kindFilter?}`).
 
 **"Module DI — who imports / provides this?"**
 ```bash
-jq --arg m 'AuthModule' '.edges[] | select((.target | contains($m)) and (.kind | startswith("module-"))) | {kind, source}' arch-graph-out/graph.json
+# DI edges are kind=di-import / di-provides / di-exports / di-controller, all
+# prefixed `di-` (not `module-`). Module nodes have id `module:<ClassName>`.
+jq --arg m 'module:AuthModule' '.edges[] | select(.to==$m and (.kind | startswith("di-"))) | {kind, from, file, line}' arch-graph-out/graph.json
 ```
 
 **"All unresolved sites in domain D?"**
 ```bash
-jq '.nats.unresolved' arch-graph-out/diagnostics.json
-# also: .typeorm.unresolvedEntities, .bullmq.unresolvedQueues, .http.unresolved, .imports.unresolvedImports
+# Site-level diagnostics. NATS / TypeORM / BullMQ / HTTP / imports site types
+# nest their source location as `.location.file` / `.location.line`.
+jq '.nats.unresolved[] | {file: .location.file, line: .location.line, via}' arch-graph-out/diagnostics.json
+# also: .typeorm.unresolvedEntities, .bullmq.unresolved, .http.unresolved, .imports.unresolvedImports
 ```
 
 ### Step 4 — Honesty in the answer

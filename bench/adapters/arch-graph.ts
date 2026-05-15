@@ -12,40 +12,14 @@
 // short `at` for edges that have a code location (line is useful, full path is
 // not — we keep the basename).
 
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 
-interface ArchNode {
-    id: string;
-    kind: string;
-    label?: string;
-    path?: string;
-    meta?: Record<string, unknown>;
-}
+import type { ArchGraph } from '../../src/core/types.js';
+import { type BenchAdapter, type CompactGraph, serializeContext as serializeCompact } from './compact.js';
 
-interface ArchEdge {
-    id?: string;
-    from: string;
-    to: string;
-    kind: string;
-    file?: string;
-    line?: number;
-    meta?: Record<string, unknown>;
-    dynamic?: boolean;
-    subjectPattern?: string;
-}
-
-interface ArchGraph {
-    nodes: ArchNode[];
-    edges: ArchEdge[];
-}
-
-export interface CompactGraph {
-    /** A short human-readable note explaining the schema to the LLM. */
-    schema: string;
-    nodes: Array<{ id: string; k: string; label?: string }>;
-    edges: Array<{ f: string; t: string; k: string; at?: string }>;
-}
+export type { CompactGraph };
 
 export async function loadArchGraph(path: string): Promise<ArchGraph> {
     const raw = await readFile(path, 'utf8');
@@ -86,7 +60,29 @@ export function compactArchGraph(g: ArchGraph): CompactGraph {
 
 /** Serialize as compact JSON (no pretty-printing — fewer tokens). */
 export function serializeContext(g: CompactGraph): string {
-    // Plain JSON.stringify keeps it deterministic. We prepend the schema as a
-    // free-form comment-style header so the LLM can read it.
-    return `# arch-graph context\n${g.schema}\n\n${JSON.stringify({ nodes: g.nodes, edges: g.edges })}`;
+    return serializeCompact(g, 'arch-graph');
 }
+
+/** Conventional arch-graph output location: `/tmp/sg-<projectId>/graph.json`. */
+function archOutputPath(projectId: string): string {
+    return `/tmp/sg-${projectId}/graph.json`;
+}
+
+/** `BenchAdapter` view onto arch-graph — used by `bench.ts`'s generic runner. */
+export const archGraphAdapter: BenchAdapter = {
+    name: 'arch-graph',
+    async load(path) {
+        const g = await loadArchGraph(path);
+        return { raw: g, nodeCount: g.nodes.length, edgeCount: g.edges.length };
+    },
+    compact(raw) {
+        return compactArchGraph(raw as ArchGraph);
+    },
+    serialize(g) {
+        return serializeContext(g);
+    },
+    findOutput(projectId, _projectRoot, _cacheRoot) {
+        const p = archOutputPath(projectId);
+        return existsSync(p) ? p : null;
+    },
+};

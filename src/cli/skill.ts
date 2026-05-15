@@ -26,12 +26,23 @@ export async function installSkill(): Promise<void> {
     await mkdir(dirname(dest), { recursive: true });
 
     let body: string;
+    let usedFallback = false;
     if (existsSync(src)) {
         body = await readFile(src, 'utf8');
     } else {
         body = FALLBACK_SKILL;
+        usedFallback = true;
     }
     await writeFile(dest, body, 'utf8');
+    if (usedFallback) {
+        // Don't fail silently: the user-facing skill is meaningfully smaller
+        // than the canonical one (jq recipes, MCP guidance, freshness rules
+        // are all in the full template). Tell them so they can investigate.
+        process.stderr.write(
+            `⚠ skill template not found at ${src}; wrote built-in fallback (no jq recipes / MCP guidance).\n` +
+                `  Re-clone or re-install arch-graph if you want the full SKILL.md.\n`,
+        );
+    }
     process.stdout.write(`✓ skill installed: ${dest}\n`);
 }
 

@@ -14,7 +14,7 @@ import { subjectMatches } from './wildcards.js';
 // ID normalisation
 // ---------------------------------------------------------------------------
 
-/** Strip a known graph prefix (`service:`, `nats:`, `db-table:`, `queue:`, `module:`, `provider:`, `lib:`, `external:`). */
+/** Strip a known graph prefix (`service:`, `nats:`, `db-table:`, `queue:`, `module:`, `provider:`, `lib:`, `external:`, `file:`). */
 const PREFIX_RE = /^(service|nats|db-table|queue|module|provider|lib|external|file):/;
 
 export function stripPrefix(id: string): string {
@@ -37,48 +37,65 @@ export function findMatchingSubjectNodes(graph: ArchGraph, subject: string): Gra
     );
 }
 
-/** Owners (services + libs) of NATS sender edges into `subject`. */
-export function findPublishers(graph: ArchGraph, subject: string): EdgeAnswer[] {
+/**
+ * Owners (services + libs) of NATS sender edges into `subject`.
+ *
+ * Returns `{ found: false }` when no `nats-subject` node matches — that is
+ * "the subject string isn't in the graph at all", typically a typo. A
+ * "matched node but no senders" answer comes back as `{ found: true, sites: [] }`,
+ * which is semantically different (the subject exists because somebody else
+ * subscribed to it, just nobody publishes there).
+ */
+export function findPublishers(graph: ArchGraph, subject: string): EdgeAnswerList {
     const subjectIds = new Set(findMatchingSubjectNodes(graph, subject).map((n) => n.id));
-    if (subjectIds.size === 0) return [];
+    if (subjectIds.size === 0) return { found: false };
     const out: EdgeAnswer[] = [];
     for (const e of graph.edges) {
         if (e.kind !== 'nats-publish' && e.kind !== 'nats-request') continue;
         if (!subjectIds.has(e.to)) continue;
-        out.push(edgeAnswer(e, e.from, e.to));
+        out.push(edgeAnswer(e, e.from, e.to, 'sender'));
     }
-    return sortByOwnerAndLocation(out);
+    return { found: true, sites: sortByOwnerAndLocation(out) };
 }
 
-/** Owners of NATS receiver edges from `subject` (subscribe / reply). */
-export function findSubscribers(graph: ArchGraph, subject: string): EdgeAnswer[] {
+/** Owners of NATS receiver edges from `subject` (subscribe / reply). See `findPublishers` for the `found:false` semantics. */
+export function findSubscribers(graph: ArchGraph, subject: string): EdgeAnswerList {
     const subjectIds = new Set(findMatchingSubjectNodes(graph, subject).map((n) => n.id));
-    if (subjectIds.size === 0) return [];
+    if (subjectIds.size === 0) return { found: false };
     const out: EdgeAnswer[] = [];
     for (const e of graph.edges) {
         if (e.kind !== 'nats-subscribe' && e.kind !== 'nats-reply') continue;
         if (!subjectIds.has(e.from)) continue;
-        out.push(edgeAnswer(e, e.to, e.from));
+        out.push(edgeAnswer(e, e.to, e.from, 'receiver'));
     }
-    return sortByOwnerAndLocation(out);
+    return { found: true, sites: sortByOwnerAndLocation(out) };
 }
 
 // ---------------------------------------------------------------------------
 // Queue queries
 // ---------------------------------------------------------------------------
 
-export function findQueueProducers(graph: ArchGraph, queue: string): EdgeAnswer[] {
+/**
+ * Producers of a BullMQ queue. Returns `{ found: false }` if no `queue:<name>`
+ * node exists in the graph — distinguishes "unknown queue (typo)" from
+ * "known queue but nobody injects it".
+ */
+export function findQueueProducers(graph: ArchGraph, queue: string): EdgeAnswerList {
     const id = withPrefix('queue', queue);
-    return graph.edges
+    if (!graph.nodes.some((n) => n.id === id)) return { found: false };
+    const sites = graph.edges
         .filter((e) => e.kind === 'queue-produce' && e.to === id)
-        .map((e) => edgeAnswer(e, e.from, e.to));
+        .map((e) => edgeAnswer(e, e.from, e.to, 'producer'));
+    return { found: true, sites: sortByOwnerAndLocation(sites) };
 }
 
-export function findQueueConsumers(graph: ArchGraph, queue: string): EdgeAnswer[] {
+export function findQueueConsumers(graph: ArchGraph, queue: string): EdgeAnswerList {
     const id = withPrefix('queue', queue);
-    return graph.edges
+    if (!graph.nodes.some((n) => n.id === id)) return { found: false };
+    const sites = graph.edges
         .filter((e) => e.kind === 'queue-consume' && e.from === id)
-        .map((e) => edgeAnswer(e, e.to, e.from));
+        .map((e) => edgeAnswer(e, e.to, e.from, 'consumer'));
+    return { found: true, sites: sortByOwnerAndLocation(sites) };
 }
 
 // ---------------------------------------------------------------------------
@@ -88,15 +105,15 @@ export function findQueueConsumers(graph: ArchGraph, queue: string): EdgeAnswer[
 /** Outgoing edges from `service:<id>`, grouped by kind family. */
 export function serviceDependencies(graph: ArchGraph, serviceId: string): GroupedDeps {
     const id = withPrefix('service', serviceId);
-    if (!graph.nodes.some((n) => n.id === id)) return emptyGroupedDeps();
-    return groupOutgoing(graph, id);
+    if (!graph.nodes.some((n) => n.id === id)) return { found: false };
+    return groupEdges(graph, id, 'outgoing');
 }
 
 /** Incoming edges into `service:<id>`, grouped by kind. */
 export function serviceDependents(graph: ArchGraph, serviceId: string): GroupedDeps {
     const id = withPrefix('service', serviceId);
-    if (!graph.nodes.some((n) => n.id === id)) return emptyGroupedDeps();
-    return groupIncoming(graph, id);
+    if (!graph.nodes.some((n) => n.id === id)) return { found: false };
+    return groupEdges(graph, id, 'incoming');
 }
 
 // ---------------------------------------------------------------------------
@@ -109,6 +126,15 @@ export interface ModuleImportChain {
     children: ModuleImportChain[];
 }
 
+/**
+ * Result of `moduleImports`. Discriminated-union matches `PathResult` convention —
+ * callers branch on `found` and the success arm carries the full chain plus a
+ * convenience `module` field.
+ */
+export type ModuleImportResult =
+    | { found: false }
+    | { found: true; module: string; imports: string[]; children: ModuleImportChain[] };
+
 const DEFAULT_MAX_DEPTH = 5;
 
 /**
@@ -119,11 +145,12 @@ export function moduleImports(
     graph: ArchGraph,
     moduleClass: string,
     maxDepth: number = DEFAULT_MAX_DEPTH,
-): ModuleImportChain | null {
+): ModuleImportResult {
     const startId = withPrefix('module', moduleClass);
-    if (!graph.nodes.some((n) => n.id === startId)) return null;
+    if (!graph.nodes.some((n) => n.id === startId)) return { found: false };
     const seen = new Set<string>();
-    return walk(graph, startId, maxDepth, seen);
+    const chain = walk(graph, startId, maxDepth, seen);
+    return { found: true, module: chain.module, imports: chain.imports, children: chain.children };
 }
 
 function walk(
@@ -147,11 +174,13 @@ function walk(
 // Table users
 // ---------------------------------------------------------------------------
 
-export function tableUsers(graph: ArchGraph, table: string): EdgeAnswer[] {
+export function tableUsers(graph: ArchGraph, table: string): EdgeAnswerList {
     const id = withPrefix('db-table', table);
-    return graph.edges
+    if (!graph.nodes.some((n) => n.id === id)) return { found: false };
+    const sites = graph.edges
         .filter((e) => e.to === id && e.kind.startsWith('db-'))
-        .map((e) => edgeAnswer(e, e.from, e.to));
+        .map((e) => edgeAnswer(e, e.from, e.to, 'accessor'));
+    return { found: true, sites: sortByOwnerAndLocation(sites) };
 }
 
 // ---------------------------------------------------------------------------
@@ -234,15 +263,18 @@ function reconstructPath(
 // Explain
 // ---------------------------------------------------------------------------
 
-export interface ExplainResult {
-    node: GraphNode;
-    incoming: Record<string, Array<{ from: string; kind: EdgeKind }>>;
-    outgoing: Record<string, Array<{ to: string; kind: EdgeKind }>>;
-}
+export type ExplainResult =
+    | { found: false }
+    | {
+          found: true;
+          node: GraphNode;
+          incoming: Record<string, Array<{ from: string; kind: EdgeKind }>>;
+          outgoing: Record<string, Array<{ to: string; kind: EdgeKind }>>;
+      };
 
-export function explain(graph: ArchGraph, nodeId: string): ExplainResult | null {
+export function explain(graph: ArchGraph, nodeId: string): ExplainResult {
     const node = graph.nodes.find((n) => n.id === nodeId);
-    if (!node) return null;
+    if (!node) return { found: false };
     const incoming: Record<string, Array<{ from: string; kind: EdgeKind }>> = {};
     const outgoing: Record<string, Array<{ to: string; kind: EdgeKind }>> = {};
     for (const e of graph.edges) {
@@ -253,7 +285,7 @@ export function explain(graph: ArchGraph, nodeId: string): ExplainResult | null 
             (outgoing[e.kind] ??= []).push({ to: e.to, kind: e.kind });
         }
     }
-    return { node, incoming, outgoing };
+    return { found: true, node, incoming, outgoing };
 }
 
 // ---------------------------------------------------------------------------
@@ -288,7 +320,21 @@ export function graphStats(graph: ArchGraph): GraphStats {
 // Internal shapes
 // ---------------------------------------------------------------------------
 
+/**
+ * One row of an edge-listing answer (NATS publishers, queue producers, table users).
+ *
+ * `role` is the discriminant from the *answerer's* point of view — what the
+ * owner is doing relative to the counterpart. It mirrors the `role` field on
+ * `NatsCallSite` / `BullMqInjectionSite` etc., so a downstream consumer can
+ * exhaustively switch on it without re-deriving from `kind`.
+ *
+ * `kind` is left as `EdgeKind` (not narrowed per query) because the
+ * answer-row only carries one edge at a time and the query already filtered
+ * to the relevant subset (`nats-publish`|`nats-request` for senders, etc.) —
+ * narrowing here would just create N empty unions.
+ */
 export interface EdgeAnswer {
+    role: 'sender' | 'receiver' | 'producer' | 'consumer' | 'accessor';
     owner: string;
     counterpart: string;
     kind: EdgeKind;
@@ -298,41 +344,48 @@ export interface EdgeAnswer {
     dynamic?: boolean;
 }
 
-export interface GroupedDeps {
-    /** Existence flag: `true` when the node was found, `false` for unknown IDs. */
-    found: boolean;
-    counts: Record<string, number>;
-    byKind: Record<string, Array<{ counterpart: string; kind: EdgeKind; file?: string; line?: number }>>;
-}
+/**
+ * Result of an edge-listing query. `{found:false}` means the node the user
+ * asked about (subject / queue / table) does not exist in the graph at all —
+ * typically a typo. `{found:true, sites: []}` means the node exists but has
+ * no edges in the queried direction (legitimate "no producers" answer).
+ */
+export type EdgeAnswerList = { found: false } | { found: true; sites: EdgeAnswer[] };
 
-function emptyGroupedDeps(): GroupedDeps {
-    return { found: false, counts: {}, byKind: {} };
-}
+export type GroupedDeps =
+    | { found: false }
+    | {
+          found: true;
+          counts: Record<string, number>;
+          byKind: Record<
+              string,
+              Array<{ counterpart: string; kind: EdgeKind; file?: string; line?: number }>
+          >;
+      };
 
-function groupOutgoing(graph: ArchGraph, nodeId: string): GroupedDeps {
-    const byKind: GroupedDeps['byKind'] = {};
+function groupEdges(graph: ArchGraph, nodeId: string, direction: 'outgoing' | 'incoming'): GroupedDeps {
+    const byKind: Record<
+        string,
+        Array<{ counterpart: string; kind: EdgeKind; file?: string; line?: number }>
+    > = {};
     const counts: Record<string, number> = {};
     for (const e of graph.edges) {
-        if (e.from !== nodeId) continue;
-        (byKind[e.kind] ??= []).push({ counterpart: e.to, kind: e.kind, file: e.file, line: e.line });
+        const isMatch = direction === 'outgoing' ? e.from === nodeId : e.to === nodeId;
+        if (!isMatch) continue;
+        const counterpart = direction === 'outgoing' ? e.to : e.from;
+        (byKind[e.kind] ??= []).push({ counterpart, kind: e.kind, file: e.file, line: e.line });
         counts[e.kind] = (counts[e.kind] ?? 0) + 1;
     }
     return { found: true, counts, byKind };
 }
 
-function groupIncoming(graph: ArchGraph, nodeId: string): GroupedDeps {
-    const byKind: GroupedDeps['byKind'] = {};
-    const counts: Record<string, number> = {};
-    for (const e of graph.edges) {
-        if (e.to !== nodeId) continue;
-        (byKind[e.kind] ??= []).push({ counterpart: e.from, kind: e.kind, file: e.file, line: e.line });
-        counts[e.kind] = (counts[e.kind] ?? 0) + 1;
-    }
-    return { found: true, counts, byKind };
-}
-
-function edgeAnswer(edge: GraphEdge, owner: string, counterpart: string): EdgeAnswer {
-    const out: EdgeAnswer = { owner, counterpart, kind: edge.kind };
+function edgeAnswer(
+    edge: GraphEdge,
+    owner: string,
+    counterpart: string,
+    role: EdgeAnswer['role'],
+): EdgeAnswer {
+    const out: EdgeAnswer = { role, owner, counterpart, kind: edge.kind };
     if (edge.file !== undefined) out.file = edge.file;
     if (edge.line !== undefined) out.line = edge.line;
     if (edge.subjectPattern !== undefined) out.subjectPattern = edge.subjectPattern;
