@@ -89,11 +89,13 @@ export async function claudeUninstall(args: ClaudeArgs): Promise<void> {
         return;
     }
     const body = await readFile(args.target, 'utf8');
-    const stripped = stripMarkedSection(body, MARK_START, MARK_END);
-    if (stripped === body) {
+    if (!body.includes(MARK_START)) {
+        // Reference-equality on the strip result is unreliable (V8 may dedupe
+        // identical strings), so check the marker explicitly instead.
         process.stdout.write(`(no arch-graph section found in ${args.target})\n`);
         return;
     }
+    const stripped = stripMarkedSection(body, MARK_START, MARK_END);
     await writeFile(args.target, stripped, 'utf8');
     process.stdout.write(`✓ removed arch-graph section from ${args.target}\n`);
 }
