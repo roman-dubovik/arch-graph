@@ -197,6 +197,7 @@ export interface DiagnosticsReport {
     bullmq: BullMqDiagnostics;
     di: DiDiagnostics;
     http: HttpDiagnostics;
+    imports: ImportsDiagnostics;
 }
 
 // ============================================================================
@@ -265,6 +266,7 @@ export interface BuildValidation {
     bullmq: BullMqValidationReport;
     di: DiValidationReport;
     http: HttpValidationReport;
+    imports: ImportsValidationReport;
 }
 
 // ============================================================================
@@ -644,4 +646,82 @@ export interface HttpValidationReport {
     groundTruth: HttpGroundTruthEntry[];
     missed: HttpGroundTruthEntry[];
     extra: HttpCallSite[];
+}
+
+// ============================================================================
+// TS-imports domain types
+// ============================================================================
+
+/**
+ * One `import` declaration captured during the imports extractor walk.
+ *
+ *  - `specifier`        — raw module specifier text (e.g. `"@platform/messaging"`).
+ *  - `resolvedFilePath` — absolute path of the file the specifier resolved to.
+ *                          `null` means external (node_modules) or unresolvable
+ *                          (broken alias / typo). Either way, no graph edge.
+ *  - `kind`             — discriminates static `import ...` vs dynamic `import(...)`.
+ *                          Dynamic imports are captured for diagnostics but never
+ *                          gate the recall metric (the regex GT only sees static).
+ *  - `typeOnly`         — `import type { X } from ...`. Still produces graph edges:
+ *                          a type-only dep is still a structural lib usage.
+ */
+export interface TsImportSite {
+    sourceFile: string;
+    specifier: string;
+    resolvedFilePath: string | null;
+    kind: 'static' | 'dynamic';
+    typeOnly: boolean;
+    /**
+     * `true` when the specifier matched a tsconfig-`paths` alias prefix at
+     * resolution time. Distinguishes "this looks internal" (`@platform/x`)
+     * from "this is bare external" (`react`). Set even when resolution
+     * succeeds — used by the mapper to route resolution failures correctly.
+     */
+    specifierShape: 'relative' | 'alias' | 'bare-external' | 'builtin';
+    location: SourceLoc;
+}
+
+export interface ImportsDiagnostics {
+    /**
+     * Static imports whose specifier didn't resolve to a real file AND wasn't a
+     * bare external (`@foo/bar` / `node:fs` / no slashes). These are the suspicious
+     * ones — usually a typo'd path alias or a missing `paths` entry in tsconfig.
+     */
+    unresolvedImports: TsImportSite[];
+    /** Dynamic `import(...)` calls — kept for visibility, not gated. */
+    dynamicImports: TsImportSite[];
+    counts: {
+        totalStatic: number;
+        totalDynamic: number;
+        resolvedToOwner: number;
+        externalOrUnresolved: number;
+        unresolvedInternal: number;
+    };
+}
+
+export interface ImportsGroundTruthEntry {
+    location: SourceLoc;
+    matchedText: string;
+    typeOnly: boolean;
+}
+
+export interface ImportsValidationReport {
+    summary: {
+        /**
+         * `extracted_static / GT_static`, computed across all files. ts-morph and
+         * the regex see the same per-file totals when extraction is healthy; a
+         * drop here usually means a whole file (or a wide swath) was excluded.
+         */
+        recallStatic: number;
+        /**
+         * Per-file recall floor — min over files where GT >= 1. Catches the
+         * single-file regression that an aggregate average would dilute away.
+         */
+        minPerFileRecall: number;
+        totalStatic: number;
+        groundTruthStatic: number;
+        filesWithImports: number;
+        /** Files where extracted < GT by at least 1; sorted, capped to first 20. */
+        filesUnderRecall: Array<{ file: string; extracted: number; groundTruth: number }>;
+    };
 }

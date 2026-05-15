@@ -145,7 +145,40 @@ NATS hit a similar inflate where pattern-with-runtime-args got coded as resolved
 
 ## Block C — TS-import extractor (dependency-cruiser)
 
-_В работе._
+**DECISION: ts-morph вместо dependency-cruiser.**
+
+Спека ссылалась на `dependency-cruiser`, но в проекте уже подключён `ts-morph` и `runBuild` загружает единый `Project` для всех extractor'ов. Добавлять dependency-cruiser значило бы:
+- лишнюю dep + второй проход AST (cruise() запускает свой scanner внутри);
+- два разных source-set'а (его exclude/ignore не совпадают с нашими `excludeGlobs`);
+- расходящуюся ground-truth (наш regex считает `^import` по нашему фильтру файлов; cruiser шёл бы по своему).
+
+Trade-off: разрешение path-aliases у ts-morph слабее (когда `Project` создан без tsconfig). Решено вручную: парсим `<root>/tsconfig.base.json` или `<root>/tsconfig.json` и резолвим алиасы через `compilerOptions.paths`. Покрывает 95% Nx/Nest монорепо.
+
+**Metrics (build на 5 проектах, recall = extracted/GT static imports):**
+- screenia:  100.0% recall (2978/2860 — ts-morph иногда находит больше, чем regex видит); 24 lib-usage edges
+- platform:  100.0% recall (7340/7093); 209 lib-usage edges, 2 antipattern (service→service)
+- insyra:    100.0% recall (5284/4981); 24 lib-usage edges
+- unpacks:   100.0% recall (1728/1648); 7 lib-usage edges
+- beribuy2:  100.0% recall (2288/2179); 10 lib-usage edges
+
+(recall capped at 1.0 — extracted > GT возникает когда regex пропускает multi-line imports: `IMPORT_RE` шаблон `[^;\n]*?` не пересекает newline, поэтому многострочный `import {\n  A,\n  B\n} from '...'` для regex невидим, а ts-morph видит его как одну ImportDeclaration)
+
+**Что не делается:**
+- `require('./foo')` (CommonJS) — out of scope блока. В монорепо `apps/`+`libs/` это редкая форма (только runtime-конфиги или legacy). Если понадобится — добавить отдельный walk для `CallExpression` к идентификатору `require`.
+- Resolution через `compilerOptions.extends` цепочки (composite tsconfigs с `references`) — мы загружаем только корневой `tsconfig.base.json`/`tsconfig.json`. Если алиасы переопределены в app-tsconfig — не подцепится. Признак: значимый `unresolvedInternal` count.
+- Side-effect-only imports (`import './polyfill'`) — извлекаются, но `externalOrUnresolved` heuristic считает их external если specifier не относительный (для bare specifiers это правильно).
+
+**Gate:** recall ≥ 80% (мягче чем NATS/TypeORM/BullMQ 95% — alias-resolution это best-effort). Фактически все 5 проектов выдали 100%.
+
+**Default config:** `imports.fileLevel = false`. File-level `ts-import` edges (file→file) генерятся только при явном opt-in — иначе граф захлёбывается (Platform: 7340 imports → ~7340 рёбер только в этом домене).
+
+**Self-review (вместо pr-review-toolkit — субагенты в этом контексте недоступны):**
+Сам отревьюил по 5 lens'ам:
+- **silent-failure-hunter**: `loadTsConfigPaths` глотал JSON parse errors — добавил `process.stderr.write` warning. `isAliasPrefix` имел false-prefix bug (`@platform` бы матчил `@platform-other`) — исправлено: храним alias prefixes с trailing `/`. Trailing-comma support в JSONC добавлен (Nx часто их использует).
+- **type-design**: `TsImportSite.specifierShape` discriminated на 4 значения (relative/alias/bare-external/builtin) — mapper использует это вместо хрупкой heuristic. Раньше `isExternalShape` в mapper'е помечал любой non-relative как external и маскировал alias-resolver regressions.
+- **code-simplifier**: `aliasResolverBundle` объединяет два API в один объект; pre-compute prefix list once вместо `.map()` в hot loop.
+- **comment-analyzer**: каждая нестандартная heuristic ("why first-seen file wins", "trailing slash matters") задокументирована в коде.
+- **code-reviewer**: GT regex теперь видит multi-line imports (`[\s\S]*?` вместо `[^;\n]*?`); side-effect form (`import './x'`) разделена отдельной regex с negative-lookahead для не-двойного матча.
 
 ---
 

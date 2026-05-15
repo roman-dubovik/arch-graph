@@ -81,6 +81,11 @@ export default defineConfig({
             // { class: 'MyNatsService', methods: ['subscribe'] },
         ],
     },
+    imports: {
+        // Emit file-level \`ts-import\` edges (file → file). Off by default —
+        // produces 10k+ edges in medium monorepos. Turn on for file-graph drill-downs.
+        // fileLevel: false,
+    },
 });
 `;
 
@@ -91,7 +96,7 @@ async function cmdInit(out: string): Promise<void> {
 }
 
 async function cmdBuild(args: ParsedArgs): Promise<void> {
-    const ALLOWED_ONLY = ['nats', 'typeorm', 'bullmq', 'di', 'http'] as const;
+    const ALLOWED_ONLY = ['nats', 'typeorm', 'bullmq', 'di', 'http', 'imports'] as const;
     if (args.only && !ALLOWED_ONLY.includes(args.only as (typeof ALLOWED_ONLY)[number])) {
         process.stderr.write(
             `error: --only=${args.only} not yet supported; available: ${ALLOWED_ONLY.join(', ')}\n`,
@@ -148,11 +153,13 @@ async function cmdBuild(args: ParsedArgs): Promise<void> {
     const b = result.validation.bullmq.summary;
     const d = result.validation.di.summary;
     const h = result.validation.http.summary;
+    const i = result.validation.imports.summary;
     const natsEnabled = cfg.domains?.nats !== false;
     const typeormEnabled = cfg.domains?.typeorm !== false;
     const bullmqEnabled = cfg.domains?.bullmq !== false;
     const diEnabled = cfg.domains?.di !== false;
     const httpEnabled = cfg.domains?.http !== false;
+    const importsEnabled = cfg.domains?.imports !== false;
     const fails: string[] = [];
 
     // Per-role zero-GT: handlers misconfig and senders misconfig fail independently
@@ -217,6 +224,18 @@ async function cmdBuild(args: ParsedArgs): Promise<void> {
         }
     }
 
+    if (importsEnabled) {
+        // Imports gate: GT must be non-zero (every project has imports), and
+        // aggregate recall must be reasonable. We aim for 80% — ts-morph's
+        // alias resolution is imperfect without a per-app Project, so we
+        // accept a lower bar than NATS/TypeORM/BullMQ. See OPEN-QUESTIONS.
+        if (i.groundTruthStatic === 0) {
+            fails.push(`imports: zero ground-truth — appsGlob/libsGlob almost certainly broken`);
+        } else if (i.recallStatic < 0.8) {
+            fails.push(`imports recall ${pct(i.recallStatic)} (< 80%)`);
+        }
+    }
+
     if (fails.length > 0) {
         process.stderr.write(`\n⚠  regression gate failed:\n  ${fails.join('\n  ')}\nSee validation.json.\n`);
         process.exit(3);
@@ -255,12 +274,14 @@ async function cmdDiagnose(args: ParsedArgs): Promise<void> {
     const b = result.diagnostics.bullmq;
     const di = result.diagnostics.di;
     const hd = result.diagnostics.http;
+    const im = result.diagnostics.imports;
     process.stdout.write(`\n--- diagnostics for ${cfg.id} ---\n`);
     process.stdout.write(`[nats]    literal=${n.counts.literal} pattern=${n.counts.pattern} dynamic=${n.counts.dynamic} unresolved=${n.counts.unresolved}\n`);
     process.stdout.write(`[typeorm] resolved=${t.counts.resolved} unresolvedEntity=${t.counts.unresolvedEntity} unowned=${t.counts.unowned} entityWarnings=${t.counts.entityDecoratorWarnings}\n`);
     process.stdout.write(`[bullmq]  producers=${b.counts.producers} consumers=${b.counts.consumers} registrations=${b.counts.registrations} unresolved=${b.counts.unresolved} unowned=${b.counts.unowned}\n`);
     process.stdout.write(`[di]      modules=${di.counts.modules} imports=${di.counts.imports} providers=${di.counts.providers} exports=${di.counts.exports} controllers=${di.counts.controllers} unresolvedRefs=${di.counts.unresolvedRefs} unowned=${di.counts.unowned}\n`);
     process.stdout.write(`[http]    total=${hd.counts.totalSites} literal=${hd.counts.literal} envRef=${hd.counts.envRef} pattern=${hd.counts.pattern} unresolved=${hd.counts.unresolved} internal=${hd.counts.internal} external=${hd.counts.external} unowned=${hd.counts.unowned}\n`);
+    process.stdout.write(`[imports] static=${im.counts.totalStatic} dynamic=${im.counts.totalDynamic} resolved=${im.counts.resolvedToOwner} external/unres=${im.counts.externalOrUnresolved} unresolvedInternal=${im.counts.unresolvedInternal}\n`);
 
     if (n.unresolved.length > 0) {
         process.stdout.write(`\nTop 10 unresolved NATS subjects:\n`);
@@ -279,6 +300,13 @@ async function cmdDiagnose(args: ParsedArgs): Promise<void> {
 
     if (n.unowned.length + t.unowned.length > 0) {
         process.stdout.write(`\nUnowned call-sites (outside apps/ & libs/): nats=${n.unowned.length}, typeorm=${t.unowned.length}\n`);
+    }
+
+    if (im.unresolvedImports.length > 0) {
+        process.stdout.write(`\nTop 10 unresolved internal imports (likely typo'd alias or broken path):\n`);
+        for (const u of im.unresolvedImports.slice(0, 10)) {
+            process.stdout.write(`  ${u.location.file}:${u.location.line}  '${u.specifier}'\n`);
+        }
     }
 
     const outDir = resolve(args.out);

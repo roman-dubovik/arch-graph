@@ -7,17 +7,20 @@ import type { ArchGraph, BuildValidation, DiagnosticsReport } from '../core/type
 import { extractBullMq } from '../extractors/bullmq/extractor.js';
 import { extractDi } from '../extractors/di/extractor.js';
 import { extractHttp } from '../extractors/http/extractor.js';
+import { extractImports } from '../extractors/imports/extractor.js';
 import { extractNats } from '../extractors/nats/extractor.js';
 import { extractTypeOrm } from '../extractors/typeorm/extractor.js';
 import { mapBullMqToGraph } from '../mapper/bullmq-to-graph.js';
 import { mapDiToGraph } from '../mapper/di-to-graph.js';
 import { mapHttpToGraph } from '../mapper/http-to-graph.js';
+import { mapImportsToGraph } from '../mapper/imports-to-graph.js';
 import { assembleGraph, buildNatsDiagnostics, mapNatsToGraph } from '../mapper/nats-to-graph.js';
 import { mapTypeOrmToGraph } from '../mapper/typeorm-to-graph.js';
 import { enumerateBullMqGroundTruth, buildBullMqReport } from '../validation/bullmq-validator.js';
 import { enumerateDiGroundTruth, buildDiReport } from '../validation/di-validator.js';
 import { enumerateHandlers } from '../validation/handlers.js';
 import { enumerateHttpGroundTruth, buildHttpReport } from '../validation/http-validator.js';
+import { buildImportsReport, enumerateImportsGroundTruth } from '../validation/imports-validator.js';
 import { enumerateSenders } from '../validation/senders.js';
 import { enumerateTypeOrmGroundTruth, buildTypeOrmReport } from '../validation/typeorm-validator.js';
 import { buildReport as buildNatsReport } from '../validation/validator.js';
@@ -203,8 +206,41 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         `  nodes: ${httpMapped.nodes.length}, edges: ${httpMapped.edges.length}, unresolved: ${httpMapped.diagnostics.unresolved.length}, unowned: ${httpMapped.diagnostics.unowned.length}, external: ${httpMapped.diagnostics.external.length}\n`,
     );
 
+    // ---- TS-imports domain ----
+    process.stdout.write(`extracting imports...\n`);
+    t0 = Date.now();
+    const imports = await stage(`[${cfg.id}] imports.extract`, () => extractImports(cfg, project));
+    process.stdout.write(
+        `  ${imports.sites.length} import sites in ${Date.now() - t0}ms\n`,
+    );
+
+    process.stdout.write(`validating imports against ground truth...\n`);
+    const importsGT = await stage(`[${cfg.id}] imports.GT`, () => enumerateImportsGroundTruth(cfg));
+    const importsValidation = buildImportsReport(imports.sites, importsGT);
+    {
+        const v = importsValidation.summary;
+        process.stdout.write(
+            `  recall=${pct(v.recallStatic)} minPerFile=${pct(v.minPerFileRecall)} files=${v.filesWithImports} GT=${v.groundTruthStatic} extracted=${v.totalStatic}\n`,
+        );
+    }
+
+    process.stdout.write(`mapping imports to graph...\n`);
+    const importsMapped = mapImportsToGraph(imports.sites, ownership, {
+        fileLevel: cfg.imports?.fileLevel === true,
+    });
+    process.stdout.write(
+        `  nodes: ${importsMapped.nodes.length}, edges: ${importsMapped.edges.length}, unresolvedInternal: ${importsMapped.diagnostics.counts.unresolvedInternal}, externalOrUnresolved: ${importsMapped.diagnostics.counts.externalOrUnresolved}, dynamic: ${importsMapped.diagnostics.counts.totalDynamic}\n`,
+    );
+
     // ---- Compose ----
-    const graph = assembleGraph(cfg.root, [natsMapped, typeormMapped, bullmqMapped, diMapped, httpMapped]);
+    const graph = assembleGraph(cfg.root, [
+        natsMapped,
+        typeormMapped,
+        bullmqMapped,
+        diMapped,
+        httpMapped,
+        importsMapped,
+    ]);
     const diagnostics: DiagnosticsReport = {
         projectId: cfg.id,
         timestamp: new Date().toISOString(),
@@ -213,6 +249,7 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         bullmq: bullmqMapped.diagnostics,
         di: diMapped.diagnostics,
         http: httpMapped.diagnostics,
+        imports: importsMapped.diagnostics,
     };
     const validation: BuildValidation = {
         projectId: cfg.id,
@@ -222,6 +259,7 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         bullmq: bullmqValidation,
         di: diValidation,
         http: httpValidation,
+        imports: importsValidation,
     };
 
     return { graph, diagnostics, validation };
