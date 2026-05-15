@@ -2,6 +2,7 @@ import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 import { loadConfig } from '../core/config.js';
+import { startMcpServer } from '../mcp/server.js';
 import { writeDiagnostics, writeGraphJson, writeValidationReport } from '../output/graph-json.js';
 import {
     parseSliceMode,
@@ -54,6 +55,8 @@ Usage:
   arch-graph build      [--config <path>] [--out <dir>] [--only=<extractor>] [--mermaid-slice=<mode>]
   arch-graph diagnose   [--config <path>] [--out <dir>]
   arch-graph init       [--out <path>]
+  arch-graph mcp        [--out <dir>]
+                        starts an MCP stdio server backed by <out>/graph.json
 
 Defaults:
   --config  ./arch-graph.config.ts
@@ -333,6 +336,13 @@ async function cmdDiagnose(args: ParsedArgs): Promise<void> {
     process.stdout.write(`\n✓ wrote ${outDir}/diagnostics.json\n`);
 }
 
+async function cmdMcp(args: ParsedArgs): Promise<void> {
+    const outDir = resolve(args.out);
+    // Log to stderr so we don't pollute the stdio JSON-RPC channel on stdout.
+    process.stderr.write(`arch-graph mcp: serving ${outDir}/graph.json over stdio\n`);
+    await startMcpServer({ out: outDir });
+}
+
 async function main(): Promise<void> {
     const args = parseArgs(process.argv.slice(2));
     if (!args.cmd || args.cmd === '-h' || args.cmd === '--help') {
@@ -349,6 +359,9 @@ async function main(): Promise<void> {
             return;
         case 'diagnose':
             await cmdDiagnose(args);
+            return;
+        case 'mcp':
+            await cmdMcp(args);
             return;
         default:
             process.stderr.write(`unknown command: ${args.cmd}\n${HELP}`);

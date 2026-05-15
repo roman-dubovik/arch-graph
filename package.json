@@ -17,7 +17,8 @@
         "@modelcontextprotocol/sdk": "^1.29.0",
         "fast-glob": "^3.3.2",
         "jiti": "^2.4.2",
-        "ts-morph": "^24.0.0"
+        "ts-morph": "^24.0.0",
+        "zod": "^4.0.0"
     },
     "devDependencies": {
         "@dqbd/tiktoken": "^1.0.22",
