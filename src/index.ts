@@ -1,5 +1,11 @@
 export { defineConfig, loadConfig } from './core/config.js';
-export type { ArchGraphConfig, HttpConfig, HttpInternalService, NatsConfig } from './core/config.js';
+export type {
+    ArchGraphConfig,
+    HttpConfig,
+    HttpInternalService,
+    ImportsConfig,
+    NatsConfig,
+} from './core/config.js';
 export type {
     ArchGraph,
     BuildValidation,
@@ -10,12 +16,15 @@ export type {
     HttpCallSite,
     HttpDiagnostics,
     HttpValidationReport,
+    ImportsDiagnostics,
+    ImportsValidationReport,
     NatsCallSite,
     NatsValidationReport,
     NodeKind,
     ResolvedSubject,
     ResolvedUrl,
     SourceLoc,
+    TsImportSite,
     TypeOrmEntity,
     TypeOrmInjectionSite,
     TypeOrmValidationReport,
