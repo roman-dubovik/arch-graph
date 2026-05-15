@@ -3,8 +3,11 @@ import type { GroundTruthEntry, NatsCallSite, NatsValidationReport } from '../co
 /**
  * Matches ground-truth entries against extracted call sites.
  *
- * Matching key = `${file}:${line}` (column varies between decorator vs call-site).
- * Coarse but sufficient — each decorator/call site sits on its own line in practice.
+ * Key = `${file}:${line}` (extractor and grep disagree on column — extractor
+ * points to `@` of decorator / start of CallExpression, grep points to the
+ * regex match offset). Cardinality is preserved by consuming one extracted
+ * candidate per GT entry of the same role — so two decorators on one line are
+ * both required to be matched, not just one of them.
  */
 export function buildReport(
     projectId: string,
@@ -15,36 +18,32 @@ export function buildReport(
     const gtKeyed = indexBy(groundTruth, locKey);
 
     const missed: GroundTruthEntry[] = [];
+    const consumed = new Set<NatsCallSite>();
+    let handlersFound = 0;
+    let sendersFound = 0;
+
     for (const [k, gtList] of gtKeyed) {
-        const candidates = extractedKeyed.get(k);
+        const candidates = extractedKeyed.get(k) ?? [];
         for (const gt of gtList) {
-            const hasMatch = candidates?.some((c) => c.role === gt.role) ?? false;
-            if (!hasMatch) missed.push(gt);
+            const match = candidates.find((c) => c.role === gt.role && !consumed.has(c));
+            if (match) {
+                consumed.add(match);
+                if (gt.role === 'receiver') handlersFound++;
+                else sendersFound++;
+            } else {
+                missed.push(gt);
+            }
         }
     }
 
     const extra: NatsCallSite[] = [];
     for (const e of extracted) {
-        const k = locKey(e);
-        const gt = gtKeyed.get(k);
-        if (!gt || !gt.some((g) => g.role === e.role)) {
-            extra.push(e);
-        }
+        if (consumed.has(e)) continue;
+        extra.push(e);
     }
 
     const handlersGT = groundTruth.filter((g) => g.role === 'receiver').length;
-    const handlersFound = groundTruth.filter((g) => {
-        if (g.role !== 'receiver') return false;
-        const k = locKey(g);
-        return extractedKeyed.get(k)?.some((c) => c.role === 'receiver') ?? false;
-    }).length;
-
     const sendersGT = groundTruth.filter((g) => g.role === 'sender').length;
-    const sendersFound = groundTruth.filter((g) => {
-        if (g.role !== 'sender') return false;
-        const k = locKey(g);
-        return extractedKeyed.get(k)?.some((c) => c.role === 'sender') ?? false;
-    }).length;
 
     const resolvedCount = extracted.filter(
         (e) => e.subject.kind === 'literal' || e.subject.kind === 'pattern',

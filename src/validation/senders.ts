@@ -47,8 +47,10 @@ export async function enumerateSenders(cfg: ArchGraphConfig): Promise<GroundTrut
         let content: string;
         try {
             content = await readFile(file, 'utf8');
-        } catch {
-            continue;
+        } catch (err) {
+            const e = err as NodeJS.ErrnoException;
+            if (e.code === 'ENOENT') continue;
+            throw new Error(`ground-truth read failed for ${file}: ${e.code ?? e.message}`);
         }
 
         const hasNestMs = importNestjsMicroservices.test(content);

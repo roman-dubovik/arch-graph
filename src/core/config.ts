@@ -22,6 +22,15 @@ export interface ArchGraphConfig {
     excludeGlobs?: string[];
     /** NATS extractor settings. */
     nats?: NatsConfig;
+    /**
+     * Opt-out flags per domain. When a domain is `true` (default) the CLI gate
+     * treats zero ground-truth as a hard failure (regex-typo, missing glob, etc.).
+     * Set to `false` to declare "this project legitimately has no <domain>".
+     */
+    domains?: {
+        nats?: boolean;
+        typeorm?: boolean;
+    };
 }
 
 export interface NatsConfig {
