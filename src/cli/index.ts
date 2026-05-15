@@ -73,8 +73,8 @@ async function cmdInit(out: string): Promise<void> {
 }
 
 async function cmdBuild(args: ParsedArgs): Promise<void> {
-    if (args.only && args.only !== 'nats') {
-        process.stderr.write(`error: --only=${args.only} not yet supported; only 'nats' available in Phase 1\n`);
+    if (args.only && args.only !== 'nats' && args.only !== 'typeorm') {
+        process.stderr.write(`error: --only=${args.only} not yet supported; available: 'nats', 'typeorm'\n`);
         process.exit(2);
     }
     const cfg = await loadConfig(args.config);
@@ -89,40 +89,53 @@ async function cmdBuild(args: ParsedArgs): Promise<void> {
     process.stdout.write(`✓ diagnostics.json: ${outDir}/diagnostics.json\n`);
     process.stdout.write(`✓ validation.json:  ${outDir}/validation.json\n`);
 
-    // Regression gate: hard fail if recall drops below 95%.
-    const v = result.validation.summary;
-    if (v.recallHandlers < 0.95 || v.recallSenders < 0.95) {
+    // Regression gate: hard fail if any domain's recall drops below 95%.
+    const n = result.validation.nats.summary;
+    const t = result.validation.typeorm.summary;
+    const fails: string[] = [];
+    if (n.recallHandlers < 0.95) fails.push(`nats handlers ${pct(n.recallHandlers)}`);
+    if (n.recallSenders < 0.95) fails.push(`nats senders ${pct(n.recallSenders)}`);
+    if (t.recallInjections < 0.95) fails.push(`typeorm injections ${pct(t.recallInjections)}`);
+    if (t.recallEntities < 0.95) fails.push(`typeorm entities ${pct(t.recallEntities)}`);
+    if (fails.length > 0) {
         process.stderr.write(
-            `\n⚠  regression: recall fell below 95% (handlers=${(v.recallHandlers * 100).toFixed(1)}%, senders=${(v.recallSenders * 100).toFixed(1)}%). See validation.json.\n`,
+            `\n⚠  regression: recall fell below 95% — ${fails.join(', ')}. See validation.json.\n`,
         );
         process.exit(3);
     }
+}
+
+function pct(n: number): string {
+    return `${(n * 100).toFixed(1)}%`;
 }
 
 async function cmdDiagnose(args: ParsedArgs): Promise<void> {
     const cfg = await loadConfig(args.config);
     const result = await runBuild(cfg);
 
-    const counts = result.diagnostics.counts;
+    const n = result.diagnostics.nats;
+    const t = result.diagnostics.typeorm;
     process.stdout.write(`\n--- diagnostics for ${cfg.id} ---\n`);
-    process.stdout.write(`literal:    ${counts.literal}\n`);
-    process.stdout.write(`pattern:    ${counts.pattern}\n`);
-    process.stdout.write(`dynamic:    ${counts.dynamic}\n`);
-    process.stdout.write(`unresolved: ${counts.unresolved}\n`);
+    process.stdout.write(`[nats]    literal=${n.counts.literal} pattern=${n.counts.pattern} dynamic=${n.counts.dynamic} unresolved=${n.counts.unresolved}\n`);
+    process.stdout.write(`[typeorm] resolved=${t.counts.resolved} unresolvedEntity=${t.counts.unresolvedEntity} unowned=${t.counts.unowned}\n`);
 
-    if (result.diagnostics.unresolved.length > 0) {
-        process.stdout.write(`\nTop 10 unresolved subjects:\n`);
-        for (const u of result.diagnostics.unresolved.slice(0, 10)) {
+    if (n.unresolved.length > 0) {
+        process.stdout.write(`\nTop 10 unresolved NATS subjects:\n`);
+        for (const u of n.unresolved.slice(0, 10)) {
             const raw = u.subject.kind === 'unresolved' ? u.subject.raw : '';
             process.stdout.write(`  ${u.location.file}:${u.location.line} via=${u.via}  ${raw}\n`);
         }
     }
 
-    if (result.diagnostics.unowned.length > 0) {
-        process.stdout.write(`\nUnowned call-sites (outside apps/ & libs/): ${result.diagnostics.unowned.length}\n`);
-        for (const u of result.diagnostics.unowned.slice(0, 5)) {
-            process.stdout.write(`  ${u.location.file}:${u.location.line}\n`);
+    if (t.unresolvedEntities.length > 0) {
+        process.stdout.write(`\nTop 10 unresolved TypeORM entities:\n`);
+        for (const u of t.unresolvedEntities.slice(0, 10)) {
+            process.stdout.write(`  ${u.location.file}:${u.location.line}  @InjectRepository(${u.entityClass})\n`);
         }
+    }
+
+    if (n.unowned.length + t.unowned.length > 0) {
+        process.stdout.write(`\nUnowned call-sites (outside apps/ & libs/): nats=${n.unowned.length}, typeorm=${t.unowned.length}\n`);
     }
 
     const outDir = resolve(args.out);

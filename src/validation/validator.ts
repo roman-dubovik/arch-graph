@@ -1,4 +1,4 @@
-import type { GroundTruthEntry, NatsCallSite, ValidationReport } from '../core/types.js';
+import type { GroundTruthEntry, NatsCallSite, NatsValidationReport } from '../core/types.js';
 
 /**
  * Matches ground-truth entries against extracted call sites.
@@ -10,7 +10,7 @@ export function buildReport(
     projectId: string,
     extracted: NatsCallSite[],
     groundTruth: GroundTruthEntry[],
-): ValidationReport {
+): NatsValidationReport {
     const extractedKeyed = indexBy(extracted, locKey);
     const gtKeyed = indexBy(groundTruth, locKey);
 
