@@ -49,8 +49,10 @@ export async function enumerateTypeOrmGroundTruth(
         let content: string;
         try {
             content = await readFile(file, 'utf8');
-        } catch {
-            continue;
+        } catch (err) {
+            const e = err as NodeJS.ErrnoException;
+            if (e.code === 'ENOENT') continue;
+            throw new Error(`ground-truth read failed for ${file}: ${e.code ?? e.message}`);
         }
         // Cheap pre-filter — most files have neither marker.
         if (!content.includes('@InjectRepository') && !content.includes('@Entity')) continue;
@@ -90,30 +92,35 @@ export function buildTypeOrmReport(
     entities: TypeOrmEntity[],
     groundTruth: TypeOrmGroundTruthEntry[],
 ): TypeOrmValidationReport {
+    // Cardinality matching: when N decorators land on one line (e.g. compact
+    // constructor params), each GT entry consumes one extracted site so partial
+    // misses can't hide behind a single matched sibling.
     const injKeyed = indexBy(injections, locKeyInj);
     const entKeyed = indexBy(entities, locKeyEnt);
     const gtInj = groundTruth.filter((g) => g.role === 'injection');
     const gtEnt = groundTruth.filter((g) => g.role === 'entity');
 
+    const consumedInj = new Set<TypeOrmInjectionSite>();
     const missedInjections: TypeOrmGroundTruthEntry[] = [];
     for (const g of gtInj) {
         const k = `${g.location.file}:${g.location.line}`;
-        if (!injKeyed.has(k)) missedInjections.push(g);
+        const candidates = injKeyed.get(k) ?? [];
+        const match = candidates.find((c) => !consumedInj.has(c));
+        if (match) consumedInj.add(match);
+        else missedInjections.push(g);
     }
 
+    const consumedEnt = new Set<TypeOrmEntity>();
     const missedEntities: TypeOrmGroundTruthEntry[] = [];
     for (const g of gtEnt) {
         const k = `${g.location.file}:${g.location.line}`;
-        if (!entKeyed.has(k)) missedEntities.push(g);
+        const candidates = entKeyed.get(k) ?? [];
+        const match = candidates.find((c) => !consumedEnt.has(c));
+        if (match) consumedEnt.add(match);
+        else missedEntities.push(g);
     }
 
-    const gtInjKeyed = indexBy(gtInj, (g) => `${g.location.file}:${g.location.line}`);
-    const extraInjections: TypeOrmInjectionSite[] = [];
-    for (const s of injections) {
-        const k = locKeyInj(s);
-        if (!gtInjKeyed.has(k)) extraInjections.push(s);
-    }
-
+    const extraInjections = injections.filter((s) => !consumedInj.has(s));
     const resolvedCount = injections.filter((s) => s.resolvedEntity !== null).length;
 
     return {

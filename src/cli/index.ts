@@ -89,18 +89,33 @@ async function cmdBuild(args: ParsedArgs): Promise<void> {
     process.stdout.write(`✓ diagnostics.json: ${outDir}/diagnostics.json\n`);
     process.stdout.write(`✓ validation.json:  ${outDir}/validation.json\n`);
 
-    // Regression gate: hard fail if any domain's recall drops below 95%.
+    // Regression gate: hard fail if any *enabled* domain produced zero ground-truth
+    // (misconfig) or dropped below 95% recall. Disable via `domains.<x> = false`.
     const n = result.validation.nats.summary;
     const t = result.validation.typeorm.summary;
+    const natsEnabled = cfg.domains?.nats !== false;
+    const typeormEnabled = cfg.domains?.typeorm !== false;
     const fails: string[] = [];
-    if (n.recallHandlers < 0.95) fails.push(`nats handlers ${pct(n.recallHandlers)}`);
-    if (n.recallSenders < 0.95) fails.push(`nats senders ${pct(n.recallSenders)}`);
-    if (t.recallInjections < 0.95) fails.push(`typeorm injections ${pct(t.recallInjections)}`);
-    if (t.recallEntities < 0.95) fails.push(`typeorm entities ${pct(t.recallEntities)}`);
+
+    if (natsEnabled) {
+        if (n.totalGroundTruth === 0) {
+            fails.push(`nats: zero ground-truth — extractor or globs misconfigured (set domains.nats=false to disable)`);
+        } else {
+            if (n.recallHandlers < 0.95) fails.push(`nats handlers ${pct(n.recallHandlers)}`);
+            if (n.recallSenders < 0.95) fails.push(`nats senders ${pct(n.recallSenders)}`);
+        }
+    }
+    if (typeormEnabled) {
+        if (t.groundTruthInjections === 0 && t.groundTruthEntities === 0) {
+            fails.push(`typeorm: zero ground-truth — extractor or globs misconfigured (set domains.typeorm=false to disable)`);
+        } else {
+            if (t.recallInjections < 0.95) fails.push(`typeorm injections ${pct(t.recallInjections)}`);
+            if (t.recallEntities < 0.95) fails.push(`typeorm entities ${pct(t.recallEntities)}`);
+        }
+    }
+
     if (fails.length > 0) {
-        process.stderr.write(
-            `\n⚠  regression: recall fell below 95% — ${fails.join(', ')}. See validation.json.\n`,
-        );
+        process.stderr.write(`\n⚠  regression gate failed:\n  ${fails.join('\n  ')}\nSee validation.json.\n`);
         process.exit(3);
     }
 }
