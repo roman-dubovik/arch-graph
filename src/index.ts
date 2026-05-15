@@ -30,6 +30,7 @@ export type {
     TypeOrmValidationReport,
     WrapperApi,
 } from './core/types.js';
+export { startMcpServer } from './mcp/server.js';
 export { runBuild } from './pipeline/build.js';
 export {
     parseSliceMode,
