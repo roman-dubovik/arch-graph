@@ -13,7 +13,7 @@ import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { basename } from 'node:path';
 
-import { type BenchAdapter, type CompactGraph, serializeContext as serializeCompact } from './compact.js';
+import { type BenchAdapter, type CompactGraph, serializeContext } from './compact.js';
 
 interface GraphifyNode {
     id: string;
@@ -47,15 +47,13 @@ interface GraphifyGraph {
     hyperedges?: unknown[];
 }
 
-export type { CompactGraph };
-
-export async function loadGraphifyGraph(path: string): Promise<GraphifyGraph> {
+async function loadGraphifyGraph(path: string): Promise<GraphifyGraph> {
     const raw = await readFile(path, 'utf8');
     return JSON.parse(raw) as GraphifyGraph;
 }
 
 /** Strip graphify's graph to the same shape as the arch-graph compact form. */
-export function compactGraphifyGraph(g: GraphifyGraph): CompactGraph {
+function compactGraphifyGraph(g: GraphifyGraph): CompactGraph {
     const nodes = g.nodes.map((n) => {
         const out: { id: string; k: string; label?: string } = {
             id: n.id,
@@ -88,10 +86,6 @@ export function compactGraphifyGraph(g: GraphifyGraph): CompactGraph {
     };
 }
 
-export function serializeContext(g: CompactGraph): string {
-    return serializeCompact(g, 'graphify');
-}
-
 /**
  * Discover the graphify-out/graph.json for a given project root.
  * Returns null if graphify hasn't been run on that project.
@@ -103,7 +97,7 @@ export function serializeContext(g: CompactGraph): string {
  *      cache (so users can stash a pre-built graphify graph alongside
  *      this repo without polluting the project being analyzed).
  */
-export function findGraphifyOutput(
+function findGraphifyOutput(
     projectId: string,
     projectRoot: string,
     benchCacheRoot: string,
@@ -129,7 +123,7 @@ export const graphifyAdapter: BenchAdapter = {
         return compactGraphifyGraph(raw as GraphifyGraph);
     },
     serialize(g) {
-        return serializeContext(g);
+        return serializeContext(g, 'graphify');
     },
     findOutput(projectId, projectRoot, cacheRoot) {
         return findGraphifyOutput(projectId, projectRoot, cacheRoot);

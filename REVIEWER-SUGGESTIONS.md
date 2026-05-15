@@ -38,6 +38,15 @@ Severity:
 
 - **[nice-to-have] [bullmq] `reason?: string` on unresolved BullMqQueueRef** — non-exported queue-name constants currently go to diagnostics without a structured reason. Predлагали добавить `reason: 'non-exported-const' | 'dynamic-expression'`. Отложено — паттерн редкий, на 5 проектах не встретился. (silent-failure-hunter, цикл BullMQ Phase 2 followup)
 
+## Block F — MCP server
+
+- **[nice-to-have] [mcp] `RoutedAction` switch lacks `never` exhaustiveness arm** — `query` tool handler в `server.ts:337+` обходит все варианты `RoutedAction['tool']` без `default: { const _: never = action; ... }`. Сейчас все 10 вариантов покрыты. Если добавится 11-й и забудут case, TS не поймает (нет `noImplicitReturns`), а handler вернёт `undefined`. Конкретный fix: добавить `default: { const _: never = action; return jsonResult({ via: 'unknown', hint: 'unrouted action' }); }`. (type-design convergence)
+- **[convention] [mcp] `EdgeAnswer.role` + `kind` независимы — design decision** — в `NatsCallSite` они стуктурно сцеплены через DU, в `EdgeAnswer` — отдельные поля. Документировано в комментарии. (type-design convergence, conscious deviation)
+
+## Block H — Bench
+
+- **[nice-to-have] [bench] доп. валидация `Question.category/difficulty/question`** — уже применено сразу: при отсутствии loadQuestions выбрасывает ошибку с индексом и id. (type-design convergence)
+
 ## Cross-cutting
 
 - **[nice-to-have] [cli] `replaceMarkedSection`/`stripMarkedSection`/`appendBlock` живут в `claude.ts` и реэкспортируются в `hooks.ts`** — зависимость `hooks.ts → claude.ts` по чисто утилитарным хелперам выглядит странно (оба экспортируются с явным комментарием `// exported for reuse by hooks.ts`). Было бы чище вынести их в `src/cli/marker-block.ts`. Отложено — текущее состояние работает, комментарий документирует намерение, blast radius минимален. (simplifier pass, Block G review)

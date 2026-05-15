@@ -17,17 +17,15 @@ import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 
 import type { ArchGraph } from '../../src/core/types.js';
-import { type BenchAdapter, type CompactGraph, serializeContext as serializeCompact } from './compact.js';
+import { type BenchAdapter, type CompactGraph, serializeContext } from './compact.js';
 
-export type { CompactGraph };
-
-export async function loadArchGraph(path: string): Promise<ArchGraph> {
+async function loadArchGraph(path: string): Promise<ArchGraph> {
     const raw = await readFile(path, 'utf8');
     return JSON.parse(raw) as ArchGraph;
 }
 
 /** Strip a graph down to its minimal LLM-context form. */
-export function compactArchGraph(g: ArchGraph): CompactGraph {
+function compactArchGraph(g: ArchGraph): CompactGraph {
     const nodes = g.nodes.map((n) => {
         const out: { id: string; k: string; label?: string } = {
             id: n.id,
@@ -58,11 +56,6 @@ export function compactArchGraph(g: ArchGraph): CompactGraph {
     };
 }
 
-/** Serialize as compact JSON (no pretty-printing — fewer tokens). */
-export function serializeContext(g: CompactGraph): string {
-    return serializeCompact(g, 'arch-graph');
-}
-
 /** Conventional arch-graph output location: `/tmp/sg-<projectId>/graph.json`. */
 function archOutputPath(projectId: string): string {
     return `/tmp/sg-${projectId}/graph.json`;
@@ -79,7 +72,7 @@ export const archGraphAdapter: BenchAdapter = {
         return compactArchGraph(raw as ArchGraph);
     },
     serialize(g) {
-        return serializeContext(g);
+        return serializeContext(g, 'arch-graph');
     },
     findOutput(projectId, _projectRoot, _cacheRoot) {
         const p = archOutputPath(projectId);
