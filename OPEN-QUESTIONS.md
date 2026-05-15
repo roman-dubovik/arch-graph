@@ -276,7 +276,49 @@ Counts (nodes/edges) в `graph.mermaid` совпадают с `graph.json` на 
 
 ## Block F — MCP server
 
-_В работе._
+**Статус:** реализован — `arch-graph mcp [--out <dir>]` запускает stdio MCP-сервер поверх готового `graph.json`.
+
+### Принятые решения
+
+1. **SDK и форма регистрации tools.** Используется `@modelcontextprotocol/sdk` v1.29 (high-level `McpServer` + `registerTool`). Каждый tool регистрируется отдельно с zod-схемой входа — это даёт автоматический JSON-Schema в `tools/list` и валидацию аргументов до вызова handler'а. Альтернатива (один `tools/call` handler с ручным dispatch'ем) была отвергнута: больше boilerplate'а, теряем валидацию.
+
+2. **Lib publishers visible.** `subject_publishers`/`subject_subscribers` возвращают _любых_ owner'ов NATS-edge'ов — и `service:`, и `lib:`. Это отражает реальность: shared `libs/platform/messaging` действительно `publish`-ит на `platform.events.message.received`. Фильтровать до `service:` означало бы скрыть факт, что бизнес-логика живёт в lib'е. То же для `service_dependents`, `queue_*`, `table_users`.
+
+3. **ID-нормализация.** Все subject/queue/table tools принимают и bare-имя (`platform.events.message.received`), и полный ID (`nats:platform.events.message.received`). Snippets/`stripPrefix` в `graph-queries.ts`. Снижает trial-and-error у вызывающего агента.
+
+4. **Wildcard symmetry.** `subject_publishers('agent.*.events')` найдёт edge на литералу `agent.foo.events`; `subject_publishers('agent.foo.events')` найдёт edge на pattern-узле `agent.*.events`. NATS-правила: `*` — один токен, `>` — хвост.
+
+5. **Empty vs not-found contract.**
+   - List-tools (`subject_publishers`, `queue_*`, `table_users`, …) → пустой массив при отсутствии совпадений.
+   - Tools, возвращающие объект (`service_dependencies`, `module_imports`, `explain`, `path`) → дискриминируемый `{ found: false }` при отсутствии узла или пути. Агент-вызывающий различает "узел не существует" и "узел существует, но рёбер нет" по `found`/`counts`.
+
+6. **Path direction.** BFS по направленным рёбрам как-есть. Совпадает с естественными data-flow вопросами (service → subject, service → db-table). Если directed BFS не нашёл пути — это сигнал, не повод инвертировать рёбра.
+
+7. **Reload-on-mtime.** `graph.json` грузится на старте + перечитывается лениво только если изменился mtime файла. Перестроить граф в другом терминале и продолжить использовать тот же MCP-сервер — работает.
+
+8. **Stdio logging.** Стартовое сообщение пишется в `stderr` (не `stdout`), чтобы не ломать JSON-RPC канал.
+
+9. **`query()` keyword router.** Минимальный без LLM: матчит keyword'ы (`publish`/`subscribe`/`producer`/`consumer`/`table`/`module`/`depend`/`callers`) и забирает последний токен или `'quoted'`-литерал как identifier. Порядок проверок зафиксирован — incoming-формы (`depended`, `used by`) проверяются _до_ outgoing (`depends on`, `uses`), иначе `"depended on by"` мисматчился бы как dependencies-вопрос.
+
+### Verified test cases (platform graph, 894 nodes / 1532 edges)
+
+```
+subject_publishers({subject:"platform.events.message.received"})
+  → 1 row: lib:libs/platform/messaging publishes (file/line included)
+
+service_dependencies({serviceId:"platform-api"})
+  → found=true, counts: { "nats-request":1, "db-access":6, "queue-produce":5, "lib-usage":31 }
+
+path({from:"service:platform-api", to:"db-table:platform_chats"})
+  → found=true, 1 edge (db-access). NB: db-table:messages не существует в platform — все таблицы префиксованы platform_*.
+```
+
+### Открытые вопросы
+
+- **`module_imports` глубина 5.** Достаточно ли для платформы (130 NestJS-модулей)? Цикл-protection через `Set`, но `depth=5` может обрезать длинные цепочки. Можно поднять default до 10, но это раздувает payload. Решено: оставить 5 + параметризовать (`maxDepth` ≤ 20).
+- **`subject_publishers` для wildcards: union или intersection?** Сейчас: union (любой матч с любой стороны попадает в результат). Для NATS это естественно — pattern `agent.*.events` _ловит_ публикации в `agent.foo.events`. Документировано в комментах к `subjectMatches`.
+- **Resource exposure.** Не выставлен MCP-resource `arch-graph://graph` для full-dump. Сознательно: вся ценность сервера — экономия токенов, full-graph дампы доступны через `cat graph.json`.
+- **Auth / multi-tenancy.** Не нужно для stdio-режима (один процесс — один граф). При переходе на HTTP-transport (вне scope Phase 2) понадобится `--out` per-project + routing.
 
 ---
 
