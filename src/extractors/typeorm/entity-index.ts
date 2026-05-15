@@ -1,5 +1,6 @@
 import {
     Decorator,
+    ExportDeclaration,
     ObjectLiteralExpression,
     Project,
     PropertyAssignment,
@@ -74,7 +75,35 @@ export function buildEntityIndex(project: Project): EntityIndex {
         }
     }
 
+    // Second pass: register `export { X as Y }` re-export aliases so
+    // `@InjectRepository(EmailSuppression)` resolves to the underlying
+    // NotificationSuppression entity even when imported via barrel re-exports.
+    registerExportAliases(project, idx);
+
     return idx;
+}
+
+function registerExportAliases(project: Project, idx: EntityIndex): void {
+    for (const sf of project.getSourceFiles()) {
+        if (isExcludedSourceFile(sf)) continue;
+        const text = sf.getFullText();
+        if (!text.includes('export {') && !text.includes('export{')) continue;
+        for (const exp of sf.getExportDeclarations()) {
+            collectAliases(exp, idx);
+        }
+    }
+}
+
+function collectAliases(exp: ExportDeclaration, idx: EntityIndex): void {
+    for (const spec of exp.getNamedExports()) {
+        const alias = spec.getAliasNode();
+        if (!alias) continue;
+        const sourceName = spec.getNameNode().getText();
+        const aliasName = alias.getText();
+        if (idx.get(aliasName)) continue;
+        const target = idx.get(sourceName);
+        if (target) idx.set(aliasName, target);
+    }
 }
 
 type Resolution =

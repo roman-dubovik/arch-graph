@@ -41,6 +41,13 @@ export type NatsCallSite =
 export interface WrapperApi {
     class: string;
     methods: string[];
+    /**
+     * Index of the subject argument in the call. Defaults to 0.
+     * Set explicitly (or discovered by Pattern F) for helpers like
+     * `NatsRequestHelper.sendWithRetry(client, subject, payload)` where the
+     * subject is not the first argument.
+     */
+    subjectArgIndex?: number;
 }
 
 // ============================================================================

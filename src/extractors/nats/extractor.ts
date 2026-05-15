@@ -62,6 +62,12 @@ interface DiscoveredWrapper {
     methodName: string;
     role: 'sender' | 'receiver';
     edgeKind: EdgeKindNats;
+    /**
+     * Which arg of the wrapper holds the subject — derived from which param of
+     * the enclosing method flowed into the inner client.publish/subscribe call.
+     * `Helper.sendWithRetry(client, subject, payload)` resolves to 1.
+     */
+    subjectArgIndex: number;
 }
 
 export async function extractNats(cfg: ArchGraphConfig, project: Project): Promise<NatsCallSite[]> {
@@ -101,10 +107,10 @@ export async function extractNats(cfg: ArchGraphConfig, project: Project): Promi
             ...ctx,
             publishApis: uniqueWrappers
                 .filter((w) => w.role === 'sender')
-                .map((w) => ({ class: w.className, methods: [w.methodName] })),
+                .map((w) => ({ class: w.className, methods: [w.methodName], subjectArgIndex: w.subjectArgIndex })),
             subscribeMethodApis: uniqueWrappers
                 .filter((w) => w.role === 'receiver')
-                .map((w) => ({ class: w.className, methods: [w.methodName] })),
+                .map((w) => ({ class: w.className, methods: [w.methodName], subjectArgIndex: w.subjectArgIndex })),
         };
         const before = out.length;
         scanFiles(project, augCtx, out, { kind: 'indirect', wrapperKeys });
@@ -159,25 +165,41 @@ function dedupWrappers(ws: DiscoveredWrapper[]): DiscoveredWrapper[] {
     return out;
 }
 
-function findEnclosingMethodAndClass(node: Node): { className: string; methodName: string } | null {
+/**
+ * Walk up to the nearest function/method, returning identity + parameter list.
+ * For class methods we use `${className}.${methodName}`; for top-level exported
+ * functions (no enclosing class) we use the sentinel className `<fn>` so pass 2
+ * can detect calls to free functions as wrappers.
+ */
+function findEnclosingFn(node: Node): { className: string; methodName: string; params: string[] } | null {
     let cur: Node | undefined = node;
-    let methodName: string | undefined;
-    let className: string | undefined;
+    let fn: Node | undefined;
     while (cur) {
-        if (!methodName) {
-            if (Node.isMethodDeclaration(cur) || Node.isFunctionDeclaration(cur)) {
-                const n = cur.getName();
-                if (n) methodName = n;
-            }
-        }
-        if (Node.isClassDeclaration(cur)) {
-            className = cur.getName();
+        if (Node.isMethodDeclaration(cur) || Node.isFunctionDeclaration(cur)) {
+            fn = cur;
             break;
         }
         cur = cur.getParent();
     }
-    if (className && methodName) return { className, methodName };
-    return null;
+    if (!fn) return null;
+
+    const methodName = (fn as unknown as { getName(): string | undefined }).getName();
+    if (!methodName) return null;
+    const params = (fn as unknown as { getParameters(): Array<{ getName(): string }> })
+        .getParameters()
+        .map((p) => p.getName());
+
+    let className = '<fn>';
+    let up: Node | undefined = fn.getParent();
+    while (up) {
+        if (Node.isClassDeclaration(up)) {
+            const n = up.getName();
+            if (n) className = n;
+            break;
+        }
+        up = up.getParent();
+    }
+    return { className, methodName, params };
 }
 
 function verifyWrapperClasses(ctx: ExtractorCtx): void {
@@ -216,11 +238,16 @@ function isExcluded(sf: SourceFile, cfg: ArchGraphConfig): boolean {
 function fileHasNatsImport(sf: SourceFile, ctx: ExtractorCtx): boolean {
     const text = sf.getFullText();
     if (/from\s+['"]@nestjs\/microservices['"]/.test(text)) return true;
-    for (const api of ctx.publishApis) {
-        if (new RegExp(`\\b${escapeReg(api.class)}\\b`).test(text)) return true;
-    }
-    for (const api of ctx.subscribeMethodApis) {
-        if (new RegExp(`\\b${escapeReg(api.class)}\\b`).test(text)) return true;
+    const apis = [...ctx.publishApis, ...ctx.subscribeMethodApis];
+    for (const api of apis) {
+        if (api.class === '<fn>') {
+            // Standalone-function wrapper: match on method name instead of class.
+            for (const m of api.methods) {
+                if (new RegExp(`\\b${escapeReg(m)}\\s*\\(`).test(text)) return true;
+            }
+        } else if (new RegExp(`\\b${escapeReg(api.class)}\\b`).test(text)) {
+            return true;
+        }
     }
     return false;
 }
@@ -263,6 +290,23 @@ function collectFromFile(sf: SourceFile, ctx: ExtractorCtx, out: NatsCallSite[],
         if (node.getKind() !== SyntaxKind.CallExpression) return;
         const call = node as CallExpression;
         const expr = call.getExpression();
+
+        // Standalone-function call (`sendNatsMessage(client, pattern, ...)`):
+        // matched against `<fn>`-class wrappers discovered by Pattern F.
+        if (expr.getKind() === SyntaxKind.Identifier) {
+            const fnName = expr.getText();
+            const pubApi = ctx.publishApis.find((a) => a.class === '<fn>' && a.methods.includes(fnName));
+            if (pubApi) {
+                handleCall(call, 'sender', fnName, pubApi, out, ctx, pass);
+                return;
+            }
+            const subApi = ctx.subscribeMethodApis.find((a) => a.class === '<fn>' && a.methods.includes(fnName));
+            if (subApi) {
+                handleCall(call, 'receiver', fnName, subApi, out, ctx, pass);
+            }
+            return;
+        }
+
         if (expr.getKind() !== SyntaxKind.PropertyAccessExpression) return;
 
         const pa = expr as PropertyAccessExpression;
@@ -293,8 +337,9 @@ function handleCall(
     pass: PassMode,
 ): void {
     const args = call.getArguments();
-    if (args.length === 0) return;
-    const resolved = resolveSubject(args[0]!, 0, ctx.constIndex);
+    const subjArg = args[api.subjectArgIndex ?? 0];
+    if (!subjArg) return;
+    const resolved = resolveSubject(subjArg, 0, ctx.constIndex);
 
     // Construct the role-narrowed NatsCallSite (DU enforces role↔edgeKind coherence).
     const base = {
@@ -318,22 +363,25 @@ function handleCall(
 
     if (pass.kind === 'main') {
         if (resolved.kind === 'dynamic' && resolved.hint.startsWith('param:')) {
-            const enc = findEnclosingMethodAndClass(call);
+            const enc = findEnclosingFn(call);
+            const paramName = resolved.hint.slice('param:'.length);
             if (enc) {
-                pass.discovered.push({
-                    className: enc.className,
-                    methodName: enc.methodName,
-                    role,
-                    edgeKind: site.edgeKind,
-                });
-                site.wrapperInternal = true;
+                const idx = enc.params.indexOf(paramName);
+                if (idx >= 0) {
+                    pass.discovered.push({
+                        className: enc.className,
+                        methodName: enc.methodName,
+                        role,
+                        edgeKind: site.edgeKind,
+                        subjectArgIndex: idx,
+                    });
+                    site.wrapperInternal = true;
+                }
             }
         }
         out.push(site);
     } else {
-        // Pass 2 (indirect): skip if this call lives inside a wrapper's body — that
-        // would re-emit the inner site we deliberately kept in pass 1 for GT recall.
-        const enc = findEnclosingMethodAndClass(call);
+        const enc = findEnclosingFn(call);
         if (enc && pass.wrapperKeys.has(`${enc.className}.${enc.methodName}`)) return;
         out.push(site);
     }
