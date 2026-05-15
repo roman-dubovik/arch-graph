@@ -18,4 +18,14 @@ export default defineConfig({
             { class: 'NatsService', methods: ['subscribe', 'subscribeWithReply'] },
         ],
     },
+    http: {
+        internalServices: [
+            // saas-admin / infrastructure-proxy call NX_DEPLOYER_URL → deployer service.
+            { id: 'deployer', envVars: ['NX_DEPLOYER_URL'] },
+            // Frontend SDKs reference NX_API_BASE_URL / NX_PLATFORM_API_URL — point to platform-api.
+            { id: 'platform-api', envVars: ['NX_API_BASE_URL', 'NX_PLATFORM_API_URL'] },
+            // Central enrollment URL used by agents.
+            { id: 'platform-central', envVars: ['NX_CENTRAL_URL', 'CENTRAL_URL'] },
+        ],
+    },
 });

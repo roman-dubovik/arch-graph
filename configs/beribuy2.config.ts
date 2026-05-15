@@ -6,5 +6,5 @@ export default defineConfig({
     appsGlob: 'apps/*',
     libsGlob: 'libs/**',
     excludeGlobs: ['/.worktrees/'],
-    domains: { bullmq: false },
+    domains: { bullmq: false, http: false },
 });
