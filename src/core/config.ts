@@ -31,6 +31,7 @@ export interface ArchGraphConfig {
         nats?: boolean;
         typeorm?: boolean;
         bullmq?: boolean;
+        di?: boolean;
     };
 }
 

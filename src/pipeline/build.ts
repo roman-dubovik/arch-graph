@@ -5,12 +5,15 @@ import type { ArchGraphConfig } from '../core/config.js';
 import { discoverOwnership } from '../core/service-registry.js';
 import type { ArchGraph, BuildValidation, DiagnosticsReport } from '../core/types.js';
 import { extractBullMq } from '../extractors/bullmq/extractor.js';
+import { extractDi } from '../extractors/di/extractor.js';
 import { extractNats } from '../extractors/nats/extractor.js';
 import { extractTypeOrm } from '../extractors/typeorm/extractor.js';
 import { mapBullMqToGraph } from '../mapper/bullmq-to-graph.js';
+import { mapDiToGraph } from '../mapper/di-to-graph.js';
 import { assembleGraph, buildNatsDiagnostics, mapNatsToGraph } from '../mapper/nats-to-graph.js';
 import { mapTypeOrmToGraph } from '../mapper/typeorm-to-graph.js';
 import { enumerateBullMqGroundTruth, buildBullMqReport } from '../validation/bullmq-validator.js';
+import { enumerateDiGroundTruth, buildDiReport } from '../validation/di-validator.js';
 import { enumerateHandlers } from '../validation/handlers.js';
 import { enumerateSenders } from '../validation/senders.js';
 import { enumerateTypeOrmGroundTruth, buildTypeOrmReport } from '../validation/typeorm-validator.js';
@@ -151,14 +154,39 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         `  nodes: ${bullmqMapped.nodes.length}, edges: ${bullmqMapped.edges.length}, unresolved: ${bullmqMapped.diagnostics.unresolved.length}, unowned: ${bullmqMapped.diagnostics.unowned.length}\n`,
     );
 
+    // ---- DI domain ----
+    process.stdout.write(`extracting DI...\n`);
+    t0 = Date.now();
+    const di = await stage(`[${cfg.id}] di.extract`, () => extractDi(cfg, project));
+    process.stdout.write(
+        `  ${di.modules.length} @Module classes, ${di.moduleIndex.size()} indexed in ${Date.now() - t0}ms\n`,
+    );
+
+    process.stdout.write(`validating DI against ground truth...\n`);
+    const diGT = await stage(`[${cfg.id}] di.GT`, () => enumerateDiGroundTruth(cfg));
+    const diValidation = buildDiReport(di.modules, diGT);
+    {
+        const v = diValidation.summary;
+        process.stdout.write(
+            `  recallMod=${pct(v.recallModules)} recallImp=${pct(v.recallImportsFields)} recallProv=${pct(v.recallProvidersFields)} recallExp=${pct(v.recallExportsFields)} resolve=${pct(v.resolveRate)}\n`,
+        );
+    }
+
+    process.stdout.write(`mapping DI to graph...\n`);
+    const diMapped = mapDiToGraph(di.modules, di.moduleIndex, ownership);
+    process.stdout.write(
+        `  nodes: ${diMapped.nodes.length}, edges: ${diMapped.edges.length}, unresolvedRefs: ${diMapped.diagnostics.unresolvedRefs.length}, unowned: ${diMapped.diagnostics.unowned.length}\n`,
+    );
+
     // ---- Compose ----
-    const graph = assembleGraph(cfg.root, [natsMapped, typeormMapped, bullmqMapped]);
+    const graph = assembleGraph(cfg.root, [natsMapped, typeormMapped, bullmqMapped, diMapped]);
     const diagnostics: DiagnosticsReport = {
         projectId: cfg.id,
         timestamp: new Date().toISOString(),
         nats: natsDiagnostics,
         typeorm: typeormMapped.diagnostics,
         bullmq: bullmqMapped.diagnostics,
+        di: diMapped.diagnostics,
     };
     const validation: BuildValidation = {
         projectId: cfg.id,
@@ -166,6 +194,7 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         nats: natsValidation,
         typeorm: typeormValidation,
         bullmq: bullmqValidation,
+        di: diValidation,
     };
 
     return { graph, diagnostics, validation };

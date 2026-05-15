@@ -73,8 +73,8 @@ async function cmdInit(out: string): Promise<void> {
 }
 
 async function cmdBuild(args: ParsedArgs): Promise<void> {
-    if (args.only && args.only !== 'nats' && args.only !== 'typeorm' && args.only !== 'bullmq') {
-        process.stderr.write(`error: --only=${args.only} not yet supported; available: 'nats', 'typeorm', 'bullmq'\n`);
+    if (args.only && args.only !== 'nats' && args.only !== 'typeorm' && args.only !== 'bullmq' && args.only !== 'di') {
+        process.stderr.write(`error: --only=${args.only} not yet supported; available: 'nats', 'typeorm', 'bullmq', 'di'\n`);
         process.exit(2);
     }
     const cfg = await loadConfigWithContext(args.config);
@@ -94,9 +94,11 @@ async function cmdBuild(args: ParsedArgs): Promise<void> {
     const n = result.validation.nats.summary;
     const t = result.validation.typeorm.summary;
     const b = result.validation.bullmq.summary;
+    const d = result.validation.di.summary;
     const natsEnabled = cfg.domains?.nats !== false;
     const typeormEnabled = cfg.domains?.typeorm !== false;
     const bullmqEnabled = cfg.domains?.bullmq !== false;
+    const diEnabled = cfg.domains?.di !== false;
     const fails: string[] = [];
 
     // Per-role zero-GT: handlers misconfig and senders misconfig fail independently
@@ -132,6 +134,23 @@ async function cmdBuild(args: ParsedArgs): Promise<void> {
             fails.push(`bullmq resolve ${pct(b.resolveRate)} (< 95%)`);
         }
     }
+    if (diEnabled) {
+        // `module` recall is the primary contract — every `@Module(` in source must be
+        // extracted. Field-presence recall (imports/providers/exports/controllers) catches
+        // regressions in the field-decoder logic. `resolveRate` catches ref-decoder regressions.
+        if (d.groundTruthModules === 0) {
+            fails.push(`di: zero @Module ground-truth — set domains.di=false if this project is not NestJS`);
+        }
+        if (d.groundTruthModules > 0 && d.recallModules < 0.95) fails.push(`di modules ${pct(d.recallModules)}`);
+        if (d.groundTruthImportsFields > 0 && d.recallImportsFields < 0.95) fails.push(`di imports-fields ${pct(d.recallImportsFields)}`);
+        if (d.groundTruthProvidersFields > 0 && d.recallProvidersFields < 0.95) fails.push(`di providers-fields ${pct(d.recallProvidersFields)}`);
+        if (d.groundTruthExportsFields > 0 && d.recallExportsFields < 0.95) fails.push(`di exports-fields ${pct(d.recallExportsFields)}`);
+        if (d.groundTruthControllersFields > 0 && d.recallControllersFields < 0.95) fails.push(`di controllers-fields ${pct(d.recallControllersFields)}`);
+        const totalRefs = d.totalImports + d.totalProviders + d.totalExports + d.totalControllers;
+        if (totalRefs > 0 && d.resolveRate < 0.95) {
+            fails.push(`di resolve ${pct(d.resolveRate)} (< 95%)`);
+        }
+    }
 
     if (fails.length > 0) {
         process.stderr.write(`\n⚠  regression gate failed:\n  ${fails.join('\n  ')}\nSee validation.json.\n`);
@@ -163,10 +182,12 @@ async function cmdDiagnose(args: ParsedArgs): Promise<void> {
     const n = result.diagnostics.nats;
     const t = result.diagnostics.typeorm;
     const b = result.diagnostics.bullmq;
+    const di = result.diagnostics.di;
     process.stdout.write(`\n--- diagnostics for ${cfg.id} ---\n`);
     process.stdout.write(`[nats]    literal=${n.counts.literal} pattern=${n.counts.pattern} dynamic=${n.counts.dynamic} unresolved=${n.counts.unresolved}\n`);
     process.stdout.write(`[typeorm] resolved=${t.counts.resolved} unresolvedEntity=${t.counts.unresolvedEntity} unowned=${t.counts.unowned} entityWarnings=${t.counts.entityDecoratorWarnings}\n`);
     process.stdout.write(`[bullmq]  producers=${b.counts.producers} consumers=${b.counts.consumers} registrations=${b.counts.registrations} unresolved=${b.counts.unresolved} unowned=${b.counts.unowned}\n`);
+    process.stdout.write(`[di]      modules=${di.counts.modules} imports=${di.counts.imports} providers=${di.counts.providers} exports=${di.counts.exports} controllers=${di.counts.controllers} unresolvedRefs=${di.counts.unresolvedRefs} unowned=${di.counts.unowned}\n`);
 
     if (n.unresolved.length > 0) {
         process.stdout.write(`\nTop 10 unresolved NATS subjects:\n`);
