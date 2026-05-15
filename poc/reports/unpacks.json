@@ -1,0 +1,2348 @@
+{
+  "projectId": "unpacks",
+  "timestamp": "2026-05-15T15:48:15.497Z",
+  "summary": {
+    "recallHandlers": 1,
+    "recallSenders": 1,
+    "resolveRate": 0.978021978021978,
+    "classificationAccuracy": 1,
+    "totalExtracted": 91,
+    "totalGroundTruth": 90,
+    "bySubjectKind": {
+      "literal": 85,
+      "dynamic": 2,
+      "pattern": 4
+    }
+  },
+  "extracted": [
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "instagram.health"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-instagram-scraper/src/controllers/instagram-health.controller.ts",
+        "line": 40,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "InstagramHealthController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "instagram.profile.request"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-instagram-scraper/src/controllers/instagram-scraper-nats.controller.ts",
+        "line": 58,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "InstagramScraperNatsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "instagram.posts.request"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-instagram-scraper/src/controllers/instagram-scraper-nats.controller.ts",
+        "line": 119,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "InstagramScraperNatsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "instagram.reels.request"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-instagram-scraper/src/controllers/instagram-scraper-nats.controller.ts",
+        "line": 180,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "InstagramScraperNatsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "instagram.post.request"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-instagram-scraper/src/controllers/instagram-scraper-nats.controller.ts",
+        "line": 241,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "InstagramScraperNatsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.analytics.passports"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/analytics/analytics.controller.ts",
+        "line": 38,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "AnalyticsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.analytics.costs"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/analytics/analytics.controller.ts",
+        "line": 69,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "AnalyticsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.analytics.matchings"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/analytics/analytics.controller.ts",
+        "line": 101,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "AnalyticsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.dashboard.overview"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/dashboard/dashboard.controller.ts",
+        "line": 28,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "DashboardController"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:subject"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/events/events.service.ts",
+        "line": 78,
+        "column": 13
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "EventsService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "ai.health"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/health/health.controller.ts",
+        "line": 160,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "HealthController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.queue.jobs"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/queue/queue.controller.ts",
+        "line": 31,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "QueueController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.queue.job.details"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/queue/queue.controller.ts",
+        "line": 66,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "QueueController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.queue.job.retry"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/queue/queue.controller.ts",
+        "line": 99,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "QueueController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.queue.summary"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/queue/queue.controller.ts",
+        "line": 130,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "QueueController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.topic-seeds.generation-status"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/topic-seeds/topic-seeds.controller.ts",
+        "line": 57,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "TopicSeedsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.topic-seeds.list"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/topic-seeds/topic-seeds.controller.ts",
+        "line": 66,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "TopicSeedsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.topic-seeds.versions"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/topic-seeds/topic-seeds.controller.ts",
+        "line": 106,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "TopicSeedsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.topic-seeds.create"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/topic-seeds/topic-seeds.controller.ts",
+        "line": 136,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "TopicSeedsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.topic-seeds.update"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/topic-seeds/topic-seeds.controller.ts",
+        "line": 168,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "TopicSeedsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.topic-seeds.delete"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/topic-seeds/topic-seeds.controller.ts",
+        "line": 200,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "TopicSeedsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.topic-seeds.rollback"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/topic-seeds/topic-seeds.controller.ts",
+        "line": 230,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "TopicSeedsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.topic-seeds.generate"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/topic-seeds/topic-seeds.controller.ts",
+        "line": 275,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "TopicSeedsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.topics.list"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/topics/topics.controller.ts",
+        "line": 23,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "TopicsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.topics.search"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/topics/topics.controller.ts",
+        "line": 39,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "TopicsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.topics.invalidate-cache"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/topics/topics.controller.ts",
+        "line": 59,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "TopicsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.topics.init-embeddings"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/topics/topics.controller.ts",
+        "line": 75,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "TopicsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.topics.refresh-counts"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/topics/topics.controller.ts",
+        "line": 98,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "TopicsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "cron.topics.embeddings-sync"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/topics/topics.controller.ts",
+        "line": 115,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "TopicsController"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:pattern"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/libs/nest-shared/src/nats/helpers/nats-request.helper.ts",
+        "line": 85,
+        "column": 13
+      },
+      "via": "ClientProxy.send",
+      "enclosingClass": "NatsRequestHelper"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.blog.in-progress"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/blog-passport/controllers/blog-passport.controller.ts",
+        "line": 78,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "BlogPassportController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.blog.passports.list"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/blog-passport/controllers/blog-passport.controller.ts",
+        "line": 108,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "BlogPassportController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.blog.search"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/blog-passport/controllers/blog-passport.controller.ts",
+        "line": 159,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "BlogPassportController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.blog.analyze"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/blog-passport/controllers/blog-passport.controller.ts",
+        "line": 193,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "BlogPassportController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.blog.batch-analyze"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/blog-passport/controllers/blog-passport.controller.ts",
+        "line": 258,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "BlogPassportController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.blog.passport.get"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/blog-passport/controllers/blog-passport.controller.ts",
+        "line": 299,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "BlogPassportController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.blog.passport.get-by-platform"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/blog-passport/controllers/blog-passport.controller.ts",
+        "line": 339,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "BlogPassportController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.blog.passport.get-by-id"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/blog-passport/controllers/blog-passport.controller.ts",
+        "line": 390,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "BlogPassportController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.blog.analysis-status"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/blog-passport/controllers/blog-passport.controller.ts",
+        "line": 432,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "BlogPassportController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.blog.import-and-analyze"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/blog-passport/controllers/blog-passport.controller.ts",
+        "line": 474,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "BlogPassportController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.blog.import-from-urls"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/blog-passport/controllers/blog-passport.controller.ts",
+        "line": 512,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "BlogPassportController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.blog.passport.delete"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/blog-passport/controllers/blog-passport.controller.ts",
+        "line": 547,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "BlogPassportController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.blog.pipeline-state"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/blog-passport/controllers/blog-passport.controller.ts",
+        "line": 588,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "BlogPassportController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.blog.retry-step.analyze"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/blog-passport/controllers/blog-passport.controller.ts",
+        "line": 628,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "BlogPassportController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.blog.segment-filter"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/blog-passport/controllers/blog-passport.controller.ts",
+        "line": 680,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "BlogPassportController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.blog.segment-filter-paginated"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/blog-passport/controllers/blog-passport.controller.ts",
+        "line": 719,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "BlogPassportController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.clients.list"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/clients/controllers/clients.controller.ts",
+        "line": 72,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "ClientsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.clients.list-short"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/clients/controllers/clients.controller.ts",
+        "line": 101,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "ClientsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.clients.get"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/clients/controllers/clients.controller.ts",
+        "line": 129,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "ClientsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.clients.stats"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/clients/controllers/clients.controller.ts",
+        "line": 158,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "ClientsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.clients.create"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/clients/controllers/clients.controller.ts",
+        "line": 187,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "ClientsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.clients.update"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/clients/controllers/clients.controller.ts",
+        "line": 216,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "ClientsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.clients.deactivate"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/clients/controllers/clients.controller.ts",
+        "line": 246,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "ClientsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.clients.activate"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/clients/controllers/clients.controller.ts",
+        "line": 275,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "ClientsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.clients.regenerate-key"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/clients/controllers/clients.controller.ts",
+        "line": 304,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "ClientsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.clients.stats-daily"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/clients/controllers/clients.controller.ts",
+        "line": 333,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "ClientsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.clients.endpoints-breakdown"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/clients/controllers/clients.controller.ts",
+        "line": 365,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "ClientsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "pattern",
+        "pattern": "*.health",
+        "placeholders": [
+          "PIPELINE_STATE_CLEANUP_PATTERN"
+        ]
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/cron/handlers/pipeline-state-cleanup-nats.handler.ts",
+        "line": 26,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "PipelineStateCleanupNatsHandler"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "cron.pipeline-state.cleanup"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/cron/handlers/pipeline-state-cleanup-nats.handler.ts",
+        "line": 35,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "PipelineStateCleanupNatsHandler"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "pattern",
+        "pattern": "*.health",
+        "placeholders": [
+          "QUEUE_STUCK_JOBS_PATTERN"
+        ]
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/cron/handlers/queue-stuck-jobs-nats.handler.ts",
+        "line": 107,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "QueueStuckJobsNatsHandler"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "cron.queue.stuck-jobs"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/cron/handlers/queue-stuck-jobs-nats.handler.ts",
+        "line": 116,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "QueueStuckJobsNatsHandler"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "pattern",
+        "pattern": "*.health",
+        "placeholders": [
+          "REDIS_CACHE_CLEANUP_PATTERN"
+        ]
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/cron/handlers/redis-cache-cleanup-nats.handler.ts",
+        "line": 26,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "RedisCacheCleanupNatsHandler"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "cron.redis-cache.cleanup"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/cron/handlers/redis-cache-cleanup-nats.handler.ts",
+        "line": 35,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "RedisCacheCleanupNatsHandler"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "pattern",
+        "pattern": "*.health",
+        "placeholders": [
+          "REQUEST_TRACKING_CLEANUP_PATTERN"
+        ]
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/cron/handlers/request-tracking-cleanup-nats.handler.ts",
+        "line": 26,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "RequestTrackingCleanupNatsHandler"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "cron.request-tracking.cleanup"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/cron/handlers/request-tracking-cleanup-nats.handler.ts",
+        "line": 35,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "RequestTrackingCleanupNatsHandler"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.endpoints.list"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/endpoint-registry/controllers/endpoint-registry.controller.ts",
+        "line": 26,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "EndpointRegistryController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.endpoints.resource-types"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/endpoint-registry/controllers/endpoint-registry.controller.ts",
+        "line": 75,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "EndpointRegistryController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.permissions.create"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/permissions/controllers/permissions.controller.ts",
+        "line": 31,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "PermissionsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.permissions.list"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/permissions/controllers/permissions.controller.ts",
+        "line": 60,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "PermissionsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.permissions.by-client"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/permissions/controllers/permissions.controller.ts",
+        "line": 89,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "PermissionsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.permissions.get"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/permissions/controllers/permissions.controller.ts",
+        "line": 120,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "PermissionsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.permissions.update"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/permissions/controllers/permissions.controller.ts",
+        "line": 150,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "PermissionsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.permissions.delete"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/permissions/controllers/permissions.controller.ts",
+        "line": 181,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "PermissionsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.permissions.grant-all"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/permissions/controllers/permissions.controller.ts",
+        "line": 210,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "PermissionsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.permissions.revoke-all"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/permissions/controllers/permissions.controller.ts",
+        "line": 240,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "PermissionsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.stats.overview"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/request-tracking/controllers/admin-requests.controller.ts",
+        "line": 31,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "AdminRequestsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.requests.list"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/request-tracking/controllers/admin-requests.controller.ts",
+        "line": 58,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "AdminRequestsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.requests.detail"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/request-tracking/controllers/admin-requests.controller.ts",
+        "line": 86,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "AdminRequestsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.social-networks.list"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/social-networks/controllers/social-networks.controller.ts",
+        "line": 26,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "SocialNetworksController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.social-networks.list-short"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/social-networks/controllers/social-networks.controller.ts",
+        "line": 54,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "SocialNetworksController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.social-networks.get"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/social-networks/controllers/social-networks.controller.ts",
+        "line": 82,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "SocialNetworksController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.social-networks.create"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/social-networks/controllers/social-networks.controller.ts",
+        "line": 111,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "SocialNetworksController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.social-networks.update"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/social-networks/controllers/social-networks.controller.ts",
+        "line": 139,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "SocialNetworksController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.social-networks.delete"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/social-networks/controllers/social-networks.controller.ts",
+        "line": 169,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "SocialNetworksController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.social-networks.activate"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/social-networks/controllers/social-networks.controller.ts",
+        "line": 198,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "SocialNetworksController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.social-networks.sort-order"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/social-networks/controllers/social-networks.controller.ts",
+        "line": 227,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "SocialNetworksController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.webhooks.stats"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/webhook-delivery/controllers/admin-webhooks.controller.ts",
+        "line": 32,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "AdminWebhooksController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.webhooks.list"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/webhook-delivery/controllers/admin-webhooks.controller.ts",
+        "line": 60,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "AdminWebhooksController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.webhooks.detail"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/webhook-delivery/controllers/admin-webhooks.controller.ts",
+        "line": 89,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "AdminWebhooksController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.webhooks.by-request"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/webhook-delivery/controllers/admin-webhooks.controller.ts",
+        "line": 118,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "AdminWebhooksController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.webhooks.retry"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/webhook-delivery/controllers/admin-webhooks.controller.ts",
+        "line": 148,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "AdminWebhooksController"
+    }
+  ],
+  "groundTruth": [
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-instagram-scraper/src/controllers/instagram-health.controller.ts",
+        "line": 40,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('instagram.health')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-instagram-scraper/src/controllers/instagram-scraper-nats.controller.ts",
+        "line": 58,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('instagram.profile.request')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-instagram-scraper/src/controllers/instagram-scraper-nats.controller.ts",
+        "line": 119,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('instagram.posts.request')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-instagram-scraper/src/controllers/instagram-scraper-nats.controller.ts",
+        "line": 180,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('instagram.reels.request')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-instagram-scraper/src/controllers/instagram-scraper-nats.controller.ts",
+        "line": 241,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('instagram.post.request')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/analytics/analytics.controller.ts",
+        "line": 38,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.analytics.passports')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/analytics/analytics.controller.ts",
+        "line": 69,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.analytics.costs')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/analytics/analytics.controller.ts",
+        "line": 101,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.analytics.matchings')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/dashboard/dashboard.controller.ts",
+        "line": 28,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.dashboard.overview')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/health/health.controller.ts",
+        "line": 160,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('ai.health')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/queue/queue.controller.ts",
+        "line": 31,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.queue.jobs')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/queue/queue.controller.ts",
+        "line": 66,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.queue.job.details')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/queue/queue.controller.ts",
+        "line": 99,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.queue.job.retry')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/queue/queue.controller.ts",
+        "line": 130,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.queue.summary')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/topic-seeds/topic-seeds.controller.ts",
+        "line": 57,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.topic-seeds.generation-status')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/topic-seeds/topic-seeds.controller.ts",
+        "line": 66,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.topic-seeds.list')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/topic-seeds/topic-seeds.controller.ts",
+        "line": 106,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.topic-seeds.versions')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/topic-seeds/topic-seeds.controller.ts",
+        "line": 136,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.topic-seeds.create')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/topic-seeds/topic-seeds.controller.ts",
+        "line": 168,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.topic-seeds.update')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/topic-seeds/topic-seeds.controller.ts",
+        "line": 200,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.topic-seeds.delete')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/topic-seeds/topic-seeds.controller.ts",
+        "line": 230,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.topic-seeds.rollback')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/topic-seeds/topic-seeds.controller.ts",
+        "line": 275,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.topic-seeds.generate')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/topics/topics.controller.ts",
+        "line": 23,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.topics.list')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/topics/topics.controller.ts",
+        "line": 39,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.topics.search')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/topics/topics.controller.ts",
+        "line": 59,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.topics.invalidate-cache')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/topics/topics.controller.ts",
+        "line": 75,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.topics.init-embeddings')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/topics/topics.controller.ts",
+        "line": 98,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.topics.refresh-counts')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/topics/topics.controller.ts",
+        "line": 115,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('cron.topics.embeddings-sync')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/blog-passport/controllers/blog-passport.controller.ts",
+        "line": 78,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.blog.in-progress')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/blog-passport/controllers/blog-passport.controller.ts",
+        "line": 108,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.blog.passports.list')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/blog-passport/controllers/blog-passport.controller.ts",
+        "line": 159,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.blog.search')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/blog-passport/controllers/blog-passport.controller.ts",
+        "line": 193,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.blog.analyze')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/blog-passport/controllers/blog-passport.controller.ts",
+        "line": 258,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.blog.batch-analyze')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/blog-passport/controllers/blog-passport.controller.ts",
+        "line": 299,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.blog.passport.get')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/blog-passport/controllers/blog-passport.controller.ts",
+        "line": 339,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.blog.passport.get-by-platform')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/blog-passport/controllers/blog-passport.controller.ts",
+        "line": 390,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.blog.passport.get-by-id')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/blog-passport/controllers/blog-passport.controller.ts",
+        "line": 432,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.blog.analysis-status')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/blog-passport/controllers/blog-passport.controller.ts",
+        "line": 474,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.blog.import-and-analyze')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/blog-passport/controllers/blog-passport.controller.ts",
+        "line": 512,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.blog.import-from-urls')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/blog-passport/controllers/blog-passport.controller.ts",
+        "line": 547,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.blog.passport.delete')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/blog-passport/controllers/blog-passport.controller.ts",
+        "line": 588,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.blog.pipeline-state')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/blog-passport/controllers/blog-passport.controller.ts",
+        "line": 628,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.blog.retry-step.analyze')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/blog-passport/controllers/blog-passport.controller.ts",
+        "line": 680,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(NATS_AI_PATTERNS.SEGMENT_FILTER)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/blog-passport/controllers/blog-passport.controller.ts",
+        "line": 719,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(NATS_AI_PATTERNS.SEGMENT_FILTER_PAGINATED)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/clients/controllers/clients.controller.ts",
+        "line": 72,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.clients.list')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/clients/controllers/clients.controller.ts",
+        "line": 101,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.clients.list-short')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/clients/controllers/clients.controller.ts",
+        "line": 129,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.clients.get')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/clients/controllers/clients.controller.ts",
+        "line": 158,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.clients.stats')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/clients/controllers/clients.controller.ts",
+        "line": 187,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.clients.create')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/clients/controllers/clients.controller.ts",
+        "line": 216,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.clients.update')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/clients/controllers/clients.controller.ts",
+        "line": 246,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.clients.deactivate')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/clients/controllers/clients.controller.ts",
+        "line": 275,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.clients.activate')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/clients/controllers/clients.controller.ts",
+        "line": 304,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.clients.regenerate-key')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/clients/controllers/clients.controller.ts",
+        "line": 333,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.clients.stats-daily')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/clients/controllers/clients.controller.ts",
+        "line": 365,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.clients.endpoints-breakdown')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/cron/handlers/pipeline-state-cleanup-nats.handler.ts",
+        "line": 26,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(getHealthCheckPattern(PIPELINE_STATE_CLEANUP_PATTERN))",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/cron/handlers/pipeline-state-cleanup-nats.handler.ts",
+        "line": 35,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(PIPELINE_STATE_CLEANUP_PATTERN)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/cron/handlers/queue-stuck-jobs-nats.handler.ts",
+        "line": 107,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(getHealthCheckPattern(QUEUE_STUCK_JOBS_PATTERN))",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/cron/handlers/queue-stuck-jobs-nats.handler.ts",
+        "line": 116,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(QUEUE_STUCK_JOBS_PATTERN)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/cron/handlers/redis-cache-cleanup-nats.handler.ts",
+        "line": 26,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(getHealthCheckPattern(REDIS_CACHE_CLEANUP_PATTERN))",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/cron/handlers/redis-cache-cleanup-nats.handler.ts",
+        "line": 35,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(REDIS_CACHE_CLEANUP_PATTERN)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/cron/handlers/request-tracking-cleanup-nats.handler.ts",
+        "line": 26,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(getHealthCheckPattern(REQUEST_TRACKING_CLEANUP_PATTERN))",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/cron/handlers/request-tracking-cleanup-nats.handler.ts",
+        "line": 35,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(REQUEST_TRACKING_CLEANUP_PATTERN)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/endpoint-registry/controllers/endpoint-registry.controller.ts",
+        "line": 26,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.endpoints.list')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/endpoint-registry/controllers/endpoint-registry.controller.ts",
+        "line": 75,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.endpoints.resource-types')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/permissions/controllers/permissions.controller.ts",
+        "line": 31,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.permissions.create')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/permissions/controllers/permissions.controller.ts",
+        "line": 60,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.permissions.list')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/permissions/controllers/permissions.controller.ts",
+        "line": 89,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.permissions.by-client')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/permissions/controllers/permissions.controller.ts",
+        "line": 120,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.permissions.get')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/permissions/controllers/permissions.controller.ts",
+        "line": 150,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.permissions.update')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/permissions/controllers/permissions.controller.ts",
+        "line": 181,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.permissions.delete')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/permissions/controllers/permissions.controller.ts",
+        "line": 210,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.permissions.grant-all')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/permissions/controllers/permissions.controller.ts",
+        "line": 240,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.permissions.revoke-all')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/request-tracking/controllers/admin-requests.controller.ts",
+        "line": 31,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.stats.overview')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/request-tracking/controllers/admin-requests.controller.ts",
+        "line": 58,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.requests.list')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/request-tracking/controllers/admin-requests.controller.ts",
+        "line": 86,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.requests.detail')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/social-networks/controllers/social-networks.controller.ts",
+        "line": 26,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.social-networks.list')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/social-networks/controllers/social-networks.controller.ts",
+        "line": 54,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.social-networks.list-short')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/social-networks/controllers/social-networks.controller.ts",
+        "line": 82,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.social-networks.get')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/social-networks/controllers/social-networks.controller.ts",
+        "line": 111,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.social-networks.create')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/social-networks/controllers/social-networks.controller.ts",
+        "line": 139,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.social-networks.update')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/social-networks/controllers/social-networks.controller.ts",
+        "line": 169,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.social-networks.delete')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/social-networks/controllers/social-networks.controller.ts",
+        "line": 198,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.social-networks.activate')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/social-networks/controllers/social-networks.controller.ts",
+        "line": 227,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.social-networks.sort-order')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/webhook-delivery/controllers/admin-webhooks.controller.ts",
+        "line": 32,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.webhooks.stats')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/webhook-delivery/controllers/admin-webhooks.controller.ts",
+        "line": 60,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.webhooks.list')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/webhook-delivery/controllers/admin-webhooks.controller.ts",
+        "line": 89,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.webhooks.detail')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/webhook-delivery/controllers/admin-webhooks.controller.ts",
+        "line": 118,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.webhooks.by-request')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/webhook-delivery/controllers/admin-webhooks.controller.ts",
+        "line": 148,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('admin.webhooks.retry')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/events/events.service.ts",
+        "line": 78,
+        "column": 13
+      },
+      "matchedText": "this.natsClient.emit(subject, data);",
+      "context": "ClientProxy.emit"
+    }
+  ],
+  "missed": [],
+  "extra": [
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:pattern"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/libs/nest-shared/src/nats/helpers/nats-request.helper.ts",
+        "line": 85,
+        "column": 13
+      },
+      "via": "ClientProxy.send",
+      "enclosingClass": "NatsRequestHelper"
+    }
+  ],
+  "unresolvedSamples": [
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:subject"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/apps/be-ai/src/modules/events/events.service.ts",
+        "line": 78,
+        "column": 13
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "EventsService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:pattern"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx/libs/nest-shared/src/nats/helpers/nats-request.helper.ts",
+        "line": 85,
+        "column": 13
+      },
+      "via": "ClientProxy.send",
+      "enclosingClass": "NatsRequestHelper"
+    }
+  ]
+}

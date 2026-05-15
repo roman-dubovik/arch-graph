@@ -1,0 +1,4033 @@
+{
+  "projectId": "platform",
+  "timestamp": "2026-05-15T15:48:06.051Z",
+  "summary": {
+    "recallHandlers": 1,
+    "recallSenders": 1,
+    "resolveRate": 0.8705035971223022,
+    "classificationAccuracy": 0.9928057553956835,
+    "totalExtracted": 139,
+    "totalGroundTruth": 98,
+    "bySubjectKind": {
+      "pattern": 10,
+      "dynamic": 17,
+      "literal": 111,
+      "unresolved": 1
+    }
+  },
+  "extracted": [
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "pattern",
+        "pattern": "mcp.*.tools.list",
+        "placeholders": [
+          "IDENT_APP_SLUG"
+        ]
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/ident/src/ai-qa/ident-mcp-tool-server.service.ts",
+        "line": 73,
+        "column": 9
+      },
+      "via": "PlatformConnectionService.handleRequest",
+      "enclosingClass": "IdentMcpToolServerService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "pattern",
+        "pattern": "mcp.*.tools.call",
+        "placeholders": [
+          "IDENT_APP_SLUG"
+        ]
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/ident/src/ai-qa/ident-mcp-tool-server.service.ts",
+        "line": 79,
+        "column": 9
+      },
+      "via": "PlatformConnectionService.handleRequest",
+      "enclosingClass": "IdentMcpToolServerService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:subject"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-agent/src/core/nats-agent.service.ts",
+        "line": 103,
+        "column": 18
+      },
+      "via": "JetStreamService.subscribe",
+      "enclosingClass": "NatsAgentService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:subject"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-agent/src/core/nats-agent.service.ts",
+        "line": 197,
+        "column": 31
+      },
+      "via": "JetStreamService.publish",
+      "enclosingClass": "NatsAgentService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "cron.register.nats"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/controllers/cron.controller.ts",
+        "line": 35,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "CronController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "cron.delete"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/controllers/cron.controller.ts",
+        "line": 69,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "CronController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "cron.job-execution.complete"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/controllers/cron.controller.ts",
+        "line": 79,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "CronController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.cron.jobs"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/controllers/cron.controller.ts",
+        "line": 101,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "CronController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.cron.executions"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/controllers/cron.controller.ts",
+        "line": 111,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "CronController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.cron.execution.byId"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/controllers/cron.controller.ts",
+        "line": 121,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "CronController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.cron.execute"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/controllers/cron.controller.ts",
+        "line": 137,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "CronController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.cron.sync-env"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/controllers/cron.controller.ts",
+        "line": 147,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "CronController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.cron.bulk-toggle"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/controllers/cron.controller.ts",
+        "line": 157,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "CronController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.cron.services-health"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/controllers/cron.controller.ts",
+        "line": 165,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "CronController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.cron.create-job"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/controllers/cron.controller.ts",
+        "line": 175,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "CronController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.cron.update-job"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/controllers/cron.controller.ts",
+        "line": 183,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "CronController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.cron.pause"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/controllers/cron.controller.ts",
+        "line": 191,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "CronController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.cron.resume"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/controllers/cron.controller.ts",
+        "line": 210,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "CronController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.cron.instances"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/controllers/cron.controller.ts",
+        "line": 225,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "CronController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "admin.cron.circuit-breakers"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/controllers/cron.controller.ts",
+        "line": 235,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "CronController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "cron.health"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/controllers/cron.controller.ts",
+        "line": 249,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "CronController"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:subject"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/services/cron-circuit-breaker.service.ts",
+        "line": 133,
+        "column": 13
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "CronCircuitBreakerService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:pattern"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/services/cron-nats-executor.service.ts",
+        "line": 102,
+        "column": 36
+      },
+      "via": "ClientProxy.send",
+      "enclosingClass": "CronNatsExecutorService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:pattern"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/services/cron-nats-executor.service.ts",
+        "line": 151,
+        "column": 36
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "CronNatsExecutorService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:natsPattern"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/services/cron-nats-executor.service.ts",
+        "line": 267,
+        "column": 21
+      },
+      "via": "ClientProxy.send",
+      "enclosingClass": "CronNatsExecutorService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "unresolved",
+        "raw": "subject",
+        "reason": "identifier not resolvable"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/services/messaging-events-reconciliation.service.ts",
+        "line": 135,
+        "column": 37
+      },
+      "via": "JetStreamService.publish",
+      "enclosingClass": "MessagingEventsReconciliationService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:subject"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/agents/src/nats/nats-central.service.ts",
+        "line": 220,
+        "column": 18
+      },
+      "via": "JetStreamService.subscribe",
+      "enclosingClass": "NatsCentralService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:subject"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/agents/src/nats/nats-central.service.ts",
+        "line": 322,
+        "column": 31
+      },
+      "via": "JetStreamService.publish",
+      "enclosingClass": "NatsCentralService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.app.shutting-down"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/heartbeat/app-heartbeat-publisher.service.ts",
+        "line": 61,
+        "column": 17
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "AppHeartbeatPublisherService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.app.heartbeat"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/heartbeat/app-heartbeat-publisher.service.ts",
+        "line": 77,
+        "column": 9
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "AppHeartbeatPublisherService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "error"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/realtime/realtime.gateway.ts",
+        "line": 69,
+        "column": 13
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "RealtimeGateway"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "error"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/realtime/realtime.gateway.ts",
+        "line": 77,
+        "column": 13
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "RealtimeGateway"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "pattern",
+        "pattern": "platform.realtime.tenant.*.notification.*",
+        "placeholders": [
+          "tenantId",
+          "type"
+        ]
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/realtime/realtime.gateway.ts",
+        "line": 121,
+        "column": 16
+      },
+      "via": "JetStreamService.publish",
+      "enclosingClass": "RealtimeGateway"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "event"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/realtime/realtime.gateway.ts",
+        "line": 176,
+        "column": 21
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "RealtimeGateway"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "pattern",
+        "pattern": "app.*.callback.handle",
+        "placeholders": [
+          "appId"
+        ]
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/callback-handler.service.ts",
+        "line": 43,
+        "column": 9
+      },
+      "via": "PlatformConnectionService.handleRequest",
+      "enclosingClass": "CallbackHandlerService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.agents.create"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-agents.service.ts",
+        "line": 15,
+        "column": 16
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformAgentsService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.agents.list"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-agents.service.ts",
+        "line": 20,
+        "column": 16
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformAgentsService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.agents.get"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-agents.service.ts",
+        "line": 25,
+        "column": 16
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformAgentsService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.agents.delete"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-agents.service.ts",
+        "line": 30,
+        "column": 16
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformAgentsService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.broadcast.app.execute"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-broadcast.service.ts",
+        "line": 19,
+        "column": 16
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformBroadcastService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.broadcast.app.cancel"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-broadcast.service.ts",
+        "line": 24,
+        "column": 16
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformBroadcastService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.broadcast.app.status"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-broadcast.service.ts",
+        "line": 32,
+        "column": 16
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformBroadcastService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:subject"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-connection.service.ts",
+        "line": 308,
+        "column": 20
+      },
+      "via": "JetStreamService.subscribe",
+      "enclosingClass": "PlatformConnectionService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.cron.register"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-cron.service.ts",
+        "line": 18,
+        "column": 16
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformCronService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.cron.unregister"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-cron.service.ts",
+        "line": 23,
+        "column": 16
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformCronService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.cron.list"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-cron.service.ts",
+        "line": 31,
+        "column": 16
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformCronService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.cron.pause"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-cron.service.ts",
+        "line": 36,
+        "column": 16
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformCronService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.cron.resume"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-cron.service.ts",
+        "line": 45,
+        "column": 16
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformCronService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "pattern",
+        "pattern": "app.*.cron.*",
+        "placeholders": [
+          "appId",
+          "jobName"
+        ]
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-event-subscriber.service.ts",
+        "line": 225,
+        "column": 9
+      },
+      "via": "PlatformConnectionService.subscribe",
+      "enclosingClass": "PlatformEventSubscriberService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.app.check-feature"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-features.service.ts",
+        "line": 15,
+        "column": 30
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformFeaturesService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.app.features.list"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-features.service.ts",
+        "line": 21,
+        "column": 30
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformFeaturesService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.messages.send"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-messages.service.ts",
+        "line": 37,
+        "column": 16
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformMessagesService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.delivery.send-batch"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-messages.service.ts",
+        "line": 50,
+        "column": 30
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformMessagesService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.delivery.send-batch"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-messages.service.ts",
+        "line": 59,
+        "column": 30
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformMessagesService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.plans.list"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-plans.service.ts",
+        "line": 10,
+        "column": 16
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformPlansService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.plans.tenant.get"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-plans.service.ts",
+        "line": 14,
+        "column": 16
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformPlansService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.plans.check-feature"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-plans.service.ts",
+        "line": 18,
+        "column": 30
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformPlansService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.plans.check-limit"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-plans.service.ts",
+        "line": 23,
+        "column": 16
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformPlansService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.referrals.create"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-referrals.service.ts",
+        "line": 21,
+        "column": 16
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformReferralsService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.referrals.list"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-referrals.service.ts",
+        "line": 26,
+        "column": 16
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformReferralsService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.referrals.get"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-referrals.service.ts",
+        "line": 31,
+        "column": 16
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformReferralsService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.referrals.track"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-referrals.service.ts",
+        "line": 36,
+        "column": 16
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformReferralsService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.referrals.update"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-referrals.service.ts",
+        "line": 44,
+        "column": 16
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformReferralsService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.referrals.delete"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-referrals.service.ts",
+        "line": 49,
+        "column": 16
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformReferralsService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.registration.start"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-registration.service.ts",
+        "line": 10,
+        "column": 16
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformRegistrationService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.registration.complete"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-registration.service.ts",
+        "line": 17,
+        "column": 16
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformRegistrationService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.templates.create"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-templates.service.ts",
+        "line": 18,
+        "column": 16
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformTemplatesService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.templates.update"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-templates.service.ts",
+        "line": 27,
+        "column": 16
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformTemplatesService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.templates.list"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-templates.service.ts",
+        "line": 36,
+        "column": 16
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformTemplatesService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.templates.render"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-templates.service.ts",
+        "line": 45,
+        "column": 16
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformTemplatesService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.tenants.create"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-tenants.service.ts",
+        "line": 15,
+        "column": 16
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformTenantsService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.tenants.list"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-tenants.service.ts",
+        "line": 20,
+        "column": 16
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformTenantsService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.tenants.get"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-tenants.service.ts",
+        "line": 25,
+        "column": 16
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformTenantsService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.tenants.update"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-tenants.service.ts",
+        "line": 30,
+        "column": 16
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "PlatformTenantsService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "pattern",
+        "pattern": "app.*.scenarios.evaluate",
+        "placeholders": [
+          "appId"
+        ]
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/scenario-evaluation.handler.ts",
+        "line": 122,
+        "column": 9
+      },
+      "via": "PlatformConnectionService.handleRequest",
+      "enclosingClass": "ScenarioEvaluationHandler"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "pattern",
+        "pattern": "app.*.broadcasts.resolve",
+        "placeholders": [
+          "appId"
+        ]
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/scenario-evaluation.handler.ts",
+        "line": 128,
+        "column": 9
+      },
+      "via": "PlatformConnectionService.handleRequest",
+      "enclosingClass": "ScenarioEvaluationHandler"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "pattern",
+        "pattern": "app.*.scenarios.request-registration",
+        "placeholders": [
+          "appId"
+        ]
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/scenario-evaluation.handler.ts",
+        "line": 134,
+        "column": 9
+      },
+      "via": "PlatformConnectionService.handleRequest",
+      "enclosingClass": "ScenarioEvaluationHandler"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.scenarios.register-fields"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/scenario-evaluation.handler.ts",
+        "line": 160,
+        "column": 39
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "ScenarioEvaluationHandler"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.tenants.list"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/scenario-evaluation.handler.ts",
+        "line": 179,
+        "column": 37
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "ScenarioEvaluationHandler"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.scenarios.ensure-presets"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/scenario-evaluation.handler.ts",
+        "line": 187,
+        "column": 39
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "ScenarioEvaluationHandler"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.care.ensure-defaults"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/scenario-evaluation.handler.ts",
+        "line": 236,
+        "column": 35
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "ScenarioEvaluationHandler"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.surveys.ensure-defaults"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/scenario-evaluation.handler.ts",
+        "line": 272,
+        "column": 35
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "ScenarioEvaluationHandler"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.contacts.match-batch"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/scenario-evaluation.handler.ts",
+        "line": 439,
+        "column": 42
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "ScenarioEvaluationHandler"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.contacts.resolve-vars"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/scenario-evaluation.handler.ts",
+        "line": 611,
+        "column": 37
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "ScenarioEvaluationHandler"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.scenarios.event.appointments.status_changed"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/appointment-app-sdk/src/publishers/nats-appointment-event-publisher.ts",
+        "line": 74,
+        "column": 9
+      },
+      "via": "PlatformConnectionService.publish",
+      "enclosingClass": "NatsAppointmentEventPublisher"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.miniapp.resolve-url"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/appointment-app-sdk/src/scenarios/appointment-scenario-resolvers.ts",
+        "line": 51,
+        "column": 32
+      },
+      "via": "PlatformConnectionService.request"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:natsSubject"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/appointment-app-sdk/src/sync-bridge/create-sync-bridge-controller.ts",
+        "line": 20,
+        "column": 9
+      },
+      "via": "@EventPattern",
+      "enclosingClass": "SyncBridgeNatsController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.billing.webhook.>"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/billing/src/handlers/billing-webhook-nats.handler.ts",
+        "line": 56,
+        "column": 15
+      },
+      "via": "JetStreamService.subscribe",
+      "enclosingClass": "BillingWebhookNatsHandler"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.billing.webhook.confirmed"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/billing/src/listeners/billing-webhook.listener.ts",
+        "line": 145,
+        "column": 37
+      },
+      "via": "JetStreamService.publish",
+      "enclosingClass": "BillingWebhookListener"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.billing.webhook.failed"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/billing/src/listeners/billing-webhook.listener.ts",
+        "line": 203,
+        "column": 37
+      },
+      "via": "JetStreamService.publish",
+      "enclosingClass": "BillingWebhookListener"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.boards.list"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/boards/src/nats/board-nats.handler.ts",
+        "line": 33,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "BoardNatsHandler"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.boards.get"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/boards/src/nats/board-nats.handler.ts",
+        "line": 43,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "BoardNatsHandler"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.boards.data"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/boards/src/nats/board-nats.handler.ts",
+        "line": 53,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "BoardNatsHandler"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.boards.counts"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/boards/src/nats/board-nats.handler.ts",
+        "line": 64,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "BoardNatsHandler"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.channels.list-by-agent"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/channels/src/controllers/channels-rpc.controller.ts",
+        "line": 30,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "ChannelsRpcController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.domains.resolve"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/core/src/custom-domains/custom-domain.controller.ts",
+        "line": 61,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "CustomDomainController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.domains.verify-pending"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/core/src/custom-domains/custom-domain.controller.ts",
+        "line": 67,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "CustomDomainController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.subscription.plan-changed"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/core/src/features/feature-cache.listener.ts",
+        "line": 16,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "FeatureCacheListener"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "literal",
+        "value": "messaging.delivery.command-pending"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/messaging/src/handlers/delivery-command-pending.handler.ts",
+        "line": 57,
+        "column": 31
+      },
+      "via": "JetStreamService.subscribe",
+      "enclosingClass": "DeliveryCommandPendingHandler"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "literal",
+        "value": "agent.*.messages.inbound"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/messaging/src/services/message-ingestion.service.ts",
+        "line": 121,
+        "column": 9
+      },
+      "via": "NatsService.subscribe",
+      "enclosingClass": "MessageIngestionService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.events.message.received"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/messaging/src/services/message-ingestion.service.ts",
+        "line": 350,
+        "column": 37
+      },
+      "via": "JetStreamService.publish",
+      "enclosingClass": "MessageIngestionService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "literal",
+        "value": "agent.*.delivery.confirm"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/messaging/src/services/message-sending.service.ts",
+        "line": 318,
+        "column": 9
+      },
+      "via": "NatsService.subscribe",
+      "enclosingClass": "MessageSendingService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.events.message.delivered"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/messaging/src/services/message-sending.service.ts",
+        "line": 958,
+        "column": 33
+      },
+      "via": "JetStreamService.publish",
+      "enclosingClass": "MessageSendingService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.events.message.received"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/messaging/src/websocket/socket.service.ts",
+        "line": 33,
+        "column": 39
+      },
+      "via": "JetStreamService.subscribe",
+      "enclosingClass": "SocketService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.events.message.delivered"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/messaging/src/websocket/socket.service.ts",
+        "line": 42,
+        "column": 40
+      },
+      "via": "JetStreamService.subscribe",
+      "enclosingClass": "SocketService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.events.message.attachment-stored"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/messaging/src/websocket/socket.service.ts",
+        "line": 51,
+        "column": 47
+      },
+      "via": "JetStreamService.subscribe",
+      "enclosingClass": "SocketService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.proxy.>"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/proxy/src/handler/platform-proxy-nats.handler.ts",
+        "line": 87,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "PlatformProxyNatsHandler"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.proxy-overrides.invalidate"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/proxy/src/services/proxy-routing-override-invalidate.listener.ts",
+        "line": 39,
+        "column": 5
+      },
+      "via": "@EventPattern",
+      "enclosingClass": "ProxyRoutingOverrideInvalidateListener"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.proxy-overrides.invalidate"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/proxy/src/services/proxy-routing-override.service.ts",
+        "line": 132,
+        "column": 13
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "ProxyRoutingOverrideService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:pattern"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/saas-admin/src/super-admin/super-admin-cron.service.ts",
+        "line": 87,
+        "column": 31
+      },
+      "via": "ClientProxy.send",
+      "enclosingClass": "SuperAdminCronService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.scenarios.execute"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/scenarios/src/nats/scenario-nats.service.ts",
+        "line": 32,
+        "column": 9
+      },
+      "via": "NatsService.subscribe",
+      "enclosingClass": "ScenarioNatsService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.events.message.attachment-stored"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/storage/src/processors/file-download.processor.ts",
+        "line": 130,
+        "column": 23
+      },
+      "via": "JetStreamService.publish",
+      "enclosingClass": "FileDownloadProcessor"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.events.message.attachment-stored"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/storage/src/processors/file-download.processor.ts",
+        "line": 168,
+        "column": 27
+      },
+      "via": "JetStreamService.publish",
+      "enclosingClass": "FileDownloadProcessor"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.ai.completion"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/ident/src/ai/services/ai-gateway.service.ts",
+        "line": 30,
+        "column": 34
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "AiGatewayService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.ai.usage.get"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/ident/src/ai/services/ai-gateway.service.ts",
+        "line": 54,
+        "column": 34
+      },
+      "via": "PlatformConnectionService.request",
+      "enclosingClass": "AiGatewayService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "ident.sync.logs.cleanup.health"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/ident/src/mssql-sync/controllers/sync-maintenance.controller.ts",
+        "line": 17,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "SyncMaintenanceController"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "ident.sync.logs.cleanup"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/ident/src/mssql-sync/controllers/sync-maintenance.controller.ts",
+        "line": 26,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "SyncMaintenanceController"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.notifications.sync_agent_offline"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/ident/src/mssql-sync/services/sync-monitoring.service.ts",
+        "line": 72,
+        "column": 25
+      },
+      "via": "PlatformConnectionService.publish",
+      "enclosingClass": "SyncMonitoringService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "ident.sync.completed"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/ident/src/mssql-sync/services/sync-orchestrator.service.ts",
+        "line": 487,
+        "column": 13
+      },
+      "via": "PlatformConnectionService.publish",
+      "enclosingClass": "SyncOrchestratorService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.notifications.sync_completed"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/ident/src/mssql-sync/services/sync-orchestrator.service.ts",
+        "line": 498,
+        "column": 17
+      },
+      "via": "PlatformConnectionService.publish",
+      "enclosingClass": "SyncOrchestratorService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "ident.sync.error"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/ident/src/mssql-sync/services/sync-orchestrator.service.ts",
+        "line": 530,
+        "column": 13
+      },
+      "via": "PlatformConnectionService.publish",
+      "enclosingClass": "SyncOrchestratorService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.notifications.sync_error"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/ident/src/mssql-sync/services/sync-orchestrator.service.ts",
+        "line": 537,
+        "column": 13
+      },
+      "via": "PlatformConnectionService.publish",
+      "enclosingClass": "SyncOrchestratorService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.billing.submit"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-api/src/billing/handlers/billing-submission.controller.ts",
+        "line": 50,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "BillingSubmissionController"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.ai.usage.get"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-api/src/services/nats-app/app-ai-usage-nats.service.ts",
+        "line": 32,
+        "column": 9
+      },
+      "via": "NatsService.subscribeWithReply",
+      "enclosingClass": "AppAiUsageNatsService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.events.message.received"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-api/src/services/nats-app/app-event-router.service.ts",
+        "line": 106,
+        "column": 39
+      },
+      "via": "JetStreamService.subscribe",
+      "enclosingClass": "AppEventRouterService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.events.message.delivered"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-api/src/services/nats-app/app-event-router.service.ts",
+        "line": 111,
+        "column": 40
+      },
+      "via": "JetStreamService.subscribe",
+      "enclosingClass": "AppEventRouterService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.events.chat.created"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-api/src/services/nats-app/app-event-router.service.ts",
+        "line": 118,
+        "column": 9
+      },
+      "via": "NatsService.subscribe",
+      "enclosingClass": "AppEventRouterService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.events.agent.enrolled"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-api/src/services/nats-app/app-event-router.service.ts",
+        "line": 119,
+        "column": 9
+      },
+      "via": "NatsService.subscribe",
+      "enclosingClass": "AppEventRouterService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.events.agent.status_changed"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-api/src/services/nats-app/app-event-router.service.ts",
+        "line": 120,
+        "column": 9
+      },
+      "via": "NatsService.subscribe",
+      "enclosingClass": "AppEventRouterService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:subject"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-api/src/services/nats-app/app-event-router.service.ts",
+        "line": 200,
+        "column": 13
+      },
+      "via": "NatsService.publish",
+      "enclosingClass": "AppEventRouterService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:subject"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-api/src/services/nats-app/app-event-router.service.ts",
+        "line": 208,
+        "column": 33
+      },
+      "via": "JetStreamService.publish",
+      "enclosingClass": "AppEventRouterService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "pattern",
+        "pattern": "platform.realtime.tenant.*.ai.*",
+        "placeholders": [
+          "tenantId",
+          "requestId"
+        ]
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/ai/src/ai-copilot/services/ai-copilot.service.ts",
+        "line": 158,
+        "column": 27
+      },
+      "via": "JetStreamService.publish",
+      "enclosingClass": "AiCopilotService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "pattern",
+        "pattern": "platform.realtime.tenant.*.ai.*",
+        "placeholders": [
+          "tenantId",
+          "requestId"
+        ]
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/ai/src/ai-copilot/services/ai-copilot.service.ts",
+        "line": 277,
+        "column": 23
+      },
+      "via": "JetStreamService.publish",
+      "enclosingClass": "AiCopilotService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.app.heartbeat"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/core/src/infra/app-liveness/app-liveness.listener.ts",
+        "line": 21,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "AppLivenessListener"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.app.shutting-down"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/core/src/infra/app-liveness/app-liveness.listener.ts",
+        "line": 28,
+        "column": 5
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "AppLivenessListener"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:subject"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/core/src/infra/health/nats-health-controller.factory.ts",
+        "line": 26,
+        "column": 9
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "NatsHealthController"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:subject"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/core/src/infra/outbox/services/outbox-publisher.service.ts",
+        "line": 312,
+        "column": 20
+      },
+      "via": "JetStreamService.publish",
+      "enclosingClass": "OutboxPublisherService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:subject"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/core/src/infra/outbox/services/outbox-publisher.service.ts",
+        "line": 320,
+        "column": 30
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "OutboxPublisherService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:subject"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/core/src/infra/outbox/services/outbox.service.ts",
+        "line": 166,
+        "column": 34
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "OutboxService"
+    }
+  ],
+  "groundTruth": [
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/controllers/cron.controller.ts",
+        "line": 35,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(NATS_CRON_PATTERNS.CRON_REGISTER_NATS)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/controllers/cron.controller.ts",
+        "line": 69,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(NATS_CRON_PATTERNS.CRON_DELETE)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/controllers/cron.controller.ts",
+        "line": 79,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(NATS_CRON_PATTERNS.CRON_JOB_EXECUTION_COMPLETE)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/controllers/cron.controller.ts",
+        "line": 101,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(NATS_CRON_PATTERNS.CRON_GET_JOBS)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/controllers/cron.controller.ts",
+        "line": 111,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(NATS_CRON_PATTERNS.CRON_GET_EXECUTIONS)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/controllers/cron.controller.ts",
+        "line": 121,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(NATS_CRON_PATTERNS.CRON_GET_EXECUTION_BY_ID)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/controllers/cron.controller.ts",
+        "line": 137,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(NATS_CRON_PATTERNS.CRON_EXECUTE_JOB)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/controllers/cron.controller.ts",
+        "line": 147,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(NATS_CRON_PATTERNS.CRON_SYNC_ENV)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/controllers/cron.controller.ts",
+        "line": 157,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(NATS_CRON_PATTERNS.CRON_BULK_TOGGLE)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/controllers/cron.controller.ts",
+        "line": 165,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(NATS_CRON_PATTERNS.CRON_GET_SERVICES_HEALTH)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/controllers/cron.controller.ts",
+        "line": 175,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(NATS_CRON_PATTERNS.CRON_CREATE_JOB)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/controllers/cron.controller.ts",
+        "line": 183,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(NATS_CRON_PATTERNS.CRON_UPDATE_JOB)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/controllers/cron.controller.ts",
+        "line": 191,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(NATS_CRON_PATTERNS.CRON_PAUSE_JOB)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/controllers/cron.controller.ts",
+        "line": 210,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(NATS_CRON_PATTERNS.CRON_RESUME_JOB)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/controllers/cron.controller.ts",
+        "line": 225,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(NATS_CRON_PATTERNS.CRON_GET_INSTANCES)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/controllers/cron.controller.ts",
+        "line": 235,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(NATS_CRON_PATTERNS.CRON_GET_CIRCUIT_BREAKERS)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/controllers/cron.controller.ts",
+        "line": 249,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(NATS_CRON_PATTERNS.CRON_HEALTH)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/ident/src/mssql-sync/controllers/sync-maintenance.controller.ts",
+        "line": 17,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(`${IDENT_NATS_SUBJECTS.LOGS_CLEANUP}.health`)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/ident/src/mssql-sync/controllers/sync-maintenance.controller.ts",
+        "line": 26,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(IDENT_NATS_SUBJECTS.LOGS_CLEANUP)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-api/src/billing/handlers/billing-submission.controller.ts",
+        "line": 50,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(BILLING_NATS_SUBJECTS.BILLING_SUBMIT)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/appointment-app-sdk/src/sync-bridge/create-sync-bridge-controller.ts",
+        "line": 20,
+        "column": 9
+      },
+      "matchedText": "@EventPattern(natsSubject)",
+      "context": "@EventPattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/boards/src/nats/board-nats.handler.ts",
+        "line": 33,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('platform.boards.list')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/boards/src/nats/board-nats.handler.ts",
+        "line": 43,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('platform.boards.get')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/boards/src/nats/board-nats.handler.ts",
+        "line": 53,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('platform.boards.data')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/boards/src/nats/board-nats.handler.ts",
+        "line": 64,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('platform.boards.counts')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/channels/src/controllers/channels-rpc.controller.ts",
+        "line": 30,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('platform.channels.list-by-agent')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/core/src/custom-domains/custom-domain.controller.ts",
+        "line": 61,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(CUSTOM_DOMAIN_NATS_SUBJECTS.RESOLVE)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/core/src/custom-domains/custom-domain.controller.ts",
+        "line": 67,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(CUSTOM_DOMAIN_NATS_SUBJECTS.VERIFY_PENDING)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/core/src/features/feature-cache.listener.ts",
+        "line": 16,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('platform.subscription.plan-changed')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/proxy/src/handler/platform-proxy-nats.handler.ts",
+        "line": 87,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern('platform.proxy.>')",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/proxy/src/services/proxy-routing-override-invalidate.listener.ts",
+        "line": 39,
+        "column": 5
+      },
+      "matchedText": "@EventPattern('platform.proxy-overrides.invalidate')",
+      "context": "@EventPattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/core/src/infra/app-liveness/app-liveness.listener.ts",
+        "line": 21,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(APP_NATS_SUBJECTS_COMMON.HEARTBEAT)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/core/src/infra/app-liveness/app-liveness.listener.ts",
+        "line": 28,
+        "column": 5
+      },
+      "matchedText": "@MessagePattern(APP_NATS_SUBJECTS_COMMON.SHUTTING_DOWN)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "receiver",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/core/src/infra/health/nats-health-controller.factory.ts",
+        "line": 26,
+        "column": 9
+      },
+      "matchedText": "@MessagePattern(subject)",
+      "context": "@MessagePattern"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-agent/src/core/nats-agent.service.ts",
+        "line": 197,
+        "column": 31
+      },
+      "matchedText": "const success = await this.jetStreamService.publish(subject, data);",
+      "context": "JetStreamService.publish"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/services/cron-circuit-breaker.service.ts",
+        "line": 133,
+        "column": 13
+      },
+      "matchedText": "this.natsClient.emit(subject, payload);",
+      "context": "ClientProxy.emit"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/services/cron-nats-executor.service.ts",
+        "line": 151,
+        "column": 36
+      },
+      "matchedText": "const observable = this.client.emit(pattern, messagePayload);",
+      "context": "ClientProxy.emit"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/services/messaging-events-reconciliation.service.ts",
+        "line": 135,
+        "column": 37
+      },
+      "matchedText": "const acked = await this.jetStreamService.publish(subject, payload);",
+      "context": "JetStreamService.publish"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/ident/src/ai/services/ai-gateway.service.ts",
+        "line": 30,
+        "column": 34
+      },
+      "matchedText": "const result = await this.platform.request(",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/ident/src/ai/services/ai-gateway.service.ts",
+        "line": 54,
+        "column": 34
+      },
+      "matchedText": "const result = await this.platform.request(",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-api/src/services/nats-app/app-event-router.service.ts",
+        "line": 208,
+        "column": 33
+      },
+      "matchedText": "const acked = await this.jetStreamService.publish(subject, data);",
+      "context": "JetStreamService.publish"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/agents/src/nats/nats-central.service.ts",
+        "line": 322,
+        "column": 31
+      },
+      "matchedText": "const success = await this.jetStreamService.publish(subject, data);",
+      "context": "JetStreamService.publish"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/appointment-app-sdk/src/publishers/nats-appointment-event-publisher.ts",
+        "line": 74,
+        "column": 9
+      },
+      "matchedText": "this.connection.publish(APPOINTMENT_EVENT_SUBJECTS.STATUS_CHANGED, payload);",
+      "context": "PlatformConnectionService.publish"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/realtime/realtime.gateway.ts",
+        "line": 121,
+        "column": 16
+      },
+      "matchedText": "return this.jetStreamService.publish(subject, data);",
+      "context": "JetStreamService.publish"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-agents.service.ts",
+        "line": 15,
+        "column": 16
+      },
+      "matchedText": "return this.connection.request(APP_NATS_SUBJECTS.AGENTS.CREATE, { tenant_id: tenantId, ...dto });",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-agents.service.ts",
+        "line": 20,
+        "column": 16
+      },
+      "matchedText": "return this.connection.request(APP_NATS_SUBJECTS.AGENTS.LIST, { tenant_id: tenantId });",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-agents.service.ts",
+        "line": 25,
+        "column": 16
+      },
+      "matchedText": "return this.connection.request(APP_NATS_SUBJECTS.AGENTS.GET, { tenant_id: tenantId, agent_id: agentId });",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-agents.service.ts",
+        "line": 30,
+        "column": 16
+      },
+      "matchedText": "return this.connection.request(APP_NATS_SUBJECTS.AGENTS.DELETE, { tenant_id: tenantId, agent_id: agentId });",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-broadcast.service.ts",
+        "line": 19,
+        "column": 16
+      },
+      "matchedText": "return this.connection.request(APP_NATS_SUBJECTS.BROADCAST.EXECUTE, dto);",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-broadcast.service.ts",
+        "line": 24,
+        "column": 16
+      },
+      "matchedText": "return this.connection.request(APP_NATS_SUBJECTS.BROADCAST.CANCEL, {",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-broadcast.service.ts",
+        "line": 32,
+        "column": 16
+      },
+      "matchedText": "return this.connection.request(APP_NATS_SUBJECTS.BROADCAST.STATUS, {",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-cron.service.ts",
+        "line": 18,
+        "column": 16
+      },
+      "matchedText": "return this.connection.request(APP_NATS_SUBJECTS.CRON.REGISTER, { tenant_id: tenantId, ...dto });",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-cron.service.ts",
+        "line": 23,
+        "column": 16
+      },
+      "matchedText": "return this.connection.request(APP_NATS_SUBJECTS.CRON.UNREGISTER, {",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-cron.service.ts",
+        "line": 31,
+        "column": 16
+      },
+      "matchedText": "return this.connection.request(APP_NATS_SUBJECTS.CRON.LIST, { tenant_id: tenantId });",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-cron.service.ts",
+        "line": 36,
+        "column": 16
+      },
+      "matchedText": "return this.connection.request(APP_NATS_SUBJECTS.CRON.PAUSE, {",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-cron.service.ts",
+        "line": 45,
+        "column": 16
+      },
+      "matchedText": "return this.connection.request(APP_NATS_SUBJECTS.CRON.RESUME, {",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-features.service.ts",
+        "line": 15,
+        "column": 30
+      },
+      "matchedText": "const result = await this.connection.request(APP_NATS_SUBJECTS.APP_FEATURES.CHECK, { feature });",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-features.service.ts",
+        "line": 21,
+        "column": 30
+      },
+      "matchedText": "const result = await this.connection.request(APP_NATS_SUBJECTS.APP_FEATURES.LIST, {});",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-messages.service.ts",
+        "line": 37,
+        "column": 16
+      },
+      "matchedText": "return this.connection.request(APP_NATS_SUBJECTS.MESSAGES.SEND, payload);",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-messages.service.ts",
+        "line": 50,
+        "column": 30
+      },
+      "matchedText": "const result = await this.connection.request(",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-messages.service.ts",
+        "line": 59,
+        "column": 30
+      },
+      "matchedText": "const result = await this.connection.request(",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-plans.service.ts",
+        "line": 10,
+        "column": 16
+      },
+      "matchedText": "return this.connection.request(APP_NATS_SUBJECTS.PLANS.LIST, {});",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-plans.service.ts",
+        "line": 14,
+        "column": 16
+      },
+      "matchedText": "return this.connection.request(APP_NATS_SUBJECTS.PLANS.TENANT_GET, { tenantId });",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-plans.service.ts",
+        "line": 18,
+        "column": 30
+      },
+      "matchedText": "const result = await this.connection.request(APP_NATS_SUBJECTS.PLANS.CHECK_FEATURE, { tenantId, feature });",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-plans.service.ts",
+        "line": 23,
+        "column": 16
+      },
+      "matchedText": "return this.connection.request(APP_NATS_SUBJECTS.PLANS.CHECK_LIMIT, { tenantId, limitKey, current });",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-referrals.service.ts",
+        "line": 21,
+        "column": 16
+      },
+      "matchedText": "return this.connection.request(APP_NATS_SUBJECTS.REFERRALS.CREATE, data);",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-referrals.service.ts",
+        "line": 26,
+        "column": 16
+      },
+      "matchedText": "return this.connection.request(APP_NATS_SUBJECTS.REFERRALS.LIST, { tenant_id: tenantId });",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-referrals.service.ts",
+        "line": 31,
+        "column": 16
+      },
+      "matchedText": "return this.connection.request(APP_NATS_SUBJECTS.REFERRALS.GET, { ref_code: refCode });",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-referrals.service.ts",
+        "line": 36,
+        "column": 16
+      },
+      "matchedText": "return this.connection.request(APP_NATS_SUBJECTS.REFERRALS.TRACK, { ref_code: refCode, contact_id: contactId });",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-referrals.service.ts",
+        "line": 44,
+        "column": 16
+      },
+      "matchedText": "return this.connection.request(APP_NATS_SUBJECTS.REFERRALS.UPDATE, { id, ...data });",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-referrals.service.ts",
+        "line": 49,
+        "column": 16
+      },
+      "matchedText": "return this.connection.request(APP_NATS_SUBJECTS.REFERRALS.DELETE, { id });",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-registration.service.ts",
+        "line": 10,
+        "column": 16
+      },
+      "matchedText": "return this.connection.request(APP_NATS_SUBJECTS.REGISTRATION.START, {",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-registration.service.ts",
+        "line": 17,
+        "column": 16
+      },
+      "matchedText": "return this.connection.request(APP_NATS_SUBJECTS.REGISTRATION.COMPLETE, { tenantId });",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-templates.service.ts",
+        "line": 18,
+        "column": 16
+      },
+      "matchedText": "return this.connection.request(APP_NATS_SUBJECTS.TEMPLATES.CREATE, { tenant_id: tenantId, ...dto });",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-templates.service.ts",
+        "line": 27,
+        "column": 16
+      },
+      "matchedText": "return this.connection.request(APP_NATS_SUBJECTS.TEMPLATES.UPDATE, {",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-templates.service.ts",
+        "line": 36,
+        "column": 16
+      },
+      "matchedText": "return this.connection.request(APP_NATS_SUBJECTS.TEMPLATES.LIST, { tenant_id: tenantId });",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-templates.service.ts",
+        "line": 45,
+        "column": 16
+      },
+      "matchedText": "return this.connection.request(APP_NATS_SUBJECTS.TEMPLATES.RENDER, {",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-tenants.service.ts",
+        "line": 15,
+        "column": 16
+      },
+      "matchedText": "return this.connection.request(APP_NATS_SUBJECTS.TENANTS.CREATE, dto);",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-tenants.service.ts",
+        "line": 20,
+        "column": 16
+      },
+      "matchedText": "return this.connection.request(APP_NATS_SUBJECTS.TENANTS.LIST, filters ?? {});",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-tenants.service.ts",
+        "line": 25,
+        "column": 16
+      },
+      "matchedText": "return this.connection.request(APP_NATS_SUBJECTS.TENANTS.GET, { tenant_id: tenantId });",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-tenants.service.ts",
+        "line": 30,
+        "column": 16
+      },
+      "matchedText": "return this.connection.request(APP_NATS_SUBJECTS.TENANTS.UPDATE, { tenant_id: tenantId, ...dto });",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/scenario-evaluation.handler.ts",
+        "line": 160,
+        "column": 39
+      },
+      "matchedText": "const registerResult = (await this.connection.request(",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/scenario-evaluation.handler.ts",
+        "line": 179,
+        "column": 37
+      },
+      "matchedText": "const tenantsResult = await this.connection.request(APP_NATS_SUBJECTS.TENANTS.LIST, { is_active: true });",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/scenario-evaluation.handler.ts",
+        "line": 187,
+        "column": 39
+      },
+      "matchedText": "const result = (await this.connection.request(APP_NATS_SUBJECTS.SCENARIOS.ENSURE_PRESETS, {",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/scenario-evaluation.handler.ts",
+        "line": 236,
+        "column": 35
+      },
+      "matchedText": "const result = (await this.connection.request(APP_NATS_SUBJECTS.CARE.ENSURE_DEFAULTS, {",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/scenario-evaluation.handler.ts",
+        "line": 272,
+        "column": 35
+      },
+      "matchedText": "const result = (await this.connection.request(APP_NATS_SUBJECTS.SURVEYS.ENSURE_DEFAULTS, {",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/scenario-evaluation.handler.ts",
+        "line": 439,
+        "column": 42
+      },
+      "matchedText": "const batchResponse = (await this.connection.request(",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/scenario-evaluation.handler.ts",
+        "line": 611,
+        "column": 37
+      },
+      "matchedText": "const response = (await this.connection.request(",
+      "context": "PlatformConnectionService.request"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/billing/src/listeners/billing-webhook.listener.ts",
+        "line": 145,
+        "column": 37
+      },
+      "matchedText": "const published = await this.jetStreamService.publish(",
+      "context": "JetStreamService.publish"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/billing/src/listeners/billing-webhook.listener.ts",
+        "line": 203,
+        "column": 37
+      },
+      "matchedText": "const published = await this.jetStreamService.publish(",
+      "context": "JetStreamService.publish"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/messaging/src/services/message-ingestion.service.ts",
+        "line": 350,
+        "column": 37
+      },
+      "matchedText": "const acked = await this.jetStreamService.publish(subject, event as unknown as Record<string, unknown>);",
+      "context": "JetStreamService.publish"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/messaging/src/services/message-sending.service.ts",
+        "line": 958,
+        "column": 33
+      },
+      "matchedText": "const acked = await this.jetStreamService.publish(subject, event as unknown as Record<string, unknown>);",
+      "context": "JetStreamService.publish"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/proxy/src/services/proxy-routing-override.service.ts",
+        "line": 132,
+        "column": 13
+      },
+      "matchedText": "this.natsClient.emit('platform.proxy-overrides.invalidate', { path, method }).subscribe({",
+      "context": "ClientProxy.emit"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/ai/src/ai-copilot/services/ai-copilot.service.ts",
+        "line": 158,
+        "column": 27
+      },
+      "matchedText": "await this.jetStreamService.publish(subject, chunk as unknown as Record<string, unknown>);",
+      "context": "JetStreamService.publish"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/ai/src/ai-copilot/services/ai-copilot.service.ts",
+        "line": 277,
+        "column": 23
+      },
+      "matchedText": "await this.jetStreamService.publish(subject, chunk as unknown as Record<string, unknown>);",
+      "context": "JetStreamService.publish"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/core/src/infra/outbox/services/outbox-publisher.service.ts",
+        "line": 312,
+        "column": 20
+      },
+      "matchedText": "return this.jetStreamService.publish(subject, payload);",
+      "context": "JetStreamService.publish"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/core/src/infra/outbox/services/outbox-publisher.service.ts",
+        "line": 320,
+        "column": 30
+      },
+      "matchedText": "await firstValueFrom(this.natsClient.emit(subject, payload));",
+      "context": "ClientProxy.emit"
+    },
+    {
+      "role": "sender",
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/core/src/infra/outbox/services/outbox.service.ts",
+        "line": 166,
+        "column": 34
+      },
+      "matchedText": "await firstValueFrom(this.natsClient.emit(subject, payload));",
+      "context": "ClientProxy.emit"
+    }
+  ],
+  "missed": [],
+  "extra": [
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "pattern",
+        "pattern": "mcp.*.tools.list",
+        "placeholders": [
+          "IDENT_APP_SLUG"
+        ]
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/ident/src/ai-qa/ident-mcp-tool-server.service.ts",
+        "line": 73,
+        "column": 9
+      },
+      "via": "PlatformConnectionService.handleRequest",
+      "enclosingClass": "IdentMcpToolServerService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "pattern",
+        "pattern": "mcp.*.tools.call",
+        "placeholders": [
+          "IDENT_APP_SLUG"
+        ]
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/ident/src/ai-qa/ident-mcp-tool-server.service.ts",
+        "line": 79,
+        "column": 9
+      },
+      "via": "PlatformConnectionService.handleRequest",
+      "enclosingClass": "IdentMcpToolServerService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:subject"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-agent/src/core/nats-agent.service.ts",
+        "line": 103,
+        "column": 18
+      },
+      "via": "JetStreamService.subscribe",
+      "enclosingClass": "NatsAgentService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:pattern"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/services/cron-nats-executor.service.ts",
+        "line": 102,
+        "column": 36
+      },
+      "via": "ClientProxy.send",
+      "enclosingClass": "CronNatsExecutorService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:natsPattern"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/services/cron-nats-executor.service.ts",
+        "line": 267,
+        "column": 21
+      },
+      "via": "ClientProxy.send",
+      "enclosingClass": "CronNatsExecutorService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:subject"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/agents/src/nats/nats-central.service.ts",
+        "line": 220,
+        "column": 18
+      },
+      "via": "JetStreamService.subscribe",
+      "enclosingClass": "NatsCentralService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.app.shutting-down"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/heartbeat/app-heartbeat-publisher.service.ts",
+        "line": 61,
+        "column": 17
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "AppHeartbeatPublisherService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.app.heartbeat"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/heartbeat/app-heartbeat-publisher.service.ts",
+        "line": 77,
+        "column": 9
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "AppHeartbeatPublisherService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "error"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/realtime/realtime.gateway.ts",
+        "line": 69,
+        "column": 13
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "RealtimeGateway"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "error"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/realtime/realtime.gateway.ts",
+        "line": 77,
+        "column": 13
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "RealtimeGateway"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "event"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/realtime/realtime.gateway.ts",
+        "line": 176,
+        "column": 21
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "RealtimeGateway"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "pattern",
+        "pattern": "app.*.callback.handle",
+        "placeholders": [
+          "appId"
+        ]
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/callback-handler.service.ts",
+        "line": 43,
+        "column": 9
+      },
+      "via": "PlatformConnectionService.handleRequest",
+      "enclosingClass": "CallbackHandlerService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:subject"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-connection.service.ts",
+        "line": 308,
+        "column": 20
+      },
+      "via": "JetStreamService.subscribe",
+      "enclosingClass": "PlatformConnectionService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "pattern",
+        "pattern": "app.*.cron.*",
+        "placeholders": [
+          "appId",
+          "jobName"
+        ]
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-event-subscriber.service.ts",
+        "line": 225,
+        "column": 9
+      },
+      "via": "PlatformConnectionService.subscribe",
+      "enclosingClass": "PlatformEventSubscriberService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "pattern",
+        "pattern": "app.*.scenarios.evaluate",
+        "placeholders": [
+          "appId"
+        ]
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/scenario-evaluation.handler.ts",
+        "line": 122,
+        "column": 9
+      },
+      "via": "PlatformConnectionService.handleRequest",
+      "enclosingClass": "ScenarioEvaluationHandler"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "pattern",
+        "pattern": "app.*.broadcasts.resolve",
+        "placeholders": [
+          "appId"
+        ]
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/scenario-evaluation.handler.ts",
+        "line": 128,
+        "column": 9
+      },
+      "via": "PlatformConnectionService.handleRequest",
+      "enclosingClass": "ScenarioEvaluationHandler"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "pattern",
+        "pattern": "app.*.scenarios.request-registration",
+        "placeholders": [
+          "appId"
+        ]
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/scenario-evaluation.handler.ts",
+        "line": 134,
+        "column": 9
+      },
+      "via": "PlatformConnectionService.handleRequest",
+      "enclosingClass": "ScenarioEvaluationHandler"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.miniapp.resolve-url"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/appointment-app-sdk/src/scenarios/appointment-scenario-resolvers.ts",
+        "line": 51,
+        "column": 32
+      },
+      "via": "PlatformConnectionService.request"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.billing.webhook.>"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/billing/src/handlers/billing-webhook-nats.handler.ts",
+        "line": 56,
+        "column": 15
+      },
+      "via": "JetStreamService.subscribe",
+      "enclosingClass": "BillingWebhookNatsHandler"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "literal",
+        "value": "messaging.delivery.command-pending"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/messaging/src/handlers/delivery-command-pending.handler.ts",
+        "line": 57,
+        "column": 31
+      },
+      "via": "JetStreamService.subscribe",
+      "enclosingClass": "DeliveryCommandPendingHandler"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "literal",
+        "value": "agent.*.messages.inbound"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/messaging/src/services/message-ingestion.service.ts",
+        "line": 121,
+        "column": 9
+      },
+      "via": "NatsService.subscribe",
+      "enclosingClass": "MessageIngestionService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "literal",
+        "value": "agent.*.delivery.confirm"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/messaging/src/services/message-sending.service.ts",
+        "line": 318,
+        "column": 9
+      },
+      "via": "NatsService.subscribe",
+      "enclosingClass": "MessageSendingService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.events.message.received"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/messaging/src/websocket/socket.service.ts",
+        "line": 33,
+        "column": 39
+      },
+      "via": "JetStreamService.subscribe",
+      "enclosingClass": "SocketService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.events.message.delivered"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/messaging/src/websocket/socket.service.ts",
+        "line": 42,
+        "column": 40
+      },
+      "via": "JetStreamService.subscribe",
+      "enclosingClass": "SocketService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.events.message.attachment-stored"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/messaging/src/websocket/socket.service.ts",
+        "line": 51,
+        "column": 47
+      },
+      "via": "JetStreamService.subscribe",
+      "enclosingClass": "SocketService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:pattern"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/saas-admin/src/super-admin/super-admin-cron.service.ts",
+        "line": 87,
+        "column": 31
+      },
+      "via": "ClientProxy.send",
+      "enclosingClass": "SuperAdminCronService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.scenarios.execute"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/scenarios/src/nats/scenario-nats.service.ts",
+        "line": 32,
+        "column": 9
+      },
+      "via": "NatsService.subscribe",
+      "enclosingClass": "ScenarioNatsService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.events.message.attachment-stored"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/storage/src/processors/file-download.processor.ts",
+        "line": 130,
+        "column": 23
+      },
+      "via": "JetStreamService.publish",
+      "enclosingClass": "FileDownloadProcessor"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.events.message.attachment-stored"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/storage/src/processors/file-download.processor.ts",
+        "line": 168,
+        "column": 27
+      },
+      "via": "JetStreamService.publish",
+      "enclosingClass": "FileDownloadProcessor"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.notifications.sync_agent_offline"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/ident/src/mssql-sync/services/sync-monitoring.service.ts",
+        "line": 72,
+        "column": 25
+      },
+      "via": "PlatformConnectionService.publish",
+      "enclosingClass": "SyncMonitoringService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "ident.sync.completed"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/ident/src/mssql-sync/services/sync-orchestrator.service.ts",
+        "line": 487,
+        "column": 13
+      },
+      "via": "PlatformConnectionService.publish",
+      "enclosingClass": "SyncOrchestratorService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.notifications.sync_completed"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/ident/src/mssql-sync/services/sync-orchestrator.service.ts",
+        "line": 498,
+        "column": 17
+      },
+      "via": "PlatformConnectionService.publish",
+      "enclosingClass": "SyncOrchestratorService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "ident.sync.error"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/ident/src/mssql-sync/services/sync-orchestrator.service.ts",
+        "line": 530,
+        "column": 13
+      },
+      "via": "PlatformConnectionService.publish",
+      "enclosingClass": "SyncOrchestratorService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.notifications.sync_error"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/ident/src/mssql-sync/services/sync-orchestrator.service.ts",
+        "line": 537,
+        "column": 13
+      },
+      "via": "PlatformConnectionService.publish",
+      "enclosingClass": "SyncOrchestratorService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.ai.usage.get"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-api/src/services/nats-app/app-ai-usage-nats.service.ts",
+        "line": 32,
+        "column": 9
+      },
+      "via": "NatsService.subscribeWithReply",
+      "enclosingClass": "AppAiUsageNatsService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.events.message.received"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-api/src/services/nats-app/app-event-router.service.ts",
+        "line": 106,
+        "column": 39
+      },
+      "via": "JetStreamService.subscribe",
+      "enclosingClass": "AppEventRouterService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.events.message.delivered"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-api/src/services/nats-app/app-event-router.service.ts",
+        "line": 111,
+        "column": 40
+      },
+      "via": "JetStreamService.subscribe",
+      "enclosingClass": "AppEventRouterService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.events.chat.created"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-api/src/services/nats-app/app-event-router.service.ts",
+        "line": 118,
+        "column": 9
+      },
+      "via": "NatsService.subscribe",
+      "enclosingClass": "AppEventRouterService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.events.agent.enrolled"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-api/src/services/nats-app/app-event-router.service.ts",
+        "line": 119,
+        "column": 9
+      },
+      "via": "NatsService.subscribe",
+      "enclosingClass": "AppEventRouterService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "literal",
+        "value": "platform.events.agent.status_changed"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-api/src/services/nats-app/app-event-router.service.ts",
+        "line": 120,
+        "column": 9
+      },
+      "via": "NatsService.subscribe",
+      "enclosingClass": "AppEventRouterService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:subject"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-api/src/services/nats-app/app-event-router.service.ts",
+        "line": 200,
+        "column": 13
+      },
+      "via": "NatsService.publish",
+      "enclosingClass": "AppEventRouterService"
+    }
+  ],
+  "unresolvedSamples": [
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:subject"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-agent/src/core/nats-agent.service.ts",
+        "line": 103,
+        "column": 18
+      },
+      "via": "JetStreamService.subscribe",
+      "enclosingClass": "NatsAgentService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:subject"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-agent/src/core/nats-agent.service.ts",
+        "line": 197,
+        "column": 31
+      },
+      "via": "JetStreamService.publish",
+      "enclosingClass": "NatsAgentService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:subject"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/services/cron-circuit-breaker.service.ts",
+        "line": 133,
+        "column": 13
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "CronCircuitBreakerService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:pattern"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/services/cron-nats-executor.service.ts",
+        "line": 102,
+        "column": 36
+      },
+      "via": "ClientProxy.send",
+      "enclosingClass": "CronNatsExecutorService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:pattern"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/services/cron-nats-executor.service.ts",
+        "line": 151,
+        "column": 36
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "CronNatsExecutorService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:natsPattern"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/services/cron-nats-executor.service.ts",
+        "line": 267,
+        "column": 21
+      },
+      "via": "ClientProxy.send",
+      "enclosingClass": "CronNatsExecutorService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "unresolved",
+        "raw": "subject",
+        "reason": "identifier not resolvable"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-cron/src/services/messaging-events-reconciliation.service.ts",
+        "line": 135,
+        "column": 37
+      },
+      "via": "JetStreamService.publish",
+      "enclosingClass": "MessagingEventsReconciliationService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:subject"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/agents/src/nats/nats-central.service.ts",
+        "line": 220,
+        "column": 18
+      },
+      "via": "JetStreamService.subscribe",
+      "enclosingClass": "NatsCentralService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:subject"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/agents/src/nats/nats-central.service.ts",
+        "line": 322,
+        "column": 31
+      },
+      "via": "JetStreamService.publish",
+      "enclosingClass": "NatsCentralService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:subject"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/app-sdk/src/services/platform-connection.service.ts",
+        "line": 308,
+        "column": 20
+      },
+      "via": "JetStreamService.subscribe",
+      "enclosingClass": "PlatformConnectionService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-subscribe",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:natsSubject"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/appointment-app-sdk/src/sync-bridge/create-sync-bridge-controller.ts",
+        "line": 20,
+        "column": 9
+      },
+      "via": "@EventPattern",
+      "enclosingClass": "SyncBridgeNatsController"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-request",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:pattern"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/saas-admin/src/super-admin/super-admin-cron.service.ts",
+        "line": 87,
+        "column": 31
+      },
+      "via": "ClientProxy.send",
+      "enclosingClass": "SuperAdminCronService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:subject"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-api/src/services/nats-app/app-event-router.service.ts",
+        "line": 200,
+        "column": 13
+      },
+      "via": "NatsService.publish",
+      "enclosingClass": "AppEventRouterService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:subject"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/apps/platform-api/src/services/nats-app/app-event-router.service.ts",
+        "line": 208,
+        "column": 33
+      },
+      "via": "JetStreamService.publish",
+      "enclosingClass": "AppEventRouterService"
+    },
+    {
+      "role": "receiver",
+      "edgeKind": "nats-reply",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:subject"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/core/src/infra/health/nats-health-controller.factory.ts",
+        "line": 26,
+        "column": 9
+      },
+      "via": "@MessagePattern",
+      "enclosingClass": "NatsHealthController"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:subject"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/core/src/infra/outbox/services/outbox-publisher.service.ts",
+        "line": 312,
+        "column": 20
+      },
+      "via": "JetStreamService.publish",
+      "enclosingClass": "OutboxPublisherService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:subject"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/core/src/infra/outbox/services/outbox-publisher.service.ts",
+        "line": 320,
+        "column": 30
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "OutboxPublisherService"
+    },
+    {
+      "role": "sender",
+      "edgeKind": "nats-publish",
+      "subject": {
+        "kind": "dynamic",
+        "hint": "param:subject"
+      },
+      "location": {
+        "file": "/Users/romandubovik/Documents/Projects/platform/libs/platform/core/src/infra/outbox/services/outbox.service.ts",
+        "line": 166,
+        "column": 34
+      },
+      "via": "ClientProxy.emit",
+      "enclosingClass": "OutboxService"
+    }
+  ]
+}

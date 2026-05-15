@@ -1,0 +1,9 @@
+{
+    "id": "unpacks",
+    "root": "/Users/romandubovik/Documents/Projects/unpacks/unpacks-nx",
+    "appsGlob": "apps/*",
+    "libsGlob": "libs/**",
+    "wrapperPublishApis": [],
+    "wrapperSubscribeApis": [],
+    "excludeGlobs": ["/tmp/"]
+}
