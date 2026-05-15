@@ -3,6 +3,11 @@ import { resolve } from 'node:path';
 
 import { loadConfig } from '../core/config.js';
 import { writeDiagnostics, writeGraphJson, writeValidationReport } from '../output/graph-json.js';
+import {
+    parseSliceMode,
+    writeGraphMermaid,
+    type MermaidSliceMode,
+} from '../output/graph-mermaid.js';
 import { runBuild } from '../pipeline/build.js';
 
 interface ParsedArgs {
@@ -10,6 +15,8 @@ interface ParsedArgs {
     config: string;
     out: string;
     only?: string;
+    /** Optional extra slice; `graph.mermaid` (full) is always written. */
+    mermaidSlice?: MermaidSliceMode;
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
@@ -17,6 +24,7 @@ function parseArgs(argv: string[]): ParsedArgs {
     let config = './arch-graph.config.ts';
     let out = './arch-graph-out';
     let only: string | undefined;
+    let mermaidSlice: MermaidSliceMode | undefined;
 
     for (let i = 0; i < rest.length; i++) {
         const a = rest[i]!;
@@ -30,22 +38,32 @@ function parseArgs(argv: string[]): ParsedArgs {
             out = a.slice('--out='.length);
         } else if (a.startsWith('--only=')) {
             only = a.slice('--only='.length);
+        } else if (a.startsWith('--mermaid-slice=')) {
+            mermaidSlice = parseSliceMode(a.slice('--mermaid-slice='.length));
+        } else if (a === '--mermaid-slice' && rest[i + 1]) {
+            mermaidSlice = parseSliceMode(rest[++i]!);
         }
     }
-    return { cmd: cmd ?? '', config, out, only };
+    return { cmd: cmd ?? '', config, out, only, mermaidSlice };
 }
 
 const HELP = `
 arch-graph — static architecture graph extractor
 
 Usage:
-  arch-graph build      [--config <path>] [--out <dir>] [--only=<extractor>]
+  arch-graph build      [--config <path>] [--out <dir>] [--only=<extractor>] [--mermaid-slice=<mode>]
   arch-graph diagnose   [--config <path>] [--out <dir>]
   arch-graph init       [--out <path>]
 
 Defaults:
   --config  ./arch-graph.config.ts
   --out     ./arch-graph-out
+
+Mermaid slice modes (default writes graph.mermaid; flag adds an extra slice):
+  full              full graph (already written as graph.mermaid)
+  per-service       one service-<id>.mermaid per service under <out>/mermaid/
+  domain:<key>      one <key>.mermaid filtered to edges of that domain.
+                    Keys: nats, bullmq, typeorm, http, di, ts-import, lib
 `;
 
 const INIT_TEMPLATE = `import { defineConfig } from 'arch-graph';
@@ -85,9 +103,40 @@ async function cmdBuild(args: ParsedArgs): Promise<void> {
     await writeDiagnostics(result.diagnostics, `${outDir}/diagnostics.json`);
     await writeValidationReport(result.validation, `${outDir}/validation.json`);
 
+    // Always emit the full Mermaid flowchart alongside graph.json.
+    const mermaidPath = `${outDir}/graph.mermaid`;
+    await writeGraphMermaid(result.graph, mermaidPath);
+
+    // Optional extra slicing per user request.
+    let extraSliceFiles: string[] = [];
+    if (args.mermaidSlice && args.mermaidSlice.kind !== 'full') {
+        if (args.mermaidSlice.kind === 'per-service') {
+            extraSliceFiles = await writeGraphMermaid(
+                result.graph,
+                `${outDir}/mermaid`,
+                { slice: args.mermaidSlice },
+            );
+        } else {
+            // domain:<key>
+            const file = `${outDir}/${args.mermaidSlice.domain}.mermaid`;
+            extraSliceFiles = await writeGraphMermaid(result.graph, file, {
+                slice: args.mermaidSlice,
+            });
+        }
+    }
+
     process.stdout.write(`\n✓ graph.json:      ${outDir}/graph.json (${result.graph.nodes.length} nodes, ${result.graph.edges.length} edges)\n`);
     process.stdout.write(`✓ diagnostics.json: ${outDir}/diagnostics.json\n`);
     process.stdout.write(`✓ validation.json:  ${outDir}/validation.json\n`);
+    process.stdout.write(`✓ graph.mermaid:    ${mermaidPath}\n`);
+    if (extraSliceFiles.length > 0) {
+        process.stdout.write(
+            `✓ mermaid slice (${describeSlice(args.mermaidSlice!)}): ${extraSliceFiles.length} file(s)\n`,
+        );
+        for (const f of extraSliceFiles) {
+            process.stdout.write(`    ${f}\n`);
+        }
+    }
 
     // Regression gate: hard fail if any *enabled* domain produced zero ground-truth
     // (misconfig) or dropped below 95% recall. Disable via `domains.<x> = false`.
@@ -141,6 +190,12 @@ async function cmdBuild(args: ParsedArgs): Promise<void> {
 
 function pct(n: number): string {
     return `${(n * 100).toFixed(1)}%`;
+}
+
+function describeSlice(slice: MermaidSliceMode): string {
+    if (slice.kind === 'full') return 'full';
+    if (slice.kind === 'per-service') return 'per-service';
+    return `domain:${slice.domain}`;
 }
 
 async function loadConfigWithContext(path: string): Promise<Awaited<ReturnType<typeof loadConfig>>> {

@@ -29,7 +29,58 @@ _В работе._
 
 ## Block D — Mermaid output
 
-_В работе._
+### Decisions
+
+**Node shapes** (per NodeKind):
+- `service` → `id["label"]` (rectangle, primary entity)
+- `lib` → `id["label"]` + class `lib` (same rectangle; differentiated by classDef fill)
+- `queue` → `id(["label"])` (stadium — async boundary)
+- `nats-subject` → `id(("label"))` (circle — pub/sub endpoint)
+- `db-table` → `id[("label")]` (cylinder — storage)
+- `module` → `id{{"label"}}` (hexagon — DI module)
+- `file` → `id["label"]` + class `file`
+
+**Edge syntax** (per EdgeKind):
+- sync RPC (`http-call`, `nats-request`, `nats-reply`) → thick arrow `==>|label|`
+- async fire-and-forget (`nats-publish`/`subscribe`, `queue-produce`/`consume`, `ts-import`, `lib-usage`, `di-*`) → dotted arrow `-.->|label|`
+- DB access (`db-read`/`write`/`access`) → open arrowhead `--o|label|`
+
+**Note on DI dotted arrow**: первоначально использовал `-..->` (more dots) для зрительного де-приоритета, но эта форма ломается в части Mermaid версий — все de-emphasised kinds сейчас используют общий `-.->` + edge-label (`di`, `import`, `lib`) как смысловой различитель.
+
+### Layout
+
+- `flowchart LR` (вертикальный LR — ширина выше высоты, лучше для multi-service графа)
+- Один subgraph на NodeKind (`Services`, `Libraries`, `Modules`, `Queues`, `NATS subjects`, `DB tables`, `Files`)
+- Ноды внутри subgraph отсортированы по label, edges отсортированы по `(kind, from, to)` — стабильные diff'ы
+- `classDef` + bulk `class id1,id2 cls;` — стили в конце файла, не inline (читаемость, дифабельность)
+
+### Truncation policy
+
+- Header comment `%% graph has N nodes, M edges — consider per-service slicing` when `N > 200`
+- Полный граф всё равно пишется (Mermaid Live рендерит ~500 нод, наш максимум сейчас — insyra 579 нод; рендерится медленно, но валидно)
+- Опциональное slicing'ование через `--mermaid-slice=`:
+  - `per-service` → `<out>/mermaid/service-<id>.mermaid` (skip services с 0 рёбрами)
+  - `domain:<key>` → `<out>/<key>.mermaid` (keys: `nats`, `bullmq`, `typeorm`, `http`, `di`, `ts-import`, `lib`)
+
+### Validation
+
+Counts (nodes/edges) в `graph.mermaid` совпадают с `graph.json` на всех 5 проектах:
+
+| project   | nodes | edges | bytes  |
+|-----------|-------|-------|--------|
+| beribuy2  |    45 |    66 |  8 099 |
+| screenia  |   139 |   154 | 24 838 |
+| platform  |   315 |   408 | 59 894 |
+| insyra    |   579 |   638 | 110 765|
+| unpacks   |   110 |   117 | 17 840 |
+
+Структурная валидация: все subgraph balanced (`open === close`), все edge endpoints определены среди node decls (0 missing).
+
+### Deferred
+
+- **Per-service для frontend сервисов**: platform/screenia/unpacks имеют фронт-сервисы без extractor coverage (NATS-only бэк, no DI/HTTP yet) → 0 рёбер → файл не создаётся. Корректно для текущего набора extractor'ов; пересмотреть после Block B (HTTP) и Block A (DI).
+- **Mermaid parser validation**: пакет `mermaid` отсутствует в `node_modules` (peer-only зависимость), валидация ограничена structural pass'ом. Live rendering проверяется в Mermaid Live Editor / `mmdc` CLI вне scope этого блока.
+- **`ts-import` domain visualisation**: ноды `module`/`file` пока не emit'ятся ни одним extractor'ом (нет DI/TS-import) — соответствующие subgraph'ы будут пустыми; рендерятся корректно (просто не появляются).
 
 ---
 
