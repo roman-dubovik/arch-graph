@@ -12,15 +12,10 @@ import type {
 import { stripComments } from './strip-comments.js';
 
 /**
- * Ground-truth grep for TypeORM.
- *
- * Two signals:
- *  - `@InjectRepository(EntityClass[, 'dataSourceName'])`   → role: 'injection'
- *  - `@Entity('table_name'?)`                                → role: 'entity'
- *
- * The validator then matches extracted call-sites against ground-truth by
- * file:line, exactly like the NATS validator. Recall < 95% trips the regression
- * gate in the CLI build.
+ * Ground-truth grep for TypeORM. Two signals:
+ *   - `@InjectRepository(EntityClass[, 'dataSource'])` -> role: 'injection'
+ *   - `@Entity('table_name'?)`                          -> role: 'entity'
+ * Matched against extracted sites by file:line (same scheme as NATS validator).
  */
 
 const INJECT_RE = /@InjectRepository\(\s*([A-Za-z_][\w]*)/g;
@@ -60,14 +55,12 @@ export async function enumerateTypeOrmGroundTruth(
         // Cheap pre-filter — most files have neither marker.
         if (!content.includes('@InjectRepository') && !content.includes('@Entity')) continue;
 
-        const stripped = stripComments(content);
-        const lines = stripped.split('\n');
+        const lines = stripComments(content).split('\n');
 
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i]!;
             if (line.length === 0) continue;
 
-            INJECT_RE.lastIndex = 0;
             for (const m of line.matchAll(INJECT_RE)) {
                 out.push({
                     role: 'injection',
@@ -77,7 +70,6 @@ export async function enumerateTypeOrmGroundTruth(
                 });
             }
 
-            ENTITY_RE.lastIndex = 0;
             for (const m of line.matchAll(ENTITY_RE)) {
                 out.push({
                     role: 'entity',

@@ -27,25 +27,19 @@ export interface FnTemplateEntry {
 export type IndexEntry = ResolvedSubject | FnTemplateEntry;
 
 export class ConstantIndex {
-    private map = new Map<string, IndexEntry>();
+    readonly map = new Map<string, IndexEntry>();
 
-    has(key: string): boolean {
-        return this.map.has(key);
-    }
     get(key: string): IndexEntry | undefined {
         return this.map.get(key);
     }
     size(): number {
         return this.map.size;
     }
-    keys(): IterableIterator<string> {
-        return this.map.keys();
-    }
 }
 
 export function buildConstantIndex(project: Project): ConstantIndex {
     const idx = new ConstantIndex();
-    const map = (idx as unknown as { map: Map<string, IndexEntry> }).map;
+    const map = idx.map;
 
     for (const sf of project.getSourceFiles()) {
         if (isExcludedForIndex(sf)) continue;
@@ -167,15 +161,12 @@ function resolveCrossReferences(map: Map<string, IndexEntry>): void {
     }
 }
 
+const EXCLUDED_INDEX_SUBSTRINGS = ['/node_modules/', '/dist/', '/.claude/', '/.worktrees/'];
+
 function isExcludedForIndex(sf: SourceFile): boolean {
     const p = sf.getFilePath();
-    if (p.includes('/node_modules/')) return true;
-    if (p.includes('/dist/')) return true;
-    if (p.includes('/.claude/')) return true;
-    if (p.includes('/.worktrees/')) return true;
-    if (p.endsWith('.d.ts')) return true;
-    if (p.endsWith('.spec.ts') || p.endsWith('.test.ts')) return true;
-    return false;
+    if (EXCLUDED_INDEX_SUBSTRINGS.some((s) => p.includes(s))) return true;
+    return p.endsWith('.d.ts') || p.endsWith('.spec.ts') || p.endsWith('.test.ts');
 }
 
 function walkConstValue(qname: string, node: Node, out: Map<string, IndexEntry>): void {

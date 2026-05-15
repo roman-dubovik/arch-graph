@@ -27,19 +27,18 @@ export class OwnershipRegistry {
 
     /** Resolve a source file to its owning service/lib node. */
     findOwner(filePath: string): GraphOwnerRef {
-        const norm = filePath;
         // Services first — they are more specific within apps/.
         for (const s of this.services) {
-            if (norm === s.rootDir || norm.startsWith(s.rootDir + '/')) {
+            if (filePath === s.rootDir || filePath.startsWith(s.rootDir + '/')) {
                 return { kind: 'service', id: s.id };
             }
         }
         for (const l of this.libs) {
-            if (norm === l.rootDir || norm.startsWith(l.rootDir + '/')) {
+            if (filePath === l.rootDir || filePath.startsWith(l.rootDir + '/')) {
                 return { kind: 'lib', id: l.id, path: l.rootDir };
             }
         }
-        return { kind: 'unknown', path: norm };
+        return { kind: 'unknown', path: filePath };
     }
 }
 
