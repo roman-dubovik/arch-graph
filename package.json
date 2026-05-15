@@ -4,7 +4,7 @@
     "private": true,
     "type": "module",
     "bin": {
-        "arch-graph": "./dist/cli/index.js"
+        "arch-graph": "./bin/arch-graph"
     },
     "scripts": {
         "build": "tsc",
