@@ -34,7 +34,12 @@ const AXIOS_RE = /\baxios\s*\.\s*(get|post|put|patch|delete|head|options)\s*(?:<
  * `axios(<config>)` direct-call form. Restricted to `await axios(` / `= axios(` /
  * `return axios(` / standalone `axios(` so it doesn't match the `axios.<method>` cases.
  */
-const AXIOS_CONFIG_RE = /(?:^|[\s=({,;])axios\s*\(/g;
+// Zero-width lookbehind: when the prefix is consumed (e.g. `\n`), `m.index` lands
+// on the prefix character — not on `axios` — and `offsetToLineCol` reports the
+// previous line. The extractor anchors on `axios` (CallExpression start), so keys
+// disagree on multi-line forms like `const result =\n  axios({...})`, producing
+// a false recall miss. Lookbehind ensures `m.index` always lands on `a` of `axios`.
+const AXIOS_CONFIG_RE = /(?<=^|[\s=({,;])axios\s*\(/gm;
 /**
  * `axios.create({...}).<method>(` chain — paired with the extractor's chain detection
  * so GT and extracted balance. The extractor emits an unresolved site at the outer
