@@ -267,6 +267,14 @@ export interface CyclesDiagnostics {
         libUsage: number;
         diImport: number;
     };
+    /**
+     * Set when cycle detection degraded or failed. A `RangeError` (stack overflow on
+     * a very large graph) populates this field and leaves `cycles: []`; the build
+     * continues. Any other unexpected error causes a hard re-throw instead.
+     *
+     * Consumers can check `if (diagnostics.cycles.error)` to detect degraded-mode runs.
+     */
+    error?: string;
 }
 
 // ============================================================================

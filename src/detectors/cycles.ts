@@ -84,8 +84,13 @@ function detectForKind(
         if (seen.has(key)) continue;
         seen.add(key);
 
+        if (normalised.length === 0) {
+            process.stderr.write(
+                `[detectCycles] BUG: canonicalise returned empty path for cycle on ${kind}; skipping.\n`,
+            );
+            continue;
+        }
         const edgeLocations = buildEdgeLocations(normalised, adj);
-        // canonicalise always returns at least one element (cycles are non-empty).
         result.push({ kind, nodes: normalised as [string, ...string[]], edgeLocations });
     }
 
@@ -234,7 +239,14 @@ function buildEdgeLocations(
         // returns the first match. First-match-wins is intentional: the adjacency list
         // is built in graph.edges insertion order. For determinism under parallel edges
         // callers should ensure a stable edge order (e.g. sorted by file:line).
-        const match = adj.get(from)!.find((nb) => nb.to === to);
+        const neighbours = adj.get(from);
+        const match = neighbours?.find((nb) => nb.to === to);
+        if (!match) {
+            process.stderr.write(
+                `[detectCycles] BUG: missing adjacency for cycle edge ${from} → ${to}; ` +
+                `this should be unreachable. Skipping location for this hop.\n`,
+            );
+        }
         let location: SourceLoc | undefined;
         if (match && match.edge.file != null && match.edge.line != null) {
             location = { file: match.edge.file, line: match.edge.line, column: 0 };

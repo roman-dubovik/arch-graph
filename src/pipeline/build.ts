@@ -249,8 +249,21 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
     try {
         cyclesDiagnostics = detectCycles(graph);
     } catch (err) {
-        process.stderr.write(`[build] cycle detection failed: ${err}\n`);
-        cyclesDiagnostics = { cycles: [], counts: { tsImport: 0, libUsage: 0, diImport: 0 } };
+        const message = err instanceof Error ? err.message : String(err);
+        if (err instanceof RangeError) {
+            // Stack overflow on a very large graph — degrade gracefully and record
+            // the failure structurally so consumers can detect degraded-mode runs.
+            process.stdout.write(`  cycles: detection skipped (stack overflow on large graph)\n`);
+            cyclesDiagnostics = {
+                cycles: [],
+                counts: { tsImport: 0, libUsage: 0, diImport: 0 },
+                error: `RangeError: ${message}`,
+            };
+        } else {
+            // Unknown errors are bugs — surface them loudly and fail the build.
+            process.stdout.write(`  cycles: detection failed: ${message}\n`);
+            throw err;
+        }
     }
     {
         const c = cyclesDiagnostics.counts;
