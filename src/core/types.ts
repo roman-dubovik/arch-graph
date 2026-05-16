@@ -493,12 +493,24 @@ export interface TypeOrmValidationReport {
 }
 
 /**
+ * A single ground-truth entry from the db-entity-field validator regex scan.
+ * Named here so `DbEntityFieldsValidationResult.groundTruth` has a concrete type
+ * (avoids anonymous inline object — mirrors `TypeOrmGroundTruthEntry` pattern).
+ */
+export interface DbEntityFieldGroundTruthEntry {
+    file: string;
+    line: number;
+    matchedText: string;
+    decorator: string;
+}
+
+/**
  * Validation result for the Variant 2 db-entity-field domain.
  * Mirrors `EndpointValidationResult` / `ConfigValidationResult` shape.
  */
 export interface DbEntityFieldsValidationResult {
     /** Ground-truth entries found by `@Column*` decorator regex. */
-    groundTruth: Array<{ file: string; line: number; matchedText: string; decorator: string }>;
+    groundTruth: DbEntityFieldGroundTruthEntry[];
     /** Number of detected column decorator occurrences via ground-truth regex. */
     groundTruthCount: number;
     /** Recall: groundTruth > 0 ? extracted / groundTruth : null. */

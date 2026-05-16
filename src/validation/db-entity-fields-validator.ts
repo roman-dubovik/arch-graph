@@ -9,17 +9,13 @@
  */
 
 import type { ArchGraphConfig } from '../core/config.js';
-import type { DbEntityFieldsValidationResult } from '../core/types.js';
+import type { DbEntityFieldGroundTruthEntry, DbEntityFieldsValidationResult } from '../core/types.js';
 import { buildLineStarts, offsetToLineCol } from './line-index.js';
 import { iterateSourceFiles } from './scan.js';
 import { stripComments } from './strip-comments.js';
 
-export interface DbEntityFieldGroundTruthEntry {
-    file: string;
-    line: number;
-    matchedText: string;
-    decorator: string;
-}
+// Re-export the canonical type so existing importers of this module keep working.
+export type { DbEntityFieldGroundTruthEntry } from '../core/types.js';
 
 /**
  * Regex matching all supported TypeORM column decorators.
