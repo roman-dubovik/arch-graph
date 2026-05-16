@@ -7,15 +7,26 @@
  */
 
 import type { ArchGraphConfig } from '../core/config.js';
+import type { HttpMethod } from '../extractors/endpoint/extractor.js';
 import { buildLineStarts, offsetToLineCol } from './line-index.js';
 import { iterateSourceFiles } from './scan.js';
 import { stripComments } from './strip-comments.js';
+
+/** Canonical HTTP method names recognised by the endpoint extractor regex. */
+const HTTP_METHODS: ReadonlySet<string> = new Set<HttpMethod>([
+    'GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'ALL', 'OPTIONS', 'HEAD', 'SSE',
+]);
+
+/** Type-guard: true iff `raw` is one of the known HttpMethod values. */
+function isHttpMethod(raw: string): raw is HttpMethod {
+    return HTTP_METHODS.has(raw);
+}
 
 export interface EndpointGroundTruthEntry {
     file: string;
     line: number;
     matchedText: string;
-    method: string;
+    method: HttpMethod;
 }
 
 export interface EndpointValidationResult {
@@ -64,11 +75,17 @@ export async function enumerateEndpointGroundTruth(
         for (const m of stripped.matchAll(ENDPOINT_RE)) {
             const offset = m.index!;
             const { line } = offsetToLineCol(offset, lineStarts);
+            const raw = m[1]!.toUpperCase();
+            if (!isHttpMethod(raw)) {
+                // Regex group 1 is bounded to the known decorator names — this branch
+                // guards against future regex drift producing an unknown method string.
+                throw new Error(`[endpoint-validator] unexpected HTTP method from regex: ${raw}`);
+            }
             out.push({
                 file,
                 line,
                 matchedText: m[0].trim(),
-                method: m[1]!.toUpperCase(),
+                method: raw,
             });
         }
     }
