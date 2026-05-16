@@ -9,6 +9,8 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { appendBlock, replaceMarkedSection, stripMarkedSection } from './marker-block.js';
+
 const MARK_START = '<!-- arch-graph:start -->';
 const MARK_END = '<!-- arch-graph:end -->';
 
@@ -104,42 +106,6 @@ export async function claudeUninstall(args: ClaudeArgs): Promise<void> {
     const stripped = stripMarkedSection(body, MARK_START, MARK_END);
     await writeFile(args.target, stripped, 'utf8');
     process.stdout.write(`✓ removed arch-graph section from ${args.target}\n`);
-}
-
-// ---------- marker helpers (exported for reuse by hooks.ts) ----------
-
-/**
- * Replace the content (and surrounding markers) of an existing marked block.
- * Returns the original body unchanged if no block is found.
- */
-export function replaceMarkedSection(
-    body: string,
-    start: string,
-    end: string,
-    replacement: string,
-): string {
-    const s = body.indexOf(start);
-    if (s < 0) return body;
-    const e = body.indexOf(end, s);
-    if (e < 0) return body;
-    const tail = e + end.length;
-    // Swallow one trailing newline if present so we don't accumulate blank lines.
-    const eatNl = body[tail] === '\n' ? 1 : 0;
-    return body.slice(0, s) + replacement + body.slice(tail + eatNl);
-}
-
-/** Strip a marked block entirely, including surrounding whitespace noise. */
-export function stripMarkedSection(body: string, start: string, end: string): string {
-    const replaced = replaceMarkedSection(body, start, end, '');
-    // Collapse any 3+ consecutive newlines that the strip might leave behind.
-    return replaced.replace(/\n{3,}/g, '\n\n');
-}
-
-/** Append a block to body, separated by a blank line. Adds trailing newline. */
-export function appendBlock(body: string, block: string): string {
-    const trimmed = body.replace(/\s+$/, '');
-    if (trimmed.length === 0) return block;
-    return `${trimmed}\n\n${block}`;
 }
 
 // Last-resort fallback when claude-md.template.md is missing from the package.
