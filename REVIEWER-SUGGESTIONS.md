@@ -1,6 +1,6 @@
 # arch-graph — отложенные предложения ревьюеров
 
-Сюда складываются **не-критичные** находки pr-review-toolkit, которые не блокируют relase, но достойны проработки. Все critical / important findings фиксятся немедленно (см. commit history).
+Сюда складываются **не-критичные** находки pr-review-toolkit, которые не блокируют release, но достойны проработки. Все critical / important findings фиксятся немедленно (см. commit history).
 
 Формат записи:
 - **[severity] [domain] short title** — описание + (file:line) + почему отложено + кем предложено (агент / блок ревью).
@@ -15,41 +15,49 @@ Severity:
 
 ---
 
-## Block A — DI extractor
+## Активные (deferred)
 
-- **[nice-to-have] [di] `DiProviderRef.token.providerKind: 'unknown'` is a low-signal escape hatch** — попадает в граф как `provider:<token>` с `providerKind=unknown` meta. Можно или удалить `'unknown'` совсем (и эти случаи отправлять в `unresolved`), или гарантировать, что `providerKind=unknown` всегда сопровождается `provideToken` (т.е. это просто string token без useX). Отложено — требует прохода по корпусу с подсчётом, насколько часто такая форма встречается. (type-design-reviewer, Block A merge)
+### Block B — HTTP extractor
 
-## Block B — HTTP extractor
+- **[feature-suggestion] [http] `axios.create()` client variable tracking** — паттерн `const client = axios.create({baseURL}); client.get(path)` не отслеживается. Полноценная реализация требует таинт-анализа (привязка `baseURL` к переменной). **Отложено окончательно** — на 5 reference-проектах паттерн встречается 0 раз. Реактивируем при появлении проекта где этот стиль есть. (silent-failure-hunter, C2 fix follow-up; подтверждено при cleanup-http 2026-05)
 
-- **[nice-to-have] [http] separate `HttpDiagnostics.externalCalls` is the first positive-classification array** — все остальные domain-diagnostics массивы (`unresolved`, `unowned`) — это «не получилось». `externalCalls` напротив — «получилось, но классифицировано как external». Возможно, имеет смысл выделить отдельную структуру `HttpDiagnostics.informational: { externalCalls: HttpCallSite[]; ... }` для positive-классификаций и `diagnostics: { unresolved: ...; unowned: ... }` для проблем. (type-design-reviewer, Block B merge)
-- **[feature-suggestion] [http] `axios.create()` client variable tracking** — сейчас inline `axios.create({...}).get(url)` детектится как unresolved, но `const client = axios.create({baseURL}); client.get(path)` не отслеживается. Полноценная реализация требует таинт-анализа (привязка `baseURL` к переменной). Отложено — паттерн рядкий, на корпусе пока 0 site’ов. (silent-failure-hunter, C2 fix follow-up)
-- **[nice-to-have] [http] `AXIOS_CREATE_RE` пропускает nested parens** — `[^)]*` не матчит `axios.create({ baseURL: getUrl() }).get(url)`. AST extractor ловит, regex GT нет → false `extra` в diagnostics (не recall miss, не gate failure). Документировано в комментарии. Можно поднять регулярку до brace/paren-balanced формы при необходимости. (silent-failure-hunter re-review, edge case)
-- **[nice-to-have] [http] `.endsWith('.create')` over-match** — extractor.ts ~line 135 ловит ЛЮБОЙ `foo.create().get(url)`, не только `axios.create()`. Для не-axios кейсов (`dataSource.create(...).get(id)`) сайт уйдёт в unresolved, GT не сматчит → false `extra`. Низкая частота, не влияет на recall. (code-reviewer re-review)
+- **[nice-to-have] [http] `AXIOS_CREATE_RE` поддерживает только depth-1 nested parens** — после cleanup-http регулярка хендлит `axios.create({ baseURL: getUrl() }).get(url)`, но `axios.create({ baseURL: build(getUrl()) })` (depth-2) всё ещё мисс. AST extractor ловит, regex GT — нет → false `extra` в diagnostics. Не recall miss, не gate failure. Решение: brace/paren-balanced регулярка или рекурсивный паттерн. На корпусе пока 0 кейсов depth ≥ 2.
 
-## Block C — TS-imports extractor
+### Block C — TS-imports extractor
 
-- **[nice-to-have] [imports] `TsImportSite.resolvedFilePath: string | null` collapses two cases** — `null` сейчас означает и «external (node_modules)», и «alias broken / typo». `specifierShape` различает их пост-фактум, но потребитель должен помнить связку. Type-guard helper `isResolvedToFile(site): site is TsImportSite & { resolvedFilePath: string }` или sum-type `resolution: { kind: 'resolved'; path } | { kind: 'external' } | { kind: 'broken-alias'; reason }` — оба путя обсудимы. Отложено — текущая форма не ломает контракт, исправление чисто эргономическое. (type-design-reviewer, Block C merge)
+- **[nice-to-have] [imports] mapper `else` branch без `never`-guard на `TsImportResolution`** — `src/mapper/imports-to-graph.ts` обрабатывает `resolved` / `external` / `dynamic-non-literal` явно, остальное (`broken-alias`, `broken-relative`) уходит в `else`. Если добавится 6-й variant — он молча упадёт в `unresolvedInternal`. Лоу-приоритет, тип-дизайн ОК. (type-design-analyzer, cleanup-imports-resolution re-review)
 
-## Block D — Mermaid output
+- **[nice-to-have] [imports] `dynamic-non-literal` структурно не привязан к `kind: 'dynamic'`** — variant может появиться на `kind: 'static'` сайте формально валидно. На практике extractor так не делает, но тип не enforced. (type-design-analyzer, cleanup-imports-resolution)
 
-- **[refactor] [mermaid] `buildIdMap` collisions report → file rather than stderr** — сейчас warning при collision уходит в stderr, оператор видит только если внимательно читает лог. Можно дополнительно записать `mermaid-collisions.json` рядом с `graph.mermaid`, чтобы факт коллизии оставался в артефактах сборки. Отложено — на 5 проектах коллизий 0; добавлять I/O имеет смысл когда хотя бы один кейс встретился. (silent-failure-hunter, I12 fix follow-up)
+### Block D — Mermaid output
 
-## Block E — BullMQ + dedup (Phase 2 baseline)
+- **[nice-to-have] [mermaid] dedup-comment в collision aggregation** — inline comment на ~line 101 говорит "same sanitizedId + same originalIds set", но dedup ключ только по `sanitizedId`. Лёгкое уточнение текста. (comment-analyzer, cleanup-mermaid-collisions)
 
-- **[nice-to-have] [bullmq] `reason?: string` on unresolved BullMqQueueRef** — non-exported queue-name constants currently go to diagnostics without a structured reason. Predлагали добавить `reason: 'non-exported-const' | 'dynamic-expression'`. Отложено — паттерн редкий, на 5 проектах не встретился. (silent-failure-hunter, цикл BullMQ Phase 2 followup)
+### Block F — MCP server
 
-## Block F — MCP server
+- **[convention] [mcp] `EdgeAnswer.role` + `kind` независимы — design decision** — в `NatsCallSite` они структурно сцеплены через DU, в `EdgeAnswer` — отдельные поля. Документировано в комментарии. (type-design convergence, conscious deviation)
 
-- **[nice-to-have] [mcp] `RoutedAction` switch lacks `never` exhaustiveness arm** — `query` tool handler в `server.ts:337+` обходит все варианты `RoutedAction['tool']` без `default: { const _: never = action; ... }`. Сейчас все 10 вариантов покрыты. Если добавится 11-й и забудут case, TS не поймает (нет `noImplicitReturns`), а handler вернёт `undefined`. Конкретный fix: добавить `default: { const _: never = action; return jsonResult({ via: 'unknown', hint: 'unrouted action' }); }`. (type-design convergence)
-- **[convention] [mcp] `EdgeAnswer.role` + `kind` независимы — design decision** — в `NatsCallSite` они стуктурно сцеплены через DU, в `EdgeAnswer` — отдельные поля. Документировано в комментарии. (type-design convergence, conscious deviation)
+- **[nice-to-have] [mcp] JSDoc на never-default-arm в `query` switch** — после cleanup-mcp-exhaust default arm с `const _: never = action` есть, но без JSDoc. Будущий разработчик может принять за dead code. Стилевое улучшение. (pr-review-toolkit, cleanup-mcp-exhaust)
 
-## Block H — Bench
+### Cross-cutting
 
-- **[nice-to-have] [bench] доп. валидация `Question.category/difficulty/question`** — уже применено сразу: при отсутствии loadQuestions выбрасывает ошибку с индексом и id. (type-design convergence)
+- **[nice-to-have] [cli] `appendBlock` JSDoc неточен** — JSDoc говорит "Adds trailing newline", но trailing newline должен быть в самом `block` параметре, не добавляется функцией. Pre-existing неточность, унаследовано из claude.ts. (comment-analyzer, cleanup-marker-block)
 
-## Cross-cutting
+---
 
-- **[nice-to-have] [cli] `replaceMarkedSection`/`stripMarkedSection`/`appendBlock` живут в `claude.ts` и реэкспортируются в `hooks.ts`** — зависимость `hooks.ts → claude.ts` по чисто утилитарным хелперам выглядит странно (оба экспортируются с явным комментарием `// exported for reuse by hooks.ts`). Было бы чище вынести их в `src/cli/marker-block.ts`. Отложено — текущее состояние работает, комментарий документирует намерение, blast radius минимален. (simplifier pass, Block G review)
+## Закрыто в cleanup-passе 2026-05 (для архива)
+
+Все исходные 8 пунктов из ранжирования Тиер 1–3 закрыты в серии cleanup/* PR’ов:
+
+- **Block A** `DiProviderRef.token.providerKind: 'unknown'` → **token-ref variant** (003d348)
+- **Block B** `HttpDiagnostics.externalCalls` → **informational** (f6149b7)
+- **Block B** `.endsWith('.create')` over-match → AST structural check (f6149b7)
+- **Block B** `AXIOS_CREATE_RE` nested parens → depth-1 fix (f6149b7)
+- **Block C** `TsImportSite.resolvedFilePath: string | null` → `TsImportResolution` DU (54e4151)
+- **Block D** `buildIdMap` collisions → `mermaid-collisions.json` artifact (7f00082)
+- **Block E** `BullMqQueueRef.unresolved.reason` → 6-variant DU (44b7b30)
+- **Block F** `RoutedAction` switch never-arm exhaustiveness → added (76aa016)
+- **Cross-cutting** marker-block helpers → `src/cli/marker-block.ts` (41915ac, aad1bc5)
 
 ---
 
