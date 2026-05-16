@@ -395,6 +395,29 @@ describe('semanticSearch — corrupt embeddings', () => {
 });
 
 // ---------------------------------------------------------------------------
+// embeddings.jsonl ENOENT (missing file, not corruption)
+// ---------------------------------------------------------------------------
+
+describe('semanticSearch — missing embeddings.jsonl', () => {
+    it('returns semantic-index-missing when embeddings.jsonl is ENOENT', async () => {
+        const graphHash = await writeGraphJson('{}');
+        const manifest = makeManifest({ graphHash, nodeCount: 1 });
+        // Write manifest but NOT embeddings.jsonl
+        await writeManifest(manifest, join(testDir, 'semantic', 'manifest.json'));
+
+        const { output, exitCode } = await semanticSearch({
+            query: 'q',
+            outDir: testDir,
+            embedder: fakeEmbedder(unitVec(0)),
+        });
+
+        expect(exitCode).toBe(1);
+        expect(output.error).toBe('semantic-index-missing');
+        expect(output.hint).toBeDefined();
+    });
+});
+
+// ---------------------------------------------------------------------------
 // Non-Error JSONL read failure (line 249 branch coverage)
 // ---------------------------------------------------------------------------
 

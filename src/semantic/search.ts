@@ -269,9 +269,23 @@ export async function semanticSearch(opts: SemanticSearchOpts): Promise<SearchRe
             scored.push({ result, score });
         }
     } catch (jsonlErr) {
-        // embeddings.jsonl exists but content is corrupt (bad JSON, dim mismatch, etc.)
-        const jsonlErrorMsg = jsonlErr instanceof Error ? jsonlErr.message : String(jsonlErr);
-        process.stderr.write(`[arch-graph semantic] embeddings read error: ${jsonlErrorMsg}\n`);
+        // Distinguish ENOENT (missing file) from actual corruption
+        const isEnoent = (jsonlErr as NodeJS.ErrnoException).code === 'ENOENT';
+        if (!isEnoent) {
+            const jsonlErrorMsg = jsonlErr instanceof Error ? jsonlErr.message : String(jsonlErr);
+            process.stderr.write(`[arch-graph semantic] embeddings read error: ${jsonlErrorMsg}\n`);
+            const output: SearchOutput = {
+                query,
+                results: [],
+                model: manifest.model,
+                dim: manifest.dim,
+                indexBuiltAt: manifest.builtAt,
+                graphHashMatches,
+                error: 'semantic-index-corrupt',
+                hint: 'run: arch-graph semantic build',
+            };
+            return { output, exitCode: 1, stderrWarning };
+        }
         const output: SearchOutput = {
             query,
             results: [],
@@ -279,7 +293,7 @@ export async function semanticSearch(opts: SemanticSearchOpts): Promise<SearchRe
             dim: manifest.dim,
             indexBuiltAt: manifest.builtAt,
             graphHashMatches,
-            error: 'semantic-index-corrupt',
+            error: 'semantic-index-missing',
             hint: 'run: arch-graph semantic build',
         };
         return { output, exitCode: 1, stderrWarning };
