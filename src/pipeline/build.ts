@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { Project } from 'ts-morph';
+import { Project, ts } from 'ts-morph';
 
 import type { ArchGraphConfig } from '../core/config.js';
 import { discoverOwnership } from '../core/service-registry.js';
@@ -92,12 +92,21 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
     const project = new Project({
         useInMemoryFileSystem: false,
         skipAddingFilesFromTsConfig: true,
-        compilerOptions: { allowJs: false, strict: false, noEmit: true },
+        compilerOptions: {
+            allowJs: false,
+            strict: false,
+            noEmit: true,
+            // Enable JSX parsing so ts-morph accepts .tsx/.jsx syntax without errors.
+            jsx: ts.JsxEmit.React,
+        },
     });
 
+    // Always include .tsx; include .jsx when the project opts in via cfg.fe?.allowJsx.
+    // See: P0-NEW — .tsx/.jsx files not in ts-morph Project globs (CATASTROPHIC).
+    const sourceExts = ['**/*.ts', '**/*.tsx'];
     const globs = [
-        join(cfg.root, cfg.appsGlob, '**/*.ts'),
-        ...(cfg.libsGlob ? [join(cfg.root, cfg.libsGlob, '**/*.ts')] : []),
+        ...sourceExts.map((ext) => join(cfg.root, cfg.appsGlob, ext)),
+        ...(cfg.libsGlob ? sourceExts.map((ext) => join(cfg.root, cfg.libsGlob, ext)) : []),
     ];
     // cfg.excludeGlobs MUST be applied here too — otherwise extractor and validator
     // disagree on the file set, and excluded paths become phantom `extra` matches
@@ -114,6 +123,10 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
             '!' + join(cfg.root, '**/.worktrees/**'),
             '!**/*.spec.ts',
             '!**/*.test.ts',
+            '!**/*.spec.tsx',
+            '!**/*.test.tsx',
+            '!**/*.spec.jsx',
+            '!**/*.test.jsx',
             '!**/*.d.ts',
             ...extraExcludes,
         ]);
