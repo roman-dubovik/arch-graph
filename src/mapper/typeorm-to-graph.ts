@@ -87,11 +87,14 @@ export function mapTypeOrmToGraph(
             unresolvedEntities,
             unowned,
             entityDecoratorWarnings: entityWarnings,
+            unresolvedRelations: [],
             counts: {
                 resolved: sites.length - unresolvedEntities.length - unowned.length,
                 unresolvedEntity: unresolvedEntities.length,
                 unowned: unowned.length,
                 entityDecoratorWarnings: entityWarnings.length,
+                relations: 0,
+                unresolvedRelations: 0,
             },
         },
     };

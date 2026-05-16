@@ -129,6 +129,7 @@ export function mapDiToGraph(
         diagnostics: {
             unresolvedRefs,
             unowned,
+            unresolvedFilterRefs: [],
             counts: {
                 modules: modules.length,
                 imports: importsCount,
@@ -137,6 +138,10 @@ export function mapDiToGraph(
                 controllers: controllersCount,
                 unresolvedRefs: unresolvedRefs.length,
                 unowned: unowned.length,
+                guards: 0,
+                interceptors: 0,
+                pipes: 0,
+                unresolvedFilterRefs: 0,
             },
         },
     };

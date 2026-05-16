@@ -8,6 +8,12 @@ dist/
 # Build outputs
 arch-graph-out/
 
+# Vitest coverage
+coverage/
+
+# Local research notes
+COMPETITIVE-LANDSCAPE.md
+
 # Local config overrides
 *.local.ts
 *.local.json

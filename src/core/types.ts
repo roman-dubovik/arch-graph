@@ -74,10 +74,14 @@ export type EdgeKind =
     | 'db-read'
     | 'db-write'
     | 'db-access'
+    | 'db-relation'
     | 'di-import'
     | 'di-provides'
     | 'di-exports'
     | 'di-controller'
+    | 'di-guard'
+    | 'di-interceptor'
+    | 'di-pipe'
     | 'ts-import'
     | 'lib-usage';
 
@@ -137,6 +141,30 @@ export function tableNameOf(e: TypeOrmEntity): string {
     return e.tableSource.table;
 }
 
+/**
+ * Captured `@ManyToOne` / `@OneToMany` / `@ManyToMany` / `@OneToOne`
+ * relation decoration on an entity property.
+ *
+ * The `target` is the *referenced* entity class name as written in the
+ * decorator's type-factory argument (`() => Other`). When the type-factory
+ * resolves to a known `@Entity`, the mapper emits a `db-relation` edge
+ * `tableA → tableB`. When it doesn't (string token, dynamic expression),
+ * the relation is reported in diagnostics with `resolvedTarget = null`.
+ */
+export interface TypeOrmRelation {
+    /** Decorator name as written. */
+    decorator: 'ManyToOne' | 'OneToMany' | 'ManyToMany' | 'OneToOne';
+    /** Class that owns the property bearing the relation decorator. */
+    ownerClass: string;
+    /** Property name on the owner class. */
+    propertyName: string;
+    /** Identifier text in `() => Foo` — empty string if unresolvable. */
+    targetClass: string;
+    /** Resolved `@Entity` for `targetClass`, or null if unknown. */
+    resolvedTarget: TypeOrmEntity | null;
+    location: SourceLoc;
+}
+
 /** Single `@InjectRepository(EntityClass)` injection site. */
 export interface TypeOrmInjectionSite {
     /** Property name on the consuming class (e.g. `blogPassportsRepo`). */
@@ -181,11 +209,19 @@ export interface TypeOrmDiagnostics {
      *   - `non-static-argument`: NOT indexed; the entity class appears in `unresolvedEntities` instead
      */
     entityDecoratorWarnings: TypeOrmEntityDecoratorWarning[];
+    /**
+     * `@ManyToOne / @OneToMany / @ManyToMany / @OneToOne` decorations whose
+     * `() => Foo` type-factory didn't resolve to a known entity (string
+     * token, dynamic expression, foreign class).
+     */
+    unresolvedRelations: TypeOrmRelation[];
     counts: {
         resolved: number;
         unresolvedEntity: number;
         unowned: number;
         entityDecoratorWarnings: number;
+        relations: number;
+        unresolvedRelations: number;
     };
 }
 
@@ -198,6 +234,39 @@ export interface DiagnosticsReport {
     di: DiDiagnostics;
     http: HttpDiagnostics;
     imports: ImportsDiagnostics;
+    cycles: CyclesDiagnostics;
+}
+
+// ============================================================================
+// Cycles — borrowed from dep-cruiser, lives on top of existing ts-import edges
+// ============================================================================
+
+/**
+ * One detected import cycle. Nodes are absolute file paths (the same ids
+ * the imports extractor uses for `ts-import` edges). The cycle is rendered
+ * as `[A, B, C]` meaning `A → B → C → A`; the closing back-edge is implicit
+ * and never repeated in the array.
+ *
+ * `kind` distinguishes the layer the cycle was detected on:
+ *   - `ts-import` — file-level cycles (typical case)
+ *   - `lib-usage` — service/lib-level cycles (architectural-layer cycles)
+ *   - `di-import` — `@Module` `imports: [OtherModule]` cycles
+ */
+export interface ImportCycle {
+    kind: 'ts-import' | 'lib-usage' | 'di-import';
+    nodes: string[];
+    /** Locations of the back-edge for each step (file:line where `import` lives). */
+    edgeLocations: Array<{ from: string; to: string; location?: SourceLoc }>;
+}
+
+export interface CyclesDiagnostics {
+    cycles: ImportCycle[];
+    counts: {
+        tsImport: number;
+        libUsage: number;
+        diImport: number;
+        total: number;
+    };
 }
 
 // ============================================================================
@@ -532,6 +601,11 @@ export interface DiDiagnostics {
     }>;
     /** `@Module`-decorated classes whose owning file falls outside apps/ and libs/. */
     unowned: DiModuleSite[];
+    /**
+     * `@UseGuards / @UseInterceptors / @UsePipes` decorations whose arguments
+     * couldn't be resolved to a class identifier (spread, ternary, factory call).
+     */
+    unresolvedFilterRefs: DiFilterChainRef[];
     counts: {
         modules: number;
         imports: number;
@@ -540,8 +614,58 @@ export interface DiDiagnostics {
         controllers: number;
         unresolvedRefs: number;
         unowned: number;
+        guards: number;
+        interceptors: number;
+        pipes: number;
+        unresolvedFilterRefs: number;
     };
 }
+
+// ============================================================================
+// DI filter chain — @UseGuards / @UseInterceptors / @UsePipes
+// ============================================================================
+
+export type DiFilterDecorator = 'UseGuards' | 'UseInterceptors' | 'UsePipes';
+
+/**
+ * Resolved reference inside `@UseGuards(...)` / `@UseInterceptors(...)` /
+ * `@UsePipes(...)`. Same three shapes as `DiProviderRef.class` / token / etc.,
+ * but the decorator only legally accepts class identifiers or new'd instances
+ * (the latter is recorded as `instance` — same edge target, different kind).
+ *
+ * Examples:
+ *   `@UseGuards(AuthGuard)`             → `class { name: 'AuthGuard' }`
+ *   `@UseInterceptors(new LoggingI())`  → `instance { name: 'LoggingI' }`
+ *   `@UsePipes(...spread)`              → `unresolved`
+ */
+export type DiFilterChainRef =
+    | {
+          kind: 'class';
+          name: string;
+          decorator: DiFilterDecorator;
+          location: SourceLoc;
+          /** Class / method this decoration sits on. */
+          enclosingClass: string;
+          /** `class` if on the class itself, `method:methodName` if on a handler. */
+          attachedTo: { kind: 'class' } | { kind: 'method'; methodName: string };
+      }
+    | {
+          kind: 'instance';
+          name: string;
+          decorator: DiFilterDecorator;
+          location: SourceLoc;
+          enclosingClass: string;
+          attachedTo: { kind: 'class' } | { kind: 'method'; methodName: string };
+      }
+    | {
+          kind: 'unresolved';
+          raw: string;
+          reason: string;
+          decorator: DiFilterDecorator;
+          location: SourceLoc;
+          enclosingClass: string;
+          attachedTo: { kind: 'class' } | { kind: 'method'; methodName: string };
+      };
 
 // ============================================================================
 // HTTP-domain types
@@ -824,6 +948,22 @@ export type TsImportSite =
           typeOnly: boolean;
           specifierShape: 'relative' | 'alias' | 'bare-external' | 'builtin';
           location: SourceLoc;
+      }
+    | {
+          /**
+           * CommonJS `require(...)` call. Captured for legacy / Node-builtin
+           * usages that still appear in mostly-ESM TS codebases. Resolution
+           * model mirrors `dynamic` — the specifier may be non-literal at
+           * the call site (`require(varName)`), producing
+           * `dynamic-non-literal`.
+           */
+          sourceFile: string;
+          specifier: string;
+          resolution: TsDynamicResolution;
+          kind: 'cjs-require';
+          typeOnly: false;
+          specifierShape: 'relative' | 'alias' | 'bare-external' | 'builtin';
+          location: SourceLoc;
       };
 
 export interface ImportsDiagnostics {
@@ -835,9 +975,12 @@ export interface ImportsDiagnostics {
     unresolvedImports: TsImportSite[];
     /** Dynamic `import(...)` calls — kept for visibility, not gated. */
     dynamicImports: TsImportSite[];
+    /** CommonJS `require(...)` calls — kept for visibility, not gated. */
+    cjsRequires: TsImportSite[];
     counts: {
         totalStatic: number;
         totalDynamic: number;
+        totalCjsRequire: number;
         resolvedToOwner: number;
         externalOrUnresolved: number;
         unresolvedInternal: number;

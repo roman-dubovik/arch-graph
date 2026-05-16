@@ -250,6 +250,7 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         di: diMapped.diagnostics,
         http: httpMapped.diagnostics,
         imports: importsMapped.diagnostics,
+        cycles: { cycles: [], counts: { tsImport: 0, libUsage: 0, diImport: 0, total: 0 } },
     };
     const validation: BuildValidation = {
         projectId: cfg.id,
