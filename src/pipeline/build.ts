@@ -6,18 +6,21 @@ import { discoverOwnership } from '../core/service-registry.js';
 import type { ArchGraph, BuildValidation, CyclesDiagnostics, DiagnosticsReport } from '../core/types.js';
 import { extractBullMq } from '../extractors/bullmq/extractor.js';
 import { extractDi } from '../extractors/di/extractor.js';
+import { extractFe } from '../extractors/fe/extractor.js';
 import { extractHttp } from '../extractors/http/extractor.js';
 import { extractImports } from '../extractors/imports/extractor.js';
 import { extractNats } from '../extractors/nats/extractor.js';
 import { extractTypeOrm } from '../extractors/typeorm/extractor.js';
 import { mapBullMqToGraph } from '../mapper/bullmq-to-graph.js';
 import { mapDiToGraph } from '../mapper/di-to-graph.js';
+import { mapFeToGraph } from '../mapper/fe-to-graph.js';
 import { mapHttpToGraph } from '../mapper/http-to-graph.js';
 import { mapImportsToGraph } from '../mapper/imports-to-graph.js';
 import { assembleGraph, buildNatsDiagnostics, mapNatsToGraph } from '../mapper/nats-to-graph.js';
 import { mapTypeOrmToGraph } from '../mapper/typeorm-to-graph.js';
 import { enumerateBullMqGroundTruth, buildBullMqReport } from '../validation/bullmq-validator.js';
 import { enumerateDiGroundTruth, buildDiReport } from '../validation/di-validator.js';
+import { enumerateFeGroundTruth, buildFeReport } from '../validation/fe-validator.js';
 import { enumerateHandlers } from '../validation/handlers.js';
 import { enumerateHttpGroundTruth, buildHttpReport } from '../validation/http-validator.js';
 import { buildImportsReport, enumerateImportsGroundTruth } from '../validation/imports-validator.js';
@@ -283,6 +286,28 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         `  nodes: ${importsMapped.nodes.length}, edges: ${importsMapped.edges.length}, unresolvedInternal: ${importsMapped.diagnostics.counts.unresolvedInternal}, externalOrUnresolved: ${importsMapped.diagnostics.counts.externalOrUnresolved}, dynamic: ${importsMapped.diagnostics.counts.totalDynamic}, cjsRequire: ${importsMapped.diagnostics.counts.totalCjsRequire}\n`,
     );
 
+    // ---- FE domain ----
+    process.stdout.write(`extracting FE...\n`);
+    t0 = Date.now();
+    const fe = await stage(`[${cfg.id}] fe.extract`, () => extractFe(cfg, project));
+    process.stdout.write(`  components: ${fe.components.length}, routes: ${fe.routes.length}, hooks: ${fe.hooks.length}, imports: ${fe.imports.length} in ${Date.now() - t0}ms\n`);
+
+    process.stdout.write(`validating FE against ground truth...\n`);
+    const feGT = await stage(`[${cfg.id}] fe.GT`, () => enumerateFeGroundTruth(cfg));
+    const feValidation = buildFeReport(fe, feGT);
+    {
+        const v = feValidation.summary;
+        process.stdout.write(
+            `  recallComp=${pct(v.recallComponents)} recallRoute=${pct(v.recallRoutes)} recallHook=${pct(v.recallHooks)}\n`,
+        );
+    }
+
+    process.stdout.write(`mapping FE to graph...\n`);
+    const feMapped = mapFeToGraph(fe, ownership);
+    process.stdout.write(
+        `  nodes: ${feMapped.nodes.length}, edges: ${feMapped.edges.length}, unresolved: ${feMapped.diagnostics.unresolved.length}, unowned: ${feMapped.diagnostics.unowned.length}\n`,
+    );
+
     // ---- Compose ----
     const graph = assembleGraph(cfg.root, [
         natsMapped,
@@ -291,6 +316,7 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         diMapped,
         httpMapped,
         importsMapped,
+        feMapped,
     ]);
 
     // ---- Cycle detection ----
@@ -312,6 +338,7 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         di: diMapped.diagnostics,
         http: httpMapped.diagnostics,
         imports: importsMapped.diagnostics,
+        fe: feMapped.diagnostics,
         cycles: cyclesDiagnostics,
     };
     const validation: BuildValidation = {
@@ -323,6 +350,7 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         di: diValidation,
         http: httpValidation,
         imports: importsValidation,
+        fe: feValidation,
     };
 
     return { graph, diagnostics, validation };

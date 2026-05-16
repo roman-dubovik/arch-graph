@@ -65,6 +65,9 @@ const EDGE_KIND_CHECK: Record<EdgeKind, null> = {
     'di-pipe': null,
     'ts-import': null,
     'lib-usage': null,
+    'fe-imports': null,
+    'fe-renders': null,
+    'fe-routes-to': null,
 };
 const EDGE_KIND_VALUES = Object.keys(EDGE_KIND_CHECK) as [EdgeKind, ...EdgeKind[]];
 

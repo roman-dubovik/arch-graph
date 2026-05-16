@@ -63,7 +63,11 @@ export type NodeKind =
     | 'module'
     | 'provider'
     | 'file'
-    | 'external';
+    | 'external'
+    | 'fe-page'
+    | 'fe-component'
+    | 'fe-route'
+    | 'fe-hook';
 
 /**
  * Exhaustiveness-gate pattern for NodeKind.
@@ -81,6 +85,10 @@ const NODE_KIND_CHECK: Record<NodeKind, null> = {
     'provider': null,
     'file': null,
     'external': null,
+    'fe-page': null,
+    'fe-component': null,
+    'fe-route': null,
+    'fe-hook': null,
 };
 
 /** All valid NodeKind values — used for runtime validation and zod enum schemas. */
@@ -104,7 +112,10 @@ export type EdgeKind =
     | 'di-interceptor'
     | 'di-pipe'
     | 'ts-import'
-    | 'lib-usage';
+    | 'lib-usage'
+    | 'fe-imports'
+    | 'fe-renders'
+    | 'fe-routes-to';
 
 export interface GraphNode {
     id: string;
@@ -316,6 +327,7 @@ export interface DiagnosticsReport {
     di: DiDiagnostics;
     http: HttpDiagnostics;
     imports: ImportsDiagnostics;
+    fe: { unresolved: any[]; unowned: any[] };
     cycles: CyclesDiagnostics;
     /**
      * Populated only when `arch-graph semantic build` has been run.
@@ -432,6 +444,7 @@ export interface BuildValidation {
     di: DiValidationReport;
     http: HttpValidationReport;
     imports: ImportsValidationReport;
+    fe: { summary: { recallComponents: number; recallRoutes: number; recallHooks: number } };
 }
 
 // ============================================================================
