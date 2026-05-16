@@ -24,6 +24,7 @@ export type {
     ResolvedSubject,
     ResolvedUrl,
     SourceLoc,
+    TsImportResolution,
     TsImportSite,
     TypeOrmEntity,
     TypeOrmInjectionSite,
