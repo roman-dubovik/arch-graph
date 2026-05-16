@@ -99,8 +99,13 @@ export function mapImportsToGraph(
                 case 'broken-relative':
                     // Graph-relevant target we failed to find — typo'd alias,
                     // broken `paths`, moved file. Real regression signal.
+                    // Routing mirror: static→unresolvedImports, dynamic→dynamicImports,
+                    // cjs-require→cjsRequires (already pushed above unconditionally).
+                    // Do NOT also push cjs-require into unresolvedImports — it would
+                    // double-count every broken CJS site in consumer code iterating
+                    // both arrays.
                     unresolvedInternal++;
-                    if (site.kind === 'static' || site.kind === 'cjs-require') {
+                    if (site.kind === 'static') {
                         unresolvedImports.push(site);
                     }
                     break;
@@ -162,6 +167,16 @@ export function mapImportsToGraph(
                     ...(site.kind === 'dynamic' ? { meta: { dynamic: true } } : {}),
                     ...(site.kind === 'cjs-require' ? { meta: { cjsRequire: true } } : {}),
                 });
+            } else if (site.kind === 'cjs-require') {
+                // Static walk runs first; when a cjs-require targets the same file,
+                // the dedup short-circuit above would silently drop `cjsRequire: true`.
+                // Merge it onto the existing edge's meta instead.
+                const existing = fileEdges.get(fileKey)!;
+                const meta = (existing.meta ?? {}) as Record<string, unknown>;
+                if (!meta.cjsRequire) {
+                    meta.cjsRequire = true;
+                    existing.meta = meta;
+                }
             }
         }
 

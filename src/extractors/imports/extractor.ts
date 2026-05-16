@@ -58,7 +58,7 @@ export async function extractImports(
         // Cheap rejection: a TS file without "import" or "require(" can't
         // contain static, dynamic or CJS imports. Saves the AST traversal
         // cost on the ~10% of files that are pure data/constants.
-        if (!text.includes('import') && !text.includes('require(')) continue;
+        if (!text.includes('import') && !text.includes('require')) continue;
 
         // ---- Static imports ----
         for (const imp of sf.getImportDeclarations()) {
@@ -82,9 +82,11 @@ export async function extractImports(
 
         // ---- CJS require(...) calls ----
         // Walk descendants for `require(specifier)` patterns. Only triggered
-        // when the cheap substring check indicates `require(` is present.
+        // when the cheap substring check indicates `require` is present.
+        // This is intentionally broad — `require (x)` (space before paren) is
+        // legal JS. The per-node check (getText() === 'require') filters precisely.
         // `require.resolve(...)` and `obj.require(...)` are filtered below.
-        if (text.includes('require(')) {
+        if (text.includes('require')) {
             sf.forEachDescendant((node) => {
                 if (node.getKind() !== SyntaxKind.CallExpression) return;
                 const call = node as CallExpression;
@@ -140,12 +142,15 @@ function buildDynamicSite(
     if (kind !== SyntaxKind.StringLiteral && kind !== SyntaxKind.NoSubstitutionTemplateLiteral) {
         const pos = sf.getLineAndColumnAtPos(call.getStart());
         // Non-literal argument: resolution is structurally impossible.
-        // `dynamic-non-literal` can only appear on a `kind: 'dynamic'` site — the
-        // type system enforces this via the TsImportSite discriminated union.
+        // `dynamic-non-literal` appears on both `kind: 'dynamic'` and `kind: 'cjs-require'`
+        // sites — both use TsDynamicResolution, which includes the dynamic-non-literal variant.
         const resolution: TsDynamicResolution = { kind: 'dynamic-non-literal' };
         return {
             sourceFile: sf.getFilePath(),
-            specifier: arg.getText().slice(0, 80),
+            // Normalize whitespace before slicing — multi-line expressions like
+            // `import(\n  getModuleName()\n)` would embed raw newlines and corrupt
+            // log lines or JSON-structured output.
+            specifier: arg.getText().replace(/\s+/g, ' ').trim().slice(0, 80),
             resolution,
             kind: 'dynamic',
             typeOnly: false,
@@ -176,17 +181,38 @@ function buildCjsRequireSite(
     isAliasPrefix: AliasPrefixCheck,
 ): (TsImportSite & { kind: 'cjs-require' }) | null {
     const args = call.getArguments();
-    if (args.length !== 1) return null;
+    if (args.length !== 1) {
+        // Zero-arg `require()` or multi-arg `require(id, opts)` — cannot resolve.
+        // Emit a structured cjs-require site with dynamic-non-literal resolution
+        // so the site routes to diagnostics.cjsRequires rather than being silently
+        // dropped. specifier is set to a human-readable marker so log output
+        // identifies the case without needing a separate meta field.
+        const pos = sf.getLineAndColumnAtPos(call.getStart());
+        const resolution: TsDynamicResolution = { kind: 'dynamic-non-literal' };
+        const specifier = args.length === 0 ? '<zero-args>' : '<multi-args>';
+        return {
+            sourceFile: sf.getFilePath(),
+            specifier,
+            resolution,
+            kind: 'cjs-require',
+            typeOnly: false,
+            specifierShape: 'bare-external',
+            location: { file: sf.getFilePath(), line: pos.line, column: pos.column },
+        };
+    }
     const arg = args[0]!;
     const kind = arg.getKind();
     const pos = sf.getLineAndColumnAtPos(call.getStart());
 
     if (kind !== SyntaxKind.StringLiteral && kind !== SyntaxKind.NoSubstitutionTemplateLiteral) {
         // Non-literal argument: specifier cannot be resolved statically.
+        // Normalize whitespace before slicing — multi-line expressions like
+        // `require(\n  getModuleName()\n)` would embed raw newlines and corrupt
+        // log lines or JSON-structured output.
         const resolution: TsDynamicResolution = { kind: 'dynamic-non-literal' };
         return {
             sourceFile: sf.getFilePath(),
-            specifier: arg.getText().slice(0, 80),
+            specifier: arg.getText().replace(/\s+/g, ' ').trim().slice(0, 80),
             resolution,
             kind: 'cjs-require',
             typeOnly: false,
@@ -258,10 +284,11 @@ function packageNameOf(specifier: string): string {
  *      npm package name (`packageNameOf`). No further probing.
  *
  * Returns `TsStaticResolution` (not the wider `TsDynamicResolution`) — this
- * function is called from both static and literal-dynamic import paths. The
- * `dynamic-non-literal` variant is produced directly in `buildDynamicSite`
- * (before this function is called) and is intentionally absent here, which
- * enforces the structural invariant that only `kind: 'dynamic'` sites carry it.
+ * function is called from both static and literal import paths (dynamic and
+ * cjs-require). The `dynamic-non-literal` variant is produced directly in
+ * `buildDynamicSite` and `buildCjsRequireSite` (before this function is called)
+ * and is intentionally absent here. Both `kind: 'dynamic'` and `kind: 'cjs-require'`
+ * sites may carry `dynamic-non-literal` resolution via TsDynamicResolution.
  */
 function resolveSpecifier(
     sourceFilePath: string,
