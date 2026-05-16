@@ -545,21 +545,21 @@ function computeStrictFails(
         if (e.groundTruthCount === 0) {
             fails.push(`endpoint: zero ground-truth — set domains.endpoint=false if this project has no NestJS HTTP endpoints`);
         }
-        strictGateRecall('endpoint', 'recall', e.groundTruthCount, e.recall ?? 0, fails, 0.95);
+        if (!e.meetsFloor) fails.push(`endpoint recall ${pct(e.recall ?? 0)} (< 95%)`);
     }
     if (enabled.config && validation.config) {
         const c = validation.config;
         if (c.groundTruthCount === 0) {
             fails.push(`config: zero ground-truth — set domains.config=false if this project has no configService/process.env usage`);
         }
-        strictGateRecall('config', 'recall', c.groundTruthCount, c.recall ?? 0, fails, 0.90);
+        if (!c.meetsFloor) fails.push(`config recall ${pct(c.recall ?? 0)} (< 90%)`);
     }
     if (enabled.dbEntityFields && validation.dbEntityFields) {
         const f = validation.dbEntityFields;
         if (f.groundTruthCount === 0) {
             fails.push(`db-entity-field: zero ground-truth — set domains.dbEntityFields=false if this project has no TypeORM @Column entities`);
         }
-        strictGateRecall('db-entity-field', 'recall', f.groundTruthCount, f.recall ?? 0, fails, 0.95);
+        if (!f.meetsFloor) fails.push(`db-entity-field recall ${pct(f.recall ?? 0)} (< 95%)`);
     }
 
     return fails;
@@ -593,7 +593,7 @@ function strictGateResolve(
 // ---------------------------------------------------------------------------
 
 async function cmdBuild(args: ParsedArgs): Promise<void> {
-    const ALLOWED_ONLY = ['nats', 'typeorm', 'bullmq', 'di', 'http', 'imports'] as const;
+    const ALLOWED_ONLY = ['nats', 'typeorm', 'bullmq', 'di', 'http', 'imports', 'endpoint', 'config', 'db-entity-field'] as const;
     if (args.only && !ALLOWED_ONLY.includes(args.only as (typeof ALLOWED_ONLY)[number])) {
         process.stderr.write(
             `error: --only=${args.only} not yet supported; available: ${ALLOWED_ONLY.join(', ')}\n`,

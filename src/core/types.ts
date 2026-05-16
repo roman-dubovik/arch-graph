@@ -66,6 +66,7 @@ export type NodeKind =
     | 'external'
     | 'endpoint'
     | 'config-field'
+    /** STUB: extractor returns empty in v1 — see B8 in design doc */
     | 'scoped-marker'
     | 'db-entity-field';
 
@@ -117,6 +118,7 @@ export type EdgeKind =
     | 'endpoint-calls'
     | 'config-read-by'
     | 'entity-has-field'
+    /** STUB: reserved for forward-compat — no scoped edges emitted in v1; see B8 in design doc */
     | 'scoped';
 
 export interface GraphNode {
