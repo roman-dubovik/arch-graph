@@ -28,7 +28,11 @@ export function stripMarkedSection(body: string, start: string, end: string): st
     return replaced.replace(/\n{3,}/g, '\n\n');
 }
 
-/** Append a block to body, separated by a blank line. Adds trailing newline. */
+/**
+ * Append `block` to body, separating from existing content with a blank line.
+ * Caller is responsible for any trailing newline within `block` itself.
+ * If body is empty (or whitespace-only), writes `block` as-is.
+ */
 export function appendBlock(body: string, block: string): string {
     const trimmed = body.replace(/\s+$/, '');
     if (trimmed.length === 0) return block;
