@@ -199,7 +199,7 @@ export function extractEndpoints(project: Project): EndpointExtractResult {
                 diagnostics.push({
                     file: filePath,
                     line: decLoc.line,
-                    message: `@Controller(${controllerDec.getArguments()[0]?.getKindName() ?? 'unknown'}) on ${controllerName} uses non-literal prefix — pattern uses '<dynamic>' placeholder`,
+                    message: `@Controller on ${controllerName} uses non-literal prefix — pattern uses '<dynamic>' placeholder`,
                 });
             }
 
@@ -222,7 +222,7 @@ export function extractEndpoints(project: Project): EndpointExtractResult {
                         diagnostics.push({
                             file: filePath,
                             line: decLoc.line,
-                            message: `@${decName}(${dec.getArguments()[0]?.getKindName() ?? 'unknown'}) on ${controllerName}.${method.getName()} uses non-literal path — pattern uses '<dynamic>' placeholder`,
+                            message: `@${decName} on ${controllerName}.${method.getName()} uses non-literal path — pattern uses '<dynamic>' placeholder`,
                         });
                     }
                     const pattern = combinePattern(prefix, methodPath);

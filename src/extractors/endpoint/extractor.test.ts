@@ -320,6 +320,43 @@ export class EmptyObjController {
         expect(result.endpoints[0]!.pattern).toBe('/ping');
     });
 
+    it('resolveControllerPrefix with object-literal path: NON_LITERAL produces <dynamic>', () => {
+        const project = inMemoryProject({
+            '/app/dynobj.controller.ts': `
+import { Controller, Get } from '@nestjs/common';
+const DYN_PATH = 'dyn';
+@Controller({ path: DYN_PATH })
+export class DynObjController {
+    @Get('items')
+    method() {}
+}
+`,
+        });
+        const result = extractEndpoints(project);
+        // Object-form path with non-literal value → dynamic placeholder
+        expect(result.endpoints[0]!.pattern).toBe('/<dynamic>/items');
+        expect(result.diagnostics.length).toBeGreaterThan(0);
+    });
+
+    it('resolveControllerPrefix with object-literal version: NON_LITERAL — version not captured', () => {
+        // version: SOME_VAR where SOME_VAR is not a string literal → initLit is undefined → version skipped
+        const project = inMemoryProject({
+            '/app/dynver.controller.ts': `
+import { Controller, Get } from '@nestjs/common';
+const SOME_VER = '2';
+@Controller({ path: 'x', version: SOME_VER })
+export class DynVerController {
+    @Get()
+    method() {}
+}
+`,
+        });
+        const result = extractEndpoints(project);
+        // path is a literal 'x', version is non-literal → no meta.version
+        expect(result.endpoints[0]!.pattern).toBe('/x');
+        expect(result.endpoints[0]!.meta?.version).toBeUndefined();
+    });
+
     it('resolveMethodPath with non-literal arg produces <dynamic> placeholder', () => {
         const project = inMemoryProject({
             '/app/dynpath.controller.ts': `
