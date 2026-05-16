@@ -8,10 +8,6 @@ export default defineConfig({
             provider: 'v8',
             reporter: ['text', 'json-summary', 'html'],
             reportsDirectory: './coverage',
-            include: [
-                'src/extractors/typeorm/relations.ts',
-                'src/mapper/typeorm-to-graph.ts',
-            ],
             exclude: [
                 'node_modules/**',
                 'dist/**',
@@ -29,14 +25,10 @@ export default defineConfig({
                 'docs/**',
                 'vitest.config.ts',
             ],
-            // 95% line coverage on files matched by `include`. Agents add
-            // their new files here; the threshold is enforced per-file so
-            // a low-coverage existing file can't pull a new one under.
+            // 95% line coverage on files listed in thresholds.include.
+            // Global thresholds are intentionally unset — perFile is enforced only
+            // on the files listed below, keeping the gate scoped to agent-owned files.
             thresholds: {
-                lines: 95,
-                statements: 95,
-                functions: 95,
-                branches: 90,
                 perFile: true,
                 include: [
                     // Each tier-agent adds their owned files here.
@@ -47,6 +39,19 @@ export default defineConfig({
                     'src/extractors/typeorm/relations.ts',
                     'src/mapper/typeorm-to-graph.ts',
                 ],
+                // Per-file thresholds for owned files:
+                'src/extractors/typeorm/relations.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                'src/mapper/typeorm-to-graph.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
             },
         },
     },

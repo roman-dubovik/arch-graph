@@ -25,18 +25,32 @@ export interface MapTypeOrmResult {
  *   - Owner unknown        -> diagnostics.unowned
  * One edge per (owner, table); first-seen injection site location wins.
  *
- * Also maps `@ManyToOne / @OneToMany / @ManyToMany / @OneToOne` relations to
+ * Also maps `@ManyToOne / @ManyToMany / @OneToOne` relations to
  * `db-table → db-table` edges with kind `db-relation`.
  *   - Resolved target      -> `db-relation` edge emitted
  *   - Unresolved target    -> diagnostics.unresolvedRelations
+ *
+ * Policy A: only `@ManyToOne` (the FK-owner side), `@ManyToMany`, and `@OneToOne`
+ * produce `db-relation` edges. `@OneToMany` is the inverse/mirror of a `@ManyToOne`
+ * on the other side of the same FK — emitting both would produce duplicate edges in
+ * opposite directions for the same logical foreign key. Since the FK lives on the
+ * `@ManyToOne` side, that is the single source of truth; `@OneToMany` is skipped.
+ *
+ * `entityIndex` is required when `relations` is non-empty: it is used to look up
+ * the owner entity's table name for each relation. Pass `undefined` or omit only
+ * when no relations are extracted (e.g. unit tests exercising db-access logic only).
  */
 export function mapTypeOrmToGraph(
     sites: TypeOrmInjectionSite[],
     ownership: OwnershipRegistry,
     entityWarnings: TypeOrmEntityDecoratorWarning[] = [],
     relations: TypeOrmRelation[] = [],
-    entityIndex?: EntityIndex,
+    entityIndex: EntityIndex | undefined = undefined,
 ): MapTypeOrmResult {
+    if (relations.length > 0 && !entityIndex) {
+        throw new Error('entityIndex is required when relations are provided');
+    }
+
     const ownerNodes = new Map<string, GraphNode>();
     const tableNodes = new Map<string, GraphNode>();
     const edges = new Map<string, GraphEdge>();
@@ -90,18 +104,27 @@ export function mapTypeOrmToGraph(
         }
     }
 
-    // ---- db-relation edges from @ManyToOne / @OneToMany / @ManyToMany / @OneToOne ----
+    // ---- db-relation edges from @ManyToOne / @ManyToMany / @OneToOne ----
+    // Policy A: skip @OneToMany — the FK is owned by @ManyToOne on the other entity.
+    // Emitting both would produce two edges in opposite directions for the same FK.
     const unresolvedRelations: TypeOrmRelation[] = [];
-    let resolvedRelationsCount = 0;
+    let relationsEmitted = 0;
+    let relationsResolved = 0;
 
     for (const rel of relations) {
+        // Policy A: @OneToMany is the inverse mirror of @ManyToOne — skip it entirely.
+        if (rel.decorator === 'OneToMany') continue;
+
         if (!rel.resolvedTarget) {
             unresolvedRelations.push(rel);
             continue;
         }
 
-        // Owner entity lookup for table name
-        const ownerEntity = entityIndex?.get(rel.ownerClass) ?? null;
+        // Count all resolved relations (before Policy A filtering for emitted count).
+        relationsResolved++;
+
+        // Owner entity lookup for table name (entityIndex is guaranteed non-null here)
+        const ownerEntity = entityIndex!.get(rel.ownerClass) ?? null;
         if (!ownerEntity) {
             // Owner not in index — treat as unresolved (defensive; extractor already filters)
             unresolvedRelations.push(rel);
@@ -158,7 +181,7 @@ export function mapTypeOrmToGraph(
                     targetClass: rel.targetClass,
                 },
             });
-            resolvedRelationsCount++;
+            relationsEmitted++;
         }
     }
 
@@ -175,7 +198,8 @@ export function mapTypeOrmToGraph(
                 unresolvedEntity: unresolvedEntities.length,
                 unowned: unowned.length,
                 entityDecoratorWarnings: entityWarnings.length,
-                relations: resolvedRelationsCount,
+                relationsEmitted,
+                relationsResolved,
                 unresolvedRelations: unresolvedRelations.length,
             },
         },
