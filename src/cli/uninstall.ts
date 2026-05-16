@@ -393,20 +393,32 @@ export async function removeProjectArtefacts(inv: ProjectInventory): Promise<voi
     }
 }
 
-export async function removeMcpRegistrations(inv: McpInventory): Promise<void> {
-    if (!inv.configPath || inv.projectsWithEntry.length === 0) return;
+/**
+ * Returns `true` if the registration was cleanly removed (or there was nothing
+ * to remove), `false` if we bailed without persisting the change (e.g. corrupt
+ * JSON we refused to touch, or write failure). The wizard uses the boolean to
+ * set `hadError` so the final exit code and message reflect partial failure.
+ */
+export async function removeMcpRegistrations(inv: McpInventory): Promise<boolean> {
+    if (!inv.configPath || inv.projectsWithEntry.length === 0) return true;
 
-    const body = await readFile(inv.configPath, 'utf8');
+    let body: string;
+    try {
+        body = await readFile(inv.configPath, 'utf8');
+    } catch (err) {
+        process.stderr.write(`⚠ arch-graph: failed to read ${inv.configPath}: ${(err as Error).message}\n`);
+        return false;
+    }
     let parsed: unknown;
     try {
         parsed = JSON.parse(body);
     } catch {
         output.write(`⚠ ~/.claude.json is not valid JSON — leaving it alone\n`);
-        return;
+        return false;
     }
     const root = parsed as Record<string, unknown>;
     const projects = root.projects as Record<string, Record<string, unknown>> | undefined;
-    if (!projects) return;
+    if (!projects) return true;
 
     for (const key of inv.projectsWithEntry) {
         const proj = projects[key];
@@ -419,7 +431,13 @@ export async function removeMcpRegistrations(inv: McpInventory): Promise<void> {
         }
     }
 
-    await writeFile(inv.configPath, JSON.stringify(root, null, 2) + '\n', 'utf8');
+    try {
+        await writeFile(inv.configPath, JSON.stringify(root, null, 2) + '\n', 'utf8');
+        return true;
+    } catch (err) {
+        process.stderr.write(`⚠ arch-graph: failed to update ${inv.configPath}: ${(err as Error).message}\n`);
+        return false;
+    }
 }
 
 /**
@@ -642,13 +660,14 @@ export async function runUninstallWizard(args: UninstallArgs): Promise<void> {
         }
     }
 
+    let hadError = false;
+
     if (scopes.has('mcp') && inv.mcp.projectsWithEntry.length > 0) {
-        await removeMcpRegistrations(inv.mcp);
+        const ok = await removeMcpRegistrations(inv.mcp);
+        if (!ok) hadError = true;
     } else if (scopes.has('mcp')) {
         output.write('(no MCP registrations to remove)\n');
     }
-
-    let hadError = false;
 
     if (scopes.has('global') && hasAnyGlobal(inv.global)) {
         const result = removeGlobalInstall(installDir);
