@@ -14,8 +14,16 @@ import { dirname, resolve } from 'node:path';
 
 import { appendBlock, replaceMarkedSection, stripMarkedSection } from './marker-block.js';
 
-const MARK_START = '# >>> arch-graph >>>';
-const MARK_END = '# <<< arch-graph <<<';
+export const MARK_START = '# >>> arch-graph >>>';
+export const MARK_END = '# <<< arch-graph <<<';
+
+export function preCommitHookPath(repo: string): string {
+    return resolve(repo, '.git', 'hooks', 'pre-commit');
+}
+
+export function postCommitHookPath(repo: string): string {
+    return resolve(repo, '.git', 'hooks', 'post-commit');
+}
 
 // ---------------------------------------------------------------------------
 // Hook body templates
@@ -102,13 +110,6 @@ function validateMode(raw: string): HookMode {
 // Path helpers
 // ---------------------------------------------------------------------------
 
-function preCommitPath(repo: string): string {
-    return resolve(repo, '.git', 'hooks', 'pre-commit');
-}
-
-function postCommitPath(repo: string): string {
-    return resolve(repo, '.git', 'hooks', 'post-commit');
-}
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -180,8 +181,8 @@ export async function hookInstall(args: HookArgs): Promise<void> {
     await ensureGitRepo(args.repo);
 
     if (args.mode === 'pre-commit') {
-        const target = preCommitPath(args.repo);
-        const other = postCommitPath(args.repo);
+        const target = preCommitHookPath(args.repo);
+        const other = postCommitHookPath(args.repo);
         // Strip marker from the old mode's file when switching.
         await removeMarkerFromFile(other);
         await writeHookBlock(target, 'pre-commit', PRE_COMMIT_BODY);
@@ -189,8 +190,8 @@ export async function hookInstall(args: HookArgs): Promise<void> {
         process.stdout.write(`  Rebuilds graph + stages artifacts before commits touching .ts files.\n`);
         process.stdout.write(`  Remove with: arch-graph hook uninstall\n`);
     } else {
-        const target = postCommitPath(args.repo);
-        const other = preCommitPath(args.repo);
+        const target = postCommitHookPath(args.repo);
+        const other = preCommitHookPath(args.repo);
         // Strip marker from the old mode's file when switching.
         await removeMarkerFromFile(other);
         await writeHookBlock(target, 'post-commit', POST_COMMIT_BODY);
@@ -202,8 +203,8 @@ export async function hookInstall(args: HookArgs): Promise<void> {
 
 export async function hookUninstall(args: HookArgs): Promise<void> {
     await ensureGitRepo(args.repo);
-    const pre = preCommitPath(args.repo);
-    const post = postCommitPath(args.repo);
+    const pre = preCommitHookPath(args.repo);
+    const post = postCommitHookPath(args.repo);
 
     let removed = 0;
 
@@ -236,8 +237,8 @@ export async function hookUninstall(args: HookArgs): Promise<void> {
 
 export async function hookStatus(args: HookArgs): Promise<void> {
     await ensureGitRepo(args.repo);
-    const pre = preCommitPath(args.repo);
-    const post = postCommitPath(args.repo);
+    const pre = preCommitHookPath(args.repo);
+    const post = postCommitHookPath(args.repo);
 
     let found = false;
 
