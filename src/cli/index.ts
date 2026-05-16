@@ -17,6 +17,15 @@ import {
 } from './claude.js';
 import { hookInstall, hookStatus, hookUninstall, parseHookArgs } from './hooks.js';
 import { installSkill } from './skill.js';
+import {
+    tipsForBullmq,
+    tipsForDi,
+    tipsForHttp,
+    tipsForImports,
+    tipsForNats,
+    tipsForTypeorm,
+} from './build-tips.js';
+import type { BuildValidation, DiagnosticsReport } from '../core/types.js';
 
 interface ParsedArgs {
     cmd: string;
@@ -27,6 +36,12 @@ interface ParsedArgs {
     mermaidSlice?: MermaidSliceMode;
     /** Suppress non-error stdout. Used by the post-commit hook. */
     quiet: boolean;
+    /**
+     * Hard-fail mode for CI: exit 3 when any enabled domain falls below recall/resolve
+     * floor. Prints the table even in strict mode (good for CI logs). When combined
+     * with --quiet, the table is suppressed but exit 3 is preserved on failures.
+     */
+    strict: boolean;
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
@@ -36,6 +51,7 @@ function parseArgs(argv: string[]): ParsedArgs {
     let only: string | undefined;
     let mermaidSlice: MermaidSliceMode | undefined;
     let quiet = false;
+    let strict = false;
 
     for (let i = 0; i < rest.length; i++) {
         const a = rest[i]!;
@@ -55,16 +71,18 @@ function parseArgs(argv: string[]): ParsedArgs {
             mermaidSlice = parseSliceMode(rest[++i]!);
         } else if (a === '--quiet' || a === '-q') {
             quiet = true;
+        } else if (a === '--strict') {
+            strict = true;
         }
     }
-    return { cmd: cmd ?? '', config, out, only, mermaidSlice, quiet };
+    return { cmd: cmd ?? '', config, out, only, mermaidSlice, quiet, strict };
 }
 
 const HELP = `
 arch-graph — static architecture graph extractor for NestJS monorepos
 
 Usage:
-  arch-graph build      [--config <path>] [--out <dir>] [--only=<extractor>] [--mermaid-slice=<mode>] [--quiet]
+  arch-graph build      [--config <path>] [--out <dir>] [--only=<extractor>] [--mermaid-slice=<mode>] [--quiet] [--strict]
   arch-graph diagnose   [--config <path>] [--out <dir>]
   arch-graph init       [--out <path>]
   arch-graph mcp        [--out <dir>]
@@ -78,6 +96,13 @@ Usage:
   arch-graph hook status      [--repo <path>]
 
   arch-graph install-skill    (writes ~/.claude/skills/arch-graph/SKILL.md)
+
+Flags:
+  --quiet   Suppress non-error stdout (progress + validation table). Used by
+            the post-commit hook so commits aren't noisy.
+  --strict  CI hard-fail mode: exit 3 if any enabled domain recall falls below
+            floor (≥95%, or ≥80% for imports). The per-domain table is always
+            printed so CI logs contain the context.
 
 Defaults:
   --config  ./arch-graph.config.ts
@@ -118,6 +143,356 @@ async function cmdInit(out: string): Promise<void> {
     await writeFile(target, INIT_TEMPLATE, 'utf8');
     process.stdout.write(`wrote ${target}\n`);
 }
+
+// ---------------------------------------------------------------------------
+// Domain-level row computation
+// ---------------------------------------------------------------------------
+
+type DomainStatus = 'ok' | 'warn' | 'disabled' | 'no-gt';
+
+interface DomainRow {
+    name: string;
+    /** Min recall across all per-role metrics (the gate-visible number). NaN when disabled or no-GT. */
+    recall: number;
+    /** Resolve rate for domains that track it; NaN otherwise. */
+    resolve: number;
+    /** The floor used for gating (0.95 for most, 0.80 for imports). */
+    floor: number;
+    status: DomainStatus;
+    tips: string[];
+}
+
+function buildDomainRows(
+    validation: BuildValidation,
+    diagnostics: DiagnosticsReport,
+    enabled: Record<string, boolean>,
+): DomainRow[] {
+    const rows: DomainRow[] = [];
+
+    // ---- NATS ----
+    {
+        const v = validation.nats.summary;
+        const d = diagnostics.nats;
+        const en = enabled.nats!;
+        let status: DomainStatus;
+        let recall = NaN;
+        let tips: string[] = [];
+        if (!en) {
+            status = 'disabled';
+        } else if (v.groundTruthHandlers === 0 && v.groundTruthSenders === 0) {
+            status = 'no-gt';
+        } else {
+            // Use min across enabled roles; roles with GT=0 are skipped per gate logic.
+            const recallVals: number[] = [];
+            if (v.groundTruthHandlers > 0) recallVals.push(v.recallHandlers);
+            if (v.groundTruthSenders > 0) recallVals.push(v.recallSenders);
+            recall = recallVals.length > 0 ? Math.min(...recallVals) : 1;
+            status = recall >= 0.95 ? 'ok' : 'warn';
+            if (status === 'warn') tips = tipsForNats(validation.nats, d);
+        }
+        rows.push({ name: 'nats', recall, resolve: NaN, floor: 0.95, status, tips });
+    }
+
+    // ---- TypeORM ----
+    {
+        const v = validation.typeorm.summary;
+        const d = diagnostics.typeorm;
+        const en = enabled.typeorm!;
+        let status: DomainStatus;
+        let recall = NaN;
+        let resolve = NaN;
+        let tips: string[] = [];
+        if (!en) {
+            status = 'disabled';
+        } else if (v.groundTruthInjections === 0 && v.groundTruthEntities === 0) {
+            status = 'no-gt';
+        } else {
+            const recallVals: number[] = [];
+            if (v.groundTruthInjections > 0) recallVals.push(v.recallInjections);
+            if (v.groundTruthEntities > 0) recallVals.push(v.recallEntities);
+            recall = recallVals.length > 0 ? Math.min(...recallVals) : 1;
+            resolve = v.resolveRate;
+            const recallOk = recall >= 0.95;
+            const resolveOk = v.totalInjections === 0 || v.resolveRate >= 0.95;
+            status = recallOk && resolveOk ? 'ok' : 'warn';
+            if (status === 'warn') tips = tipsForTypeorm(validation.typeorm, d);
+        }
+        rows.push({ name: 'typeorm', recall, resolve, floor: 0.95, status, tips });
+    }
+
+    // ---- BullMQ ----
+    {
+        const v = validation.bullmq.summary;
+        const d = diagnostics.bullmq;
+        const en = enabled.bullmq!;
+        let status: DomainStatus;
+        let recall = NaN;
+        let resolve = NaN;
+        let tips: string[] = [];
+        if (!en) {
+            status = 'disabled';
+        } else if (
+            v.groundTruthProducers === 0 &&
+            v.groundTruthConsumers === 0 &&
+            v.groundTruthRegistrations === 0
+        ) {
+            status = 'no-gt';
+        } else {
+            const recallVals: number[] = [];
+            if (v.groundTruthProducers > 0) recallVals.push(v.recallProducers);
+            if (v.groundTruthConsumers > 0) recallVals.push(v.recallConsumers);
+            if (v.groundTruthRegistrations > 0) recallVals.push(v.recallRegistrations);
+            recall = recallVals.length > 0 ? Math.min(...recallVals) : 1;
+            const totalSites = v.totalProducers + v.totalConsumers + v.totalRegistrations;
+            resolve = v.resolveRate;
+            const recallOk = recall >= 0.95;
+            const resolveOk = totalSites === 0 || v.resolveRate >= 0.95;
+            status = recallOk && resolveOk ? 'ok' : 'warn';
+            if (status === 'warn') tips = tipsForBullmq(validation.bullmq, d);
+        }
+        rows.push({ name: 'bullmq', recall, resolve, floor: 0.95, status, tips });
+    }
+
+    // ---- DI ----
+    {
+        const v = validation.di.summary;
+        const d = diagnostics.di;
+        const en = enabled.di!;
+        let status: DomainStatus;
+        let recall = NaN;
+        let resolve = NaN;
+        let tips: string[] = [];
+        if (!en) {
+            status = 'disabled';
+        } else if (v.groundTruthModules === 0) {
+            status = 'no-gt';
+        } else {
+            const recallVals: number[] = [v.recallModules];
+            if (v.groundTruthImportsFields > 0) recallVals.push(v.recallImportsFields);
+            if (v.groundTruthProvidersFields > 0) recallVals.push(v.recallProvidersFields);
+            if (v.groundTruthExportsFields > 0) recallVals.push(v.recallExportsFields);
+            if (v.groundTruthControllersFields > 0) recallVals.push(v.recallControllersFields);
+            recall = Math.min(...recallVals);
+            const totalRefs =
+                v.totalImports + v.totalProviders + v.totalExports + v.totalControllers;
+            resolve = v.resolveRate;
+            const recallOk = recall >= 0.95;
+            const resolveOk = totalRefs === 0 || v.resolveRate >= 0.95;
+            status = recallOk && resolveOk ? 'ok' : 'warn';
+            if (status === 'warn') tips = tipsForDi(validation.di, d);
+        }
+        rows.push({ name: 'di', recall, resolve, floor: 0.95, status, tips });
+    }
+
+    // ---- HTTP ----
+    {
+        const v = validation.http.summary;
+        const d = diagnostics.http;
+        const en = enabled.http!;
+        let status: DomainStatus;
+        let recall = NaN;
+        let tips: string[] = [];
+        if (!en) {
+            status = 'disabled';
+        } else if (v.groundTruthCalls === 0) {
+            status = 'no-gt';
+        } else {
+            recall = v.recallCalls;
+            status = recall >= 0.95 ? 'ok' : 'warn';
+            if (status === 'warn') tips = tipsForHttp(validation.http, d);
+        }
+        // HTTP resolve is informational (not gated), so show n/a per spec sample
+        rows.push({ name: 'http', recall, resolve: NaN, floor: 0.95, status, tips });
+    }
+
+    // ---- imports ----
+    {
+        const v = validation.imports.summary;
+        const d = diagnostics.imports;
+        const en = enabled.imports!;
+        let status: DomainStatus;
+        let recall = NaN;
+        let tips: string[] = [];
+        if (!en) {
+            status = 'disabled';
+        } else if (v.groundTruthStatic === 0) {
+            status = 'no-gt';
+        } else {
+            recall = v.recallStatic;
+            status = recall >= 0.8 ? 'ok' : 'warn';
+            if (status === 'warn') tips = tipsForImports(validation.imports, d);
+        }
+        // imports has no resolve gate
+        rows.push({ name: 'imports', recall, resolve: NaN, floor: 0.8, status, tips });
+    }
+
+    return rows;
+}
+
+// ---------------------------------------------------------------------------
+// Table formatting
+// ---------------------------------------------------------------------------
+
+function formatPct(n: number): string {
+    if (isNaN(n)) return 'n/a';
+    return `${(n * 100).toFixed(1)}%`;
+}
+
+function formatFloor(floor: number, status: DomainStatus): string {
+    if (status === 'disabled' || status === 'no-gt') return '—';
+    return `≥${(floor * 100).toFixed(1)}%`;
+}
+
+function statusSymbol(status: DomainStatus): string {
+    switch (status) {
+        case 'ok': return '✓ ok';        // ✓ ok
+        case 'warn': return '⚠ WARN';    // ⚠ WARN
+        case 'disabled': return '• disabled'; // • disabled
+        case 'no-gt': return '• no GT (domain not in use?)'; // • no GT
+    }
+}
+
+function printValidationTable(rows: DomainRow[]): void {
+    // Column widths
+    const COL_DOMAIN  = 10;
+    const COL_RECALL  = 9;
+    const COL_RESOLVE = 9;
+    const COL_FLOOR   = 8;
+    const COL_STATUS  = 30;
+
+    const header =
+        'Domain'.padEnd(COL_DOMAIN) +
+        'Recall'.padStart(COL_RECALL) +
+        'Resolve'.padStart(COL_RESOLVE) +
+        'Floor'.padStart(COL_FLOOR) +
+        '   Status';
+
+    const sep = '─'.repeat(COL_DOMAIN + COL_RECALL + COL_RESOLVE + COL_FLOOR + 3 + COL_STATUS);
+
+    process.stdout.write(`\n${header}\n${sep}\n`);
+
+    for (const row of rows) {
+        const line =
+            row.name.padEnd(COL_DOMAIN) +
+            formatPct(row.recall).padStart(COL_RECALL) +
+            formatPct(row.resolve).padStart(COL_RESOLVE) +
+            formatFloor(row.floor, row.status).padStart(COL_FLOOR) +
+            '   ' +
+            statusSymbol(row.status);
+        process.stdout.write(`${line}\n`);
+    }
+
+    // Tips section: collect all warn domains
+    const warnRows = rows.filter((r) => r.status === 'warn' && r.tips.length > 0);
+    if (warnRows.length > 0) {
+        process.stdout.write(`\nTips:\n`);
+        for (const row of warnRows) {
+            process.stdout.write(`  [${row.name}]\n`);
+            for (const tip of row.tips) {
+                process.stdout.write(`    - ${tip}\n`);
+            }
+        }
+    }
+
+    process.stdout.write('\n');
+}
+
+// ---------------------------------------------------------------------------
+// Strict-mode gate (same semantics as the old hard-fail, but collected here)
+// ---------------------------------------------------------------------------
+
+function computeStrictFails(
+    validation: BuildValidation,
+    enabled: Record<string, boolean>,
+): string[] {
+    const fails: string[] = [];
+    const n = validation.nats.summary;
+    const t = validation.typeorm.summary;
+    const b = validation.bullmq.summary;
+    const d = validation.di.summary;
+    const h = validation.http.summary;
+    const i = validation.imports.summary;
+
+    // Per-role zero-GT: handlers misconfig and senders misconfig fail independently.
+    if (enabled.nats) {
+        if (n.groundTruthHandlers === 0) fails.push(`nats: zero handler ground-truth — check subscribe decorators / wrapperSubscribeApis`);
+        if (n.groundTruthSenders === 0) fails.push(`nats: zero sender ground-truth — check wrapperPublishApis (typo'd class name?)`);
+        strictGateRecall(true, 'nats', 'handlers', n.groundTruthHandlers, n.recallHandlers, fails);
+        strictGateRecall(true, 'nats', 'senders', n.groundTruthSenders, n.recallSenders, fails);
+    }
+    if (enabled.typeorm) {
+        if (t.groundTruthInjections === 0) fails.push(`typeorm: zero injection ground-truth — check appsGlob / @InjectRepository usage`);
+        if (t.groundTruthEntities === 0) fails.push(`typeorm: zero entity ground-truth — check @Entity declarations in libs/`);
+        strictGateRecall(true, 'typeorm', 'injections', t.groundTruthInjections, t.recallInjections, fails);
+        strictGateRecall(true, 'typeorm', 'entities', t.groundTruthEntities, t.recallEntities, fails);
+        strictGateResolve(true, 'typeorm', t.totalInjections, t.resolveRate, fails);
+    }
+    if (enabled.http) {
+        if (h.groundTruthCalls === 0) {
+            fails.push(`http: zero ground-truth — set domains.http=false if this project has no HTTP usage`);
+        }
+        strictGateRecall(true, 'http', 'recall', h.groundTruthCalls, h.recallCalls, fails);
+    }
+    if (enabled.bullmq) {
+        const anyGt = b.groundTruthProducers + b.groundTruthConsumers + b.groundTruthRegistrations;
+        if (anyGt === 0) fails.push(`bullmq: zero ground-truth across producers/consumers/registrations — set domains.bullmq=false if this project has no BullMQ`);
+        strictGateRecall(true, 'bullmq', 'producers', b.groundTruthProducers, b.recallProducers, fails);
+        strictGateRecall(true, 'bullmq', 'consumers', b.groundTruthConsumers, b.recallConsumers, fails);
+        strictGateRecall(true, 'bullmq', 'registrations', b.groundTruthRegistrations, b.recallRegistrations, fails);
+        const totalSites = b.totalProducers + b.totalConsumers + b.totalRegistrations;
+        strictGateResolve(true, 'bullmq', totalSites, b.resolveRate, fails);
+    }
+    if (enabled.di) {
+        if (d.groundTruthModules === 0) {
+            fails.push(`di: zero @Module ground-truth — set domains.di=false if this project is not NestJS`);
+        }
+        strictGateRecall(true, 'di', 'modules', d.groundTruthModules, d.recallModules, fails);
+        strictGateRecall(true, 'di', 'imports-fields', d.groundTruthImportsFields, d.recallImportsFields, fails);
+        strictGateRecall(true, 'di', 'providers-fields', d.groundTruthProvidersFields, d.recallProvidersFields, fails);
+        strictGateRecall(true, 'di', 'exports-fields', d.groundTruthExportsFields, d.recallExportsFields, fails);
+        strictGateRecall(true, 'di', 'controllers-fields', d.groundTruthControllersFields, d.recallControllersFields, fails);
+        const totalRefs = d.totalImports + d.totalProviders + d.totalExports + d.totalControllers;
+        strictGateResolve(true, 'di', totalRefs, d.resolveRate, fails);
+    }
+    if (enabled.imports) {
+        if (i.groundTruthStatic === 0) {
+            fails.push(`imports: zero ground-truth — appsGlob/libsGlob almost certainly broken`);
+        } else if (i.recallStatic < 0.8) {
+            fails.push(`imports recall ${pct(i.recallStatic)} (< 80%)`);
+        }
+    }
+
+    return fails;
+}
+
+function strictGateRecall(
+    _enabled: boolean,
+    domain: string,
+    field: string,
+    gt: number,
+    recall: number,
+    fails: string[],
+    threshold = 0.95,
+): void {
+    if (gt === 0) return;
+    if (recall < threshold) fails.push(`${domain} ${field} ${pct(recall)}`);
+}
+
+function strictGateResolve(
+    _enabled: boolean,
+    domain: string,
+    total: number,
+    rate: number,
+    fails: string[],
+    threshold = 0.95,
+): void {
+    if (total === 0) return;
+    if (rate < threshold) fails.push(`${domain} resolve ${pct(rate)} (< ${pct(threshold)})`);
+}
+
+// ---------------------------------------------------------------------------
+// Build command
+// ---------------------------------------------------------------------------
 
 async function cmdBuild(args: ParsedArgs): Promise<void> {
     const ALLOWED_ONLY = ['nats', 'typeorm', 'bullmq', 'di', 'http', 'imports'] as const;
@@ -172,123 +547,37 @@ async function cmdBuild(args: ParsedArgs): Promise<void> {
         }
     }
 
-    // Regression gate: hard fail if any *enabled* domain produced zero ground-truth
-    // (misconfig) or dropped below 95% recall. Disable via `domains.<x> = false`.
-    const n = result.validation.nats.summary;
-    const t = result.validation.typeorm.summary;
-    const b = result.validation.bullmq.summary;
-    const d = result.validation.di.summary;
-    const h = result.validation.http.summary;
-    const i = result.validation.imports.summary;
-    const natsEnabled = cfg.domains?.nats !== false;
-    const typeormEnabled = cfg.domains?.typeorm !== false;
-    const bullmqEnabled = cfg.domains?.bullmq !== false;
-    const diEnabled = cfg.domains?.di !== false;
-    const httpEnabled = cfg.domains?.http !== false;
-    const importsEnabled = cfg.domains?.imports !== false;
-    const fails: string[] = [];
+    // Determine which domains are enabled
+    const enabled: Record<string, boolean> = {
+        nats: cfg.domains?.nats !== false,
+        typeorm: cfg.domains?.typeorm !== false,
+        bullmq: cfg.domains?.bullmq !== false,
+        di: cfg.domains?.di !== false,
+        http: cfg.domains?.http !== false,
+        imports: cfg.domains?.imports !== false,
+    };
 
-    // Per-role zero-GT: handlers misconfig and senders misconfig fail independently
-    // (otherwise a zero on one side hides behind a non-zero on the other).
-    if (natsEnabled) {
-        if (n.groundTruthHandlers === 0) fails.push(`nats: zero handler ground-truth — check subscribe decorators / wrapperSubscribeApis`);
-        if (n.groundTruthSenders === 0) fails.push(`nats: zero sender ground-truth — check wrapperPublishApis (typo'd class name?)`);
-        gateRecall(natsEnabled, 'nats', 'handlers', n.groundTruthHandlers, n.recallHandlers, fails);
-        gateRecall(natsEnabled, 'nats', 'senders', n.groundTruthSenders, n.recallSenders, fails);
-    }
-    if (typeormEnabled) {
-        if (t.groundTruthInjections === 0) fails.push(`typeorm: zero injection ground-truth — check appsGlob / @InjectRepository usage`);
-        if (t.groundTruthEntities === 0) fails.push(`typeorm: zero entity ground-truth — check @Entity declarations in libs/`);
-        gateRecall(typeormEnabled, 'typeorm', 'injections', t.groundTruthInjections, t.recallInjections, fails);
-        gateRecall(typeormEnabled, 'typeorm', 'entities', t.groundTruthEntities, t.recallEntities, fails);
-        // Low resolveRate = many @InjectRepository(X) didn't match a known @Entity —
-        // usually a real extractor gap (alias re-exports, namespaced imports) worth gating.
-        gateResolve(typeormEnabled, 'typeorm', t.totalInjections, t.resolveRate, fails);
-    }
-    if (httpEnabled) {
-        // HTTP is opt-in via gate: a project with no HTTP at all should set `domains.http=false`.
-        // We only gate on recall (the resolve metric reflects how *interpretable* the URLs are —
-        // a project with 80% external `fetch(literal)` legitimately has low "resolve" by the spec).
-        if (h.groundTruthCalls === 0) {
-            fails.push(`http: zero ground-truth — set domains.http=false if this project has no HTTP usage`);
-        }
-        gateRecall(httpEnabled, 'http', 'recall', h.groundTruthCalls, h.recallCalls, fails);
-    }
-    if (bullmqEnabled) {
-        // Per-role zero-GT — each role gates independently. A project with @InjectQueue but
-        // no @Processor is legitimate; both being zero usually means BullMQ isn't in the project
-        // and the operator should set `domains.bullmq = false`.
-        const anyGt = b.groundTruthProducers + b.groundTruthConsumers + b.groundTruthRegistrations;
-        if (anyGt === 0) fails.push(`bullmq: zero ground-truth across producers/consumers/registrations — set domains.bullmq=false if this project has no BullMQ`);
-        gateRecall(bullmqEnabled, 'bullmq', 'producers', b.groundTruthProducers, b.recallProducers, fails);
-        gateRecall(bullmqEnabled, 'bullmq', 'consumers', b.groundTruthConsumers, b.recallConsumers, fails);
-        gateRecall(bullmqEnabled, 'bullmq', 'registrations', b.groundTruthRegistrations, b.recallRegistrations, fails);
-        const totalSites = b.totalProducers + b.totalConsumers + b.totalRegistrations;
-        gateResolve(bullmqEnabled, 'bullmq', totalSites, b.resolveRate, fails);
-    }
-    if (diEnabled) {
-        // `module` recall is the primary contract — every `@Module(` in source must be
-        // extracted. Field-presence recall (imports/providers/exports/controllers) catches
-        // regressions in the field-decoder logic. `resolveRate` catches ref-decoder regressions.
-        if (d.groundTruthModules === 0) {
-            fails.push(`di: zero @Module ground-truth — set domains.di=false if this project is not NestJS`);
-        }
-        gateRecall(diEnabled, 'di', 'modules', d.groundTruthModules, d.recallModules, fails);
-        gateRecall(diEnabled, 'di', 'imports-fields', d.groundTruthImportsFields, d.recallImportsFields, fails);
-        gateRecall(diEnabled, 'di', 'providers-fields', d.groundTruthProvidersFields, d.recallProvidersFields, fails);
-        gateRecall(diEnabled, 'di', 'exports-fields', d.groundTruthExportsFields, d.recallExportsFields, fails);
-        gateRecall(diEnabled, 'di', 'controllers-fields', d.groundTruthControllersFields, d.recallControllersFields, fails);
-        const totalRefs = d.totalImports + d.totalProviders + d.totalExports + d.totalControllers;
-        gateResolve(diEnabled, 'di', totalRefs, d.resolveRate, fails);
+    // Build per-domain rows for advisory table
+    const rows = buildDomainRows(result.validation, result.diagnostics, enabled);
+
+    // Print the validation table (advisory mode: always; strict mode: always; quiet: never)
+    if (!args.quiet) {
+        printValidationTable(rows);
     }
 
-    if (importsEnabled) {
-        // Imports gate: GT must be non-zero (every project has imports), and
-        // aggregate recall must be reasonable. We aim for 80% — ts-morph's
-        // alias resolution is imperfect without a per-app Project, so we
-        // accept a lower bar than NATS/TypeORM/BullMQ. See OPEN-QUESTIONS.
-        if (i.groundTruthStatic === 0) {
-            fails.push(`imports: zero ground-truth — appsGlob/libsGlob almost certainly broken`);
-        } else if (i.recallStatic < 0.8) {
-            fails.push(`imports recall ${pct(i.recallStatic)} (< 80%)`);
+    // Strict mode: hard-fail exactly like the old behavior
+    if (args.strict) {
+        const fails = computeStrictFails(result.validation, enabled);
+        if (fails.length > 0) {
+            process.stderr.write(`\n⚠  regression gate failed (--strict):\n  ${fails.join('\n  ')}\nSee validation.json.\n`);
+            process.exit(3);
         }
     }
-
-    if (fails.length > 0) {
-        process.stderr.write(`\n⚠  regression gate failed:\n  ${fails.join('\n  ')}\nSee validation.json.\n`);
-        process.exit(3);
-    }
+    // Default (advisory) mode: always exit 0
 }
 
 function pct(n: number): string {
     return `${(n * 100).toFixed(1)}%`;
-}
-
-/** Push a recall failure if `enabled`, GT is non-zero, and `recall` is below `threshold`. */
-function gateRecall(
-    enabled: boolean,
-    domain: string,
-    field: string,
-    gt: number,
-    recall: number,
-    fails: string[],
-    threshold = 0.95,
-): void {
-    if (!enabled || gt === 0) return;
-    if (recall < threshold) fails.push(`${domain} ${field} ${pct(recall)}`);
-}
-
-/** Push a resolve failure if `enabled`, total is non-zero, and `rate` is below `threshold`. */
-function gateResolve(
-    enabled: boolean,
-    domain: string,
-    total: number,
-    rate: number,
-    fails: string[],
-    threshold = 0.95,
-): void {
-    if (!enabled || total === 0) return;
-    if (rate < threshold) fails.push(`${domain} resolve ${pct(rate)} (< ${pct(threshold)})`);
 }
 
 function describeSlice(slice: MermaidSliceMode): string {
