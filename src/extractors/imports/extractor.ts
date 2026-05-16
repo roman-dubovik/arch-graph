@@ -55,10 +55,10 @@ export async function extractImports(
     for (const sf of project.getSourceFiles()) {
         if (isExcludedSourceFile(sf)) continue;
         const text = sf.getFullText();
-        // Cheap rejection: a TS file without "import" string can't contain
-        // static or dynamic imports. Saves the AST traversal cost on the
-        // ~10% of files that are pure data/constants.
-        if (!text.includes('import')) continue;
+        // Cheap rejection: a TS file without "import" or "require(" can't
+        // contain static, dynamic or CJS imports. Saves the AST traversal
+        // cost on the ~10% of files that are pure data/constants.
+        if (!text.includes('import') && !text.includes('require(')) continue;
 
         // ---- Static imports ----
         for (const imp of sf.getImportDeclarations()) {
@@ -76,6 +76,24 @@ export async function extractImports(
                 const call = node as CallExpression;
                 if (call.getExpression().getKind() !== SyntaxKind.ImportKeyword) return;
                 const site = buildDynamicSite(sf, call, aliasResolver, isAliasPrefix);
+                if (site) sites.push(site);
+            });
+        }
+
+        // ---- CJS require(...) calls ----
+        // Walk descendants for `require(specifier)` patterns. Only triggered
+        // when the cheap substring check indicates `require(` is present.
+        // `require.resolve(...)` and `obj.require(...)` are filtered below.
+        if (text.includes('require(')) {
+            sf.forEachDescendant((node) => {
+                if (node.getKind() !== SyntaxKind.CallExpression) return;
+                const call = node as CallExpression;
+                const expr = call.getExpression();
+                // Must be a bare `require` identifier, not `require.resolve` (PropertyAccessExpression)
+                // or `obj.require` (also PropertyAccessExpression).
+                if (expr.getKind() !== SyntaxKind.Identifier) return;
+                if (expr.getText() !== 'require') return;
+                const site = buildCjsRequireSite(sf, call, aliasResolver, isAliasPrefix);
                 if (site) sites.push(site);
             });
         }
@@ -145,6 +163,45 @@ function buildDynamicSite(
         specifier,
         resolution,
         kind: 'dynamic',
+        typeOnly: false,
+        specifierShape: classifySpecifier(specifier, isAliasPrefix),
+        location: { file: sf.getFilePath(), line: pos.line, column: pos.column },
+    };
+}
+
+function buildCjsRequireSite(
+    sf: SourceFile,
+    call: CallExpression,
+    aliasResolver: AliasResolver,
+    isAliasPrefix: AliasPrefixCheck,
+): (TsImportSite & { kind: 'cjs-require' }) | null {
+    const args = call.getArguments();
+    if (args.length !== 1) return null;
+    const arg = args[0]!;
+    const kind = arg.getKind();
+    const pos = sf.getLineAndColumnAtPos(call.getStart());
+
+    if (kind !== SyntaxKind.StringLiteral && kind !== SyntaxKind.NoSubstitutionTemplateLiteral) {
+        // Non-literal argument: specifier cannot be resolved statically.
+        const resolution: TsDynamicResolution = { kind: 'dynamic-non-literal' };
+        return {
+            sourceFile: sf.getFilePath(),
+            specifier: arg.getText().slice(0, 80),
+            resolution,
+            kind: 'cjs-require',
+            typeOnly: false,
+            specifierShape: 'bare-external',
+            location: { file: sf.getFilePath(), line: pos.line, column: pos.column },
+        };
+    }
+
+    const specifier = (arg as Node).getText().replace(/^['"`]|['"`]$/g, '');
+    const resolution = resolveSpecifier(sf.getFilePath(), specifier, undefined, aliasResolver, isAliasPrefix);
+    return {
+        sourceFile: sf.getFilePath(),
+        specifier,
+        resolution,
+        kind: 'cjs-require',
         typeOnly: false,
         specifierShape: classifySpecifier(specifier, isAliasPrefix),
         location: { file: sf.getFilePath(), line: pos.line, column: pos.column },

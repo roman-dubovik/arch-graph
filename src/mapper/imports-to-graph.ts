@@ -58,9 +58,11 @@ export function mapImportsToGraph(
 
     const unresolvedImports: TsImportSite[] = [];
     const dynamicImports: TsImportSite[] = [];
+    const cjsRequires: TsImportSite[] = [];
 
     let totalStatic = 0;
     let totalDynamic = 0;
+    let totalCjsRequire = 0;
     let resolvedToOwner = 0;
     let externalOrUnresolved = 0;
     let unresolvedInternal = 0;
@@ -69,6 +71,9 @@ export function mapImportsToGraph(
         if (site.kind === 'dynamic') {
             totalDynamic++;
             dynamicImports.push(site);
+        } else if (site.kind === 'cjs-require') {
+            totalCjsRequire++;
+            cjsRequires.push(site);
         } else {
             totalStatic++;
         }
@@ -82,9 +87,12 @@ export function mapImportsToGraph(
             // into the wrong bucket.
             switch (res.kind) {
                 case 'external':
+                    // node_modules package or Node builtin — expected, not a bug; no graph edge.
+                    externalOrUnresolved++;
+                    break;
                 case 'dynamic-non-literal':
-                    // node_modules package, Node builtin, or a non-literal dynamic
-                    // import specifier — expected, not a bug; no graph edge.
+                    // Non-literal dynamic import or CJS require specifier — untrackable, not a bug.
+                    // CJS non-literal goes into cjsRequires (already pushed above); do not add to unresolvedImports.
                     externalOrUnresolved++;
                     break;
                 case 'broken-alias':
@@ -92,7 +100,9 @@ export function mapImportsToGraph(
                     // Graph-relevant target we failed to find — typo'd alias,
                     // broken `paths`, moved file. Real regression signal.
                     unresolvedInternal++;
-                    if (site.kind === 'static') unresolvedImports.push(site);
+                    if (site.kind === 'static' || site.kind === 'cjs-require') {
+                        unresolvedImports.push(site);
+                    }
                     break;
                 default: {
                     // Exhaustiveness guard: if a new TsImportResolution variant is
@@ -150,6 +160,7 @@ export function mapImportsToGraph(
                     file: site.sourceFile,
                     line: site.location.line,
                     ...(site.kind === 'dynamic' ? { meta: { dynamic: true } } : {}),
+                    ...(site.kind === 'cjs-require' ? { meta: { cjsRequire: true } } : {}),
                 });
             }
         }
@@ -192,11 +203,11 @@ export function mapImportsToGraph(
         diagnostics: {
             unresolvedImports,
             dynamicImports,
-            cjsRequires: [],
+            cjsRequires,
             counts: {
                 totalStatic,
                 totalDynamic,
-                totalCjsRequire: 0,
+                totalCjsRequire,
                 resolvedToOwner,
                 externalOrUnresolved,
                 unresolvedInternal,
