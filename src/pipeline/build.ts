@@ -126,9 +126,15 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
     }
 
     process.stdout.write(`mapping TypeORM to graph...\n`);
-    const typeormMapped = mapTypeOrmToGraph(typeorm.sites, ownership, typeorm.entities.warnings);
+    const typeormMapped = mapTypeOrmToGraph(
+        typeorm.sites,
+        ownership,
+        typeorm.entities.warnings,
+        typeorm.relations,
+        typeorm.entities,
+    );
     process.stdout.write(
-        `  nodes: ${typeormMapped.nodes.length}, edges: ${typeormMapped.edges.length}, unresolved: ${typeormMapped.diagnostics.unresolvedEntities.length}, unowned: ${typeormMapped.diagnostics.unowned.length}, entityWarnings: ${typeormMapped.diagnostics.entityDecoratorWarnings.length}\n`,
+        `  nodes: ${typeormMapped.nodes.length}, edges: ${typeormMapped.edges.length}, unresolved: ${typeormMapped.diagnostics.unresolvedEntities.length}, unowned: ${typeormMapped.diagnostics.unowned.length}, entityWarnings: ${typeormMapped.diagnostics.entityDecoratorWarnings.length}, relations: ${typeormMapped.diagnostics.counts.relations}, unresolvedRelations: ${typeormMapped.diagnostics.counts.unresolvedRelations}\n`,
     );
 
     // ---- BullMQ domain ----
