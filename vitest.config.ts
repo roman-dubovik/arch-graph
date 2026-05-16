@@ -70,6 +70,18 @@ export default defineConfig({
                     functions: 95,
                     branches: 90,
                 },
+                'src/extractors/imports/extractor.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                'src/mapper/imports-to-graph.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
             },
         },
     },
