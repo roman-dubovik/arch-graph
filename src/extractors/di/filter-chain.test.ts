@@ -11,13 +11,23 @@ function project(files: Record<string, string>) {
     return inMemoryProject(files);
 }
 
+/** Convenience: extract refs only. */
+function extractRefs(files: Record<string, string>) {
+    return extractFilterChain(project(files)).refs;
+}
+
+/** Convenience: extract skippedAnonymousFiles only. */
+function extractSkipped(files: Record<string, string>) {
+    return extractFilterChain(project(files)).skippedAnonymousFiles;
+}
+
 // ---------------------------------------------------------------------------
 // Class-level decorators
 // ---------------------------------------------------------------------------
 
 describe('extractFilterChain — class-level @UseGuards', () => {
     it('captures a bare identifier guard on a class', () => {
-        const p = project({
+        const refs = extractRefs({
             '/src/cats.controller.ts': `
                 import { Controller, UseGuards } from '@nestjs/common';
                 import { AuthGuard } from './auth.guard';
@@ -26,7 +36,6 @@ describe('extractFilterChain — class-level @UseGuards', () => {
                 export class CatsController {}
             `,
         });
-        const refs = extractFilterChain(p);
         expect(refs).toHaveLength(1);
         const [ref] = refs;
         expect(ref.kind).toBe('class');
@@ -41,7 +50,7 @@ describe('extractFilterChain — class-level @UseGuards', () => {
     });
 
     it('captures a bare identifier interceptor on a class', () => {
-        const p = project({
+        const refs = extractRefs({
             '/src/cats.controller.ts': `
                 import { Controller, UseInterceptors } from '@nestjs/common';
                 import { LoggingInterceptor } from './logging.interceptor';
@@ -50,7 +59,6 @@ describe('extractFilterChain — class-level @UseGuards', () => {
                 export class CatsController {}
             `,
         });
-        const refs = extractFilterChain(p);
         expect(refs).toHaveLength(1);
         expect(refs[0].kind).toBe('class');
         expect(refs[0].decorator).toBe('UseInterceptors');
@@ -61,7 +69,7 @@ describe('extractFilterChain — class-level @UseGuards', () => {
     });
 
     it('captures a bare identifier pipe on a class', () => {
-        const p = project({
+        const refs = extractRefs({
             '/src/cats.controller.ts': `
                 import { Controller, UsePipes } from '@nestjs/common';
                 import { ValidationPipe } from '@nestjs/common';
@@ -70,7 +78,6 @@ describe('extractFilterChain — class-level @UseGuards', () => {
                 export class CatsController {}
             `,
         });
-        const refs = extractFilterChain(p);
         expect(refs).toHaveLength(1);
         expect(refs[0].kind).toBe('class');
         expect(refs[0].decorator).toBe('UsePipes');
@@ -87,7 +94,7 @@ describe('extractFilterChain — class-level @UseGuards', () => {
 
 describe('extractFilterChain — method-level @UseGuards', () => {
     it('captures a guard on a method', () => {
-        const p = project({
+        const refs = extractRefs({
             '/src/cats.controller.ts': `
                 import { Controller, Get, UseGuards } from '@nestjs/common';
                 import { AuthGuard } from './auth.guard';
@@ -99,7 +106,6 @@ describe('extractFilterChain — method-level @UseGuards', () => {
                 }
             `,
         });
-        const refs = extractFilterChain(p);
         expect(refs).toHaveLength(1);
         const [ref] = refs;
         expect(ref.kind).toBe('class');
@@ -112,7 +118,7 @@ describe('extractFilterChain — method-level @UseGuards', () => {
     });
 
     it('captures an interceptor on a method', () => {
-        const p = project({
+        const refs = extractRefs({
             '/src/cats.controller.ts': `
                 import { Controller, Get, UseInterceptors } from '@nestjs/common';
                 import { CacheInterceptor } from '@nestjs/common';
@@ -124,14 +130,13 @@ describe('extractFilterChain — method-level @UseGuards', () => {
                 }
             `,
         });
-        const refs = extractFilterChain(p);
         expect(refs).toHaveLength(1);
         expect(refs[0].attachedTo).toEqual({ kind: 'method', methodName: 'findAll' });
         expect(refs[0].decorator).toBe('UseInterceptors');
     });
 
     it('captures a pipe on a method', () => {
-        const p = project({
+        const refs = extractRefs({
             '/src/cats.controller.ts': `
                 import { Controller, Post, UsePipes } from '@nestjs/common';
                 import { ParseIntPipe } from '@nestjs/common';
@@ -143,7 +148,6 @@ describe('extractFilterChain — method-level @UseGuards', () => {
                 }
             `,
         });
-        const refs = extractFilterChain(p);
         expect(refs).toHaveLength(1);
         expect(refs[0].attachedTo).toEqual({ kind: 'method', methodName: 'create' });
         expect(refs[0].decorator).toBe('UsePipes');
@@ -156,7 +160,7 @@ describe('extractFilterChain — method-level @UseGuards', () => {
 
 describe('extractFilterChain — multiple arguments', () => {
     it('emits one ref per argument for @UseGuards(A, B)', () => {
-        const p = project({
+        const refs = extractRefs({
             '/src/cats.controller.ts': `
                 import { Controller, UseGuards } from '@nestjs/common';
                 import { AuthGuard } from './auth.guard';
@@ -166,7 +170,6 @@ describe('extractFilterChain — multiple arguments', () => {
                 export class CatsController {}
             `,
         });
-        const refs = extractFilterChain(p);
         expect(refs).toHaveLength(2);
         expect(refs[0].kind).not.toBe('unresolved');
         expect(refs[1].kind).not.toBe('unresolved');
@@ -180,7 +183,7 @@ describe('extractFilterChain — multiple arguments', () => {
     });
 
     it('emits one ref per argument for three-arg @UseGuards', () => {
-        const p = project({
+        const refs = extractRefs({
             '/src/cats.controller.ts': `
                 import { Controller, UseGuards } from '@nestjs/common';
                 @UseGuards(GuardA, GuardB, GuardC)
@@ -188,7 +191,6 @@ describe('extractFilterChain — multiple arguments', () => {
                 export class CatsController {}
             `,
         });
-        const refs = extractFilterChain(p);
         expect(refs).toHaveLength(3);
         expect(refs.map((r) => (r as { name: string }).name)).toEqual(['GuardA', 'GuardB', 'GuardC']);
     });
@@ -200,7 +202,7 @@ describe('extractFilterChain — multiple arguments', () => {
 
 describe('extractFilterChain — instance (new) arguments', () => {
     it('emits an instance ref for @UseInterceptors(new LoggingInterceptor())', () => {
-        const p = project({
+        const refs = extractRefs({
             '/src/cats.controller.ts': `
                 import { Controller, UseInterceptors } from '@nestjs/common';
                 import { LoggingInterceptor } from './logging.interceptor';
@@ -209,7 +211,6 @@ describe('extractFilterChain — instance (new) arguments', () => {
                 export class CatsController {}
             `,
         });
-        const refs = extractFilterChain(p);
         expect(refs).toHaveLength(1);
         const [ref] = refs;
         expect(ref.kind).toBe('instance');
@@ -221,7 +222,7 @@ describe('extractFilterChain — instance (new) arguments', () => {
     });
 
     it('emits an instance ref for @UseGuards(new AuthGuard("jwt"))', () => {
-        const p = project({
+        const refs = extractRefs({
             '/src/cats.controller.ts': `
                 import { Controller, UseGuards } from '@nestjs/common';
                 @Controller('cats')
@@ -231,12 +232,28 @@ describe('extractFilterChain — instance (new) arguments', () => {
                 }
             `,
         });
-        const refs = extractFilterChain(p);
         expect(refs).toHaveLength(1);
         expect(refs[0].kind).toBe('instance');
         if (refs[0].kind === 'instance') {
             expect(refs[0].name).toBe('AuthGuard');
         }
+    });
+
+    it('emits unresolved for new with non-identifier expression (new factory.create())', () => {
+        const refs = extractRefs({
+            '/src/cats.controller.ts': `
+                import { Controller, UseGuards } from '@nestjs/common';
+                declare const factory: any;
+                @Controller('cats')
+                export class CatsController {
+                    @UseGuards(new factory.create())
+                    findAll() {}
+                }
+            `,
+        });
+        expect(refs).toHaveLength(1);
+        expect(refs[0].kind).toBe('unresolved');
+        expect((refs[0] as { reason: string }).reason).toBe('new-non-identifier-expression');
     });
 });
 
@@ -246,7 +263,7 @@ describe('extractFilterChain — instance (new) arguments', () => {
 
 describe('extractFilterChain — all three decorators on the same class', () => {
     it('emits three separate refs for @UseGuards, @UseInterceptors, @UsePipes', () => {
-        const p = project({
+        const refs = extractRefs({
             '/src/cats.controller.ts': `
                 import { Controller, UseGuards, UseInterceptors, UsePipes } from '@nestjs/common';
                 @UseGuards(AuthGuard)
@@ -256,7 +273,6 @@ describe('extractFilterChain — all three decorators on the same class', () => 
                 export class CatsController {}
             `,
         });
-        const refs = extractFilterChain(p);
         expect(refs).toHaveLength(3);
         const decorators = refs.map((r) => r.decorator);
         expect(decorators).toContain('UseGuards');
@@ -271,7 +287,7 @@ describe('extractFilterChain — all three decorators on the same class', () => 
 
 describe('extractFilterChain — class and method level on same class', () => {
     it('emits refs for both class and method decorators', () => {
-        const p = project({
+        const refs = extractRefs({
             '/src/cats.controller.ts': `
                 import { Controller, Get, UseGuards } from '@nestjs/common';
                 @UseGuards(AuthGuard)
@@ -283,7 +299,6 @@ describe('extractFilterChain — class and method level on same class', () => {
                 }
             `,
         });
-        const refs = extractFilterChain(p);
         expect(refs).toHaveLength(2);
         const classRef = refs.find((r) => r.attachedTo.kind === 'class');
         const methodRef = refs.find((r) => r.attachedTo.kind === 'method');
@@ -294,12 +309,67 @@ describe('extractFilterChain — class and method level on same class', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Namespace-qualified identifier: @UseGuards(Namespace.Guard)
+// ---------------------------------------------------------------------------
+
+describe('extractFilterChain — namespace-qualified identifier', () => {
+    it('resolves rightmost identifier for @UseGuards(Auth.Guard)', () => {
+        const refs = extractRefs({
+            '/src/cats.controller.ts': `
+                import { Controller, UseGuards } from '@nestjs/common';
+                import * as Auth from './auth';
+                @UseGuards(Auth.Guard)
+                @Controller('cats')
+                export class CatsController {}
+            `,
+        });
+        expect(refs).toHaveLength(1);
+        expect(refs[0].kind).toBe('class');
+        expect((refs[0] as { name: string }).name).toBe('Guard');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Parenthesized / as-expression unwrapping
+// ---------------------------------------------------------------------------
+
+describe('extractFilterChain — parenthesized and as-expression unwrapping', () => {
+    it('unwraps parenthesized expression @UseGuards((AuthGuard))', () => {
+        const refs = extractRefs({
+            '/src/cats.controller.ts': `
+                import { Controller, UseGuards } from '@nestjs/common';
+                @UseGuards((AuthGuard))
+                @Controller('cats')
+                export class CatsController {}
+            `,
+        });
+        expect(refs).toHaveLength(1);
+        expect(refs[0].kind).toBe('class');
+        expect((refs[0] as { name: string }).name).toBe('AuthGuard');
+    });
+
+    it('unwraps as-expression @UseGuards(AuthGuard as any)', () => {
+        const refs = extractRefs({
+            '/src/cats.controller.ts': `
+                import { Controller, UseGuards } from '@nestjs/common';
+                @UseGuards(AuthGuard as any)
+                @Controller('cats')
+                export class CatsController {}
+            `,
+        });
+        expect(refs).toHaveLength(1);
+        expect(refs[0].kind).toBe('class');
+        expect((refs[0] as { name: string }).name).toBe('AuthGuard');
+    });
+});
+
+// ---------------------------------------------------------------------------
 // Unresolved arguments
 // ---------------------------------------------------------------------------
 
 describe('extractFilterChain — unresolved arguments', () => {
     it('emits unresolved for @UseGuards(...spread)', () => {
-        const p = project({
+        const refs = extractRefs({
             '/src/cats.controller.ts': `
                 import { Controller, UseGuards } from '@nestjs/common';
                 const guards = [AuthGuard, RoleGuard];
@@ -308,15 +378,16 @@ describe('extractFilterChain — unresolved arguments', () => {
                 export class CatsController {}
             `,
         });
-        const refs = extractFilterChain(p);
         // Each spread element in the arg list is emitted
         const unresolved = refs.filter((r) => r.kind === 'unresolved');
         expect(unresolved.length).toBeGreaterThan(0);
         expect(unresolved[0].decorator).toBe('UseGuards');
+        // Verify the reason contains SpreadElement
+        expect((unresolved[0] as { reason: string }).reason).toContain('SpreadElement');
     });
 
     it('emits unresolved for a ternary in @UseGuards', () => {
-        const p = project({
+        const refs = extractRefs({
             '/src/cats.controller.ts': `
                 import { Controller, UseGuards } from '@nestjs/common';
                 const prod = true;
@@ -325,7 +396,6 @@ describe('extractFilterChain — unresolved arguments', () => {
                 export class CatsController {}
             `,
         });
-        const refs = extractFilterChain(p);
         expect(refs).toHaveLength(1);
         expect(refs[0].kind).toBe('unresolved');
         expect(refs[0].decorator).toBe('UseGuards');
@@ -333,7 +403,7 @@ describe('extractFilterChain — unresolved arguments', () => {
     });
 
     it('emits unresolved for a function call in @UseInterceptors', () => {
-        const p = project({
+        const refs = extractRefs({
             '/src/cats.controller.ts': `
                 import { Controller, UseInterceptors } from '@nestjs/common';
                 function makeInterceptor() { return null as any; }
@@ -342,7 +412,6 @@ describe('extractFilterChain — unresolved arguments', () => {
                 export class CatsController {}
             `,
         });
-        const refs = extractFilterChain(p);
         expect(refs).toHaveLength(1);
         expect(refs[0].kind).toBe('unresolved');
     });
@@ -354,37 +423,34 @@ describe('extractFilterChain — unresolved arguments', () => {
 
 describe('extractFilterChain — excluded files', () => {
     it('skips files under /node_modules/', () => {
-        const p = project({
+        const refs = extractRefs({
             '/node_modules/some-lib/src/controller.ts': `
                 import { Controller, UseGuards } from '@nestjs/common';
                 @UseGuards(AuthGuard)
                 export class LibController {}
             `,
         });
-        const refs = extractFilterChain(p);
         expect(refs).toHaveLength(0);
     });
 
     it('skips files under /dist/', () => {
-        const p = project({
+        const refs = extractRefs({
             '/dist/cats.controller.js': `
                 @UseGuards(AuthGuard)
                 export class CatsController {}
             `,
         });
-        const refs = extractFilterChain(p);
         expect(refs).toHaveLength(0);
     });
 
     it('skips .test.ts files', () => {
-        const p = project({
+        const refs = extractRefs({
             '/src/cats.controller.test.ts': `
                 import { Controller, UseGuards } from '@nestjs/common';
                 @UseGuards(TestGuard)
                 export class CatsController {}
             `,
         });
-        const refs = extractFilterChain(p);
         expect(refs).toHaveLength(0);
     });
 });
@@ -395,15 +461,12 @@ describe('extractFilterChain — excluded files', () => {
 
 describe('extractFilterChain — empty or unrelated decorators', () => {
     it('returns empty for a file with no classes', () => {
-        const p = project({
-            '/src/constants.ts': `export const FOO = 'foo';`,
-        });
-        const refs = extractFilterChain(p);
+        const refs = extractRefs({ '/src/constants.ts': `export const FOO = 'foo';` });
         expect(refs).toHaveLength(0);
     });
 
     it('returns empty for a class with no filter decorators', () => {
-        const p = project({
+        const refs = extractRefs({
             '/src/cats.controller.ts': `
                 import { Controller, Get } from '@nestjs/common';
                 @Controller('cats')
@@ -413,34 +476,32 @@ describe('extractFilterChain — empty or unrelated decorators', () => {
                 }
             `,
         });
-        const refs = extractFilterChain(p);
         expect(refs).toHaveLength(0);
     });
 
     it('returns empty for an empty file', () => {
-        const p = project({ '/src/empty.ts': '' });
-        const refs = extractFilterChain(p);
+        const refs = extractRefs({ '/src/empty.ts': '' });
         expect(refs).toHaveLength(0);
     });
 
-    it('ignores anonymous classes (no name)', () => {
+    it('reports anonymous class files in skippedAnonymousFiles instead of silently dropping', () => {
         const p = project({
             '/src/anon.ts': `
                 import { UseGuards } from '@nestjs/common';
-                // This is a contrived case — anonymous class with decorator
-                const ctrl = @UseGuards(AuthGuard) class {}
+                export default class {
+                    @UseGuards(AuthGuard)
+                    findAll() {}
+                }
             `,
         });
-        // Anonymous classes are skipped. This won't parse as valid TS but the extractor
-        // handles it gracefully by checking className !== undefined.
-        const refs = extractFilterChain(p);
-        // Either 0 (if ts-morph rejects syntax) or refs may contain results for named
-        // classes only. The important thing is no crash.
-        expect(Array.isArray(refs)).toBe(true);
+        const { refs, skippedAnonymousFiles } = extractFilterChain(p);
+        // No refs emitted for anonymous classes — but the file IS recorded
+        expect(refs).toHaveLength(0);
+        expect(skippedAnonymousFiles.some((f) => f.includes('anon.ts'))).toBe(true);
     });
 
     it('does not emit refs for decorator with no arguments', () => {
-        const p = project({
+        const refs = extractRefs({
             '/src/cats.controller.ts': `
                 import { Controller, UseGuards } from '@nestjs/common';
                 @UseGuards()
@@ -448,7 +509,6 @@ describe('extractFilterChain — empty or unrelated decorators', () => {
                 export class CatsController {}
             `,
         });
-        const refs = extractFilterChain(p);
         // @UseGuards() with zero args → nothing to emit
         expect(refs).toHaveLength(0);
     });
@@ -460,7 +520,7 @@ describe('extractFilterChain — empty or unrelated decorators', () => {
 
 describe('extractFilterChain — multiple files', () => {
     it('collects refs from multiple source files', () => {
-        const p = project({
+        const refs = extractRefs({
             '/src/cats.controller.ts': `
                 import { Controller, UseGuards } from '@nestjs/common';
                 @UseGuards(AuthGuard)
@@ -474,7 +534,6 @@ describe('extractFilterChain — multiple files', () => {
                 export class DogsController {}
             `,
         });
-        const refs = extractFilterChain(p);
         expect(refs).toHaveLength(2);
         const decorators = new Set(refs.map((r) => r.decorator));
         expect(decorators.has('UseGuards')).toBe(true);
@@ -482,7 +541,7 @@ describe('extractFilterChain — multiple files', () => {
     });
 
     it('skips excluded file while processing valid file', () => {
-        const p = project({
+        const refs = extractRefs({
             '/src/cats.controller.ts': `
                 import { Controller, UseGuards } from '@nestjs/common';
                 @UseGuards(AuthGuard)
@@ -495,8 +554,32 @@ describe('extractFilterChain — multiple files', () => {
                 export class PkgController {}
             `,
         });
-        const refs = extractFilterChain(p);
         expect(refs).toHaveLength(1);
         expect((refs[0] as { name: string }).name).toBe('AuthGuard');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Inheritance (documentation test — non-inheritance behaviour)
+// ---------------------------------------------------------------------------
+
+describe('extractFilterChain — inheritance (non-inheritance documented)', () => {
+    it('does not inherit decorators from parent class — only direct decorators are captured', () => {
+        // The extractor only walks the class's own decorators / method decorators.
+        // Parent-class decorators are NOT inherited — that is NestJS runtime behaviour,
+        // not something the static extractor models.
+        const refs = extractRefs({
+            '/src/base.controller.ts': `
+                import { UseGuards } from '@nestjs/common';
+                @UseGuards(AuthGuard)
+                export class BaseController {}
+            `,
+            '/src/child.controller.ts': `
+                export class ChildController extends BaseController {}
+            `,
+        });
+        // Only BaseController has the decorator — ChildController emits nothing
+        expect(refs).toHaveLength(1);
+        expect(refs[0].enclosingClass).toBe('BaseController');
     });
 });

@@ -43,6 +43,21 @@ function makeModule(
     };
 }
 
+/**
+ * Build a module that registers a controller and a list of provider classes.
+ * Used by filter-chain tests to ensure the required provider nodes exist in
+ * providerNodes before filter refs are processed.
+ */
+function moduleWithProvidersAndControllers(
+    controllerName: string,
+    providerNames: string[],
+): DiModuleSite {
+    return makeModule('TestModule', {
+        controllers: [{ kind: 'class', name: controllerName }],
+        providers: providerNames.map((p) => ({ kind: 'class' as const, name: p })),
+    });
+}
+
 type FilterRefInput = {
     kind: 'class' | 'instance' | 'unresolved';
     name?: string;
@@ -338,6 +353,45 @@ describe('mapDiToGraph — token-ref enrichment', () => {
         const node = nodes.find((n) => n.id === 'provider:MY_TOKEN')!;
         expect(node.meta?.providerKind).toBe('class');
     });
+
+    it('does NOT overwrite providerKind when the concrete token ref appears a second time', () => {
+        // Two modules both declare { provide: MY_TOKEN, useClass: FooImpl }.
+        // Second encounter hits the `else if (ref.kind === 'token')` branch with
+        // providerKind already set — first-concrete-ref wins, nothing is overwritten.
+        const provider1: DiProviderRef = {
+            kind: 'token',
+            name: 'MY_TOKEN',
+            providerKind: 'class',
+        };
+        const provider2: DiProviderRef = {
+            kind: 'token',
+            name: 'MY_TOKEN',
+            providerKind: 'factory', // different kind — should be ignored
+        };
+        const mod1 = makeModule('AppModule', { providers: [provider1] });
+        const mod2 = makeModule('OtherModule', { providers: [provider2] });
+        const { nodes } = mapDiToGraph([mod1, mod2], IDX, EMPTY_OWNERSHIP);
+        const node = nodes.find((n) => n.id === 'provider:MY_TOKEN')!;
+        // First-seen wins: mod1's 'class' should be preserved
+        expect(node.meta?.providerKind).toBe('class');
+    });
+
+    it('enriches a token-ref node when token-ref appears before the concrete token in the same providers array', () => {
+        // token-ref first in providers creates node with providerKind=undefined.
+        // concrete token second enriches the node.
+        const tokenRef: DiProviderRef = { kind: 'token-ref', name: 'SHARED_TOKEN' };
+        const concrete: DiProviderRef = {
+            kind: 'token',
+            name: 'SHARED_TOKEN',
+            providerKind: 'factory',
+            provideToken: 'SHARED_TOKEN',
+        };
+        const mod = makeModule('AppModule', { providers: [tokenRef, concrete] });
+        const { nodes } = mapDiToGraph([mod], IDX, EMPTY_OWNERSHIP);
+        const node = nodes.find((n) => n.id === 'provider:SHARED_TOKEN')!;
+        expect(node.meta?.providerKind).toBe('factory');
+        expect(node.meta?.provideToken).toBe('SHARED_TOKEN');
+    });
 });
 
 // ---------------------------------------------------------------------------
@@ -407,24 +461,65 @@ describe('mapDiToGraph — counts in diagnostics', () => {
 
 // ---------------------------------------------------------------------------
 // Filter-chain: di-guard edges
+//
+// Policy: only emit edges when both enclosingClass and guard target are already
+// registered in providerNodes from a real @Module declaration. Unregistered
+// classes are routed to unresolvedFilterRefs with a structured reason.
 // ---------------------------------------------------------------------------
 
 describe('mapDiToGraph — di-guard edges', () => {
-    it('emits a di-guard edge for a class UseGuards ref', () => {
+    it('emits a di-guard edge when both controller and guard are in providerNodes', () => {
+        const mod = moduleWithProvidersAndControllers('CatsController', ['AuthGuard']);
         const ref = makeFilterRef({
             kind: 'class',
             name: 'AuthGuard',
             decorator: 'UseGuards',
             enclosingClass: 'CatsController',
         });
-        const { edges } = mapDiToGraph([], IDX, EMPTY_OWNERSHIP, [ref]);
+        const { edges } = mapDiToGraph([mod], IDX, EMPTY_OWNERSHIP, [ref]);
         const e = edges.find((e) => e.kind === 'di-guard');
         expect(e).toBeDefined();
         expect(e?.from).toBe('provider:CatsController');
         expect(e?.to).toBe('provider:AuthGuard');
     });
 
+    it('routes to unresolvedFilterRefs when guard target is NOT in providerNodes', () => {
+        // Only controller registered, not the guard
+        const mod = moduleWithProvidersAndControllers('CatsController', []);
+        const ref = makeFilterRef({
+            kind: 'class',
+            name: 'AuthGuard',
+            decorator: 'UseGuards',
+            enclosingClass: 'CatsController',
+        });
+        const { edges, diagnostics } = mapDiToGraph([mod], IDX, EMPTY_OWNERSHIP, [ref]);
+        expect(edges.filter((e) => e.kind === 'di-guard')).toHaveLength(0);
+        expect(diagnostics.unresolvedFilterRefs.length).toBeGreaterThan(0);
+        const unresolved = diagnostics.unresolvedFilterRefs[0];
+        expect(unresolved.kind).toBe('unresolved');
+        expect((unresolved as { reason: string }).reason).toBe('target-not-in-di-graph');
+    });
+
+    it('routes to unresolvedFilterRefs when enclosingClass is NOT in providerNodes', () => {
+        // Guard registered but controller is not
+        const mod = makeModule('TestModule', {
+            providers: [{ kind: 'class', name: 'AuthGuard' }],
+        });
+        const ref = makeFilterRef({
+            kind: 'class',
+            name: 'AuthGuard',
+            decorator: 'UseGuards',
+            enclosingClass: 'UnregisteredController',
+        });
+        const { edges, diagnostics } = mapDiToGraph([mod], IDX, EMPTY_OWNERSHIP, [ref]);
+        expect(edges.filter((e) => e.kind === 'di-guard')).toHaveLength(0);
+        expect(diagnostics.unresolvedFilterRefs.length).toBeGreaterThan(0);
+        const unresolved = diagnostics.unresolvedFilterRefs[0];
+        expect((unresolved as { reason: string }).reason).toBe('source-not-in-di-graph');
+    });
+
     it('sets meta.decorator and meta.attachedTo on the guard edge', () => {
+        const mod = moduleWithProvidersAndControllers('CatsController', ['AuthGuard']);
         const ref = makeFilterRef({
             kind: 'class',
             name: 'AuthGuard',
@@ -432,13 +527,14 @@ describe('mapDiToGraph — di-guard edges', () => {
             enclosingClass: 'CatsController',
             attachedTo: { kind: 'class' },
         });
-        const { edges } = mapDiToGraph([], IDX, EMPTY_OWNERSHIP, [ref]);
+        const { edges } = mapDiToGraph([mod], IDX, EMPTY_OWNERSHIP, [ref]);
         const e = edges.find((e) => e.kind === 'di-guard')!;
         expect(e.meta?.decorator).toBe('UseGuards');
         expect(e.meta?.attachedTo).toBe('class');
     });
 
     it('sets meta.attachedTo to method:<name> for method-level guard', () => {
+        const mod = moduleWithProvidersAndControllers('CatsController', ['RoleGuard']);
         const ref = makeFilterRef({
             kind: 'class',
             name: 'RoleGuard',
@@ -446,21 +542,23 @@ describe('mapDiToGraph — di-guard edges', () => {
             enclosingClass: 'CatsController',
             attachedTo: { kind: 'method', methodName: 'findAll' },
         });
-        const { edges } = mapDiToGraph([], IDX, EMPTY_OWNERSHIP, [ref]);
+        const { edges } = mapDiToGraph([mod], IDX, EMPTY_OWNERSHIP, [ref]);
         const e = edges.find((e) => e.kind === 'di-guard')!;
         expect(e.meta?.attachedTo).toBe('method:findAll');
     });
 
     it('increments guards count per emitted edge', () => {
+        const mod = moduleWithProvidersAndControllers('CatsController', ['GuardA', 'GuardB']);
         const refs = [
             makeFilterRef({ kind: 'class', name: 'GuardA', decorator: 'UseGuards', enclosingClass: 'CatsController' }),
             makeFilterRef({ kind: 'class', name: 'GuardB', decorator: 'UseGuards', enclosingClass: 'CatsController' }),
         ];
-        const { diagnostics } = mapDiToGraph([], IDX, EMPTY_OWNERSHIP, refs);
+        const { diagnostics } = mapDiToGraph([mod], IDX, EMPTY_OWNERSHIP, refs);
         expect(diagnostics.counts.guards).toBe(2);
     });
 
-    it('deduplicates guard edges (same from/to/kind)', () => {
+    it('deduplicates guard edges when attachedTo is the same', () => {
+        const mod = moduleWithProvidersAndControllers('CatsController', ['AuthGuard']);
         const ref1 = makeFilterRef({
             kind: 'class',
             name: 'AuthGuard',
@@ -473,11 +571,40 @@ describe('mapDiToGraph — di-guard edges', () => {
             decorator: 'UseGuards',
             enclosingClass: 'CatsController',
         });
-        const { edges, diagnostics } = mapDiToGraph([], IDX, EMPTY_OWNERSHIP, [ref1, ref2]);
+        const { edges, diagnostics } = mapDiToGraph([mod], IDX, EMPTY_OWNERSHIP, [ref1, ref2]);
         const guardEdges = edges.filter((e) => e.kind === 'di-guard');
         expect(guardEdges).toHaveLength(1);
-        // Count increments only once (first insertion wins)
+        // Count increments only once (first insertion wins); second is dedupDropped
         expect(diagnostics.counts.guards).toBe(1);
+        expect(diagnostics.counts.dedupDropped).toBe(1);
+    });
+
+    it('produces TWO distinct di-guard edges for @UseGuards(AuthGuard) on two different methods', () => {
+        // This is the core fix for the dedup-key issue:
+        // Same guard on different methods must NOT collapse into one edge.
+        const mod = moduleWithProvidersAndControllers('CatsController', ['AuthGuard']);
+        const refFindAll = makeFilterRef({
+            kind: 'class',
+            name: 'AuthGuard',
+            decorator: 'UseGuards',
+            enclosingClass: 'CatsController',
+            attachedTo: { kind: 'method', methodName: 'findAll' },
+        });
+        const refFindOne = makeFilterRef({
+            kind: 'class',
+            name: 'AuthGuard',
+            decorator: 'UseGuards',
+            enclosingClass: 'CatsController',
+            attachedTo: { kind: 'method', methodName: 'findOne' },
+        });
+        const { edges, diagnostics } = mapDiToGraph([mod], IDX, EMPTY_OWNERSHIP, [refFindAll, refFindOne]);
+        const guardEdges = edges.filter((e) => e.kind === 'di-guard');
+        expect(guardEdges).toHaveLength(2);
+        expect(diagnostics.counts.guards).toBe(2);
+        expect(diagnostics.counts.dedupDropped).toBe(0);
+        const methods = guardEdges.map((e) => e.meta?.attachedTo as string);
+        expect(methods).toContain('method:findAll');
+        expect(methods).toContain('method:findOne');
     });
 });
 
@@ -486,14 +613,15 @@ describe('mapDiToGraph — di-guard edges', () => {
 // ---------------------------------------------------------------------------
 
 describe('mapDiToGraph — di-interceptor edges', () => {
-    it('emits a di-interceptor edge for a class UseInterceptors ref', () => {
+    it('emits a di-interceptor edge when both controller and interceptor are in providerNodes', () => {
+        const mod = moduleWithProvidersAndControllers('CatsController', ['LoggingInterceptor']);
         const ref = makeFilterRef({
             kind: 'class',
             name: 'LoggingInterceptor',
             decorator: 'UseInterceptors',
             enclosingClass: 'CatsController',
         });
-        const { edges, diagnostics } = mapDiToGraph([], IDX, EMPTY_OWNERSHIP, [ref]);
+        const { edges, diagnostics } = mapDiToGraph([mod], IDX, EMPTY_OWNERSHIP, [ref]);
         const e = edges.find((e) => e.kind === 'di-interceptor');
         expect(e).toBeDefined();
         expect(e?.from).toBe('provider:CatsController');
@@ -502,13 +630,14 @@ describe('mapDiToGraph — di-interceptor edges', () => {
     });
 
     it('emits instantiated=true for an instance UseInterceptors ref', () => {
+        const mod = moduleWithProvidersAndControllers('CatsController', ['LoggingInterceptor']);
         const ref = makeFilterRef({
             kind: 'instance',
             name: 'LoggingInterceptor',
             decorator: 'UseInterceptors',
             enclosingClass: 'CatsController',
         });
-        const { edges } = mapDiToGraph([], IDX, EMPTY_OWNERSHIP, [ref]);
+        const { edges } = mapDiToGraph([mod], IDX, EMPTY_OWNERSHIP, [ref]);
         const e = edges.find((e) => e.kind === 'di-interceptor')!;
         expect(e.meta?.instantiated).toBe(true);
     });
@@ -519,14 +648,15 @@ describe('mapDiToGraph — di-interceptor edges', () => {
 // ---------------------------------------------------------------------------
 
 describe('mapDiToGraph — di-pipe edges', () => {
-    it('emits a di-pipe edge for a class UsePipes ref', () => {
+    it('emits a di-pipe edge when both controller and pipe are in providerNodes', () => {
+        const mod = moduleWithProvidersAndControllers('CatsController', ['ValidationPipe']);
         const ref = makeFilterRef({
             kind: 'class',
             name: 'ValidationPipe',
             decorator: 'UsePipes',
             enclosingClass: 'CatsController',
         });
-        const { edges, diagnostics } = mapDiToGraph([], IDX, EMPTY_OWNERSHIP, [ref]);
+        const { edges, diagnostics } = mapDiToGraph([mod], IDX, EMPTY_OWNERSHIP, [ref]);
         const e = edges.find((e) => e.kind === 'di-pipe');
         expect(e).toBeDefined();
         expect(diagnostics.counts.pipes).toBe(1);
@@ -553,6 +683,7 @@ describe('mapDiToGraph — unresolved filter refs', () => {
     });
 
     it('mixes resolved and unresolved filter refs correctly', () => {
+        const mod = moduleWithProvidersAndControllers('CatsController', ['AuthGuard']);
         const resolved = makeFilterRef({
             kind: 'class',
             name: 'AuthGuard',
@@ -565,7 +696,7 @@ describe('mapDiToGraph — unresolved filter refs', () => {
             decorator: 'UseGuards',
             enclosingClass: 'CatsController',
         });
-        const { edges, diagnostics } = mapDiToGraph([], IDX, EMPTY_OWNERSHIP, [resolved, unresolved]);
+        const { edges, diagnostics } = mapDiToGraph([mod], IDX, EMPTY_OWNERSHIP, [resolved, unresolved]);
         expect(edges.filter((e) => e.kind === 'di-guard')).toHaveLength(1);
         expect(diagnostics.unresolvedFilterRefs).toHaveLength(1);
         expect(diagnostics.counts.guards).toBe(1);
@@ -579,6 +710,7 @@ describe('mapDiToGraph — unresolved filter refs', () => {
 
 describe('mapDiToGraph — filter-chain edge location', () => {
     it('sets file and line on the guard edge from ref.location', () => {
+        const mod = moduleWithProvidersAndControllers('CatsController', ['AuthGuard']);
         const ref = makeFilterRef({
             kind: 'class',
             name: 'AuthGuard',
@@ -586,7 +718,7 @@ describe('mapDiToGraph — filter-chain edge location', () => {
             enclosingClass: 'CatsController',
             location: { file: '/apps/api/src/cats.controller.ts', line: 42, column: 3 },
         });
-        const { edges } = mapDiToGraph([], IDX, EMPTY_OWNERSHIP, [ref]);
+        const { edges } = mapDiToGraph([mod], IDX, EMPTY_OWNERSHIP, [ref]);
         const e = edges.find((e) => e.kind === 'di-guard')!;
         expect(e.file).toBe('/apps/api/src/cats.controller.ts');
         expect(e.line).toBe(42);
@@ -594,26 +726,31 @@ describe('mapDiToGraph — filter-chain edge location', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Filter-chain: provider node creation (ensureNamedProviderNode)
+// Filter-chain: provider node creation (no phantom nodes policy)
 // ---------------------------------------------------------------------------
 
 describe('mapDiToGraph — provider nodes from filter chain', () => {
-    it('creates provider nodes for enclosingClass and guard name', () => {
+    it('does NOT create phantom provider nodes when guard/controller are unregistered', () => {
+        // With no modules, neither CatsController nor AuthGuard are in providerNodes.
+        // The old behavior was to fabricate them — now both go to unresolvedFilterRefs.
         const ref = makeFilterRef({
             kind: 'class',
             name: 'AuthGuard',
             decorator: 'UseGuards',
             enclosingClass: 'CatsController',
         });
-        const { nodes } = mapDiToGraph([], IDX, EMPTY_OWNERSHIP, [ref]);
+        const { nodes, diagnostics } = mapDiToGraph([], IDX, EMPTY_OWNERSHIP, [ref]);
         const ids = nodes.map((n) => n.id);
-        expect(ids).toContain('provider:CatsController');
-        expect(ids).toContain('provider:AuthGuard');
+        expect(ids).not.toContain('provider:CatsController');
+        expect(ids).not.toContain('provider:AuthGuard');
+        expect(diagnostics.unresolvedFilterRefs.length).toBeGreaterThan(0);
+        expect((diagnostics.unresolvedFilterRefs[0] as { reason: string }).reason).toBe('source-not-in-di-graph');
     });
 
     it('does not duplicate a provider node when it already exists from @Module controllers', () => {
         const mod = makeModule('AppModule', {
             controllers: [{ kind: 'class', name: 'CatsController' }],
+            providers: [{ kind: 'class', name: 'AuthGuard' }],
         });
         const ref = makeFilterRef({
             kind: 'class',
@@ -624,6 +761,44 @@ describe('mapDiToGraph — provider nodes from filter chain', () => {
         const { nodes } = mapDiToGraph([mod], IDX, EMPTY_OWNERSHIP, [ref]);
         const catNodes = nodes.filter((n) => n.id === 'provider:CatsController');
         expect(catNodes).toHaveLength(1);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Filter-chain: diagnostics fields (new in this PR)
+// ---------------------------------------------------------------------------
+
+describe('mapDiToGraph — new diagnostics fields', () => {
+    it('initialises unresolvedFilterRefsTruncated as false', () => {
+        const { diagnostics } = mapDiToGraph([], IDX, EMPTY_OWNERSHIP, []);
+        expect(diagnostics.unresolvedFilterRefsTruncated).toBe(false);
+    });
+
+    it('initialises skippedAnonymousFiles as empty array', () => {
+        const { diagnostics } = mapDiToGraph([], IDX, EMPTY_OWNERSHIP, []);
+        expect(Array.isArray(diagnostics.skippedAnonymousFiles)).toBe(true);
+        expect(diagnostics.skippedAnonymousFiles).toHaveLength(0);
+    });
+
+    it('initialises dedupDropped as 0 with no refs', () => {
+        const { diagnostics } = mapDiToGraph([], IDX, EMPTY_OWNERSHIP, []);
+        expect(diagnostics.counts.dedupDropped).toBe(0);
+    });
+
+    it('truncates unresolvedFilterRefs at 200 and sets truncated flag', () => {
+        // Build 201 unresolved refs (the kind that always goes to unresolved)
+        const refs: DiFilterChainRef[] = Array.from({ length: 201 }, (_, i) =>
+            makeFilterRef({
+                kind: 'unresolved',
+                decorator: 'UseGuards',
+                enclosingClass: `Controller${i}`,
+            }),
+        );
+        const { diagnostics } = mapDiToGraph([], IDX, EMPTY_OWNERSHIP, refs);
+        expect(diagnostics.unresolvedFilterRefs).toHaveLength(200);
+        expect(diagnostics.unresolvedFilterRefsTruncated).toBe(true);
+        // Count still reflects the capped length
+        expect(diagnostics.counts.unresolvedFilterRefs).toBe(200);
     });
 });
 
