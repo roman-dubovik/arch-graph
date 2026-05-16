@@ -124,8 +124,8 @@
                 <td><span class="cell no">✗</span></td>
                 <td><span class="cell no">✗</span></td>
               </tr>
-              <tr><th scope="row">TypeORM entity-relation (ER)</th>
-                <td title="planned — see ROADMAP.md"><span class="cell partial">◐</span></td>
+              <tr><th scope="row">TypeORM entity-relation (ER) → <code>db-relation</code></th>
+                <td title="@ManyToOne / @ManyToMany / @OneToOne — first-class db-table → db-table edges"><span class="cell ok">✓</span></td>
                 <td><span class="cell partial">◐</span></td>
                 <td><span class="cell no">✗</span></td>
                 <td><span class="cell no">✗</span></td>
@@ -168,8 +168,8 @@
                 <td><span class="cell no">✗</span></td>
                 <td><span class="cell no">✗</span></td>
               </tr>
-              <tr><th scope="row">Guards / Interceptors / Pipes</th>
-                <td title="planned — see ROADMAP.md"><span class="cell partial">◐</span></td>
+              <tr><th scope="row">Guards / Interceptors / Pipes (<code>di-guard / di-interceptor / di-pipe</code>)</th>
+                <td title="@UseGuards / @UseInterceptors / @UsePipes captured as typed edges with attachedTo class/method"><span class="cell ok">✓</span></td>
                 <td><span class="cell no">✗</span></td>
                 <td><span class="cell ok">✓</span></td>
                 <td><span class="cell partial">◐</span></td>
@@ -190,8 +190,8 @@
                 <td><span class="cell no">✗</span></td>
                 <td><span class="cell no">✗</span></td>
               </tr>
-              <tr><th scope="row">TS imports (file → file)</th>
-                <td><span class="cell ok">✓</span></td>
+              <tr><th scope="row">TS imports — static + dynamic + CommonJS <code>require</code></th>
+                <td title="Static import, import(), and require() captured uniformly"><span class="cell ok">✓</span></td>
                 <td title="Tree-sitter + LLM, not a typed import-edge artifact"><span class="cell partial">◐</span></td>
                 <td><span class="cell no">✗</span></td>
                 <td><span class="cell no">✗</span></td>
@@ -212,8 +212,8 @@
                 <td><span class="cell no">✗</span></td>
                 <td><span class="cell no">✗</span></td>
               </tr>
-              <tr><th scope="row">Cycle detection</th>
-                <td title="planned — see ROADMAP.md"><span class="cell partial">◐</span></td>
+              <tr><th scope="row">Import cycle detection (<code>diagnostics.cycles</code>)</th>
+                <td title="Johnson's algorithm over ts-import / lib-usage / di-import edges; emits structured cycles with file:line + Mermaid red highlight"><span class="cell ok">✓</span></td>
                 <td><span class="cell no">✗</span></td>
                 <td><span class="cell no">✗</span></td>
                 <td><span class="cell no">✗</span></td>
@@ -365,18 +365,18 @@
               <tr>
                 <th scope="row">arch-graph</th>
                 <td>static</td>
-                <td class="mono">38,654</td>
+                <td class="mono">39,779</td>
                 <td><span class="cell full">100%</span></td>
-                <td>NATS · BullMQ · TypeORM · DI · HTTP · imports</td>
+                <td>NATS · BullMQ · TypeORM (+ ER) · DI (+ Guards/Interceptors/Pipes) · HTTP · imports (static + dynamic + CJS) · cycle detection</td>
                 <td>baseline — questions auto-derived from arch-graph's own nodes, so it scores 100% by construction</td>
               </tr>
               <tr>
                 <th scope="row">graphify</th>
                 <td>LLM-driven</td>
-                <td class="mono">570,605</td>
-                <td><span class="cell partial">25%</span></td>
+                <td class="mono">569,924</td>
+                <td><span class="cell partial">39%</span></td>
                 <td>generic semantic concepts</td>
-                <td>not designed for NestJS message-bus topology — strength is cross-cutting / "what's this codebase about"</td>
+                <td>not designed for NestJS message-bus topology — strength is cross-cutting / "what's this codebase about". The recall number jumped vs. the previous run because the question seed changed (auto-generated questions are re-derived from arch-graph's current node set, which expanded this cycle)</td>
               </tr>
               <tr>
                 <th scope="row">@nestjs/devtools-integration</th>

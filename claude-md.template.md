@@ -9,8 +9,11 @@ The graph is the source of truth for these questions; do not grep or guess:
 - "Who publishes / subscribes to NATS subject `X`?"
 - "What services depend on TypeORM entity `Y` / queue `Z`?"
 - "Which module imports / provides / exports `SomeProvider`?"
+- "Which guards / interceptors / pipes are applied to controller `C` or method `m`?" (`di-guard`, `di-interceptor`, `di-pipe` edges)
+- "What tables relate to `T` via `@ManyToOne / @OneToMany / @ManyToMany`?" (`db-relation` edges)
+- "Are there import cycles in this codebase?" (`diagnostics.cycles` — ts-import, lib-usage, di-import)
 - "How does service `A` reach service `B`? (NATS, HTTP, BullMQ, DI)"
-- "What changes if I rename / move `libs/foo`?" (ts-import edges)
+- "What changes if I rename / move `libs/foo`?" (ts-import edges incl. CommonJS `require(...)`)
 - "What are the outgoing / incoming dependencies of service `X`?"
 
 ### Prefer CLI query subcommands
@@ -63,7 +66,9 @@ If `arch-graph mcp` is available on PATH and the editor has an MCP client config
 
 ### jq fallback (if CLI unavailable)
 
-If neither the CLI nor MCP is available, read `arch-graph-out/graph.json` directly. GraphEdge fields are `{id, from, to, kind, file?, line?, dynamic?, subjectPattern?, meta?}` — not `source`/`target`/`label`/`location`. Node id prefixes: `nats:<subject>`, `service:<id>`, `db-table:<name>`, `queue:<name>`, `module:<ClassName>`.
+If neither the CLI nor MCP is available, read `arch-graph-out/graph.json` directly. GraphEdge fields are `{id, from, to, kind, file?, line?, dynamic?, subjectPattern?, meta?}` — not `source`/`target`/`label`/`location`. Node id prefixes: `nats:<subject>`, `service:<id>`, `db-table:<name>`, `queue:<name>`, `module:<ClassName>`, `provider:<ClassName>`, `file:<absolute-path>`.
+
+For cycle diagnostics, read `arch-graph-out/diagnostics.json` → `.cycles.cycles[]` (each entry has `kind` ∈ {`ts-import`, `lib-usage`, `di-import`}, `nodes: string[]`, `edgeLocations: [{from, to, location?}]`). If `.cycles.error` is set, cycle detection degraded (e.g. RangeError on a very large graph) — output may be incomplete.
 
 ```bash
 # Who publishes on a subject?
@@ -98,11 +103,12 @@ To rebuild manually: `arch-graph build`
 | Domain | Edges | Resolution gate |
 |---|---|---|
 | NATS | `nats-publish`, `nats-subscribe`, `nats-request`, `nats-reply` | recall ≥ 95% vs grep-based ground truth |
-| TypeORM | `db-read`, `db-write`, `db-access` (service → table) | recall ≥ 95%, resolve ≥ 95% |
+| TypeORM | `db-read`, `db-write`, `db-access` (service → table) + `db-relation` (table → table via `@ManyToOne` / `@OneToMany` / `@ManyToMany` / `@OneToOne`) | recall ≥ 95%, resolve ≥ 95% |
 | BullMQ | `queue-produce`, `queue-consume` | recall ≥ 95% per role |
-| NestJS DI | `di-import`, `di-provides`, `di-exports`, `di-controller` | recall ≥ 95% per field |
+| NestJS DI | `di-import`, `di-provides`, `di-exports`, `di-controller` + `di-guard` / `di-interceptor` / `di-pipe` (from `@UseGuards` / `@UseInterceptors` / `@UsePipes`, attachedTo class or method) | recall ≥ 95% per field |
 | HTTP | `http-call` (internal) or `http-external` (host) | recall ≥ 95% on call sites |
-| TS imports | `ts-import` (file→file, opt-in), `lib-usage` (service→lib) | recall ≥ 80% (alias-resolution best-effort) |
+| TS imports | `ts-import` (file→file, opt-in, captures static `import`, dynamic `import()`, and CommonJS `require(...)`), `lib-usage` (service→lib) | recall ≥ 80% (alias-resolution best-effort) |
+| Cycles | `diagnostics.cycles` (Johnson's enumeration over `ts-import` / `lib-usage` / `di-import` subgraphs) | informational — surfaced in Mermaid output with red highlight |
 
 ### Honesty rules
 
