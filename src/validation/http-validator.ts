@@ -47,11 +47,15 @@ const AXIOS_CONFIG_RE = /(?<=^|[\s=({,;])axios\s*\(/gm;
  * `axios.create({...}).<method>(` chain — paired with the extractor's chain detection
  * so GT and extracted balance. The extractor emits an unresolved site at the outer
  * `.get()` location; this regex matches the same offset (anchored at `axios.create`).
- * Single-level paren matching with `[^)]*` is enough — `axios.create({...})` rarely
- * contains nested parens inside the config arg.
+ *
+ * Depth-1 paren balancing: `[^)]*(?:\([^)]*\)[^)]*)*` allows one level of nested
+ * parens inside the config object (e.g. `axios.create({ baseURL: getUrl() })`).
+ * Without this, a `getUrl()` call inside the config arg causes `[^)]*` to stop at
+ * the inner `)`, leaving the regex unanchored and producing false `extra` diagnostics
+ * (the AST extractor sees the site correctly; the GT regex doesn't).
  */
 const AXIOS_CREATE_RE =
-    /\baxios\s*\.\s*create\s*\([^)]*\)\s*\.\s*(get|post|put|patch|delete|head|options)\s*\(/g;
+    /\baxios\s*\.\s*create\s*\([^)]*(?:\([^)]*\)[^)]*)*\)\s*\.\s*(get|post|put|patch|delete|head|options)\s*\(/g;
 /**
  * Global `fetch(`. We exclude `.fetch(` (method on an object) and `<word>fetch(`
  * (identifier suffix like `prefetch`). Stripping comments first removes JSDoc noise.
@@ -114,6 +118,7 @@ export function buildHttpReport(
     let external = 0;
     let unresolvedClassification = 0;
     let resolvedForMetric = 0;
+    const externalCalls: HttpCallSite[] = [];
     for (const s of sites) {
         const cls = classifyForMetric(s.url, internalEnvVars, httpCfg);
         if (cls === 'internal') {
@@ -121,9 +126,11 @@ export function buildHttpReport(
             resolvedForMetric += 1;
         } else if (cls === 'external-literal') {
             external += 1;
+            externalCalls.push(s);
             // External literals are recall-OK but not "resolved" per spec — don't bump resolvedForMetric.
         } else if (cls === 'external') {
             external += 1;
+            externalCalls.push(s);
         } else {
             unresolvedClassification += 1;
         }
@@ -138,6 +145,9 @@ export function buildHttpReport(
             internal,
             external,
             unresolvedClassification,
+        },
+        informational: {
+            externalCalls,
         },
         sites,
         groundTruth,
