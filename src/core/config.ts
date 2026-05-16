@@ -58,16 +58,16 @@ export interface NatsConfig {
 }
 
 export interface HttpInternalService {
-    /** Stable service id used as graph target (e.g. `platform-api` → `service:platform-api`). */
+    /** Stable service id used as graph target (e.g. `my-api` → `service:my-api`). */
     id: string;
     /**
-     * ENV-var names that resolve to this service's base URL — e.g. `['PLATFORM_API_URL']`.
+     * ENV-var names that resolve to this service's base URL — e.g. `['MY_API_URL']`.
      * An `env-ref` URL whose `envVar` matches any of these is classified internal.
      */
     envVars?: string[];
     /**
      * Substring patterns matched against the literal URL form — e.g.
-     * `['http://localhost:3010', 'http://platform-api']`. Cheap substring containment,
+     * `['http://localhost:3010', 'http://my-api']`. Cheap substring containment,
      * no glob/regex semantics (kept simple to mirror NATS's "exact match" rule).
      */
     urlPatterns?: string[];

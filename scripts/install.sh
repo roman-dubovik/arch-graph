@@ -2,20 +2,19 @@
 # arch-graph installer — POSIX, no bash features.
 #
 # Clones (or git pull's) the repo into ~/.arch-graph, installs deps, and
-# symlinks `bin/arch-graph` onto PATH. The repo is not yet on a public Git
-# host, so the URL is resolved from one of, in order:
+# symlinks `bin/arch-graph` onto PATH. The clone URL is resolved from one
+# of, in order:
 #
 #   1. $ARCH_GRAPH_GIT — user-supplied clone source (any URL or local path)
 #   2. ~/.arch-graph already exists with a git remote — use its `origin`
 #   3. The path stored in $0 of this script, if it lives inside a git work
 #      tree (the case when the user runs `bash scripts/install.sh` from
 #      their existing clone)
-#
-# Replace ARCH_GRAPH_DEFAULT_GIT below once the repo is published.
+#   4. $ARCH_GRAPH_DEFAULT_GIT — built-in default (the public GitHub repo)
 
 set -e
 
-ARCH_GRAPH_DEFAULT_GIT="${ARCH_GRAPH_DEFAULT_GIT:-}"   # TODO: set to the public URL once published
+ARCH_GRAPH_DEFAULT_GIT="${ARCH_GRAPH_DEFAULT_GIT:-https://github.com/roman-dubovik/arch-graph.git}"
 INSTALL_DIR="${ARCH_GRAPH_HOME:-$HOME/.arch-graph}"
 BIN_DIR="${ARCH_GRAPH_BIN_DIR:-$HOME/.local/bin}"
 

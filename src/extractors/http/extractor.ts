@@ -26,25 +26,19 @@ import { resolveUrl } from './url-resolver.js';
  * URL resolution lives in `./url-resolver.ts`; the extractor's job is purely to
  * identify the call shape, pick the right URL argument, and tag the API kind.
  *
- * Out of scope (documented in OPEN-QUESTIONS Block B):
- *   - Wrapper services (`this.platformApiClient.fetchUser(id)`) — no auto-discovery.
+ * Out of scope:
+ *   - Wrapper services (`this.myApiClient.fetchUser(id)`) — no auto-discovery.
  *   - `axios.create({ baseURL })` cross-statement tracking — client variable bindings
  *     are not traced. Inline `axios.create({...}).get(url)` chains ARE detected (via
  *     a structural AST check: receiver must be `CallExpression` on callee `axios.create`)
  *     and emitted as unresolved so they balance the GT walker.
  *
- *     DEFERRED — no corpus signal (verified 2026-05-16):
- *       beribuy2  — 0 axios.create() calls
- *       insyra    — 0 axios.create() calls
- *       platform  — 1 axios.create() call (sync-client.ts:77), but NO `baseURL` property;
- *                   uses `this.host` field prepended at each call-site instead
- *       screenia  — 0 axios.create() calls
- *       unpacks   — 0 axios.create() calls
- *     Across all 5 reference projects, `axios.create` is never called with a `baseURL`
- *     property, so taint-tracking would yield zero resolvable URLs. A full implementation
+ *     DEFERRED — no corpus signal across the benchmark suite: `axios.create` is
+ *     either not called at all, or called without a `baseURL` property (callers
+ *     prepend a host field at each call-site instead). A full implementation
  *     would require a `Map<varName, ResolvedUrlBase>` pre-pass with scope-boundary
- *     clearing (~150 LOC). See REVIEWER-SUGGESTIONS.md — "Закрыто как deferred,
- *     no corpus signal". Reactivate if a project with the `baseURL` pattern appears.
+ *     clearing (~150 LOC). Reactivate if a project with the `baseURL` pattern
+ *     appears in the bench.
  *   - GraphQL / tRPC / gRPC — separate domain entirely.
  */
 

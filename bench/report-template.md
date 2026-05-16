@@ -4,8 +4,8 @@ _Generated: {{GENERATED_AT}}_
 
 ## What this measures
 
-For each of 5 NestJS monorepos (`platform`, `insyra`, `beribuy2`, `unpacks`,
-`screenia`), we built **two** knowledge graphs:
+For each NestJS monorepo configured under `configs/`, we built **two**
+knowledge graphs:
 
 - **arch-graph** — a NestJS-specific static graph (typed nodes + edges:
   NATS subjects, BullMQ queues, TypeORM tables, DI modules/providers, HTTP
@@ -15,8 +15,8 @@ For each of 5 NestJS monorepos (`platform`, `insyra`, `beribuy2`, `unpacks`,
   extraction (deterministic) with LLM-driven semantic subagents that surface
   cross-cutting concepts and ambiguous edges.
 
-We then ran 15 architecture-grade questions (~3 per project) through a
-benchmark adapter that:
+We then ran architecture-grade questions (defined in `bench/questions.yaml`)
+through a benchmark adapter that:
 
 1. Loads each tool's graph, **compresses it identically** (drop redundant
    `meta`, drop absolute paths, keep only `id` + `kind/file_type` + `label`
@@ -100,8 +100,7 @@ does **not** cover, e.g.:
 
 Numbers above (`arch build` column) come from `bench/.build-times.json`,
 populated by `bench/run.sh`. We don't time graphify here because it must be
-launched as a Claude skill (`/graphify <path>`), not from a script — see
-`bench/README.md`.
+launched as a Claude skill, not from a script — see `bench/README.md`.
 
 ## Honesty disclaimer
 
@@ -123,7 +122,6 @@ domain-specific tool buys you over a generic one for that workload.
 
 {{SKIPPED_LEGS}}
 
-To populate the graphify leg for a project, run `/graphify <project_root>` in
-a Claude Code session (graphify is a skill, not a one-shot CLI). The output
-should land at `<project_root>/graphify-out/graph.json`. Re-run
-`bash bench/run.sh` afterwards.
+To populate the graphify leg for a project, run graphify as a Claude Code
+skill against the project root. The output should land at
+`<project_root>/graphify-out/graph.json`. Re-run `bash bench/run.sh` afterwards.

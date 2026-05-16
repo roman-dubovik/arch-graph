@@ -220,7 +220,7 @@ function resolveConfigGetCall(node: Node, depth: number, idx: ConstantIndex): Re
         return { kind: 'unresolved', raw: node.getText().slice(0, 80), reason: 'no env-var arg' };
     }
     const first = args[0]!;
-    // Direct string literal is the common form: `configService.get('PLATFORM_API_URL')`.
+    // Direct string literal is the common form: `configService.get('MY_API_URL')`.
     if (
         first.getKind() === SyntaxKind.StringLiteral ||
         first.getKind() === SyntaxKind.NoSubstitutionTemplateLiteral
@@ -274,15 +274,15 @@ function resolvePropertyAccess(
     idx: ConstantIndex,
 ): ResolvedUrl {
     // `process.env.X` is the second canonical env-var shape (alongside `configService.get`).
-    // Recognising it here lets bare `axios.get(process.env.PLATFORM_API_URL)` and template
-    // forms like `\`${process.env.PLATFORM_API_URL}/users/${id}\`` upgrade to env-ref —
+    // Recognising it here lets bare `axios.get(process.env.MY_API_URL)` and template
+    // forms like `\`${process.env.MY_API_URL}/users/${id}\`` upgrade to env-ref —
     // without this they'd fall through to symbol chasing (whose declaration site is in
     // Node typings) and emerge as unresolved.
     if (node.getExpression().getText() === 'process.env') {
         return { kind: 'env-ref', envVar: node.getName() };
     }
 
-    // First check whole-dotted lookup in the constant index — handles `URLS.PLATFORM` patterns.
+    // First check whole-dotted lookup in the constant index — handles `URLS.API` patterns.
     const entry = idx.get(node.getText());
     if (entry && entry.kind === 'literal') return { kind: 'literal', value: entry.value };
 
