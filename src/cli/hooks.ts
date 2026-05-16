@@ -9,7 +9,7 @@ import { existsSync } from 'node:fs';
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
-import { appendBlock, replaceMarkedSection, stripMarkedSection } from './claude.js';
+import { appendBlock, replaceMarkedSection, stripMarkedSection } from './marker-block.js';
 
 const MARK_START = '# >>> arch-graph >>>';
 const MARK_END = '# <<< arch-graph <<<';
