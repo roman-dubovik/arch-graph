@@ -185,6 +185,20 @@ code {
   background: var(--bg-3);
   border-color: var(--accent);
 }
+.site-nav .nav-active {
+  color: var(--text);
+  position: relative;
+}
+.site-nav .nav-active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -22px;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 2px;
+}
 
 @media (max-width: 720px) {
   .site-nav { gap: 16px; }
@@ -1077,6 +1091,215 @@ pre {
 
   /* Footer */
   .site-footer nav ul { flex-wrap: wrap; gap: 12px 16px; padding: 0; }
+}
+
+/* ─────────────────────────────────── CAPABILITY MATRIX ──────────────── */
+/* Shared cell glyphs for matrix tables (compact + full) */
+.cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  border: 1px solid transparent;
+}
+.cell.ok      { background: rgba(52, 211, 153, 0.10); color: var(--accent-ok);   border-color: rgba(52, 211, 153, 0.25);  }
+.cell.partial { background: rgba(251, 191, 36, 0.08); color: var(--accent-warm); border-color: rgba(251, 191, 36, 0.25);  }
+.cell.no      { background: rgba(228, 228, 231, 0.04); color: var(--text-mute);  border-color: rgba(228, 228, 231, 0.10); }
+
+/* Compact capability matrix on the landing page (inside section-bench) */
+.matrix-block {
+  margin-top: 56px;
+}
+.matrix-foot {
+  margin: 14px 0 0;
+  font-size: 14px;
+  color: var(--text-dim);
+}
+table.matrix-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.matrix-table th, .matrix-table td {
+  padding: 12px 14px;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.matrix-table th[scope="row"] {
+  text-align: left;
+  font-weight: 500;
+  color: var(--text);
+  font-size: 13.5px;
+  position: sticky;
+  left: 0;
+  background: var(--bg-1);
+  z-index: 1;
+}
+.matrix-table thead th {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+  font-weight: 500;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+}
+.matrix-table thead th.capability-col {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+}
+.matrix-table tbody tr:last-child td,
+.matrix-table tbody tr:last-child th { border-bottom: none; }
+.matrix-table tbody tr:hover { background: rgba(255, 255, 255, 0.02); }
+.matrix-table tbody tr:hover th[scope="row"] { background: var(--bg-2); }
+.matrix-table .col-self {
+  color: var(--accent);
+}
+
+/* Full comparison page — wider matrix, sticky first column for horizontal scroll */
+.section-compare-hero { padding-top: 96px; }
+.comparison-wrap { background: var(--bg-1); }
+table.comparison-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+.comparison-table th, .comparison-table td {
+  padding: 12px 12px;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.comparison-table thead th {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+  font-weight: 500;
+  background: var(--bg-2);
+  white-space: normal;
+  vertical-align: bottom;
+  min-width: 92px;
+  max-width: 120px;
+}
+.comparison-table thead th.th-narrow {
+  font-size: 10px;
+  line-height: 1.25;
+}
+.comparison-table thead th.capability-col {
+  text-align: left;
+  min-width: 240px;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+}
+.comparison-table th[scope="row"] {
+  text-align: left;
+  font-weight: 500;
+  color: var(--text);
+  font-size: 13.5px;
+  font-family: var(--font-sans);
+  position: sticky;
+  left: 0;
+  background: var(--bg-1);
+  z-index: 1;
+  white-space: normal;
+  max-width: 280px;
+}
+.comparison-table th[scope="row"] code {
+  font-size: 12px;
+}
+.comparison-table tbody tr:last-child td,
+.comparison-table tbody tr:last-child th { border-bottom: none; }
+.comparison-table tbody tr:hover { background: rgba(255, 255, 255, 0.02); }
+.comparison-table tbody tr:hover th[scope="row"] { background: var(--bg-2); }
+
+/* Per-tool cards */
+.compare-tools-list {
+  list-style: none;
+  padding: 0;
+  margin: 32px 0 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+.compare-tools-list li {
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 22px;
+}
+.compare-tools-list h3 {
+  margin: 0 0 4px;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.compare-tools-list .tool-meta {
+  margin: 0 0 12px;
+  font-size: 11.5px;
+  color: var(--text-mute);
+  letter-spacing: 0.02em;
+}
+.compare-tools-list p {
+  margin: 0 0 10px;
+  font-size: 14px;
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+.compare-tools-list p:last-child { margin-bottom: 0; font-size: 13px; }
+
+/* Where we lose */
+.section-compare-losses { background: linear-gradient(180deg, var(--bg), var(--bg-1) 80%, var(--bg)); }
+.compare-losses-list {
+  list-style: none;
+  padding: 0;
+  margin: 32px 0 0;
+  display: grid;
+  gap: 14px;
+}
+.compare-losses-list li {
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent-warm);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+}
+.compare-losses-list h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.compare-losses-list p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+
+@media (max-width: 900px) {
+  .compare-tools-list { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 600px) {
+  .matrix-table th, .matrix-table td { padding: 9px 10px; font-size: 12.5px; }
+  .comparison-table th, .comparison-table td { padding: 9px 8px; font-size: 12.5px; }
+  .comparison-table thead th { min-width: 84px; }
+  .comparison-table thead th.capability-col { min-width: 180px; }
+  .matrix-table thead th.capability-col,
+  .matrix-table th[scope="row"] { min-width: 200px; }
 }
 
 /* Very small phones */

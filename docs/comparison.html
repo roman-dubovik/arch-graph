@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>arch-graph — How it compares (capability matrix vs adjacent tools)</title>
+  <meta name="description" content="Honest, vibe-based capability matrix: arch-graph vs @nestjs/devtools-integration, @riaskov/nestjs-graph-visualizer, nestjs-spelunker, nestjs-doctor, dependency-cruiser, erdia, scip-typescript, graphify. Where arch-graph wins, where it loses." />
+  <meta name="theme-color" content="#0a0a0f" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="arch-graph — How it compares" />
+  <meta property="og:description" content="Honest capability matrix across 9 adjacent tools. Where arch-graph is structurally unique, and where other tools are stronger." />
+  <meta property="og:url" content="https://roman-dubovik.github.io/arch-graph/comparison.html" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" />
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <header class="site-header" role="banner">
+    <div class="container header-row">
+      <a class="brand" href="index.html" aria-label="arch-graph home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="6" cy="16" r="3"></circle>
+            <circle cx="26" cy="7" r="3"></circle>
+            <circle cx="26" cy="25" r="3"></circle>
+            <path d="M9 14 L23 9"></path>
+            <path d="M9 18 L23 23"></path>
+          </svg>
+        </span>
+        <span class="brand-text">arch-graph</span>
+      </a>
+      <nav class="site-nav" aria-label="Primary">
+        <a href="index.html#problem">Why</a>
+        <a href="index.html#flow">How</a>
+        <a href="index.html#bench">Benchmark</a>
+        <a href="index.html#install">Install</a>
+        <a href="index.html#queries">Query</a>
+        <a class="nav-active" aria-current="page" href="comparison.html">Compare</a>
+        <a class="nav-cta" href="https://github.com/roman-dubovik/arch-graph" rel="noopener" target="_blank">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- ──────────────────────────────────────────────── HERO ─────────── -->
+    <section class="section section-compare-hero" id="top" aria-labelledby="compare-title">
+      <div class="container narrow">
+        <p class="section-eyebrow">Compare</p>
+        <h1 id="compare-title" class="section-title">How arch-graph compares.</h1>
+        <p class="section-lead">
+          A capability matrix across nine adjacent tools — the ones a NestJS architect might reasonably reach for when they want to understand a monorepo. This is a <strong>vibe-based</strong> coverage check (does a tool emit this edge kind, yes/no/partially?), not a head-to-head benchmark. Numbers live on the <a class="link" href="index.html#bench">main page</a>; this page is the orthogonal "what can each tool see?" question.
+        </p>
+        <p class="prose dim small">
+          Capability claims here are derived from public docs and README pages of each tool — not from running them locally. The full research notes live in <code>COMPETITIVE-LANDSCAPE.md</code> in the repo (currently a local research artifact). Spotted an inaccuracy? Open an issue.
+        </p>
+      </div>
+    </section>
+
+    <!-- ──────────────────────────────────────── FULL MATRIX ─────────── -->
+    <section class="section section-compare-matrix" id="matrix" aria-labelledby="matrix-title">
+      <div class="container">
+        <p class="section-eyebrow">Capability matrix</p>
+        <h2 id="matrix-title" class="section-title">What each tool covers.</h2>
+        <p class="section-lead">
+          Rows are capability axes. Columns are tools. <span class="cell ok" aria-hidden="true">✓</span> = first-class support, <span class="cell partial" aria-hidden="true">◐</span> = partial / via inference / scope-narrowed, <span class="cell no" aria-hidden="true">✗</span> = not covered by construction. Hover a cell for context where applicable.
+        </p>
+
+        <div class="table-wrap reveal comparison-wrap">
+          <table class="comparison-table">
+            <thead>
+              <tr>
+                <th scope="col" class="capability-col">Capability</th>
+                <th scope="col">arch-graph</th>
+                <th scope="col">graphify</th>
+                <th scope="col" class="th-narrow">@nestjs/<wbr>devtools-<wbr>integration</th>
+                <th scope="col">nestjs-<wbr>spelunker</th>
+                <th scope="col" class="th-narrow">@riaskov/<wbr>nestjs-graph-<wbr>visualizer</th>
+                <th scope="col">nestjs-<wbr>doctor</th>
+                <th scope="col">dependency-<wbr>cruiser</th>
+                <th scope="col">erdia / typeorm-uml</th>
+                <th scope="col">scip-<wbr>typescript</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><th scope="row">NATS pub/sub edges</th>
+                <td><span class="cell ok">✓</span></td>
+                <td title="LLM inference may surface these but not as typed edges"><span class="cell partial">◐</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td title="Collapses to ordinary file imports"><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+              </tr>
+              <tr><th scope="row">BullMQ producer/consumer</th>
+                <td><span class="cell ok">✓</span></td>
+                <td><span class="cell partial">◐</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+              </tr>
+              <tr><th scope="row">TypeORM <code>@InjectRepository</code> → table</th>
+                <td><span class="cell ok">✓</span></td>
+                <td><span class="cell partial">◐</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td title="Surfaced inside HTML report, not as typed edge"><span class="cell partial">◐</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+              </tr>
+              <tr><th scope="row">TypeORM entity-relation (ER)</th>
+                <td title="planned — see ROADMAP.md"><span class="cell partial">◐</span></td>
+                <td><span class="cell partial">◐</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell ok">✓</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell ok">✓</span></td>
+                <td><span class="cell no">✗</span></td>
+              </tr>
+              <tr><th scope="row">HTTP inter-service calls</th>
+                <td><span class="cell ok">✓</span></td>
+                <td><span class="cell partial">◐</span></td>
+                <td title="Records HTTP entrypoints, not outbound calls"><span class="cell partial">◐</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+              </tr>
+              <tr><th scope="row">NestJS DI modules / providers / exports</th>
+                <td title="static decorator parse"><span class="cell ok">✓</span></td>
+                <td><span class="cell partial">◐</span></td>
+                <td title="runtime authority"><span class="cell ok">✓</span></td>
+                <td title="runtime"><span class="cell ok">✓</span></td>
+                <td title="static AST"><span class="cell ok">✓</span></td>
+                <td><span class="cell ok">✓</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+              </tr>
+              <tr><th scope="row">Controllers + entrypoints</th>
+                <td><span class="cell ok">✓</span></td>
+                <td><span class="cell partial">◐</span></td>
+                <td><span class="cell ok">✓</span></td>
+                <td><span class="cell ok">✓</span></td>
+                <td><span class="cell ok">✓</span></td>
+                <td><span class="cell ok">✓</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+              </tr>
+              <tr><th scope="row">Guards / Interceptors / Pipes</th>
+                <td title="planned — see ROADMAP.md"><span class="cell partial">◐</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell ok">✓</span></td>
+                <td><span class="cell partial">◐</span></td>
+                <td><span class="cell partial">◐</span></td>
+                <td><span class="cell partial">◐</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+              </tr>
+              <tr><th scope="row">Conditional DI at runtime</th>
+                <td title="Static extraction cannot resolve runtime conditionals"><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td title="The reason to use devtools"><span class="cell ok">✓</span></td>
+                <td><span class="cell ok">✓</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+              </tr>
+              <tr><th scope="row">TS imports (file → file)</th>
+                <td><span class="cell ok">✓</span></td>
+                <td title="Tree-sitter + LLM, not a typed import-edge artifact"><span class="cell partial">◐</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td title="Battle-tested across ESM/CJS/AMD"><span class="cell ok">✓ best</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td title="Compiler-grade defs/refs — adjacent abstraction, not import-edges"><span class="cell partial">◐</span></td>
+              </tr>
+              <tr><th scope="row">Service → lib aggregation</th>
+                <td><span class="cell ok">✓</span></td>
+                <td><span class="cell partial">◐</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td title="Via custom rules"><span class="cell partial">◐</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+              </tr>
+              <tr><th scope="row">Cycle detection</th>
+                <td title="planned — see ROADMAP.md"><span class="cell partial">◐</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell partial">◐</span></td>
+                <td><span class="cell ok">✓</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+              </tr>
+              <tr><th scope="row">Typed JSON graph</th>
+                <td><span class="cell ok">✓</span></td>
+                <td><span class="cell ok">✓</span></td>
+                <td title="NestJS-defined schema"><span class="cell ok">✓</span></td>
+                <td><span class="cell ok">✓</span></td>
+                <td title="Mermaid / DOT / SVG only, no JSON"><span class="cell no">✗</span></td>
+                <td title="HTML report only"><span class="cell no">✗</span></td>
+                <td><span class="cell ok">✓</span></td>
+                <td title="Diagram-first outputs"><span class="cell no">✗</span></td>
+                <td title="SCIP protobuf (different schema)"><span class="cell partial">◐</span></td>
+              </tr>
+              <tr><th scope="row"><code>file:line</code> on every edge</th>
+                <td><span class="cell ok">✓</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td title="Per-symbol, not per-edge"><span class="cell partial">◐</span></td>
+              </tr>
+              <tr><th scope="row">Diagnostics for unresolved sites</th>
+                <td><span class="cell ok">✓</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td title="Lint findings, different shape"><span class="cell partial">◐</span></td>
+                <td title="Rule violations, not edge-gaps"><span class="cell partial">◐</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+              </tr>
+              <tr><th scope="row">Static (no boot required)</th>
+                <td><span class="cell ok">✓</span></td>
+                <td title="LLM calls at build time"><span class="cell partial">◐</span></td>
+                <td title="Needs NestFactory.create()"><span class="cell no">✗</span></td>
+                <td title="Needs NestFactory.create()"><span class="cell no">✗</span></td>
+                <td><span class="cell ok">✓</span></td>
+                <td><span class="cell ok">✓</span></td>
+                <td><span class="cell ok">✓</span></td>
+                <td><span class="cell ok">✓</span></td>
+                <td><span class="cell ok">✓</span></td>
+              </tr>
+              <tr><th scope="row">Deterministic (no LLM)</th>
+                <td><span class="cell ok">✓</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell ok">✓</span></td>
+                <td><span class="cell ok">✓</span></td>
+                <td><span class="cell ok">✓</span></td>
+                <td><span class="cell ok">✓</span></td>
+                <td><span class="cell ok">✓</span></td>
+                <td><span class="cell ok">✓</span></td>
+                <td><span class="cell ok">✓</span></td>
+              </tr>
+              <tr><th scope="row">Works on broken builds</th>
+                <td title="ts-morph tolerates type errors"><span class="cell ok">✓</span></td>
+                <td><span class="cell partial">◐</span></td>
+                <td title="App must boot"><span class="cell no">✗</span></td>
+                <td title="App must boot"><span class="cell no">✗</span></td>
+                <td><span class="cell ok">✓</span></td>
+                <td><span class="cell ok">✓</span></td>
+                <td><span class="cell ok">✓</span></td>
+                <td title="Entities must parse"><span class="cell partial">◐</span></td>
+                <td title="Requires typechecker"><span class="cell no">✗</span></td>
+              </tr>
+              <tr><th scope="row">CLI query subcommands</th>
+                <td title="who-publishes, deps-of, path, stats, …"><span class="cell ok">✓</span></td>
+                <td><span class="cell partial">◐</span></td>
+                <td title="Web UI only"><span class="cell no">✗</span></td>
+                <td title="Library API + Mermaid output"><span class="cell partial">◐</span></td>
+                <td><span class="cell partial">◐</span></td>
+                <td><span class="cell partial">◐</span></td>
+                <td title="Rule-validation CLI"><span class="cell ok">✓</span></td>
+                <td><span class="cell partial">◐</span></td>
+                <td title="Query via SCIP tooling"><span class="cell partial">◐</span></td>
+              </tr>
+              <tr><th scope="row">MCP server</th>
+                <td><span class="cell ok">✓</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+              </tr>
+              <tr><th scope="row">Claude Code skill</th>
+                <td><span class="cell ok">✓</span></td>
+                <td title="graphify ships a Claude skill too"><span class="cell ok">✓</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+              </tr>
+              <tr><th scope="row">Pre-commit hook</th>
+                <td><span class="cell ok">✓</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td title="Common pattern, not bundled"><span class="cell partial">◐</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="prose dim small">
+          The capability column for arch-graph reflects what ships <strong>today</strong>. Cells marked <span class="cell partial" aria-hidden="true">◐</span> with the tooltip "planned" track items in the <a class="link" href="https://github.com/roman-dubovik/arch-graph/blob/main/ROADMAP.md" rel="noopener" target="_blank">ROADMAP</a> (cycle detection, ER edges, Guards/Interceptors/Pipes).
+        </p>
+      </div>
+    </section>
+
+    <!-- ──────────────────────────────────────────── PER TOOL ─────────── -->
+    <section class="section section-compare-tools" id="tools" aria-labelledby="tools-title">
+      <div class="container">
+        <p class="section-eyebrow">Per-tool analysis</p>
+        <h2 id="tools-title" class="section-title">What each tool actually does.</h2>
+        <p class="section-lead">Short framing for each. Read alongside the matrix above — the table tells you <em>what</em>, these cards tell you <em>why</em>.</p>
+
+        <ul class="compare-tools-list">
+          <li class="reveal">
+            <h3>arch-graph</h3>
+            <p class="tool-meta mono">static · NestJS-aware · 6 edge kinds · file:line provenance</p>
+            <p>Static ts-morph extractor producing a typed JSON graph across NATS pub/sub, BullMQ queues, TypeORM repositories, NestJS DI, inter-service HTTP, and TS imports. Every edge cites <code>file:line</code>. Ships CLI, MCP server, and Claude Code skill. Wedge: cross-cutting message-bus + data-layer coverage at the intersection where no other static tool lives.</p>
+            <p><a class="link" href="https://github.com/roman-dubovik/arch-graph" rel="noopener" target="_blank">repo →</a></p>
+          </li>
+
+          <li class="reveal">
+            <h3>graphify</h3>
+            <p class="tool-meta mono">LLM-driven · semantic · generic</p>
+            <p>LLM-driven semantic graph builder over any codebase. Produces a JSON graph but isn't specialized for NestJS message-bus patterns — infers structure rather than parsing decorators, so NATS/BullMQ/TypeORM edges either get inferred imprecisely or collapse to generic semantic relations. Useful where the language/framework is unknown; weak on call-graph specifics.</p>
+            <p><a class="link" href="https://github.com/roman-dubovik/graphify" rel="noopener" target="_blank">repo →</a></p>
+          </li>
+
+          <li class="reveal">
+            <h3>@nestjs/devtools-integration</h3>
+            <p class="tool-meta mono">official · runtime · authoritative DI</p>
+            <p>The canonical NestJS graph tool. Boots your app via <code>NestFactory.create()</code> and snapshots a <code>SerializedGraph</code> of modules, providers, controllers, guards/interceptors/pipes, and HTTP/WS/gRPC/GraphQL entrypoints. On the narrow "module DI graph" question this is more authoritative than any static tool — it's literally Nest's own metadata. Doesn't extract NATS subjects, BullMQ queue names, or TypeORM table edges as typed edges; no <code>file:line</code> on emitted nodes; can't run on broken builds.</p>
+            <p><a class="link" href="https://www.npmjs.com/package/@nestjs/devtools-integration" rel="noopener" target="_blank">npm →</a> · <a class="link" href="https://docs.nestjs.com/devtools/overview" rel="noopener" target="_blank">docs →</a></p>
+          </li>
+
+          <li class="reveal">
+            <h3>nestjs-spelunker</h3>
+            <p class="tool-meta mono">runtime · DI only · community</p>
+            <p>The popular community DI grapher. Runtime-based (needs <code>NestFactory.create</code>). Covers modules / providers / controllers / exports / injection tokens, emits JSON arrays + Mermaid-mappable edges. Useful head-to-head on the DI subset specifically. No cross-cutting NATS / BullMQ / TypeORM coverage.</p>
+            <p><a class="link" href="https://github.com/jmcdo29/nestjs-spelunker" rel="noopener" target="_blank">repo →</a></p>
+          </li>
+
+          <li class="reveal">
+            <h3>@riaskov/nestjs-graph-visualizer</h3>
+            <p class="tool-meta mono">static AST · DI only · Mermaid / DOT / SVG</p>
+            <p>Methodologically closest peer to arch-graph: a CLI that statically walks <code>app.module.ts</code> via AST metadata parsing — no DI container, no <code>NestFactory</code>. Narrower scope: NestJS module DI only, no NATS/BullMQ/TypeORM. Output is Mermaid / DOT / SVG, not JSON. The fairest "no boot required" baseline for the DI subset.</p>
+            <p><a class="link" href="https://www.npmjs.com/package/@riaskov/nestjs-graph-visualizer" rel="noopener" target="_blank">npm →</a></p>
+          </li>
+
+          <li class="reveal">
+            <h3>nestjs-doctor</h3>
+            <p class="tool-meta mono">static · lint + graph + ER · HTML report</p>
+            <p>Static AST scanner that runs ~50 rules and produces a health score, plus a module graph and TypeORM ER diagram in a self-contained HTML report. Comparable on DI + ER coverage; not comparable as a graph <em>data</em> producer (no first-class JSON export). Different deliverable: lint-oriented health check, not an extractor for downstream agents.</p>
+            <p><a class="link" href="https://www.npmjs.com/package/nestjs-doctor" rel="noopener" target="_blank">npm →</a> · <a class="link" href="https://nestjs.doctor/docs" rel="noopener" target="_blank">docs →</a></p>
+          </li>
+
+          <li class="reveal">
+            <h3>dependency-cruiser</h3>
+            <p class="tool-meta mono">static · framework-agnostic · import graph</p>
+            <p>Production-grade dependency analyzer for JS/TS/CoffeeScript across ES6/CJS/AMD. Validates configurable rules and emits JSON / dot / mermaid / csv / html. The <strong>honest baseline</strong> for file-level imports — battle-tested across module systems, more than arch-graph is. Framework-agnostic by design: NestJS decorators, NATS subjects, BullMQ queues, and TypeORM entities all collapse to ordinary <code>import</code> edges.</p>
+            <p><a class="link" href="https://github.com/sverweij/dependency-cruiser" rel="noopener" target="_blank">repo →</a></p>
+          </li>
+
+          <li class="reveal">
+            <h3>erdia / typeorm-uml</h3>
+            <p class="tool-meta mono">static · ER diagram · single-domain</p>
+            <p>Live ER-diagram generators that read TypeORM entities and emit PlantUML / Mermaid / SVG / HTML. Cover the ER sub-graph only — no service-to-service edges, no message bus, no DI. Peer for a TypeORM-only sub-bench; not a peer for the "architecture Q&amp;A" workload.</p>
+            <p><a class="link" href="https://github.com/imjuni/erdia" rel="noopener" target="_blank">erdia →</a> · <a class="link" href="https://github.com/eugene-manuilov/typeorm-uml" rel="noopener" target="_blank">typeorm-uml →</a></p>
+          </li>
+
+          <li class="reveal">
+            <h3>scip-typescript</h3>
+            <p class="tool-meta mono">code intel · symbols/refs/defs · polyglot index</p>
+            <p>Sourcegraph's TypeScript indexer. Uses the official typechecker to emit SCIP protobuf for defs/refs/symbol navigation — compiler-accurate, cross-repo. Different abstraction: <em>code intel</em> (symbols), not architectural edges. Won't tell you who publishes a NATS subject, but will tell you everywhere <code>UserService</code> is referenced. Mention as the "if you want IDE-grade refs" answer.</p>
+            <p><a class="link" href="https://github.com/sourcegraph/scip-typescript" rel="noopener" target="_blank">repo →</a></p>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ──────────────────────────────────────── WHERE WE LOSE ─────────── -->
+    <section class="section section-compare-losses" id="losses" aria-labelledby="losses-title">
+      <div class="container narrow">
+        <p class="section-eyebrow">Honest losses</p>
+        <h2 id="losses-title" class="section-title">Where arch-graph is the wrong tool.</h2>
+        <p class="section-lead">If your problem maps to one of these, reach for the tool that's actually built for it. arch-graph is not trying to be every tool — it's trying to be the one that lives at the intersection no other static tool covers.</p>
+        <ul class="compare-losses-list">
+          <li class="reveal">
+            <h3>Conditional DI at runtime → use @nestjs/devtools-integration</h3>
+            <p>Static decorator parsing can't resolve "this provider is conditionally registered when <code>NODE_ENV === 'prod'</code>." DevTools snapshots Nest's <em>actual</em> runtime metadata after <code>NestFactory.create()</code>, so it sees what really got wired up.</p>
+          </li>
+          <li class="reveal">
+            <h3>TypeORM entity relations (ER) → use erdia or typeorm-uml</h3>
+            <p>arch-graph today emits <code>service → table</code> from <code>@InjectRepository</code> but not <code>@ManyToOne</code> / <code>@OneToMany</code> / <code>@JoinTable</code> as typed ER edges. erdia's Mermaid ER output is the cleanest peer for "what does this entity relate to schema-wise." On the <a class="link" href="https://github.com/roman-dubovik/arch-graph/blob/main/ROADMAP.md" rel="noopener" target="_blank">roadmap</a> as Tier 2.</p>
+          </li>
+          <li class="reveal">
+            <h3>Pure file-imports across module systems → use dependency-cruiser</h3>
+            <p>dep-cruiser handles ESM / CJS / AMD with battle-tested resolvers, has years of rule tuning, and ships a richer rule DSL. On the narrow "which file imports which file?" question, arch-graph should be roughly tied — or strictly worse in legacy CJS corner cases. dep-cruiser is the credible baseline there.</p>
+          </li>
+          <li class="reveal">
+            <h3>Cross-repo / cross-language → use scip-typescript or Joern</h3>
+            <p>arch-graph is a single-monorepo, TypeScript-only static extractor by charter. If you need code intel across repos (Sourcegraph SCIP) or a polyglot CPG (Joern), arch-graph isn't the right abstraction level. Joern emits AST/CFG/DDG; arch-graph emits architectural edges. Different products.</p>
+          </li>
+          <li class="reveal">
+            <h3>Runtime topology from prod traffic → use OpenTelemetry service maps</h3>
+            <p>otelmap / spanmetrics / vendor APMs (Tempo, Elastic) build service-to-service topology from live spans. They find edges arch-graph can't see (dynamically constructed subjects, prod-only paths) and miss edges that exist in code but never fire. Complementary, not competing — and outside arch-graph's static charter.</p>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ──────────────────────────────────── METHODOLOGY ───────────────── -->
+    <section class="section section-compare-methodology" id="methodology" aria-labelledby="methodology-title">
+      <div class="container narrow">
+        <p class="section-eyebrow">Methodology</p>
+        <h2 id="methodology-title" class="section-title">How the matrix was filled in.</h2>
+        <p class="prose">
+          Cells were assigned by reading each tool's public README / npm page / official docs, and asking: <em>does this tool emit this kind of edge as a first-class typed artifact?</em> No installs, no runs — this is a coverage check, not a benchmark. The full research notes (sources per tool, judgement calls, edge-cases) live in <code>COMPETITIVE-LANDSCAPE.md</code> in the repo. The corresponding head-to-head <strong>numbers</strong> (recall, token cost) are on the <a class="link" href="index.html#bench">main page</a>; that's the orthogonal "how well does it actually answer questions?" question.
+        </p>
+        <p class="prose">
+          A planned <code>bench/competitive-bench.md</code> will extend the numeric benchmark beyond graphify to @nestjs/devtools-integration, @riaskov/nestjs-graph-visualizer, and dependency-cruiser, as outlined in the <a class="link" href="https://github.com/roman-dubovik/arch-graph/blob/main/ROADMAP.md" rel="noopener" target="_blank">ROADMAP</a>. Until that lands, this matrix is the honest one-page answer to "what does each tool see?".
+        </p>
+        <p class="prose dim small">
+          Spotted a wrong cell? Open an issue with a link to the upstream doc that contradicts the assignment — corrections welcome.
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer" role="contentinfo">
+    <div class="container footer-row">
+      <div>
+        <p class="footer-brand mono">arch-graph</p>
+        <p class="footer-sub">Made for NestJS architects who need answers, not guesses.</p>
+      </div>
+      <nav aria-label="Footer">
+        <ul>
+          <li><a href="https://github.com/roman-dubovik/arch-graph" rel="noopener" target="_blank">GitHub</a></li>
+          <li><a href="https://github.com/roman-dubovik/arch-graph/blob/main/bench/report.md" rel="noopener" target="_blank">Benchmark</a></li>
+          <li><a href="https://github.com/roman-dubovik/arch-graph/blob/main/README.md" rel="noopener" target="_blank">README</a></li>
+          <li><a href="https://github.com/roman-dubovik/arch-graph/blob/main/ROADMAP.md" rel="noopener" target="_blank">Roadmap</a></li>
+          <li><a href="https://github.com/roman-dubovik/arch-graph/blob/main/LICENSE" rel="noopener" target="_blank">License</a></li>
+        </ul>
+      </nav>
+      <p class="footer-meta">MIT &middot; v0.1.0</p>
+    </div>
+  </footer>
+
+  <script src="scripts.js" defer></script>
+</body>
+</html>
