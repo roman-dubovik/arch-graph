@@ -26,15 +26,14 @@
     <div class="container header-row">
       <a class="brand" href="#top" aria-label="arch-graph home">
         <span class="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 32 32" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M16 5 L5 27"></path>
-            <path d="M16 5 L27 27"></path>
-            <path d="M9 19 L23 19"></path>
-            <circle cx="16" cy="5" r="2.5" fill="currentColor" stroke="none"></circle>
-            <circle cx="5" cy="27" r="2.5" fill="currentColor" stroke="none"></circle>
-            <circle cx="27" cy="27" r="2.5" fill="currentColor" stroke="none"></circle>
-            <circle cx="9" cy="19" r="1.6" fill="var(--bg, #0A0A0F)"></circle>
-            <circle cx="23" cy="19" r="1.6" fill="var(--bg, #0A0A0F)"></circle>
+          <svg viewBox="0 0 32 32" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter">
+            <path d="M8 26 L16 6 L24 26"></path>
+            <path d="M11 18 H21"></path>
+            <circle cx="16" cy="6" r="2.2" fill="var(--bg, #0A0A0F)"></circle>
+            <circle cx="8" cy="26" r="2.2" fill="var(--bg, #0A0A0F)"></circle>
+            <circle cx="24" cy="26" r="2.2" fill="var(--bg, #0A0A0F)"></circle>
+            <circle cx="11" cy="18" r="1.9" fill="var(--bg, #0A0A0F)"></circle>
+            <circle cx="21" cy="18" r="1.9" fill="var(--bg, #0A0A0F)"></circle>
           </svg>
         </span>
         <span class="brand-text">arch-graph</span>
@@ -242,16 +241,15 @@
             <g class="flow-core" transform="translate(600 260)">
               <circle r="130" fill="url(#coreGlow)"></circle>
               <rect x="-110" y="-80" width="220" height="160" rx="18" class="core-card"></rect>
-              <!-- arch-graph mark — stylised "A" of graph primitives -->
-              <g class="core-mark" transform="translate(0 -28) scale(2.4)" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path class="core-mark-leg" d="M0 -10 L-11 12"></path>
-                <path class="core-mark-leg" d="M0 -10 L11 12"></path>
-                <path class="core-mark-bar" d="M-7 4 L7 4"></path>
-                <circle class="core-mark-node major" cx="0" cy="-10" r="2.6"></circle>
-                <circle class="core-mark-node major" cx="-11" cy="12" r="2.6"></circle>
-                <circle class="core-mark-node major" cx="11" cy="12" r="2.6"></circle>
-                <circle class="core-mark-node minor" cx="-7" cy="4" r="1.8"></circle>
-                <circle class="core-mark-node minor" cx="7" cy="4" r="1.8"></circle>
+              <!-- arch-graph mark — stylised "A" of graph primitives (brand-kit geometry) -->
+              <g class="core-mark" transform="translate(0 -22) scale(2.4)" fill="none" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter">
+                <path class="core-mark-leg" d="M-8 10 L0 -10 L8 10"></path>
+                <path class="core-mark-bar" d="M-5 2 H5"></path>
+                <circle class="core-mark-node" cx="0" cy="-10" r="2.2"></circle>
+                <circle class="core-mark-node" cx="-8" cy="10" r="2.2"></circle>
+                <circle class="core-mark-node" cx="8" cy="10" r="2.2"></circle>
+                <circle class="core-mark-node" cx="-5" cy="2" r="1.9"></circle>
+                <circle class="core-mark-node" cx="5" cy="2" r="1.9"></circle>
               </g>
               <text x="0" y="40" class="core-title" text-anchor="middle">arch-graph</text>
               <text x="0" y="60" class="core-mono mono" text-anchor="middle">ts-morph → graph.json</text>
