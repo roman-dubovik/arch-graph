@@ -114,11 +114,15 @@ if [ $REMOTE -eq 1 ]; then
     SRC_DIR="$WORK/src"
     git clone https://github.com/roman-dubovik/arch-graph.git "$SRC_DIR" --quiet
     INSTALL_SCRIPT="$SRC_DIR/scripts/install.sh"
+    ARCH_GRAPH_GIT=""
 else
     INSTALL_SCRIPT="$REPO_DIR/scripts/install.sh"
+    # Explicitly point install.sh at the current repo so it doesn't fall through
+    # to the GitHub remote (which would miss uncommitted or locally-committed changes).
+    ARCH_GRAPH_GIT="$REPO_DIR"
 fi
 
-ARCH_GRAPH_GIT="${ARCH_GRAPH_GIT:-}" bash "$INSTALL_SCRIPT" >/dev/null 2>&1 \
+ARCH_GRAPH_GIT="$ARCH_GRAPH_GIT" bash "$INSTALL_SCRIPT" >/dev/null 2>&1 \
     || fail "install.sh exited non-zero"
 
 command -v arch-graph >/dev/null 2>&1 \
