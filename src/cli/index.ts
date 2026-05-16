@@ -17,6 +17,7 @@ import {
 } from './claude.js';
 import { hookInstall, hookStatus, hookUninstall, parseHookArgs } from './hooks.js';
 import { installSkill } from './skill.js';
+import { parseQueryArgs, QUERY_CMDS, runQueryCommand } from './query-commands.js';
 
 interface ParsedArgs {
     cmd: string;
@@ -78,6 +79,25 @@ Usage:
   arch-graph hook status      [--repo <path>]
 
   arch-graph install-skill    (writes ~/.claude/skills/arch-graph/SKILL.md)
+
+Graph query subcommands (read arch-graph-out/graph.json):
+  arch-graph who-publishes  <subject>      NATS publishers of subject (e.g. user.created)
+  arch-graph who-subscribes <subject>      NATS subscribers of subject
+  arch-graph queue-producers <queue>       BullMQ producers of queue
+  arch-graph queue-consumers <queue>       BullMQ consumers of queue
+  arch-graph table-users    <table>        TypeORM accessors of table
+  arch-graph deps-of        <service-id>   service's outgoing dependencies
+  arch-graph dependents-of  <service-id>   services that depend on this one
+  arch-graph module-imports <module-name>  what does this NestJS module import
+  arch-graph path           <from> <to>    shortest path between two graph nodes
+  arch-graph stats                         overview: node/edge counts per kind
+
+  Query options:
+    --out <dir>   directory containing graph.json (default: ./arch-graph-out)
+    --json        structured JSON output on stdout (default)
+    --table       pretty table format for humans
+
+  Exit codes for queries: 0=found, 4=not found
 
 Defaults:
   --config  ./arch-graph.config.ts
@@ -395,6 +415,14 @@ async function main(): Promise<void> {
     }
     if (cmd === 'install-skill') {
         return installSkill();
+    }
+
+    // Query subcommands: dispatch before flag-parser so positionals aren't
+    // mis-interpreted as config paths. Exit codes: 0=found, 4=not found.
+    if (QUERY_CMDS.has(cmd)) {
+        const qargs = parseQueryArgs(argv);
+        await runQueryCommand(qargs);
+        return;
     }
 
     const args = parseArgs(argv);
