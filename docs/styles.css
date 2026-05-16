@@ -472,6 +472,18 @@ code {
 .core-title { fill: var(--text); font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
 .core-sub   { fill: var(--text-dim); font-size: 12px; font-family: var(--font-mono); letter-spacing: 0.05em; text-transform: uppercase; }
 .core-mono  { fill: var(--accent-2); font-size: 13px; }
+.core-mark .core-mark-leg,
+.core-mark .core-mark-bar { stroke: var(--accent); filter: drop-shadow(0 0 6px var(--accent-glow)); }
+.core-mark .core-mark-node.major { fill: var(--accent); stroke: none; }
+.core-mark .core-mark-node.minor { fill: var(--bg-elev); stroke: var(--accent); stroke-width: 1.4; }
+@keyframes coreMarkBreathe {
+  0%, 100% { opacity: 0.85; }
+  50%      { opacity: 1; }
+}
+.core-mark { animation: coreMarkBreathe 4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .core-mark { animation: none; }
+}
 .core-orbit circle {
   fill: var(--accent);
   opacity: 0.6;
@@ -600,6 +612,79 @@ code {
   background: var(--bg-1);
 }
 table.bench-table,
+/* ── Domain grid (replaces old flat domain-table) ── */
+.domain-grid {
+  list-style: none;
+  padding: 0;
+  margin: 32px 0 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+.domain-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  transition: transform 200ms ease, border-color 200ms ease;
+}
+.domain-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-strong);
+}
+.domain-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.domain-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--bg-3), var(--bg-2));
+  border: 1px solid var(--border-strong);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.domain-card h3 {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
+  color: var(--text);
+}
+.domain-blurb {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-dim);
+  line-height: 1.55;
+}
+.domain-edges {
+  list-style: none;
+  padding: 0;
+  margin: auto 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.domain-edges li {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(125, 211, 252, 0.08);
+  border: 1px solid rgba(125, 211, 252, 0.18);
+  color: var(--accent);
+  font-size: 12px;
+  letter-spacing: 0.01em;
+}
+
 table.domain-table {
   width: 100%;
   border-collapse: collapse;

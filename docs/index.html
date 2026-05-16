@@ -17,6 +17,7 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" />
 
   <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to main content</a>
@@ -26,11 +27,14 @@
       <a class="brand" href="#top" aria-label="arch-graph home">
         <span class="brand-mark" aria-hidden="true">
           <svg viewBox="0 0 32 32" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="6" cy="16" r="3"></circle>
-            <circle cx="26" cy="7" r="3"></circle>
-            <circle cx="26" cy="25" r="3"></circle>
-            <path d="M9 14 L23 9"></path>
-            <path d="M9 18 L23 23"></path>
+            <path d="M16 5 L5 27"></path>
+            <path d="M16 5 L27 27"></path>
+            <path d="M9 19 L23 19"></path>
+            <circle cx="16" cy="5" r="2.5" fill="currentColor" stroke="none"></circle>
+            <circle cx="5" cy="27" r="2.5" fill="currentColor" stroke="none"></circle>
+            <circle cx="27" cy="27" r="2.5" fill="currentColor" stroke="none"></circle>
+            <circle cx="9" cy="19" r="1.6" fill="var(--bg, #0A0A0F)"></circle>
+            <circle cx="23" cy="19" r="1.6" fill="var(--bg, #0A0A0F)"></circle>
           </svg>
         </span>
         <span class="brand-text">arch-graph</span>
@@ -237,26 +241,36 @@
             <!-- Core extractor -->
             <g class="flow-core" transform="translate(600 260)">
               <circle r="130" fill="url(#coreGlow)"></circle>
-              <rect x="-95" y="-50" width="190" height="100" rx="14" class="core-card"></rect>
-              <text x="0" y="-18" class="core-title" text-anchor="middle">ts-morph</text>
-              <text x="0" y="6" class="core-sub" text-anchor="middle">extractors</text>
-              <text x="0" y="30" class="core-mono mono" text-anchor="middle">→ graph.json</text>
+              <rect x="-110" y="-80" width="220" height="160" rx="18" class="core-card"></rect>
+              <!-- arch-graph mark — stylised "A" of graph primitives -->
+              <g class="core-mark" transform="translate(0 -28) scale(2.4)" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path class="core-mark-leg" d="M0 -10 L-11 12"></path>
+                <path class="core-mark-leg" d="M0 -10 L11 12"></path>
+                <path class="core-mark-bar" d="M-7 4 L7 4"></path>
+                <circle class="core-mark-node major" cx="0" cy="-10" r="2.6"></circle>
+                <circle class="core-mark-node major" cx="-11" cy="12" r="2.6"></circle>
+                <circle class="core-mark-node major" cx="11" cy="12" r="2.6"></circle>
+                <circle class="core-mark-node minor" cx="-7" cy="4" r="1.8"></circle>
+                <circle class="core-mark-node minor" cx="7" cy="4" r="1.8"></circle>
+              </g>
+              <text x="0" y="40" class="core-title" text-anchor="middle">arch-graph</text>
+              <text x="0" y="60" class="core-mono mono" text-anchor="middle">ts-morph → graph.json</text>
               <g class="core-orbit">
-                <circle cx="0" cy="-80" r="3"></circle>
-                <circle cx="76" cy="-25" r="3"></circle>
-                <circle cx="47" cy="65" r="3"></circle>
-                <circle cx="-47" cy="65" r="3"></circle>
-                <circle cx="-76" cy="-25" r="3"></circle>
+                <circle cx="0" cy="-110" r="3"></circle>
+                <circle cx="124" cy="-40" r="3"></circle>
+                <circle cx="76" cy="105" r="3"></circle>
+                <circle cx="-76" cy="105" r="3"></circle>
+                <circle cx="-124" cy="-40" r="3"></circle>
               </g>
             </g>
 
             <!-- Lanes from core → graph -->
             <g class="flow-lanes-out" stroke="url(#flowLaneOut)" stroke-width="2" fill="none">
-              <path d="M720 220 Q 820 180 900 130"></path>
-              <path d="M720 250 Q 820 220 920 210"></path>
-              <path d="M720 280 Q 820 280 920 290"></path>
-              <path d="M720 290 Q 820 320 910 370"></path>
-              <path d="M720 300 Q 820 360 900 440"></path>
+              <path d="M730 220 Q 820 180 900 130"></path>
+              <path d="M730 250 Q 820 220 920 210"></path>
+              <path d="M730 280 Q 820 280 920 290"></path>
+              <path d="M730 290 Q 820 320 910 370"></path>
+              <path d="M730 300 Q 820 360 900 440"></path>
             </g>
 
             <!-- Right column: typed graph nodes -->
@@ -290,11 +304,11 @@
 
             <!-- Travelling pulses on out-lanes -->
             <g class="flow-pulses-out" fill="rgba(125,211,252,0.95)">
-              <circle r="3" class="pulse pulse-out-1"><animateMotion dur="6s" begin="2.4s" repeatCount="indefinite" path="M720 220 Q 820 180 900 130"></animateMotion></circle>
-              <circle r="3" class="pulse pulse-out-2"><animateMotion dur="6s" begin="3.2s" repeatCount="indefinite" path="M720 250 Q 820 220 920 210"></animateMotion></circle>
-              <circle r="3" class="pulse pulse-out-3"><animateMotion dur="6s" begin="4s" repeatCount="indefinite" path="M720 280 Q 820 280 920 290"></animateMotion></circle>
-              <circle r="3" class="pulse pulse-out-4"><animateMotion dur="6s" begin="4.8s" repeatCount="indefinite" path="M720 290 Q 820 320 910 370"></animateMotion></circle>
-              <circle r="3" class="pulse pulse-out-5"><animateMotion dur="6s" begin="5.6s" repeatCount="indefinite" path="M720 300 Q 820 360 900 440"></animateMotion></circle>
+              <circle r="3" class="pulse pulse-out-1"><animateMotion dur="6s" begin="2.4s" repeatCount="indefinite" path="M730 220 Q 820 180 900 130"></animateMotion></circle>
+              <circle r="3" class="pulse pulse-out-2"><animateMotion dur="6s" begin="3.2s" repeatCount="indefinite" path="M730 250 Q 820 220 920 210"></animateMotion></circle>
+              <circle r="3" class="pulse pulse-out-3"><animateMotion dur="6s" begin="4s" repeatCount="indefinite" path="M730 280 Q 820 280 920 290"></animateMotion></circle>
+              <circle r="3" class="pulse pulse-out-4"><animateMotion dur="6s" begin="4.8s" repeatCount="indefinite" path="M730 290 Q 820 320 910 370"></animateMotion></circle>
+              <circle r="3" class="pulse pulse-out-5"><animateMotion dur="6s" begin="5.6s" repeatCount="indefinite" path="M730 300 Q 820 360 900 440"></animateMotion></circle>
             </g>
 
             <!-- Edge legends between graph nodes (typed edges) -->
@@ -612,53 +626,135 @@ arch-graph build --strict      # CI: exit 3 if recall drops below floor</code></
       <div class="container">
         <p class="section-eyebrow">What it knows</p>
         <h2 id="domains-title" class="section-title">Six domains. Gated on every build.</h2>
-        <p class="section-lead">Coverage is whether an extractor exists for a domain — boolean, by design. Recall is a separate, measured quantity in the bench above. This table is coverage only.</p>
+        <p class="section-lead">Each card is one extractor pass — a typed walk over the NestJS decorators / call shapes that domain uses. Coverage is boolean here (the extractor exists or it doesn't); per-domain recall is measured separately in the bench above and gated by <code>arch-graph build --strict</code>.</p>
 
-        <div class="table-wrap reveal">
-          <table class="domain-table">
-            <thead>
-              <tr>
-                <th scope="col">Domain</th>
-                <th scope="col">Edge kinds</th>
-                <th scope="col">Coverage</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <th scope="row">NATS</th>
-                <td class="mono">nats-publish · nats-subscribe · nats-request · nats-reply</td>
-                <td><span class="pill ok">supported</span></td>
-              </tr>
-              <tr>
-                <th scope="row">TypeORM</th>
-                <td class="mono">db-access · db-read · db-write</td>
-                <td><span class="pill ok">supported</span></td>
-              </tr>
-              <tr>
-                <th scope="row">BullMQ</th>
-                <td class="mono">queue-produce · queue-consume</td>
-                <td><span class="pill ok">supported</span></td>
-              </tr>
-              <tr>
-                <th scope="row">NestJS DI</th>
-                <td class="mono">di-import · di-provides · di-exports · di-controller</td>
-                <td><span class="pill ok">supported</span></td>
-              </tr>
-              <tr>
-                <th scope="row">HTTP</th>
-                <td class="mono">http-call · http-external</td>
-                <td><span class="pill ok">supported</span></td>
-              </tr>
-              <tr>
-                <th scope="row">TS imports</th>
-                <td class="mono">ts-import · lib-usage</td>
-                <td><span class="pill ok">supported</span></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <ul class="domain-grid" role="list">
+          <li class="domain-card reveal">
+            <div class="domain-head">
+              <span class="domain-icon" aria-hidden="true">
+                <svg viewBox="0 0 32 32" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="16" cy="16" r="3"></circle>
+                  <path d="M16 4v6"></path>
+                  <path d="M16 22v6"></path>
+                  <path d="M4 16h6"></path>
+                  <path d="M22 16h6"></path>
+                  <circle cx="7" cy="7" r="1.5" fill="currentColor"></circle>
+                  <circle cx="25" cy="7" r="1.5" fill="currentColor"></circle>
+                  <circle cx="7" cy="25" r="1.5" fill="currentColor"></circle>
+                  <circle cx="25" cy="25" r="1.5" fill="currentColor"></circle>
+                </svg>
+              </span>
+              <h3>NATS</h3>
+            </div>
+            <p class="domain-blurb">Subject-level message bus. Senders, handlers, request/reply pairs — resolved to literal or pattern subjects.</p>
+            <ul class="domain-edges mono">
+              <li>nats-publish</li>
+              <li>nats-subscribe</li>
+              <li>nats-request</li>
+              <li>nats-reply</li>
+            </ul>
+          </li>
+
+          <li class="domain-card reveal">
+            <div class="domain-head">
+              <span class="domain-icon" aria-hidden="true">
+                <svg viewBox="0 0 32 32" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <ellipse cx="16" cy="8" rx="9" ry="3"></ellipse>
+                  <path d="M7 8v8c0 1.7 4 3 9 3s9-1.3 9-3V8"></path>
+                  <path d="M7 16v8c0 1.7 4 3 9 3s9-1.3 9-3v-8"></path>
+                </svg>
+              </span>
+              <h3>TypeORM</h3>
+            </div>
+            <p class="domain-blurb">Repository → entity → table chain. Now with entity-relation edges (<code>@ManyToOne</code>, <code>@OneToMany</code>, …) joining tables to tables.</p>
+            <ul class="domain-edges mono">
+              <li>db-access</li>
+              <li>db-read · db-write</li>
+              <li>db-relation</li>
+            </ul>
+          </li>
+
+          <li class="domain-card reveal">
+            <div class="domain-head">
+              <span class="domain-icon" aria-hidden="true">
+                <svg viewBox="0 0 32 32" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="4" y="10" width="6" height="12" rx="1"></rect>
+                  <rect x="13" y="10" width="6" height="12" rx="1"></rect>
+                  <rect x="22" y="10" width="6" height="12" rx="1"></rect>
+                  <path d="M4 14h24"></path>
+                </svg>
+              </span>
+              <h3>BullMQ</h3>
+            </div>
+            <p class="domain-blurb">Queue boundaries. <code>@InjectQueue</code> producers and <code>@Processor</code> consumers tied to a named queue node.</p>
+            <ul class="domain-edges mono">
+              <li>queue-produce</li>
+              <li>queue-consume</li>
+            </ul>
+          </li>
+
+          <li class="domain-card reveal">
+            <div class="domain-head">
+              <span class="domain-icon" aria-hidden="true">
+                <svg viewBox="0 0 32 32" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="4" y="4" width="10" height="10" rx="1.5"></rect>
+                  <rect x="18" y="4" width="10" height="10" rx="1.5"></rect>
+                  <rect x="11" y="18" width="10" height="10" rx="1.5"></rect>
+                  <path d="M9 14v4"></path>
+                  <path d="M23 14v4"></path>
+                </svg>
+              </span>
+              <h3>NestJS DI</h3>
+            </div>
+            <p class="domain-blurb">Module wiring plus the filter chain. Guards, interceptors, pipes attach to controllers and handlers as first-class edges.</p>
+            <ul class="domain-edges mono">
+              <li>di-import · di-provides · di-exports</li>
+              <li>di-controller</li>
+              <li>di-guard · di-interceptor · di-pipe</li>
+            </ul>
+          </li>
+
+          <li class="domain-card reveal">
+            <div class="domain-head">
+              <span class="domain-icon" aria-hidden="true">
+                <svg viewBox="0 0 32 32" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="16" cy="16" r="11"></circle>
+                  <path d="M5 16h22"></path>
+                  <path d="M16 5c3 3.6 5 7.6 5 11s-2 7.4-5 11"></path>
+                  <path d="M16 5c-3 3.6-5 7.6-5 11s2 7.4 5 11"></path>
+                </svg>
+              </span>
+              <h3>HTTP</h3>
+            </div>
+            <p class="domain-blurb"><code>HttpService</code>, <code>axios</code>, <code>fetch</code> call sites. Env-ref URLs resolved against internal services; external hosts emit <code>http-external</code>.</p>
+            <ul class="domain-edges mono">
+              <li>http-call</li>
+              <li>http-external</li>
+            </ul>
+          </li>
+
+          <li class="domain-card reveal">
+            <div class="domain-head">
+              <span class="domain-icon" aria-hidden="true">
+                <svg viewBox="0 0 32 32" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 5h8l8 8v14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"></path>
+                  <path d="M17 5v8h8"></path>
+                  <path d="M11 21l4-4-4-4"></path>
+                  <path d="M21 21h-6"></path>
+                </svg>
+              </span>
+              <h3>TS imports</h3>
+            </div>
+            <p class="domain-blurb">Static <code>import</code>, dynamic <code>import()</code>, and CommonJS <code>require(...)</code>. Aliases resolved via <code>tsconfig.paths</code>. File-level + service-level aggregation.</p>
+            <ul class="domain-edges mono">
+              <li>ts-import</li>
+              <li>lib-usage</li>
+            </ul>
+          </li>
+        </ul>
+
         <p class="prose dim small">
-          Per-build the extractor also runs a recall gate against ground truth it derives from your code (e.g. NATS handlers vs senders, TypeORM <code>@InjectRepository</code> resolution, BullMQ producer/consumer roles, DI references). Floors are ≥ 95% per domain (≥ 80% for TS imports, since alias resolution is best-effort). <code>arch-graph build --strict</code> exits non-zero on regression.
+          Per-build the extractor also runs a recall gate against ground truth it derives from your code (NATS handlers vs senders, TypeORM <code>@InjectRepository</code> resolution, BullMQ producer/consumer roles, DI references). Floors are ≥ 95% per domain (≥ 80% for TS imports, since alias resolution is best-effort). <code>arch-graph build --strict</code> exits non-zero on regression. Additional diagnostic: import cycles across <code>ts-import</code> / <code>lib-usage</code> / <code>di-import</code> layers, surfaced in <code>diagnostics.json</code>.
         </p>
       </div>
     </section>
