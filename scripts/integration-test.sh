@@ -515,17 +515,20 @@ cd "$FIXTURE"
 GRAPH="$FIXTURE/arch-graph-out/graph.json"
 
 # Assert at least one di-guard edge exists
-GUARD_COUNT=$(jq '[.edges[] | select(.kind == "di-guard")] | length' "$GRAPH")
+GUARD_COUNT=$(jq '[.edges[] | select(.kind == "di-guard")] | length' "$GRAPH") \
+    || fail "jq failed reading $GRAPH for di-guard edges"
 [ "$GUARD_COUNT" -ge 1 ] \
     || fail "expected at least 1 di-guard edge in graph.json, got $GUARD_COUNT"
 
 # Assert at least one di-interceptor edge exists
-INTERCEPTOR_COUNT=$(jq '[.edges[] | select(.kind == "di-interceptor")] | length' "$GRAPH")
+INTERCEPTOR_COUNT=$(jq '[.edges[] | select(.kind == "di-interceptor")] | length' "$GRAPH") \
+    || fail "jq failed reading $GRAPH for di-interceptor edges"
 [ "$INTERCEPTOR_COUNT" -ge 1 ] \
     || fail "expected at least 1 di-interceptor edge in graph.json, got $INTERCEPTOR_COUNT"
 
 # Assert at least one di-pipe edge exists
-PIPE_COUNT=$(jq '[.edges[] | select(.kind == "di-pipe")] | length' "$GRAPH")
+PIPE_COUNT=$(jq '[.edges[] | select(.kind == "di-pipe")] | length' "$GRAPH") \
+    || fail "jq failed reading $GRAPH for di-pipe edges"
 [ "$PIPE_COUNT" -ge 1 ] \
     || fail "expected at least 1 di-pipe edge in graph.json, got $PIPE_COUNT"
 
