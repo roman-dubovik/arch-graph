@@ -615,7 +615,12 @@ code {
   border-radius: var(--radius);
   background: var(--bg-1);
 }
-table.bench-table,
+table.bench-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
 /* ── Domain grid (replaces old flat domain-table) ── */
 .domain-grid {
   list-style: none;
@@ -846,6 +851,9 @@ td.dim, .dim { color: var(--text-mute); }
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 22px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
   transition: border-color 200ms ease, transform 200ms ease;
 }
 .cli-card:hover { border-color: var(--border-strong); transform: translateY(-2px); }
@@ -859,6 +867,15 @@ td.dim, .dim { color: var(--text-mute); }
   font-size: 14px;
   color: var(--text-dim);
   margin: 0 0 14px;
+}
+/* Code block in CLI/MCP/Skill cards extends to bottom (margin-top: auto pushes it
+ * down), so cards of varying text length still align their code regions. The inner
+ * <pre> is vertically centered for a balanced look regardless of snippet height. */
+.cli-card .code-block {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 /* ─────────────────────────────────────── CONTRIBUTE BANNER ─────────── */
