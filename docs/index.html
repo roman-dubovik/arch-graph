@@ -4,12 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>arch-graph — Static architecture graph for NestJS monorepos</title>
-  <meta name="description" content="arch-graph extracts NATS, BullMQ, TypeORM, NestJS DI, HTTP, and TS imports from a NestJS monorepo into a typed graph. Deterministic. Validated. No LLM. 7.6x fewer tokens than graphify, 100% recall." />
+  <meta name="description" content="arch-graph extracts NATS, BullMQ, TypeORM, NestJS DI, HTTP, and TS imports from a NestJS monorepo into a typed graph. Deterministic. No LLM at build time. 7.6× fewer LLM context tokens than graphify and 100% recall on our 15-question architecture benchmark (substring-presence heuristic)." />
   <meta name="theme-color" content="#0a0a0f" />
 
   <meta property="og:type" content="website" />
   <meta property="og:title" content="arch-graph — Static architecture graph for NestJS monorepos" />
-  <meta property="og:description" content="Deterministic. Validated. No LLM. 7.6x fewer tokens than graphify, 100% recall on architecture questions." />
+  <meta property="og:description" content="Deterministic. No LLM at build time. 7.6× fewer LLM context tokens than graphify and 100% recall on our 15-question architecture benchmark." />
   <meta property="og:url" content="https://roman-dubovik.github.io/arch-graph/" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -100,7 +100,7 @@
       <div class="container hero-content">
         <p class="eyebrow">v0.1.0 · Node ≥ 20 · No build step</p>
         <h1 class="hero-title"><span class="title-mono">arch-graph</span></h1>
-        <p class="hero-tagline">Static architecture graph for NestJS monorepos. <span class="hl">Deterministic.</span> <span class="hl">Validated.</span> <span class="hl-accent">No LLM.</span></p>
+        <p class="hero-tagline">Static architecture graph for NestJS monorepos. <span class="hl">Deterministic.</span> <span class="hl">Benchmarked.</span> <span class="hl-accent">No LLM at build time.</span></p>
 
         <div class="hero-ctas">
           <a class="btn btn-primary" href="#install">
@@ -119,11 +119,11 @@
           </li>
           <li>
             <span class="stat-num">100%</span>
-            <span class="stat-label">recall on architecture Qs</span>
+            <span class="stat-label">recall on bench suite</span>
           </li>
           <li>
             <span class="stat-num">5</span>
-            <span class="stat-label">monorepos validated</span>
+            <span class="stat-label">reference monorepos benchmarked</span>
           </li>
           <li>
             <span class="stat-num">0</span>
@@ -320,7 +320,7 @@
       <div class="container">
         <p class="section-eyebrow">Measured</p>
         <h2 id="bench-title" class="section-title">Measured on 5 NestJS monorepos.</h2>
-        <p class="section-lead">15 architecture-grade questions. Same compression. Same encoder (cl100k_base). Substring-presence recall.</p>
+        <p class="section-lead">15 architecture-grade questions in the run below (the YAML now defines 30; re-running needs the private reference repos). Same compression aggressiveness, same encoder (cl100k_base), same questions for both tools. Recall is a substring-presence necessary-condition heuristic, not an end-to-end LLM eval.</p>
 
         <div class="bench-cards reveal">
           <div class="bench-card highlight">
@@ -330,16 +330,16 @@
             <p class="bench-card-foot">arch ran on all 15 questions; graphify on 9. 12.6× per answered Q.</p>
           </div>
           <div class="bench-card">
-            <p class="bench-card-label">Mean recall</p>
+            <p class="bench-card-label">Mean recall (substring-presence)</p>
             <p class="bench-card-row"><span class="bench-card-tool">arch-graph</span><span class="bench-card-num">100%</span></p>
             <p class="bench-card-row dim"><span class="bench-card-tool">graphify</span><span class="bench-card-num">39%</span></p>
-            <p class="bench-card-foot">2.5× higher recall on architecture Qs.</p>
+            <p class="bench-card-foot">On the 15-question bench suite. Necessary-condition heuristic, not an LLM eval.</p>
           </div>
           <div class="bench-card">
             <p class="bench-card-label">Total tokens · 15 questions</p>
             <p class="bench-card-row"><span class="bench-card-tool">arch-graph</span><span class="bench-card-num">688K</span></p>
             <p class="bench-card-row dim"><span class="bench-card-tool">graphify</span><span class="bench-card-num">5.2M</span></p>
-            <p class="bench-card-foot">Same compression, same encoder.</p>
+            <p class="bench-card-foot">Same compression aggressiveness, same cl100k_base encoder, same 15 questions.</p>
           </div>
           <div class="bench-card">
             <p class="bench-card-label">Build cost</p>
@@ -478,7 +478,8 @@ arch-graph build --strict      # CI: exit 3 if recall drops below floor</code></
     <section class="section section-domains" id="domains" aria-labelledby="domains-title">
       <div class="container">
         <p class="section-eyebrow">What it knows</p>
-        <h2 id="domains-title" class="section-title">Six domains. Validated on every build.</h2>
+        <h2 id="domains-title" class="section-title">Six domains. Gated on every build.</h2>
+        <p class="section-lead">Coverage is whether an extractor exists for a domain — boolean, by design. Recall is a separate, measured quantity in the bench above. This table is coverage only.</p>
 
         <div class="table-wrap reveal">
           <table class="domain-table">
@@ -486,43 +487,46 @@ arch-graph build --strict      # CI: exit 3 if recall drops below floor</code></
               <tr>
                 <th scope="col">Domain</th>
                 <th scope="col">Edge kinds</th>
-                <th scope="col">Recall (measured)</th>
+                <th scope="col">Coverage</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <th scope="row">NATS</th>
                 <td class="mono">nats-publish · nats-subscribe · nats-request · nats-reply</td>
-                <td><span class="pill ok">100%</span></td>
+                <td><span class="pill ok">supported</span></td>
               </tr>
               <tr>
                 <th scope="row">TypeORM</th>
                 <td class="mono">db-access · db-read · db-write</td>
-                <td><span class="pill ok">100%</span></td>
+                <td><span class="pill ok">supported</span></td>
               </tr>
               <tr>
                 <th scope="row">BullMQ</th>
                 <td class="mono">queue-produce · queue-consume</td>
-                <td><span class="pill ok">100%</span></td>
+                <td><span class="pill ok">supported</span></td>
               </tr>
               <tr>
                 <th scope="row">NestJS DI</th>
                 <td class="mono">di-import · di-provides · di-exports · di-controller</td>
-                <td><span class="pill ok">100%</span></td>
+                <td><span class="pill ok">supported</span></td>
               </tr>
               <tr>
                 <th scope="row">HTTP</th>
                 <td class="mono">http-call · http-external</td>
-                <td><span class="pill ok">100%</span></td>
+                <td><span class="pill ok">supported</span></td>
               </tr>
               <tr>
                 <th scope="row">TS imports</th>
                 <td class="mono">ts-import · lib-usage</td>
-                <td><span class="pill ok">100%</span></td>
+                <td><span class="pill ok">supported</span></td>
               </tr>
             </tbody>
           </table>
         </div>
+        <p class="prose dim small">
+          Per-build the extractor also runs a recall gate against ground truth it derives from your code (e.g. NATS handlers vs senders, TypeORM <code>@InjectRepository</code> resolution, BullMQ producer/consumer roles, DI references). Floors are ≥ 95% per domain (≥ 80% for TS imports, since alias resolution is best-effort). <code>arch-graph build --strict</code> exits non-zero on regression.
+        </p>
       </div>
     </section>
 
@@ -593,8 +597,8 @@ arch-graph hook install            # pre-commit, recommended</code></pre>
     <section class="section section-limits" id="limits" aria-labelledby="limits-title">
       <div class="container">
         <p class="section-eyebrow">Honesty</p>
-        <h2 id="limits-title" class="section-title">What it isn't.</h2>
-        <p class="section-lead">arch-graph is a static extractor. It does not see runtime configuration, container env values, or dynamically constructed identifiers.</p>
+        <h2 id="limits-title" class="section-title">What it isn't. When it doesn't work.</h2>
+        <p class="section-lead">arch-graph is a static extractor. It does not see runtime configuration, container env values, or dynamically constructed identifiers. The bench numbers are measured on our reference suite — your project's results depend on how closely your code matches the NestJS conventions the extractor recognises.</p>
 
         <ul class="limits-list">
           <li class="reveal">
@@ -606,12 +610,20 @@ arch-graph hook install            # pre-commit, recommended</code></pre>
             <p><code>publish(`subject.${userId}`)</code> becomes a diagnostic with <code>file:line</code>, not a guessed edge. No hallucinated topology.</p>
           </li>
           <li class="reveal">
+            <h3>Custom wrappers must be declared</h3>
+            <p>If you wrap <code>@nestjs/microservices</code> or BullMQ in your own client, you have to declare the wrapper API in <code>arch-graph.config.ts</code> — otherwise the extractor sees no decorator it recognises and silently misses the calls. The diagnostics output is the gap report.</p>
+          </li>
+          <li class="reveal">
             <h3>Single monorepo</h3>
             <p>No cross-repo graph yet. Multi-repo deployments need a separate stitching pass that isn't built.</p>
           </li>
           <li class="reveal">
             <h3>NestJS-specific</h3>
             <p>The extractors are tuned to NestJS decorators and a small set of wrapper conventions. General-purpose code analysis isn't the goal — graphify is.</p>
+          </li>
+          <li class="reveal">
+            <h3>Bench ≠ your codebase</h3>
+            <p>We measure ourselves on our 5 reference NestJS monorepos. We do not promise the same recall on yours — your numbers depend on which conventions you follow and what's declared in your config. The per-build recall gate is what tells you whether arch-graph is matching reality on your code.</p>
           </li>
         </ul>
       </div>
