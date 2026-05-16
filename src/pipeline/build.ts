@@ -298,7 +298,7 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
     t0 = Date.now();
     const endpoints = await stage(`[${cfg.id}] endpoint.extract`, () => extractEndpoints(project));
     process.stdout.write(
-        `  ${endpoints.endpoints.length} endpoint sites in ${Date.now() - t0}ms\n`,
+        `  ${endpoints.endpoints.length} endpoint sites, ${endpoints.diagnostics.length} diagnostics in ${Date.now() - t0}ms\n`,
     );
 
     process.stdout.write(`validating endpoints against ground truth...\n`);
@@ -320,7 +320,7 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
     t0 = Date.now();
     const config = await stage(`[${cfg.id}] config.extract`, () => extractConfig(project));
     process.stdout.write(
-        `  ${config.fields.length} config callsites in ${Date.now() - t0}ms\n`,
+        `  ${config.fields.length} config callsites, ${config.diagnostics.length} diagnostics in ${Date.now() - t0}ms\n`,
     );
 
     process.stdout.write(`validating config against ground truth...\n`);
@@ -351,7 +351,7 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         extractEntityFields(Array.from(typeorm.entities.entries()), project),
     );
     process.stdout.write(
-        `  ${dbEntityFields.fields.length} entity fields in ${Date.now() - t0}ms\n`,
+        `  ${dbEntityFields.fields.length} entity fields, ${dbEntityFields.diagnostics.length} diagnostics in ${Date.now() - t0}ms\n`,
     );
 
     process.stdout.write(`validating db entity fields against ground truth...\n`);
@@ -401,9 +401,27 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         http: httpMapped.diagnostics,
         imports: importsMapped.diagnostics,
         cycles: cyclesDiagnostics,
-        endpoint: { messages: endpointsMapped.diagnostics },
-        config: { messages: configMapped.diagnostics },
-        dbEntityFields: { messages: entityFieldsMapped.diagnostics },
+        endpoint: {
+            // Merge: extractor-level (non-literal arg) + mapper-level (unowned files)
+            messages: [
+                ...endpoints.diagnostics,
+                ...endpointsMapped.diagnostics,
+            ],
+        },
+        config: {
+            // Merge: extractor-level (non-literal key) + mapper-level (unowned files)
+            messages: [
+                ...config.diagnostics,
+                ...configMapped.diagnostics,
+            ],
+        },
+        dbEntityFields: {
+            // Merge: extractor-level (not-in-index) + mapper-level (duplicate fields)
+            messages: [
+                ...dbEntityFields.diagnostics,
+                ...entityFieldsMapped.diagnostics,
+            ],
+        },
         scoped: {
             markerCount: scoped.markers.length,
             messages: scoped.diagnostics,
@@ -435,7 +453,7 @@ function pct(n: number): string {
  * Otherwise a fatal NATS-grep failure surfaces as a bare `ENOENT: ...` with
  * no indication of which pipeline phase produced it.
  */
-async function stage<T>(label: string, fn: () => Promise<T>): Promise<T> {
+async function stage<T>(label: string, fn: () => T | Promise<T>): Promise<Awaited<T>> {
     try {
         return await fn();
     } catch (err) {

@@ -69,7 +69,17 @@ export function extractConfig(project: Project): ConfigExtractResult {
                         if (
                             firstArg.getKind() !== SyntaxKind.StringLiteral &&
                             firstArg.getKind() !== SyntaxKind.NoSubstitutionTemplateLiteral
-                        ) continue;
+                        ) {
+                            // Non-literal key (variable, template-with-subs, etc.) — emit diagnostic
+                            const startPos = node.getStart();
+                            const loc = sf.getLineAndColumnAtPos(startPos);
+                            diagnostics.push({
+                                file: filePath,
+                                line: loc.line,
+                                message: `configService.${methodName}() called with non-literal key (${firstArg.getKindName()}) — callsite skipped`,
+                            });
+                            continue;
+                        }
 
                         const key = (firstArg as unknown as { getLiteralText(): string }).getLiteralText();
                         if (!key) continue;

@@ -59,9 +59,12 @@ function getLiteral(node: Node): string | undefined {
 
 /**
  * Extract the controller prefix string from a @Controller decorator argument.
- * Returns '' when no prefix (no-arg or VERSION_NEUTRAL-only usage).
+ * Returns `{ prefix: '', isDynamic: false }` when no prefix (no-arg usage).
+ * Returns `{ prefix: '<dynamic>', isDynamic: true }` when the arg is a non-literal
+ * (e.g. @Controller(API_PREFIX)) — pattern is still emitted with a placeholder so
+ * consumers know the endpoint exists but the path is unresolvable at static time.
  */
-export function resolveControllerPrefix(dec: Decorator): { prefix: string; version?: string } {
+export function resolveControllerPrefix(dec: Decorator): { prefix: string; version?: string; isDynamic?: boolean } {
     const args = dec.getArguments();
     if (args.length === 0) return { prefix: '' };
 
@@ -76,6 +79,7 @@ export function resolveControllerPrefix(dec: Decorator): { prefix: string; versi
         const obj = first as ObjectLiteralExpression;
         let prefix = '';
         let version: string | undefined;
+        let hasDynamicPath = false;
         for (const prop of obj.getProperties()) {
             if (prop.getKind() !== SyntaxKind.PropertyAssignment) continue;
             const pa = prop as PropertyAssignment;
@@ -83,17 +87,22 @@ export function resolveControllerPrefix(dec: Decorator): { prefix: string; versi
             if (!init) continue;
             const propName = pa.getName();
             const initLit = getLiteral(init);
-            if (propName === 'path' && initLit !== undefined) {
-                prefix = initLit;
+            if (propName === 'path') {
+                if (initLit !== undefined) {
+                    prefix = initLit;
+                } else {
+                    hasDynamicPath = true;
+                    prefix = '<dynamic>';
+                }
             } else if (propName === 'version' && initLit !== undefined) {
                 version = initLit;
             }
         }
-        return { prefix, version };
+        return hasDynamicPath ? { prefix, version, isDynamic: true } : { prefix, version };
     }
 
-    // Identifier (VERSION_NEUTRAL constant or other) — treat as empty prefix
-    return { prefix: '' };
+    // Identifier or other non-literal (e.g. @Controller(API_PREFIX)) — dynamic placeholder
+    return { prefix: '<dynamic>', isDynamic: true };
 }
 
 /**
@@ -108,19 +117,22 @@ export function combinePattern(prefix: string, methodPath: string): string {
 
 /**
  * Extract the path argument from an HTTP method decorator.
- * Returns '' when no arg (e.g. `@Get()`).
+ * Returns `{ path: '' }` when no arg (e.g. `@Get()`).
+ * Returns `{ path: '<dynamic>', isDynamic: true }` when arg is non-literal
+ * (e.g. @Get(SOME_VAR)) — endpoint is still emitted with a placeholder.
  * Handles:
- *   @Get()           → ''
- *   @Get('path')     → 'path'
- *   @Get([':id'])    → ':id' (array form — takes first element)
+ *   @Get()           → { path: '' }
+ *   @Get('path')     → { path: 'path' }
+ *   @Get([':id'])    → { path: ':id' } (array form — takes first element)
+ *   @Get(PATH_VAR)   → { path: '<dynamic>', isDynamic: true }
  */
-export function resolveMethodPath(dec: Decorator): string {
+export function resolveMethodPath(dec: Decorator): { path: string; isDynamic?: boolean } {
     const args = dec.getArguments();
-    if (args.length === 0) return '';
+    if (args.length === 0) return { path: '' };
     const first = args[0]!;
 
     const lit = getLiteral(first);
-    if (lit !== undefined) return lit;
+    if (lit !== undefined) return { path: lit };
 
     // Array form @Get([':id', ':uuid']) — take first string
     if (first.getKind() === SyntaxKind.ArrayLiteralExpression) {
@@ -128,10 +140,14 @@ export function resolveMethodPath(dec: Decorator): string {
         const el = arr.getElements()[0];
         if (el) {
             const elLit = getLiteral(el);
-            if (elLit !== undefined) return elLit;
+            if (elLit !== undefined) return { path: elLit };
         }
+        // Array with non-literal first element
+        return { path: '<dynamic>', isDynamic: true };
     }
-    return '';
+
+    // Identifier or other non-literal argument
+    return { path: '<dynamic>', isDynamic: true };
 }
 
 /**
@@ -175,7 +191,17 @@ export function extractEndpoints(project: Project): EndpointExtractResult {
             const controllerName = cls.getName();
             if (!controllerName) continue;
 
-            const { prefix, version: controllerVersion } = resolveControllerPrefix(controllerDec);
+            const { prefix, version: controllerVersion, isDynamic: controllerDynamic } = resolveControllerPrefix(controllerDec);
+
+            if (controllerDynamic) {
+                const decStart = controllerDec.getStart();
+                const decLoc = sf.getLineAndColumnAtPos(decStart);
+                diagnostics.push({
+                    file: filePath,
+                    line: decLoc.line,
+                    message: `@Controller(${controllerDec.getArguments()[0]?.getKindName() ?? 'unknown'}) on ${controllerName} uses non-literal prefix — pattern uses '<dynamic>' placeholder`,
+                });
+            }
 
             // Collect class-level @Version decorator
             const classVersionStr = (() => {
@@ -189,7 +215,16 @@ export function extractEndpoints(project: Project): EndpointExtractResult {
                     const httpMethod = HTTP_METHOD_DECORATORS[decName];
                     if (!httpMethod) continue;
 
-                    const methodPath = resolveMethodPath(dec);
+                    const { path: methodPath, isDynamic: methodDynamic } = resolveMethodPath(dec);
+                    if (methodDynamic) {
+                        const decStart = dec.getStart();
+                        const decLoc = sf.getLineAndColumnAtPos(decStart);
+                        diagnostics.push({
+                            file: filePath,
+                            line: decLoc.line,
+                            message: `@${decName}(${dec.getArguments()[0]?.getKindName() ?? 'unknown'}) on ${controllerName}.${method.getName()} uses non-literal path — pattern uses '<dynamic>' placeholder`,
+                        });
+                    }
                     const pattern = combinePattern(prefix, methodPath);
 
                     // Method-level @Version (overrides class/controller version)

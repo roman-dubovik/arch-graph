@@ -322,29 +322,29 @@ export interface TypeOrmDiagnostics {
 
 /**
  * Diagnostics for the Variant 2 endpoint domain.
- * Shape mirrors `EndpointMapResult['diagnostics']`.
+ * Merges extractor-level (non-literal arg) and mapper-level (unowned file) messages.
  */
 export interface EndpointDiagnostics {
-    /** Mapper-level diagnostics (e.g. unowned files). */
-    messages: Array<{ message: string }>;
+    /** Combined extractor + mapper diagnostics. file/line are optional (mapper messages carry no location). */
+    messages: Array<{ message: string; file?: string; line?: number }>;
 }
 
 /**
  * Diagnostics for the Variant 2 config-field domain.
- * Shape mirrors `ConfigMapResult['diagnostics']`.
+ * Merges extractor-level (non-literal key) and mapper-level (unowned file) messages.
  */
 export interface ConfigDiagnostics {
-    /** Mapper-level diagnostics (e.g. unowned files). */
-    messages: Array<{ message: string }>;
+    /** Combined extractor + mapper diagnostics. file/line are optional (mapper messages carry no location). */
+    messages: Array<{ message: string; file?: string; line?: number }>;
 }
 
 /**
  * Diagnostics for the Variant 2 db-entity-field domain.
- * Shape mirrors `EntityFieldsMapResult['diagnostics']`.
+ * Merges extractor-level (not-in-index) and mapper-level (duplicate fields) messages.
  */
 export interface DbEntityFieldsDiagnostics {
-    /** Mapper-level diagnostics (e.g. duplicate fields). */
-    messages: Array<{ message: string }>;
+    /** Combined extractor + mapper diagnostics. file/line are optional (mapper messages carry no location). */
+    messages: Array<{ message: string; file?: string; line?: number }>;
 }
 
 /**

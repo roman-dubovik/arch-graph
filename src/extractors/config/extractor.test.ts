@@ -102,7 +102,7 @@ export class MixedService {
         expect(keys).toContain('FALLBACK');
     });
 
-    it('ignores configService.get with non-string first arg (dynamic key)', () => {
+    it('ignores configService.get with non-string first arg and emits diagnostic (P0-1)', () => {
         const project = inMemoryProject({
             '/app/dynamic.service.ts': `
 import { ConfigService } from '@nestjs/config';
@@ -115,8 +115,28 @@ export class DynService {
 `,
         });
         const result = extractConfig(project);
-        // Dynamic key — should be ignored (no string literal)
+        // Dynamic key — should be ignored (no string literal) but diagnostic emitted
         expect(result.fields).toHaveLength(0);
+        expect(result.diagnostics.length).toBeGreaterThan(0);
+        expect(result.diagnostics[0]!.message).toContain('non-literal key');
+    });
+
+    it('emits diagnostic for template-literal-with-substitution key', () => {
+        const project = inMemoryProject({
+            '/app/template.service.ts': `
+import { ConfigService } from '@nestjs/config';
+export class TplService {
+    constructor(private configService: ConfigService) {}
+    get(suffix: string) {
+        return this.configService.get(\`KEY_\${suffix}\`);
+    }
+}
+`,
+        });
+        const result = extractConfig(project);
+        // Template literal with substitution → non-literal → diagnostic
+        expect(result.fields).toHaveLength(0);
+        expect(result.diagnostics.length).toBeGreaterThan(0);
     });
 
     it('skips test files', () => {

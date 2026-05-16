@@ -234,7 +234,6 @@ export class XController {
     });
 
     it('does not throw on unusual @Controller arg shapes', () => {
-        // identifier arg falls back to empty prefix via the identifier branch
         const project = inMemoryProject({
             '/app/plain.controller.ts': `
 import { Controller, Get } from '@nestjs/common';
@@ -266,7 +265,7 @@ export class ItemsController {
         expect(result.endpoints[0]!.pattern).toBe('/items/:id');
     });
 
-    it('handles @Get with identifier arg (unknown form) — returns empty path', () => {
+    it('handles @Get with identifier arg — produces <dynamic> placeholder pattern', () => {
         const project = inMemoryProject({
             '/app/ident.controller.ts': `
 import { Controller, Get } from '@nestjs/common';
@@ -279,11 +278,14 @@ export class IdentController {
 `,
         });
         const result = extractEndpoints(project);
-        // Path resolves to '' when not a string literal
-        expect(result.endpoints[0]!.pattern).toBe('/base');
+        // Non-literal method path → '<dynamic>' placeholder
+        expect(result.endpoints[0]!.pattern).toBe('/base/<dynamic>');
+        // Diagnostic emitted for the dynamic arg
+        expect(result.diagnostics.length).toBeGreaterThan(0);
+        expect(result.diagnostics[0]!.message).toContain('<dynamic>');
     });
 
-    it('resolveControllerPrefix with identifier arg falls back to empty', () => {
+    it('resolveControllerPrefix with identifier arg produces <dynamic> prefix', () => {
         const project = inMemoryProject({
             '/app/id.controller.ts': `
 import { Controller, Get } from '@nestjs/common';
@@ -296,8 +298,11 @@ export class IdController {
 `,
         });
         const result = extractEndpoints(project);
-        // Identifier arg for @Controller — prefix should be ''
-        expect(result.endpoints[0]!.pattern).toBe('/');
+        // Identifier arg for @Controller — prefix is '<dynamic>', pattern is '/<dynamic>'
+        expect(result.endpoints[0]!.pattern).toBe('/<dynamic>');
+        // Diagnostic emitted
+        expect(result.diagnostics.length).toBeGreaterThan(0);
+        expect(result.diagnostics[0]!.message).toContain('<dynamic>');
     });
 
     it('resolveControllerPrefix with object without path/version props', () => {
@@ -315,7 +320,7 @@ export class EmptyObjController {
         expect(result.endpoints[0]!.pattern).toBe('/ping');
     });
 
-    it('resolveMethodPath with non-string-literal arg falls back to empty string', () => {
+    it('resolveMethodPath with non-literal arg produces <dynamic> placeholder', () => {
         const project = inMemoryProject({
             '/app/dynpath.controller.ts': `
 import { Controller, Get } from '@nestjs/common';
@@ -326,9 +331,11 @@ export class DynPathController {
 }
 `,
         });
-        // Should not throw, endpoint pattern should be '/'
+        // Non-literal method path → '<dynamic>' placeholder; endpoint still emitted
         const result = extractEndpoints(project);
-        expect(result.endpoints.length).toBeGreaterThanOrEqual(0);
+        expect(result.endpoints).toHaveLength(1);
+        expect(result.endpoints[0]!.pattern).toBe('/<dynamic>');
+        expect(result.diagnostics.length).toBeGreaterThan(0);
     });
 
     it('@Version with non-string arg returns undefined version', () => {
@@ -448,7 +455,7 @@ export class DynVerController {
         expect(result.endpoints[0]!.meta?.version).toBeUndefined();
     });
 
-    it('@Get with array containing non-string element returns empty path', () => {
+    it('@Get with array containing non-string element produces <dynamic> placeholder', () => {
         // Array literal where first element is not a string literal
         const project = inMemoryProject({
             '/app/arrnum.controller.ts': `
@@ -461,8 +468,9 @@ export class ArrNumController {
 `,
         });
         const result = extractEndpoints(project);
-        // First array element is not string → methodPath = '' → pattern = '/x'
-        expect(result.endpoints[0]!.pattern).toBe('/x');
+        // First array element is not string → methodPath = '<dynamic>' → pattern = '/x/<dynamic>'
+        expect(result.endpoints[0]!.pattern).toBe('/x/<dynamic>');
+        expect(result.diagnostics.length).toBeGreaterThan(0);
     });
 
     it('file with @Controller text but classes without decorator — no endpoints', () => {
