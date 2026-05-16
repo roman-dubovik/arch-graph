@@ -283,7 +283,36 @@ export interface BuildValidation {
 export type BullMqQueueRef =
     | { kind: 'literal'; name: string }
     | { kind: 'const'; name: string; identifier: string }
-    | { kind: 'unresolved'; raw: string };
+    | {
+          kind: 'unresolved';
+          raw: string;
+          /**
+           * Structured reason for why the queue name could not be resolved:
+           *
+           *   `no-arg`               — decorator called with zero arguments (`@Processor()`).
+           *                           (typically decorator)
+           *   `unindexed-identifier` — identifier / dotted-path not found in QueueNameIndex;
+           *                           may be a non-exported const, an import from an unscanned
+           *                           file, or a typo. (typically decorator)
+           *   `options-no-name`      — object-literal form of `@Processor` / `@InjectQueue`
+           *                           has no `name` property (`@Processor({ concurrency: 3 })`).
+           *                           (typically decorator)
+           *   `dynamic-expression`   — argument is a template literal, function call, ternary,
+           *                           binary expression, or other non-static node kind.
+           *                           (typically decorator)
+           *   `no-name-property`     — `registerQueue({ ... })` object has no `name` field.
+           *                           (registration only)
+           *   `non-object-arg`       — `registerQueue(expr)` argument is not an object literal.
+           *                           (registration only)
+           */
+          reason:
+              | 'no-arg'
+              | 'unindexed-identifier'
+              | 'options-no-name'
+              | 'dynamic-expression'
+              | 'no-name-property'
+              | 'non-object-arg';
+      };
 
 interface BullMqSiteBase {
     queue: BullMqQueueRef;
