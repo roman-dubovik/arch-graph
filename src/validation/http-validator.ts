@@ -46,16 +46,53 @@ const AXIOS_CONFIG_RE = /(?<=^|[\s=({,;])axios\s*\(/gm;
 /**
  * `axios.create({...}).<method>(` chain — paired with the extractor's chain detection
  * so GT and extracted balance. The extractor emits an unresolved site at the outer
- * `.get()` location; this regex matches the same offset (anchored at `axios.create`).
+ * `.get()` location; this walker matches the same offset (anchored at `axios.create`).
  *
- * Depth-1 paren balancing: `[^)]*(?:\([^)]*\)[^)]*)*` allows one level of nested
- * parens inside the config object (e.g. `axios.create({ baseURL: getUrl() })`).
- * Without this, a `getUrl()` call inside the config arg causes `[^)]*` to stop at
- * the inner `)`, leaving the regex unanchored and producing false `extra` diagnostics
- * (the AST extractor sees the site correctly; the GT regex doesn't).
+ * Balanced-paren walker (approach C): we scan forward from the `(` of `create(`,
+ * counting `(` and `)` to find the matching close-paren at any depth.  This handles
+ * arbitrary nesting (depth-0 `axios.create({})`, depth-1 `axios.create({ b: f() })`,
+ * depth-2 `axios.create({ b: g(f()) })`, etc.) without the depth-limit hazard of a
+ * pure regex.
+ *
+ * Known limitation (shared with the old regex): string literals containing unbalanced
+ * parens, e.g. `axios.create({ url: 'http://x)y' }).get(…)`, can cause the walker to
+ * close early.  This is the same edge-case the depth-1 regex had and is acceptable
+ * given the rarity in real codebases.
+ *
+ * Malformed input (unmatched open paren) is handled by bailing out of the walk and
+ * yielding nothing — the AST extractor still reports the site, so recall is preserved.
  */
-const AXIOS_CREATE_RE =
-    /\baxios\s*\.\s*create\s*\([^)]*(?:\([^)]*\)[^)]*)*\)\s*\.\s*(get|post|put|patch|delete|head|options)\s*\(/g;
+const HTTP_METHODS_RE = /^\s*\.\s*(get|post|put|patch|delete|head|options)\s*\(/;
+
+/** Yields `{ index, method }` for each `axios.create(…).<method>(` in `src`. */
+function* matchAxiosCreateChains(
+    src: string,
+): Generator<{ index: number; method: string }> {
+    const anchorRe = /\baxios\s*\.\s*create\s*\(/g;
+    for (const anchor of src.matchAll(anchorRe)) {
+        const start = anchor.index!;
+        // Walk forward from the `(` of `create(` (the last char of anchor[0]).
+        let pos = start + anchor[0].length - 1; // points at `(`
+        let depth = 0;
+        let balanced = false;
+        while (pos < src.length) {
+            const ch = src[pos];
+            if (ch === '(') depth++;
+            else if (ch === ')') {
+                depth--;
+                if (depth === 0) { balanced = true; break; }
+            }
+            pos++;
+        }
+        if (!balanced) continue; // unmatched open-paren — skip
+
+        const tail = src.slice(pos + 1); // text after the closing `)`
+        const methodMatch = HTTP_METHODS_RE.exec(tail);
+        if (!methodMatch) continue;
+        yield { index: start, method: methodMatch[1]! };
+    }
+}
+
 /**
  * Global `fetch(`. We exclude `.fetch(` (method on an object) and `<word>fetch(`
  * (identifier suffix like `prefetch`). Stripping comments first removes JSDoc noise.
@@ -94,7 +131,15 @@ export async function enumerateHttpGroundTruth(
         // `axios.create({...}).<method>(` — must run before AXIOS_CREATE is shadowed
         // by anything. AXIOS_RE only matches `axios.<method>` (not `axios.create.<method>`),
         // so there's no double-count.
-        for (const m of stripped.matchAll(AXIOS_CREATE_RE)) push(m, `axios.create.${m[1]}`);
+        for (const hit of matchAxiosCreateChains(stripped)) {
+            const { line, column } = offsetToLineCol(hit.index, lineStarts);
+            out.push({
+                role: 'call',
+                location: { file, line, column },
+                matchedText: stripped.slice(hit.index, hit.index + 80).replace(/\n.*$/s, '').trim(),
+                context: `axios.create.${hit.method}`,
+            });
+        }
         for (const m of stripped.matchAll(FETCH_RE)) push(m, 'fetch');
     }
 
