@@ -20,9 +20,12 @@
  * mistaken for a rigged benchmark.
  */
 
-import { writeFile, stat, mkdir } from 'node:fs/promises';
+import { writeFile, stat, mkdir, readFile } from 'node:fs/promises';
 import { existsSync, statSync } from 'node:fs';
-import { resolve, basename, dirname } from 'node:path';
+import { resolve, basename, dirname, join } from 'node:path';
+import { homedir, platform } from 'node:os';
+import { spawnSync } from 'node:child_process';
+import { createInterface } from 'node:readline';
 
 import type { ArchGraph, GraphNode } from '../core/types.js';
 import {
@@ -50,6 +53,11 @@ export interface CompareArgs {
     questions: number;
     report?: string;
     quiet: boolean;
+    share: boolean;
+    /** Skip the interactive confirmation in --share mode (for tests/CI). */
+    shareYes: boolean;
+    /** Skip opening the browser in --share mode (for tests/CI). */
+    shareNoOpen: boolean;
 }
 
 const DEFAULT_QUESTIONS = 10;
@@ -62,6 +70,9 @@ export function parseCompareArgs(argv: string[]): CompareArgs {
     let questions = DEFAULT_QUESTIONS;
     let report: string | undefined;
     let quiet = false;
+    let share = false;
+    let shareYes = false;
+    let shareNoOpen = false;
 
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i]!;
@@ -83,6 +94,9 @@ export function parseCompareArgs(argv: string[]): CompareArgs {
         else if (a === '--report') report = takeValue('--report');
         else if (a.startsWith('--report=')) report = a.slice('--report='.length);
         else if (a === '--quiet' || a === '-q') quiet = true;
+        else if (a === '--share') share = true;
+        else if (a === '--share-yes') { share = true; shareYes = true; }
+        else if (a === '--share-no-open') { share = true; shareNoOpen = true; }
         else if (a === '-h' || a === '--help') {
             process.stdout.write(COMPARE_HELP);
             process.exit(0);
@@ -90,7 +104,7 @@ export function parseCompareArgs(argv: string[]): CompareArgs {
         // unknown flags are silently ignored to match the rest of the CLI
     }
 
-    return { out, graphify, questions, report, quiet };
+    return { out, graphify, questions, report, quiet, share, shareYes, shareNoOpen };
 }
 
 function parseQuestionCount(raw: string): number {
@@ -111,15 +125,22 @@ arch-graph compare — side-by-side context-cost comparison on your own repo.
 
 Usage:
   arch-graph compare [--out <dir>] [--graphify <path>] [--questions <n>]
-                     [--report <path>] [--quiet]
+                     [--report <path>] [--quiet] [--share]
 
 Options:
   --out <dir>        Directory with arch-graph's graph.json (default: ./arch-graph-out)
   --graphify <path>  Path to a graphify-out directory or graph.json file.
-                     Omit for a graph-size-only summary (no recall comparison).
+                     If omitted, we auto-detect ./graphify-out/ in the current dir.
+                     Without graphify, you get a graph-size-only summary.
   --questions <n>    How many questions to auto-generate (default 10, max 20).
   --report <path>    Markdown report path (default <out>/compare-report.md).
   --quiet            Suppress stdout table; still writes the report.
+  --share            After comparing, generate an anonymized markdown snippet
+                     (counts only — no project/subject/queue names) and open a
+                     GitHub Discussion draft to contribute it to the public
+                     multi-repo benchmark.
+  --share-yes        With --share: skip the confirmation prompt.
+  --share-no-open    With --share: print the URL instead of opening a browser.
 `;
 
 // ---------------------------------------------------------------------------
@@ -477,8 +498,91 @@ interface CompareReport {
     archGraphPath: string;
     /** Jointly present-or-null with all graphify fields below. */
     graphify: GraphifyInfo | null;
+    /** True if we discovered graphify-out/ without `--graphify` being passed. */
+    graphifyAutoDetected: boolean;
+    /** Set when graphify is null, to drive the post-run hint. */
+    detect: GraphifyAutoDetect | null;
     questions: GeneratedQuestion[];
     results: PerQuestionResult[];
+    /** Loaded once for the --share contributor snippet. */
+    archGraph: ArchGraph;
+}
+
+// ---------------------------------------------------------------------------
+// Graphify auto-detection
+//
+// We try three increasingly indirect signals to make the "no --graphify"
+// path friendlier:
+//   1. `<cwd>/graphify-out/graph.json` exists → autoload it and continue
+//      with a full head-to-head (printing a tiny note that we did so).
+//   2. Either `~/.claude/skills/graphify/SKILL.md` exists or `which graphify`
+//      resolves → graphify is *installed* but produced no output here. Tell
+//      the user to run `/graphify .` and re-run.
+//   3. Neither → friendly install hint (skill name + repo URL).
+//
+// The detection result is one discriminated union so callers can branch
+// on the kind once, without re-checking the filesystem.
+// ---------------------------------------------------------------------------
+
+interface GraphifyAutoDetect {
+    /**
+     * `autoloaded`: we found an output and will use it.
+     * `installed-no-output`: graphify is available but produced nothing here.
+     * `not-installed`: no signal of graphify anywhere on this machine.
+     */
+    kind: 'autoloaded' | 'installed-no-output' | 'not-installed';
+    /** Set only when kind === 'autoloaded'. Always absolute. */
+    autoloadedPath?: string;
+}
+
+function detectGraphify(cwd: string): GraphifyAutoDetect {
+    // Signal 1: graphify-out next to where the user ran the command.
+    const out1 = resolve(cwd, 'graphify-out', 'graph.json');
+    if (existsSync(out1)) {
+        return { kind: 'autoloaded', autoloadedPath: out1 };
+    }
+
+    // Signal 2a: Claude Code skill installed globally.
+    const skillPath = join(homedir(), '.claude', 'skills', 'graphify', 'SKILL.md');
+    const skillInstalled = existsSync(skillPath);
+
+    // Signal 2b: standalone CLI on PATH. `which` doesn't exist on Windows; we
+    // spawn-pipe so a missing binary is a clean failure (status !== 0), not a
+    // shell-escape risk. We don't *use* the path — only the boolean.
+    let cliInstalled = false;
+    if (platform() !== 'win32') {
+        try {
+            const r = spawnSync('which', ['graphify'], { stdio: 'pipe' });
+            cliInstalled = r.status === 0;
+        } catch {
+            cliInstalled = false;
+        }
+    }
+
+    if (skillInstalled || cliInstalled) {
+        return { kind: 'installed-no-output' };
+    }
+    return { kind: 'not-installed' };
+}
+
+function printGraphifyHint(detect: GraphifyAutoDetect, cwd: string): void {
+    if (detect.kind === 'installed-no-output') {
+        process.stdout.write(
+            `\ngraphify is installed but no output found here.\n` +
+            `  Run \`/graphify .\` in Claude Code, then re-run \`arch-graph compare\`.\n`,
+        );
+        return;
+    }
+    // 'not-installed' — full install hint.
+    process.stdout.write(
+        `\ngraphify not detected. Without it, only graph-size analysis is available.\n\n` +
+        `To install graphify (a Claude Code skill):\n` +
+        `  1. In Claude Code, type: /skill install graphify\n` +
+        `  2. Or: see https://github.com/safishamsi/graphify\n` +
+        `Then run on your repo:\n` +
+        `  /graphify ${cwd}\n` +
+        `  arch-graph compare --graphify graphify-out/\n`,
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -605,14 +709,27 @@ export async function runCompareCommand(args: CompareArgs): Promise<void> {
         );
     }
 
-    // Resolve graphify if requested. The path-resolution and graph.json load
-    // are both wrapped because either step can fail (path missing, malformed
-    // JSON, unexpected NetworkX shape) and a raw stack trace isn't useful.
+    // Resolve graphify: either explicit `--graphify <path>`, or auto-detect
+    // `<cwd>/graphify-out/graph.json`. Auto-detection is silent on success
+    // (we print a small notice in `printStdout`) and falls back to a
+    // friendlier hint when nothing's available.
     let graphifyContext: string | null = null;
     let graphify: GraphifyInfo | null = null;
-    if (args.graphify !== undefined) {
+    let graphifyAutoDetected = false;
+    let detect: GraphifyAutoDetect | null = null;
+
+    let effectiveGraphifyPath: string | undefined = args.graphify;
+    if (effectiveGraphifyPath === undefined) {
+        detect = detectGraphify(process.cwd());
+        if (detect.kind === 'autoloaded' && detect.autoloadedPath) {
+            effectiveGraphifyPath = detect.autoloadedPath;
+            graphifyAutoDetected = true;
+        }
+    }
+
+    if (effectiveGraphifyPath !== undefined) {
         try {
-            const resolvedPath = resolveGraphifyPath(args.graphify);
+            const resolvedPath = resolveGraphifyPath(effectiveGraphifyPath);
             const gLoaded = await graphifyAdapter.load(resolvedPath);
             const gCompact = graphifyAdapter.compact(gLoaded.raw);
             graphifyContext = graphifyAdapter.serialize(gCompact);
@@ -666,8 +783,11 @@ export async function runCompareCommand(args: CompareArgs): Promise<void> {
             archSizeBytes: archSize,
             archGraphPath: archPath,
             graphify,
+            graphifyAutoDetected,
+            detect,
             questions,
             results,
+            archGraph,
         };
 
         if (!args.quiet) {
@@ -680,6 +800,10 @@ export async function runCompareCommand(args: CompareArgs): Promise<void> {
         if (!args.quiet) {
             process.stdout.write(`\nDetailed report → ${reportPath}\n`);
         }
+
+        if (args.share) {
+            await runShareFlow(report, args);
+        }
     } finally {
         disposeTokens();
     }
@@ -691,22 +815,27 @@ export async function runCompareCommand(args: CompareArgs): Promise<void> {
 
 function printStdout(rep: CompareReport): void {
     if (rep.graphify === null) {
-        // Size-only mode
+        // Size-only mode — pick a friendlier hint based on what's available.
         const totalTok = rep.results.length > 0 ? rep.results[0]!.archTokens : 0;
         process.stdout.write(`\narch-graph compare — graph size analysis (no graphify comparison)\n\n`);
         process.stdout.write(`Your arch-graph graph:\n`);
         process.stdout.write(`  ${rep.archNodes} nodes · ${rep.archEdges} edges · ${fmtBytes(rep.archSizeBytes)}\n`);
         process.stdout.write(`  Estimated context tokens (compact graph): ${fmtNumber(totalTok)}\n`);
         process.stdout.write(`  Generated ${rep.results.length} question(s): ${categoryCounts(rep.results)}\n`);
-        process.stdout.write(`\nTo compare against graphify:\n`);
-        process.stdout.write(`  1. Generate graphify output for this repo:  /graphify ${rep.repoRoot}\n`);
-        process.stdout.write(`  2. Re-run:  arch-graph compare --graphify <path/to/graphify-out>\n`);
+        if (rep.detect !== null) {
+            printGraphifyHint(rep.detect, process.cwd());
+        }
         return;
     }
 
     // Head-to-head mode — every result row carries a non-null `graphify` field
     // because we're here only when the report-level `graphify` is set, and the
     // two are produced together in one branch above.
+    if (rep.graphifyAutoDetected) {
+        process.stdout.write(
+            `\n(auto-detected graphify-out/ — pass \`--graphify <path>\` to override)\n`,
+        );
+    }
     const archAvg = meanNumber(rep.results.map((r) => r.archTokens));
     const gAvg = meanNumber(rep.results.map((r) => r.graphify?.tokens ?? 0));
     const archRecall = meanNumber(rep.results.map((r) => r.archRecall));
@@ -861,5 +990,354 @@ function renderMarkdown(rep: CompareReport): string {
     reproLines.push(``);
 
     return [...head, ...perQ, ...aggLines, ...reproLines].join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// --share flow
+//
+// Builds a **strictly allowlisted** anonymized markdown snippet (no project
+// path, no node IDs, no question text, no ground-truth labels) and either
+// opens a GitHub Discussion draft URL pre-filled with it, or prints the URL
+// for manual paste.
+//
+// CRITICAL: this snippet is intended to be made public. Anything that isn't
+// in the allowlist below must NOT leak into the output. We build it from
+// scratch (not by stripping the existing markdown report) so additions to
+// the report can't accidentally leak into share. `assertAnonymized()` at the
+// end is a defense-in-depth check against future drift.
+// ---------------------------------------------------------------------------
+
+const SHARE_DISCUSSION_URL =
+    'https://github.com/roman-dubovik/arch-graph/discussions/new?category=benchmark-contributions';
+
+interface ShareSnippet {
+    markdown: string;
+    title: string;
+}
+
+async function buildShareSnippet(rep: CompareReport): Promise<ShareSnippet> {
+    const date = new Date().toISOString().slice(0, 10);
+    const version = await readArchGraphVersion();
+
+    // Per-edge-kind counts. EdgeKind values are TYPE NAMES (`nats-publish`,
+    // `queue-produce`, etc.), not user data — safe to include.
+    const edgeKindCounts = new Map<string, number>();
+    for (const e of rep.archGraph.edges) {
+        edgeKindCounts.set(e.kind, (edgeKindCounts.get(e.kind) ?? 0) + 1);
+    }
+    // Per-node-kind counts. NodeKind values are TYPE NAMES (`nats-subject`,
+    // `queue`, `db-table`, `service`, `module`, `lib`), not user data.
+    const nodeKindCounts = new Map<string, number>();
+    for (const n of rep.archGraph.nodes) {
+        nodeKindCounts.set(n.kind, (nodeKindCounts.get(n.kind) ?? 0) + 1);
+    }
+
+    // Aggregate tokens / recall (totals + averages — never per-question text).
+    const archAvg = Math.round(meanNumber(rep.results.map((r) => r.archTokens)));
+    const archRecall = meanNumber(rep.results.map((r) => r.archRecall));
+    const archTotal = rep.results.reduce((a, r) => a + r.archTokens, 0);
+    const hasGraphify = rep.graphify !== null;
+    const gAvg = hasGraphify
+        ? Math.round(meanNumber(rep.results.map((r) => r.graphify?.tokens ?? 0)))
+        : 0;
+    const gRecall = hasGraphify
+        ? meanNumber(rep.results.map((r) => r.graphify?.recall ?? 0))
+        : 0;
+    const gTotal = hasGraphify
+        ? rep.results.reduce((a, r) => a + (r.graphify?.tokens ?? 0), 0)
+        : 0;
+
+    // Per-CATEGORY recall (e.g. NATS / BullMQ / TypeORM / DI / cross-domain).
+    // Category labels are types, not user data.
+    const byCategory = new Map<string, PerQuestionResult[]>();
+    for (const r of rep.results) {
+        const list = byCategory.get(r.sourceLabel) ?? [];
+        list.push(r);
+        byCategory.set(r.sourceLabel, list);
+    }
+
+    const lines: string[] = [];
+    lines.push(`# arch-graph compare contribution`);
+    lines.push(``);
+    lines.push(`- Project: anonymized`);
+    lines.push(`- Generated: ${date}`);
+    lines.push(`- arch-graph version: ${version}`);
+    lines.push(`- graphify available: ${hasGraphify ? 'yes' : 'no'}`);
+    lines.push(`- questions: ${rep.results.length}`);
+    lines.push(``);
+    lines.push(`## Graph stats`);
+    lines.push(``);
+    if (hasGraphify) {
+        lines.push(`| tool | nodes | edges | size (KB) | tokens (compact) |`);
+        lines.push(`|---|---:|---:|---:|---:|`);
+        lines.push(
+            `| arch-graph | ${rep.archNodes} | ${rep.archEdges} | ${kb(rep.archSizeBytes)} | ${fmtNumber(archAvg)} |`,
+        );
+        lines.push(
+            `| graphify | ${rep.graphify!.nodes} | ${rep.graphify!.edges} | ${kb(rep.graphify!.sizeBytes)} | ${fmtNumber(gAvg)} |`,
+        );
+    } else {
+        lines.push(`| tool | nodes | edges | size (KB) | tokens (compact) |`);
+        lines.push(`|---|---:|---:|---:|---:|`);
+        lines.push(
+            `| arch-graph | ${rep.archNodes} | ${rep.archEdges} | ${kb(rep.archSizeBytes)} | ${fmtNumber(archAvg)} |`,
+        );
+    }
+    lines.push(``);
+
+    lines.push(`## Edge breakdown (arch-graph)`);
+    lines.push(``);
+    lines.push(`| kind | count |`);
+    lines.push(`|---|---:|`);
+    for (const kind of Array.from(edgeKindCounts.keys()).sort()) {
+        lines.push(`| ${kind} | ${edgeKindCounts.get(kind)} |`);
+    }
+    lines.push(``);
+
+    lines.push(`## Node breakdown (arch-graph)`);
+    lines.push(``);
+    lines.push(`| kind | count |`);
+    lines.push(`|---|---:|`);
+    for (const kind of Array.from(nodeKindCounts.keys()).sort()) {
+        lines.push(`| ${kind} | ${nodeKindCounts.get(kind)} |`);
+    }
+    lines.push(``);
+
+    lines.push(`## Recall by category (${rep.results.length} auto-generated questions)`);
+    lines.push(``);
+    if (hasGraphify) {
+        lines.push(`| category | arch recall | graphify recall |`);
+        lines.push(`|---|---:|---:|`);
+        for (const cat of Array.from(byCategory.keys()).sort()) {
+            const rows = byCategory.get(cat)!;
+            const aR = meanNumber(rows.map((r) => r.archRecall));
+            const gR = meanNumber(rows.map((r) => r.graphify?.recall ?? 0));
+            lines.push(`| ${cat} | ${fmtPct(aR)} | ${fmtPct(gR)} |`);
+        }
+    } else {
+        lines.push(`| category | arch recall |`);
+        lines.push(`|---|---:|`);
+        for (const cat of Array.from(byCategory.keys()).sort()) {
+            const rows = byCategory.get(cat)!;
+            const aR = meanNumber(rows.map((r) => r.archRecall));
+            lines.push(`| ${cat} | ${fmtPct(aR)} |`);
+        }
+    }
+    lines.push(``);
+
+    lines.push(`## Totals`);
+    lines.push(``);
+    if (hasGraphify) {
+        lines.push(`| metric | arch-graph | graphify |`);
+        lines.push(`|---|---:|---:|`);
+        lines.push(`| mean recall | ${fmtPct(archRecall)} | ${fmtPct(gRecall)} |`);
+        lines.push(`| Σ per-Q tokens | ${fmtNumber(archTotal)} | ${fmtNumber(gTotal)} |`);
+    } else {
+        lines.push(`| metric | arch-graph |`);
+        lines.push(`|---|---:|`);
+        lines.push(`| mean recall | ${fmtPct(archRecall)} |`);
+        lines.push(`| Σ per-Q tokens | ${fmtNumber(archTotal)} |`);
+    }
+    lines.push(``);
+
+    const markdown = lines.join('\n');
+    const title = `arch-graph compare contribution (${date}, ${rep.archNodes}n/${rep.archEdges}e)`;
+
+    // Defense-in-depth: guard against future code paths that accidentally
+    // pipe identifying data through this function. Errors here surface as
+    // user-visible failures rather than silently leaked snippets.
+    assertAnonymized(markdown, rep);
+
+    return { markdown, title };
+}
+
+function kb(bytes: number): string {
+    if (bytes <= 0) return '0';
+    return (bytes / 1024).toFixed(1);
+}
+
+/**
+ * Read the version field from `package.json`. We compute the path relative
+ * to this source file via `process.argv[1]` rather than `import.meta` so the
+ * compiled output (under `dist/`) and the tsx-driven path both work. If we
+ * can't determine it, return 'unknown' rather than throwing — version is a
+ * decoration, not a correctness gate.
+ */
+async function readArchGraphVersion(): Promise<string> {
+    const candidates = [
+        // From compiled dist or tsx-run src: walk up to find package.json
+        resolve(process.argv[1] ?? '', '..', '..', '..', 'package.json'),
+        resolve(process.argv[1] ?? '', '..', '..', 'package.json'),
+        resolve(process.cwd(), 'package.json'),
+    ];
+    for (const p of candidates) {
+        if (!existsSync(p)) continue;
+        try {
+            const json = JSON.parse(await readFile(p, 'utf8')) as { name?: string; version?: string };
+            if (json.name === 'arch-graph' && typeof json.version === 'string') {
+                return json.version;
+            }
+        } catch {
+            // Ignore — try next candidate.
+        }
+    }
+    return 'unknown';
+}
+
+/**
+ * Defense-in-depth: scan the generated snippet for high-signal identifying
+ * values from the user's graph. If any appears, abort loudly — better to
+ * crash than to silently leak.
+ *
+ * We deliberately DON'T check every node.id / node.label by substring,
+ * because those routinely contain generic English words ("user", "queue",
+ * "service") that legitimately appear in our snippet's prose and headers.
+ * Instead we focus on the highest-signal sources:
+ *   - the absolute repoRoot path and its basename
+ *   - any absolute file paths (archGraphPath, graphify.path)
+ *   - the literal question text (contains backticked subject/queue/table names)
+ *   - ground-truth labels for each question (these ARE the real
+ *     service/lib/module names that the user wants kept private)
+ *
+ * If this trips, the snippet was NOT written or sent. The user should file
+ * a bug — drift in `buildShareSnippet` is the only way this should fire.
+ */
+function assertAnonymized(snippet: string, rep: CompareReport): void {
+    const lower = snippet.toLowerCase();
+
+    const forbid: string[] = [];
+    if (rep.repoRoot) {
+        forbid.push(rep.repoRoot);
+        const base = basename(rep.repoRoot);
+        // Skip obviously-generic basenames (e.g. `src`, `app`, `repo`).
+        if (base && base.length >= 4) forbid.push(base);
+    }
+    if (rep.archGraphPath) forbid.push(rep.archGraphPath);
+    if (rep.graphify?.path) forbid.push(rep.graphify.path);
+
+    // Question text and ground-truth labels are the highest-risk identifying
+    // values: by construction they contain real subject names, queue names,
+    // table names, and service/lib basenames.
+    for (const q of rep.questions) {
+        if (q.question) forbid.push(q.question);
+        for (const l of q.groundTruthLabels) {
+            if (l && l.length >= 3) forbid.push(l);
+        }
+    }
+
+    // Allowlist tokens that the snippet legitimately contains as type names.
+    // These can collide with ground-truth labels if a user names a service
+    // `nats` or `queue`, but we accept that false-negative trade — the value
+    // would be uninformative as a leak anyway.
+    const safeTokens = new Set<string>([
+        'nats', 'bullmq', 'typeorm', 'di', 'http', 'cross-domain',
+        'arch-graph', 'graphify',
+        ...EDGE_KIND_TOKENS,
+        ...NODE_KIND_TOKENS,
+    ]);
+
+    for (const raw of forbid) {
+        const needle = raw.toLowerCase().trim();
+        if (needle.length < 3) continue;
+        if (safeTokens.has(needle)) continue;
+        if (lower.includes(needle)) {
+            throw new Error(
+                `--share: refusing to emit snippet — anonymization guard ` +
+                `matched a potentially identifying value. The snippet was NOT ` +
+                `written or sent. Please report this as a bug.`,
+            );
+        }
+    }
+}
+
+const EDGE_KIND_TOKENS: readonly string[] = [
+    'nats-publish', 'nats-request', 'nats-subscribe', 'nats-reply',
+    'http-call', 'http-external',
+    'queue-produce', 'queue-consume',
+    'db-read', 'db-write', 'db-access',
+    'di-import', 'di-provides', 'di-exports', 'di-controller',
+    'ts-import', 'lib-usage',
+];
+const NODE_KIND_TOKENS: readonly string[] = [
+    'service', 'lib', 'module', 'nats-subject', 'queue', 'db-table',
+    'provider', 'file', 'external',
+];
+
+async function runShareFlow(rep: CompareReport, args: CompareArgs): Promise<void> {
+    let snippet: ShareSnippet;
+    try {
+        snippet = await buildShareSnippet(rep);
+    } catch (err) {
+        process.stderr.write(`error: --share: ${(err as Error).message}\n`);
+        process.exit(1);
+    }
+
+    // Show preview so the user can SEE what we're about to send.
+    process.stdout.write(`\n────────── --share preview (anonymized) ──────────\n`);
+    process.stdout.write(snippet.markdown);
+    process.stdout.write(`\n──────────────────────────────────────────────────\n`);
+    process.stdout.write(
+        `Counts only — no project, subject, queue, table, module, or file names.\n`,
+    );
+
+    if (!args.shareYes) {
+        const yes = await promptYesNo(`Open GitHub to submit this contribution? [Y/n] `);
+        if (!yes) {
+            process.stdout.write(`Skipped. Snippet not sent.\n`);
+            return;
+        }
+    }
+
+    const url =
+        SHARE_DISCUSSION_URL +
+        `&title=${encodeURIComponent(snippet.title)}` +
+        `&body=${encodeURIComponent(snippet.markdown)}`;
+
+    if (args.shareNoOpen) {
+        process.stdout.write(`\nPaste into your browser:\n  ${url}\n`);
+        return;
+    }
+
+    const opened = openInBrowser(url);
+    if (!opened) {
+        process.stdout.write(
+            `\nCould not open a browser automatically. Paste this URL:\n  ${url}\n`,
+        );
+    } else {
+        process.stdout.write(`Opened your browser. The Discussion form is pre-filled.\n`);
+    }
+}
+
+async function promptYesNo(prompt: string): Promise<boolean> {
+    // Non-TTY (e.g. CI, piped stdin): default to NO. The user must explicitly
+    // pass --share-yes to skip the prompt non-interactively.
+    if (!process.stdin.isTTY) return false;
+
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    try {
+        const answer = await new Promise<string>((res) => rl.question(prompt, res));
+        const t = answer.trim().toLowerCase();
+        return t === '' || t === 'y' || t === 'yes';
+    } finally {
+        rl.close();
+    }
+}
+
+function openInBrowser(url: string): boolean {
+    // Pick the platform-native opener. We pipe stdio (not inherit) so the
+    // command's own output doesn't garble our terminal, and we don't wait
+    // for the browser to exit.
+    const plat = platform();
+    let cmd: string;
+    let argv: string[];
+    if (plat === 'darwin') { cmd = 'open'; argv = [url]; }
+    else if (plat === 'win32') { cmd = 'cmd'; argv = ['/c', 'start', '""', url]; }
+    else { cmd = 'xdg-open'; argv = [url]; }
+    try {
+        const r = spawnSync(cmd, argv, { stdio: 'ignore' });
+        return r.status === 0;
+    } catch {
+        return false;
+    }
 }
 
