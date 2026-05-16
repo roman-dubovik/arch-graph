@@ -76,16 +76,38 @@ export function mapImportsToGraph(
         const res = site.resolution;
         if (res.kind !== 'resolved') {
             // Not resolved to a file. Route to the appropriate diagnostic bucket.
-            //   - external / dynamic-non-literal → node_modules / node:fs / non-literal
-            //     dynamic specifier — expected, not a bug
-            //   - broken-alias / broken-relative  → graph-relevant target we failed to find;
-            //     this IS the regression signal (typo'd alias, broken `paths`, moved file)
-            if (res.kind === 'external' || res.kind === 'dynamic-non-literal') {
-                externalOrUnresolved++;
-            } else {
-                // broken-alias or broken-relative
-                unresolvedInternal++;
-                if (site.kind === 'static') unresolvedImports.push(site);
+            // Switch over every non-resolved variant explicitly so that a future
+            // addition to TsImportResolution triggers a compile-time error here
+            // (via the `never`-guard default arm) rather than silently falling
+            // into the wrong bucket.
+            switch (res.kind) {
+                case 'external':
+                case 'dynamic-non-literal':
+                    // node_modules package, Node builtin, or a non-literal dynamic
+                    // import specifier — expected, not a bug; no graph edge.
+                    externalOrUnresolved++;
+                    break;
+                case 'broken-alias':
+                case 'broken-relative':
+                    // Graph-relevant target we failed to find — typo'd alias,
+                    // broken `paths`, moved file. Real regression signal.
+                    unresolvedInternal++;
+                    if (site.kind === 'static') unresolvedImports.push(site);
+                    break;
+                default: {
+                    // Exhaustiveness guard: if a new TsImportResolution variant is
+                    // added without updating this switch, TypeScript will flag `res`
+                    // as `never` here — forcing an explicit routing decision. The
+                    // stderr warning covers the JS-only / type-stripped runtime case
+                    // where the compile-time guard is bypassed.
+                    const _exhaustive: never = res;
+                    void _exhaustive;
+                    process.stderr.write(
+                        `[imports.mapper] WARNING: unknown resolution kind '${(res as { kind: string }).kind}' — routed to unresolvedInternal\n`,
+                    );
+                    unresolvedInternal++;
+                    break;
+                }
             }
             continue;
         }
