@@ -1,9 +1,6 @@
-import fg from 'fast-glob';
-import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
-
 import type { ArchGraphConfig } from '../core/config.js';
 import type { GroundTruthEntry } from '../core/types.js';
+import { iterateSourceFiles } from './scan.js';
 import { stripComments } from './strip-comments.js';
 
 /**
@@ -11,37 +8,10 @@ import { stripComments } from './strip-comments.js';
  * Самый точный сигнал — однозначные NATS-маркеры.
  */
 export async function enumerateHandlers(cfg: ArchGraphConfig): Promise<GroundTruthEntry[]> {
-    const root = resolve(cfg.root);
-    const files = await fg(
-        [`${cfg.appsGlob}/**/*.ts`, ...(cfg.libsGlob ? [`${cfg.libsGlob}/**/*.ts`] : [])],
-        {
-            cwd: root,
-            absolute: true,
-            ignore: [
-                '**/node_modules/**',
-                '**/dist/**',
-                '**/.claude/**',
-                '**/.worktrees/**',
-                '**/*.spec.ts',
-                '**/*.test.ts',
-                '**/*.d.ts',
-                ...(cfg.excludeGlobs?.map((g) => `**${g}**`) ?? []),
-            ],
-        },
-    );
-
     const decoratorRe = /@(MessagePattern|EventPattern)\s*\(/g;
     const out: GroundTruthEntry[] = [];
 
-    for (const file of files) {
-        let content: string;
-        try {
-            content = await readFile(file, 'utf8');
-        } catch (err) {
-            const e = err as NodeJS.ErrnoException;
-            if (e.code === 'ENOENT') continue;
-            throw new Error(`ground-truth read failed for ${file}: ${e.code ?? e.message}`, { cause: err });
-        }
+    for await (const { file, content } of iterateSourceFiles(cfg, 'handlers GT')) {
         const stripped = stripComments(content);
         const lines = stripped.split('\n');
         for (let i = 0; i < lines.length; i++) {
