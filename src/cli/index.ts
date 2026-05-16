@@ -121,7 +121,7 @@ Usage:
                         Auto-detects ./graphify-out/ if --graphify omitted.
                         --share: contribute anonymized counts to the public bench.
 
-Semantic sidecar (optional — requires `semantic build` first):
+Semantic sidecar (optional — requires 'semantic build' first):
   arch-graph semantic build   [--out <dir>] [--config <path>] [--repo <id>]
                               Embed all graph nodes and write arch-graph-out/semantic/.
   arch-graph semantic search  "<query>" [--out <dir>] [--repo <id>] [--k <n>]
@@ -159,7 +159,7 @@ Flags:
 Defaults:
   --config  ./arch-graph.config.ts
   --out     ./arch-graph-out
-  --mode    pre-commit          (for \`hook install\`)
+  --mode    pre-commit          (for 'hook install')
 
 Mermaid slice modes (default writes graph.mermaid; flag adds an extra slice):
   full              full graph (already written as graph.mermaid)
