@@ -73,7 +73,7 @@ Usage:
   arch-graph claude install   [--target <CLAUDE.md>] [--skill]
   arch-graph claude uninstall [--target <CLAUDE.md>]
 
-  arch-graph hook install     [--repo <path>]
+  arch-graph hook install     [--repo <path>] [--mode=<pre-commit|post-commit>]
   arch-graph hook uninstall   [--repo <path>]
   arch-graph hook status      [--repo <path>]
 
@@ -82,6 +82,7 @@ Usage:
 Defaults:
   --config  ./arch-graph.config.ts
   --out     ./arch-graph-out
+  --mode    pre-commit          (for \`hook install\`)
 
 Mermaid slice modes (default writes graph.mermaid; flag adds an extra slice):
   full              full graph (already written as graph.mermaid)
