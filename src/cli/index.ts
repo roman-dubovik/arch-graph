@@ -354,6 +354,57 @@ function buildDomainRows(
         rows.push({ name: 'imports', recall, resolve: NaN, floor: 0.8, status, tips });
     }
 
+    // ---- endpoint (Var 2) ----
+    if (validation.endpoint) {
+        const vr = validation.endpoint;
+        const en = enabled.endpoint!;
+        let status: DomainStatus;
+        let recall = NaN;
+        if (!en) {
+            status = 'disabled';
+        } else if (vr.groundTruthCount === 0) {
+            status = 'no-gt';
+        } else {
+            recall = vr.recall ?? 1;
+            status = recall >= 0.95 ? 'ok' : 'warn';
+        }
+        rows.push({ name: 'endpoint', recall, resolve: NaN, floor: 0.95, status, tips: [] });
+    }
+
+    // ---- config (Var 2) ----
+    if (validation.config) {
+        const vc = validation.config;
+        const en = enabled.config!;
+        let status: DomainStatus;
+        let recall = NaN;
+        if (!en) {
+            status = 'disabled';
+        } else if (vc.groundTruthCount === 0) {
+            status = 'no-gt';
+        } else {
+            recall = vc.recall ?? 1;
+            status = recall >= 0.9 ? 'ok' : 'warn';
+        }
+        rows.push({ name: 'config', recall, resolve: NaN, floor: 0.9, status, tips: [] });
+    }
+
+    // ---- db-entity-field (Var 2) ----
+    if (validation.dbEntityFields) {
+        const vf = validation.dbEntityFields;
+        const en = enabled.dbEntityFields!;
+        let status: DomainStatus;
+        let recall = NaN;
+        if (!en) {
+            status = 'disabled';
+        } else if (vf.groundTruthCount === 0) {
+            status = 'no-gt';
+        } else {
+            recall = vf.recall ?? 1;
+            status = recall >= 0.95 ? 'ok' : 'warn';
+        }
+        rows.push({ name: 'db-entity-field', recall, resolve: NaN, floor: 0.95, status, tips: [] });
+    }
+
     return rows;
 }
 
@@ -489,6 +540,27 @@ function computeStrictFails(
             fails.push(`imports recall ${pct(i.recallStatic)} (< 80%)`);
         }
     }
+    if (enabled.endpoint && validation.endpoint) {
+        const e = validation.endpoint;
+        if (e.groundTruthCount === 0) {
+            fails.push(`endpoint: zero ground-truth — set domains.endpoint=false if this project has no NestJS HTTP endpoints`);
+        }
+        strictGateRecall('endpoint', 'recall', e.groundTruthCount, e.recall ?? 0, fails, 0.95);
+    }
+    if (enabled.config && validation.config) {
+        const c = validation.config;
+        if (c.groundTruthCount === 0) {
+            fails.push(`config: zero ground-truth — set domains.config=false if this project has no configService/process.env usage`);
+        }
+        strictGateRecall('config', 'recall', c.groundTruthCount, c.recall ?? 0, fails, 0.90);
+    }
+    if (enabled.dbEntityFields && validation.dbEntityFields) {
+        const f = validation.dbEntityFields;
+        if (f.groundTruthCount === 0) {
+            fails.push(`db-entity-field: zero ground-truth — set domains.dbEntityFields=false if this project has no TypeORM @Column entities`);
+        }
+        strictGateRecall('db-entity-field', 'recall', f.groundTruthCount, f.recall ?? 0, fails, 0.95);
+    }
 
     return fails;
 }
@@ -592,6 +664,9 @@ async function cmdBuild(args: ParsedArgs): Promise<void> {
         di: cfg.domains?.di !== false,
         http: cfg.domains?.http !== false,
         imports: cfg.domains?.imports !== false,
+        endpoint: cfg.domains?.endpoint !== false,
+        config: cfg.domains?.config !== false,
+        dbEntityFields: cfg.domains?.dbEntityFields !== false,
     };
 
     // Build per-domain rows for advisory table
