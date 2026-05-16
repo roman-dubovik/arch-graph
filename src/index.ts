@@ -35,6 +35,7 @@ export { runBuild } from './pipeline/build.js';
 export {
     parseSliceMode,
     writeGraphMermaid,
+    type CollisionGroup,
     type DomainKey,
     type MermaidSliceMode,
     type MermaidWriteOptions,

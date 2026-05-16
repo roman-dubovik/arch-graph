@@ -1,7 +1,29 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
 import type { ArchGraph, EdgeKind, GraphEdge, GraphNode, NodeKind } from '../core/types.js';
+
+// ============================================================================
+// Collision reporting
+// ============================================================================
+
+/**
+ * One entry in `mermaid-collisions.json` — groups all raw node ids that
+ * collapsed to the same sanitized base id, along with the node kind of the
+ * first collider (which keeps the plain base; subsequent colliders receive
+ * `_2`, `_3`, … suffixes).
+ */
+export interface CollisionGroup {
+    sanitizedId: string;
+    originalIds: string[];
+    nodeKind: NodeKind;
+}
+
+/** Shape of `mermaid-collisions.json`. */
+interface CollisionsFile {
+    collisions: CollisionGroup[];
+    generatedAt: string;
+}
 
 // ============================================================================
 // Public API
@@ -46,17 +68,21 @@ export async function writeGraphMermaid(
     const threshold = options.largeGraphThreshold ?? 200;
 
     if (slice.kind === 'full') {
-        const body = renderMermaid(graph.nodes, graph.edges, threshold);
+        const { body, collisionGroups } = renderMermaid(graph.nodes, graph.edges, threshold);
         await ensureDir(outPath);
         await writeFile(outPath, body, 'utf8');
+        await flushCollisionsFile(dirname(outPath), collisionGroups);
         return [outPath];
     }
 
     if (slice.kind === 'domain') {
         const { nodes, edges } = sliceByDomain(graph, slice.domain);
-        const body = renderMermaid(nodes, edges, threshold);
+        const { body } = renderMermaid(nodes, edges, threshold);
         await ensureDir(outPath);
         await writeFile(outPath, body, 'utf8');
+        // Domain/per-service slices operate on a subset of the graph — only the
+        // full build sees the complete node set, so the collision file belongs
+        // exclusively to the full build and must not be touched here.
         return [outPath];
     }
 
@@ -67,11 +93,13 @@ export async function writeGraphMermaid(
         const { nodes, edges } = sliceByService(graph, svc.id);
         // Skip empty slices — a service with zero touching edges is uninteresting.
         if (edges.length === 0) continue;
-        const body = renderMermaid(nodes, edges, threshold);
+        const { body } = renderMermaid(nodes, edges, threshold);
         const file = join(outPath, `service-${sanitizeFilename(svc.label)}.mermaid`);
         await writeFile(file, body, 'utf8');
         written.push(file);
     }
+    // Per-service slices operate on subsets — the collision file is owned by the
+    // full build and must not be touched here (see domain branch comment above).
     return written;
 }
 
@@ -216,14 +244,14 @@ export function renderMermaid(
     nodes: GraphNode[],
     edges: GraphEdge[],
     largeGraphThreshold: number,
-): string {
+): { body: string; collisionGroups: CollisionGroup[] } {
     const lines: string[] = [];
 
     // Per-render id map — handles `sanitizeId` collisions deterministically (first-seen wins,
     // subsequent colliders get `_<n>` suffix) and warns once when a collision occurs so the
     // operator can rename the offending raw ids. Used for every node declaration AND every
     // edge endpoint in this render — that's why it's scoped here, not at module level.
-    const idMap = buildIdMap(nodes);
+    const { map: idMap, collisionGroups } = buildIdMap(nodes);
 
     lines.push('flowchart LR');
     // Header comment goes INSIDE the diagram (after the directive) — some Mermaid
@@ -242,7 +270,7 @@ export function renderMermaid(
         lines.push('    empty["(no nodes in this slice)"]');
         lines.push('    classDef placeholder fill:#f9fafb,stroke:#9ca3af,color:#6b7280;');
         lines.push('    class empty placeholder;');
-        return lines.join('\n') + '\n';
+        return { body: lines.join('\n') + '\n', collisionGroups };
     }
 
     // Group nodes by kind, preserving deterministic SUBGRAPH_ORDER.
@@ -301,7 +329,7 @@ export function renderMermaid(
         lines.push(`    class ${ids.sort().join(',')} ${cls};`);
     }
 
-    return lines.join('\n') + '\n';
+    return { body: lines.join('\n') + '\n', collisionGroups };
 }
 
 // ============================================================================
@@ -360,15 +388,25 @@ function sanitizeId(rawId: string): string {
  * colliders get a `_2`, `_3`, … suffix. Emits one stderr warning per render when
  * collisions occur — silent merge would produce a broken Mermaid diagram (two
  * declarations of the same id; edges potentially attached to the wrong node).
+ *
+ * Returns the id map and structured collision groups (one entry per base
+ * sanitizedId that had more than one raw source), suitable for writing to
+ * `mermaid-collisions.json` by the caller.
  */
-function buildIdMap(nodes: GraphNode[]): Map<string, string> {
+function buildIdMap(nodes: GraphNode[]): { map: Map<string, string>; collisionGroups: CollisionGroup[] } {
     const map = new Map<string, string>();
     const usedSanitized = new Map<string, number>();
-    const collisions: Array<{ raw: string; sanitized: string; assigned: string }> = [];
+    // Track which raw ids (and their kinds) map to each base sanitized id.
+    const baseToRaws = new Map<string, Array<{ rawId: string; kind: NodeKind }>>();
 
     for (const n of nodes) {
         const base = sanitizeId(n.id);
         const seen = usedSanitized.get(base) ?? 0;
+
+        // Record first-seen mapping (needed to build the originalIds group later).
+        if (!baseToRaws.has(base)) baseToRaws.set(base, []);
+        baseToRaws.get(base)!.push({ rawId: n.id, kind: n.kind });
+
         if (seen === 0) {
             usedSanitized.set(base, 1);
             map.set(n.id, base);
@@ -385,20 +423,31 @@ function buildIdMap(nodes: GraphNode[]): Map<string, string> {
         usedSanitized.set(base, suffix);
         usedSanitized.set(candidate, 1);
         map.set(n.id, candidate);
-        collisions.push({ raw: n.id, sanitized: base, assigned: candidate });
     }
 
-    if (collisions.length > 0) {
-        const sample = collisions
+    // Build structured groups for bases that had more than one raw id source.
+    const collisionGroups: CollisionGroup[] = [];
+    for (const [base, raws] of baseToRaws) {
+        if (raws.length < 2) continue;
+        collisionGroups.push({
+            sanitizedId: base,
+            originalIds: raws.map((r) => r.rawId),
+            // Use the kind of the first node that claimed this base (the winner).
+            nodeKind: raws[0]!.kind,
+        });
+    }
+
+    if (collisionGroups.length > 0) {
+        const sample = collisionGroups
             .slice(0, 3)
-            .map((c) => `${c.raw} → ${c.assigned}`)
+            .map((g) => `${g.originalIds.join(' vs ')} → ${g.sanitizedId}`)
             .join('; ');
         process.stderr.write(
-            `[mermaid] WARNING: ${collisions.length} sanitizeId collision(s); first: ${sample}\n`,
+            `[mermaid] WARNING: ${collisionGroups.length} sanitizeId collision group(s); first: ${sample}\n`,
         );
     }
 
-    return map;
+    return { map, collisionGroups };
 }
 
 /**
@@ -465,3 +514,26 @@ function isDomainKey(s: string): s is DomainKey {
 async function ensureDir(filePath: string): Promise<void> {
     await mkdir(dirname(filePath), { recursive: true });
 }
+
+/**
+ * Write `mermaid-collisions.json` into `dir` when there are collisions, or
+ * delete it (best-effort) when there are none so stale artifacts from a
+ * previous build don't mislead the operator.
+ */
+async function flushCollisionsFile(dir: string, collisionGroups: CollisionGroup[]): Promise<void> {
+    const filePath = join(dir, 'mermaid-collisions.json');
+    if (collisionGroups.length === 0) {
+        // Remove a possibly-stale file from a prior build that did have collisions.
+        await rm(filePath, { force: true });
+        return;
+    }
+    // Ensure the directory exists — the full-build path always calls ensureDir first,
+    // but defensive mkdir makes this function safe for standalone API callers too.
+    await mkdir(dir, { recursive: true });
+    const payload: CollisionsFile = {
+        collisions: collisionGroups,
+        generatedAt: new Date().toISOString(),
+    };
+    await writeFile(filePath, JSON.stringify(payload, null, 2) + '\n', 'utf8');
+}
+
