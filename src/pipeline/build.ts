@@ -32,6 +32,7 @@ import { enumerateSenders } from '../validation/senders.js';
 import { enumerateTypeOrmGroundTruth, buildTypeOrmReport } from '../validation/typeorm-validator.js';
 import { validateEndpoints } from '../validation/endpoint-validator.js';
 import { validateConfig } from '../validation/config-validator.js';
+import { validateDbEntityFields } from '../validation/db-entity-fields-validator.js';
 import { buildReport as buildNatsReport } from '../validation/validator.js';
 import { detectCycles } from '../detectors/cycles.js';
 
@@ -353,6 +354,14 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         `  ${dbEntityFields.fields.length} entity fields in ${Date.now() - t0}ms\n`,
     );
 
+    process.stdout.write(`validating db entity fields against ground truth...\n`);
+    const dbEntityFieldsValidation = await stage(`[${cfg.id}] dbEntityFields.GT`, () =>
+        validateDbEntityFields(cfg, dbEntityFields.fields.length),
+    );
+    process.stdout.write(
+        `  groundTruth: ${dbEntityFieldsValidation.groundTruthCount}, recall: ${dbEntityFieldsValidation.recall !== null ? pct(dbEntityFieldsValidation.recall) : 'N/A'}\n`,
+    );
+
     process.stdout.write(`mapping db entity fields to graph...\n`);
     const entityFieldsMapped = mapEntityFieldsToGraph(dbEntityFields.fields);
     process.stdout.write(
@@ -392,6 +401,13 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         http: httpMapped.diagnostics,
         imports: importsMapped.diagnostics,
         cycles: cyclesDiagnostics,
+        endpoint: { messages: endpointsMapped.diagnostics },
+        config: { messages: configMapped.diagnostics },
+        dbEntityFields: { messages: entityFieldsMapped.diagnostics },
+        scoped: {
+            markerCount: scoped.markers.length,
+            messages: scoped.diagnostics,
+        },
     };
     const validation: BuildValidation = {
         projectId: cfg.id,
@@ -402,6 +418,9 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         di: diValidation,
         http: httpValidation,
         imports: importsValidation,
+        endpoint: endpointValidation,
+        config: configValidation,
+        dbEntityFields: dbEntityFieldsValidation,
     };
 
     return { graph, diagnostics, validation };

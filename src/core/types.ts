@@ -320,6 +320,43 @@ export interface TypeOrmDiagnostics {
     };
 }
 
+/**
+ * Diagnostics for the Variant 2 endpoint domain.
+ * Shape mirrors `EndpointMapResult['diagnostics']`.
+ */
+export interface EndpointDiagnostics {
+    /** Mapper-level diagnostics (e.g. unowned files). */
+    messages: Array<{ message: string }>;
+}
+
+/**
+ * Diagnostics for the Variant 2 config-field domain.
+ * Shape mirrors `ConfigMapResult['diagnostics']`.
+ */
+export interface ConfigDiagnostics {
+    /** Mapper-level diagnostics (e.g. unowned files). */
+    messages: Array<{ message: string }>;
+}
+
+/**
+ * Diagnostics for the Variant 2 db-entity-field domain.
+ * Shape mirrors `EntityFieldsMapResult['diagnostics']`.
+ */
+export interface DbEntityFieldsDiagnostics {
+    /** Mapper-level diagnostics (e.g. duplicate fields). */
+    messages: Array<{ message: string }>;
+}
+
+/**
+ * Diagnostics for the Variant 2 scoped-marker domain (stub).
+ */
+export interface ScopedDiagnostics {
+    /** Number of scoped-marker sites found (0 in v1 stub). */
+    markerCount: number;
+    /** Extractor-level messages. */
+    messages: Array<{ file: string; line: number; message: string }>;
+}
+
 export interface DiagnosticsReport {
     projectId: string;
     timestamp: string;
@@ -330,6 +367,14 @@ export interface DiagnosticsReport {
     http: HttpDiagnostics;
     imports: ImportsDiagnostics;
     cycles: CyclesDiagnostics;
+    /** Variant 2 — endpoint domain diagnostics. */
+    endpoint?: EndpointDiagnostics;
+    /** Variant 2 — config-field domain diagnostics. */
+    config?: ConfigDiagnostics;
+    /** Variant 2 — db-entity-field domain diagnostics. */
+    dbEntityFields?: DbEntityFieldsDiagnostics;
+    /** Variant 2 — scoped-marker domain diagnostics (stub). */
+    scoped?: ScopedDiagnostics;
     /**
      * Populated only when `arch-graph semantic build` has been run.
      * Optional so plain `arch-graph build` keeps the same diagnostics.json
@@ -436,6 +481,21 @@ export interface TypeOrmValidationReport {
     extraInjections: TypeOrmInjectionSite[];
 }
 
+/**
+ * Validation result for the Variant 2 db-entity-field domain.
+ * Mirrors `EndpointValidationResult` / `ConfigValidationResult` shape.
+ */
+export interface DbEntityFieldsValidationResult {
+    /** Ground-truth entries found by `@Column*` decorator regex. */
+    groundTruth: Array<{ file: string; line: number; matchedText: string; decorator: string }>;
+    /** Number of detected column decorator occurrences via ground-truth regex. */
+    groundTruthCount: number;
+    /** Recall: groundTruth > 0 ? extracted / groundTruth : null. */
+    recall: number | null;
+    /** Recall floor 95%. True if recall >= 0.95 or no ground truth detected. */
+    meetsFloor: boolean;
+}
+
 export interface BuildValidation {
     projectId: string;
     timestamp: string;
@@ -445,6 +505,12 @@ export interface BuildValidation {
     di: DiValidationReport;
     http: HttpValidationReport;
     imports: ImportsValidationReport;
+    /** Variant 2 — endpoint validation report. */
+    endpoint?: import('../validation/endpoint-validator.js').EndpointValidationResult;
+    /** Variant 2 — config-field validation report. */
+    config?: import('../validation/config-validator.js').ConfigValidationResult;
+    /** Variant 2 — db-entity-field validation report. */
+    dbEntityFields?: DbEntityFieldsValidationResult;
 }
 
 // ============================================================================

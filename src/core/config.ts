@@ -38,6 +38,12 @@ export interface ArchGraphConfig {
         di?: boolean;
         http?: boolean;
         imports?: boolean;
+        /** Variant 2 — NestJS endpoint decorators (@Get, @Post, …). Defaults to true. */
+        endpoint?: boolean;
+        /** Variant 2 — config-field callsites (configService.get / process.env). Defaults to true. */
+        config?: boolean;
+        /** Variant 2 — TypeORM entity column decorators (@Column, @PrimaryColumn, …). Defaults to true. */
+        dbEntityFields?: boolean;
     };
 }
 
