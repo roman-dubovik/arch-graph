@@ -502,52 +502,41 @@ code {
 }
 
 /* Graph nodes */
-.g-node rect {
-  fill: var(--bg-2);
-  stroke: var(--border-strong);
-  stroke-width: 1;
+/* Obsidian-style graph cluster on the right side of the flow stage.
+ * Nodes are filled circles colored by kind; static lines beneath show the
+ * edges that arch-graph actually emits. Pulses (above) animate flow INTO
+ * the cluster's hub node; intra-cluster edges are decorative-static. */
+.graph-cluster-edges path { stroke-linecap: round; }
+.cn-kind {
+  stroke: rgba(10, 10, 15, 0.6);
+  stroke-width: 1.5;
+  transform-box: fill-box;
+  transform-origin: center;
 }
-.g-node text { fill: var(--text); font-size: 12px; }
-.g-node { opacity: 0; animation: nodeGrow 8s ease-out infinite; transform-box: fill-box; transform-origin: left center; }
-.g-node.gn-1 { animation-delay: 2.4s; }
-.g-node.gn-2 { animation-delay: 2.9s; }
-.g-node.gn-3 { animation-delay: 3.4s; }
-.g-node.gn-4 { animation-delay: 3.9s; }
-.g-node.gn-5 { animation-delay: 4.4s; }
-.g-node.gn-6 { animation-delay: 4.9s; }
-.g-node.gn-7 { animation-delay: 5.4s; }
+.cn-hub .cn-kind { filter: drop-shadow(0 0 8px rgba(125, 211, 252, 0.55)); }
+.cn-label {
+  fill: var(--text-dim);
+  font-size: 11px;
+  letter-spacing: 0.01em;
+  pointer-events: none;
+}
+.cn-hub .cn-label { fill: var(--text); font-size: 12px; }
+.cn { opacity: 0; animation: nodeGrow 8s ease-out infinite; }
+.cn-hub { animation-delay: 2.0s; }
+.cn-1   { animation-delay: 2.6s; }
+.cn-2   { animation-delay: 3.1s; }
+.cn-3   { animation-delay: 3.6s; }
+.cn-4   { animation-delay: 4.1s; }
+.cn-5   { animation-delay: 4.6s; }
+.cn-6   { animation-delay: 5.1s; }
 
-.gn-kind.kind-service { fill: var(--accent-2);  }
-.gn-kind.kind-nats    { fill: #c084fc;          }
-.gn-kind.kind-db      { fill: var(--accent-ok); }
-.gn-kind.kind-queue   { fill: var(--accent-warm); }
-.gn-kind.kind-module  { fill: var(--accent);    }
+.cn-kind.kind-service { fill: var(--accent-2);  }
+.cn-kind.kind-nats    { fill: #c084fc;          }
+.cn-kind.kind-db      { fill: var(--accent-ok); }
+.cn-kind.kind-queue   { fill: var(--accent-warm); }
+.cn-kind.kind-module  { fill: var(--accent);    }
 
 /* Flow legend */
-.flow-legend {
-  list-style: none;
-  padding: 24px 4px 0;
-  margin: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 22px;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--text-dim);
-}
-.flow-legend .dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  margin-right: 8px;
-  vertical-align: middle;
-}
-.flow-legend .dot.kind-service { background: var(--accent-2);  }
-.flow-legend .dot.kind-nats    { background: #c084fc;          }
-.flow-legend .dot.kind-db      { background: var(--accent-ok); }
-.flow-legend .dot.kind-queue   { background: var(--accent-warm); }
-.flow-legend .dot.kind-module  { background: var(--accent);    }
 
 /* ─────────────────────────────────────────────── BENCH ──────────────── */
 .bench-cards {
