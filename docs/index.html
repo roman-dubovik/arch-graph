@@ -40,7 +40,8 @@
         <a href="#flow">How</a>
         <a href="#bench">Benchmark</a>
         <a href="#install">Install</a>
-        <a href="#queries">CLI</a>
+        <a href="#queries">Query</a>
+        <a href="#contribute">Contribute</a>
         <a class="nav-cta" href="https://github.com/roman-dubovik/arch-graph" rel="noopener" target="_blank">GitHub</a>
       </nav>
     </div>
@@ -430,6 +431,32 @@
       </div>
     </section>
 
+    <!-- ──────────────────────────────────────── CONTRIBUTE BANNER ─────── -->
+    <section class="section section-contribute" id="contribute" aria-labelledby="contribute-title">
+      <div class="container">
+        <div class="contribute-card reveal">
+          <div class="contribute-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9"></circle>
+              <path d="M12 8v8"></path>
+              <path d="M8 12h8"></path>
+            </svg>
+          </div>
+          <div class="contribute-body">
+            <p class="contribute-eyebrow">Open invitation</p>
+            <h2 id="contribute-title" class="contribute-title">Help us build a multi-repo benchmark.</h2>
+            <p class="contribute-lead">
+              Run <code>arch-graph compare --share</code> on your NestJS repo. We collect <strong>anonymous numbers only</strong> — no code, no subject names, no service IDs. Just counts and ratios. The preview shows you the exact payload before anything leaves your machine. All contributions land in a public Discussion.
+            </p>
+            <div class="contribute-ctas">
+              <a class="btn btn-primary" href="#install">Install arch-graph<span class="btn-arrow" aria-hidden="true">→</span></a>
+              <a class="btn btn-ghost" href="https://github.com/roman-dubovik/arch-graph/blob/main/src/cli/compare-command.ts" rel="noopener" target="_blank">See what's sent</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- ──────────────────────────────────────────── INSTALL ───────────── -->
     <section class="section section-install" id="install" aria-labelledby="install-title">
       <div class="container">
@@ -535,66 +562,78 @@ arch-graph build --strict      # CI: exit 3 if recall drops below floor</code></
       </div>
     </section>
 
-    <!-- ──────────────────────────────────────────── CLI ───────────────── -->
+    <!-- ──────────────────────────────────── THREE WAYS TO QUERY ───────── -->
     <section class="section section-cli" id="queries" aria-labelledby="cli-title">
       <div class="container">
-        <p class="section-eyebrow">CLI</p>
-        <h2 id="cli-title" class="section-title">Query the graph from the terminal.</h2>
-        <p class="section-lead">Ten subcommands. <code>--json</code> by default, <code>--table</code> for humans. Exit code <code>4</code> for not-found.</p>
+        <p class="section-eyebrow">Three ways to query</p>
+        <h2 id="cli-title" class="section-title">CLI, MCP, or Claude Code skill — equal first-class paths.</h2>
+        <p class="section-lead">The same graph backs all three. Pick the integration that matches the consumer: terminals → CLI, MCP-aware editors → MCP server, agents in Claude Code → skill.</p>
 
-        <div class="cli-grid">
+        <div class="three-ways">
           <article class="cli-card reveal">
-            <h3 class="mono">who-publishes</h3>
-            <p>Find every service that publishes on a NATS subject. Cites <code>file:line</code>.</p>
+            <p class="three-ways-sub">Primary path</p>
+            <h3 class="mono">CLI</h3>
+            <p>Ten subcommands. <code>--json</code> by default, <code>--table</code> for humans. Exit code <code>4</code> on not-found. Fastest for agents — no stdio overhead, no server lifecycle.</p>
             <div class="code-block">
-              <button class="copy-btn" type="button" aria-label="Copy who-publishes example">Copy</button>
-              <pre><code class="lang-sh">arch-graph who-publishes user.created --table</code></pre>
+              <button class="copy-btn" type="button" aria-label="Copy CLI example">Copy</button>
+              <pre><code class="lang-sh">arch-graph who-publishes user.created --table
+arch-graph deps-of order-api --table
+arch-graph path service:auth service:billing
+arch-graph stats</code></pre>
             </div>
           </article>
 
           <article class="cli-card reveal">
-            <h3 class="mono">deps-of</h3>
-            <p>List the outgoing dependencies of a service, grouped by edge kind.</p>
+            <p class="three-ways-sub">For MCP-aware clients</p>
+            <h3 class="mono">MCP server</h3>
+            <p>Stdio MCP server exposing 12 typed tools (<code>subject_publishers</code>, <code>queue_consumers</code>, <code>table_users</code>, <code>path</code>, …). Wire it into any MCP host.</p>
             <div class="code-block">
-              <button class="copy-btn" type="button" aria-label="Copy deps-of example">Copy</button>
-              <pre><code class="lang-sh">arch-graph deps-of order-api --table</code></pre>
+              <button class="copy-btn" type="button" aria-label="Copy MCP config">Copy</button>
+              <pre><code class="lang-json">// ~/.claude/.mcp.json
+{
+  "mcpServers": {
+    "arch-graph": { "command": "arch-graph", "args": ["mcp"] }
+  }
+}</code></pre>
             </div>
           </article>
 
           <article class="cli-card reveal">
-            <h3 class="mono">path</h3>
-            <p>Shortest directed path between two nodes. Useful for "is X reachable from Y?".</p>
+            <p class="three-ways-sub">Auto-trigger in Claude Code</p>
+            <h3 class="mono">Claude Code skill</h3>
+            <p>Installs <code>~/.claude/skills/arch-graph/SKILL.md</code> + a delimited block in <code>./CLAUDE.md</code>. The skill knows when to fire — Claude consults the graph automatically on architecture questions.</p>
             <div class="code-block">
-              <button class="copy-btn" type="button" aria-label="Copy path example">Copy</button>
-              <pre><code class="lang-sh">arch-graph path service:auth service:billing</code></pre>
-            </div>
-          </article>
-
-          <article class="cli-card reveal">
-            <h3 class="mono">stats</h3>
-            <p>Node + edge counts per kind. Sanity-check the graph after every build.</p>
-            <div class="code-block">
-              <button class="copy-btn" type="button" aria-label="Copy stats example">Copy</button>
-              <pre><code class="lang-sh">arch-graph stats</code></pre>
+              <button class="copy-btn" type="button" aria-label="Copy skill install command">Copy</button>
+              <pre><code class="lang-sh">arch-graph claude install --skill
+arch-graph hook install            # pre-commit, keeps graph in lockstep</code></pre>
             </div>
           </article>
         </div>
       </div>
     </section>
 
-    <!-- ──────────────────────────────────────────── CLAUDE ────────────── -->
-    <section class="section section-claude" id="claude" aria-labelledby="claude-title">
+    <!-- ──────────────────────────────────── ADJACENT TOOLS ─────────────── -->
+    <section class="section section-adjacent" id="adjacent" aria-labelledby="adjacent-title">
       <div class="container narrow">
-        <p class="section-eyebrow">Integration</p>
-        <h2 id="claude-title" class="section-title">Always-on inside Claude Code.</h2>
+        <p class="section-eyebrow">Honest comparison</p>
+        <h2 id="adjacent-title" class="section-title">Other tools you might consider.</h2>
         <p class="prose">
-          <code>arch-graph claude install --skill</code> writes a delimited block into <code>./CLAUDE.md</code> telling Claude to consult the graph before answering architecture questions, and registers <code>~/.claude/skills/arch-graph/SKILL.md</code> globally. The pre-commit hook keeps the graph in lockstep with the code — every checkout in history is self-consistent.
+          arch-graph isn't the only graph extractor in this space, and on some questions it isn't the best one. If you're picking a tool, weigh these honestly against arch-graph's wedge (static + cross-cutting NATS/BullMQ/TypeORM edges + file:line provenance).
         </p>
-        <div class="code-block reveal">
-          <button class="copy-btn" type="button" aria-label="Copy Claude install command">Copy</button>
-          <pre><code class="lang-sh">arch-graph claude install --skill
-arch-graph hook install            # pre-commit, recommended</code></pre>
-        </div>
+        <ul class="adjacent-list">
+          <li class="reveal">
+            <h3><a class="link" href="https://www.npmjs.com/package/@nestjs/devtools-integration" rel="noopener" target="_blank">@nestjs/devtools-integration</a></h3>
+            <p>Official, runtime-based. Boots your app via <code>NestFactory.create()</code> and snapshots the live module/provider graph. More authoritative than any static tool on what DI actually wires up — including conditional bootstrap. Different category (live runtime vs static). Doesn't extract NATS subjects, BullMQ queues, or TypeORM table edges as typed edges.</p>
+          </li>
+          <li class="reveal">
+            <h3><a class="link" href="https://www.npmjs.com/package/@riaskov/nestjs-graph-visualizer" rel="noopener" target="_blank">@riaskov/nestjs-graph-visualizer</a></h3>
+            <p>Static + Nest-aware — methodologically closest to arch-graph. Narrower scope: NestJS module DI only, no cross-cutting NATS / BullMQ / inter-service HTTP. Output is Mermaid / DOT / SVG (not JSON).</p>
+          </li>
+          <li class="reveal">
+            <h3><a class="link" href="https://github.com/sverweij/dependency-cruiser" rel="noopener" target="_blank">dependency-cruiser</a></h3>
+            <p>Generic TypeScript import graph. Battle-tested across module systems. Doesn't see NestJS semantics — all decorators collapse to plain imports. arch-graph won't dominate it on raw file-imports; we'd expect a near-tie there, and a win by construction on any NATS / BullMQ / TypeORM question dep-cruiser is structurally incapable of answering.</p>
+          </li>
+        </ul>
       </div>
     </section>
 
