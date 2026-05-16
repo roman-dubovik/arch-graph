@@ -17,9 +17,20 @@ import type { GraphEdge, GraphNode } from '../core/types.js';
 import type { FeExtractResult } from '../extractors/fe/types.js';
 import { OwnershipRegistry } from '../core/service-registry.js';
 
+/** Kind literals for unresolved FE references. */
+export type FeUnresolvedKind = 'fe-imports' | 'fe-renders';
+
+/** Kind literals for unowned FE nodes. */
+export type FeUnownedKind = 'fe-component' | 'fe-page' | 'fe-hook' | 'fe-route';
+
 export interface FeDiagnostics {
-    unresolved: Array<{ kind: string; ref: string; reason: string }>;
-    unowned: Array<{ kind: string; file: string }>;
+    unresolved: Array<{ kind: FeUnresolvedKind; ref: string; reason: string }>;
+    unowned: Array<{ kind: FeUnownedKind; file: string }>;
+    counts: {
+        unresolvedImports: number;
+        unresolvedRenders: number;
+        unowned: number;
+    };
 }
 
 export interface MapFeResult {
@@ -46,7 +57,7 @@ export function mapFeToGraph(
     // Carry over unresolved imports from extractor (P0-5)
     for (const u of extractorOutput.unresolvedImports) {
         unresolved.push({
-            kind: 'fe-imports',
+            kind: 'fe-imports' as FeUnresolvedKind,
             ref: u.specifier,
             reason: u.error,
         });
@@ -103,10 +114,11 @@ export function mapFeToGraph(
     }
 
     // -----------------------------------------------------------------------
-    // 4. Page nodes  →  fe-page + fe-routes-to edge
+    // 4. Page nodes  →  fe-page (file-qualified to avoid App Router collisions)
+    //    + fe-routes-to edge
     // -----------------------------------------------------------------------
     for (const page of extractorOutput.pages) {
-        const pageNodeId = `fe-page:${page.name}`;
+        const pageNodeId = `fe-page:${page.file}#${page.name}`;
         if (!nodeMap.has(pageNodeId)) {
             nodeMap.set(pageNodeId, {
                 id: pageNodeId,
@@ -158,7 +170,7 @@ export function mapFeToGraph(
         if (!toId) {
             // toName not found in extracted components — could be external/unresolved
             unresolved.push({
-                kind: 'fe-renders',
+                kind: 'fe-renders' as FeUnresolvedKind,
                 ref: render.toName,
                 reason: 'component-not-found',
             });
@@ -191,7 +203,7 @@ export function mapFeToGraph(
     for (const page of extractorOutput.pages) {
         const key = page.file;
         if (!fileToNodes.has(key)) fileToNodes.set(key, []);
-        const pageNodeId = `fe-page:${page.name}`;
+        const pageNodeId = `fe-page:${page.file}#${page.name}`;
         fileToNodes.get(key)!.push(pageNodeId);
     }
 
@@ -200,7 +212,7 @@ export function mapFeToGraph(
         if (!imp.resolvedFile) {
             // Push to diagnostics when resolvedFile is null (P0-5)
             unresolved.push({
-                kind: 'fe-imports',
+                kind: 'fe-imports' as FeUnresolvedKind,
                 ref: imp.specifier,
                 reason: 'unresolved-file',
             });
@@ -239,32 +251,43 @@ export function mapFeToGraph(
     for (const comp of extractorOutput.components) {
         const owner = ownership.findOwner(comp.file);
         if (owner.kind === 'unknown') {
-            unowned.push({ kind: 'fe-component', file: comp.file });
+            unowned.push({ kind: 'fe-component' as FeUnownedKind, file: comp.file });
         }
     }
     for (const page of extractorOutput.pages) {
         const owner = ownership.findOwner(page.file);
         if (owner.kind === 'unknown') {
-            unowned.push({ kind: 'fe-page', file: page.file });
+            unowned.push({ kind: 'fe-page' as FeUnownedKind, file: page.file });
         }
     }
     for (const hook of extractorOutput.hooks) {
         const owner = ownership.findOwner(hook.file);
         if (owner.kind === 'unknown') {
-            unowned.push({ kind: 'fe-hook', file: hook.file });
+            unowned.push({ kind: 'fe-hook' as FeUnownedKind, file: hook.file });
         }
     }
     for (const route of extractorOutput.routes) {
         const owner = ownership.findOwner(route.pageFile);
         if (owner.kind === 'unknown') {
-            unowned.push({ kind: 'fe-route', file: route.pageFile });
+            unowned.push({ kind: 'fe-route' as FeUnownedKind, file: route.pageFile });
         }
     }
+
+    const unresolvedImportsCount = unresolved.filter((u) => u.kind === 'fe-imports').length;
+    const unresolvedRendersCount = unresolved.filter((u) => u.kind === 'fe-renders').length;
 
     return {
         nodes: [...nodeMap.values()],
         edges: [...edgeMap.values()],
-        diagnostics: { unresolved, unowned },
+        diagnostics: {
+            unresolved,
+            unowned,
+            counts: {
+                unresolvedImports: unresolvedImportsCount,
+                unresolvedRenders: unresolvedRendersCount,
+                unowned: unowned.length,
+            },
+        },
     };
 }
 

@@ -68,6 +68,15 @@ const COMPONENT_RE =
 /**
  * Matches hook function definitions: function useXxx or const useXxx =
  * Also catches arrow hooks: const useXxx = (...) =>
+ *
+ * KNOWN DIVERGENCE from react-patterns.ts extractor:
+ *   This regex counts any `use[A-Z]*` function by name alone, regardless of
+ *   whether its body calls another hook. The AST extractor (react-patterns.ts)
+ *   additionally requires `bodyCallsHook()` — i.e. the body must contain at
+ *   least one `use[A-Z]*()` call. Bare utility functions named `useXxx` that
+ *   contain no inner hook calls are counted by GT but skipped by the extractor.
+ *   This is intentional: the extractor prioritises precision over recall.
+ *   See: test "KNOWN DIVERGENCE — bare use* function" in react-patterns.test.ts.
  */
 const HOOK_RE =
     /(?:function|const)\s+(use[A-Z]\w*)\s*[=(]/g;
@@ -162,25 +171,27 @@ export function buildFeReport(
     const gtHooks = groundTruth.filter((g) => g.role === 'hook');
     const gtRoutes = groundTruth.filter((g) => g.role === 'route');
 
-    // Build lookup sets from extracted results
-    const extractedComponentNames = new Set(extracted.components.map((c) => c.name));
-    const extractedHookNames = new Set(extracted.hooks.map((h) => h.name));
+    // Build lookup sets from extracted results — keyed as `${file}#${name}` to
+    // avoid cross-file collisions (e.g. two `Button` components in different files).
+    const extractedComponentKeys = new Set(extracted.components.map((c) => `${c.file}#${c.name}`));
+    const extractedHookKeys = new Set(extracted.hooks.map((h) => `${h.file}#${h.name}`));
     const extractedRoutePatterns = new Set(extracted.routes.map((r) => r.pattern));
 
     // Recall: ground-truth entries that have a match in extracted
     const missedComponents: FeGroundTruthEntry[] = [];
     for (const gt of gtComponents) {
-        // Match by file + component name presence (extract component name from matched text)
+        // Match by file + component name (file-qualified key prevents same-name cross-file inflation)
         const nameMatch = gt.matchedText.match(/(?:function|class|const)\s+([A-Z]\w*)/);
         const name = nameMatch?.[1] ?? '';
-        if (!extractedComponentNames.has(name)) {
+        if (!extractedComponentKeys.has(`${gt.file}#${name}`)) {
             missedComponents.push(gt);
         }
     }
 
     const missedHooks: FeGroundTruthEntry[] = [];
     for (const gt of gtHooks) {
-        if (!extractedHookNames.has(gt.matchedText)) {
+        // gt.matchedText for hooks is the hook name (e.g. "useCounter")
+        if (!extractedHookKeys.has(`${gt.file}#${gt.matchedText}`)) {
             missedHooks.push(gt);
         }
     }

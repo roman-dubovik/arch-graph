@@ -9,9 +9,12 @@ import type { BuildValidation } from '../core/types.js';
 // Strict-mode gate
 // ---------------------------------------------------------------------------
 
+/** Domain names understood by the strict-mode gate. Typo-resistant union. */
+export type StrictDomainName = 'nats' | 'typeorm' | 'bullmq' | 'di' | 'http' | 'imports' | 'fe';
+
 export function computeStrictFails(
     validation: BuildValidation,
-    enabled: Record<string, boolean>,
+    enabled: Record<StrictDomainName, boolean>,
 ): string[] {
     const fails: string[] = [];
     const n = validation.nats.summary;
@@ -71,6 +74,10 @@ export function computeStrictFails(
         }
     }
     if (enabled.fe) {
+        const feGtTotal = f.groundTruthComponents + f.groundTruthRoutes + f.groundTruthHooks;
+        if (feGtTotal === 0) {
+            fails.push(`fe: zero ground-truth — set domains.fe=false if no React/Next.js`);
+        }
         strictGateRecall('fe', 'components', f.groundTruthComponents, f.recallComponents, fails, 0.9);
         strictGateRecall('fe', 'routes', f.groundTruthRoutes, f.recallRoutes, fails, 0.9);
         strictGateRecall('fe', 'hooks', f.groundTruthHooks, f.recallHooks, fails, 0.9);

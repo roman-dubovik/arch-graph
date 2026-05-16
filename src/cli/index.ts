@@ -29,7 +29,7 @@ import {
     tipsForNats,
     tipsForTypeorm,
 } from './build-tips.js';
-import { computeStrictFails } from './strict-gate.js';
+import { computeStrictFails, type StrictDomainName } from './strict-gate.js';
 export { computeStrictFails } from './strict-gate.js';
 import type { BuildValidation, DiagnosticsReport } from '../core/types.js';
 
@@ -464,7 +464,7 @@ function printValidationTable(rows: DomainRow[]): void {
 // ---------------------------------------------------------------------------
 
 async function cmdBuild(args: ParsedArgs): Promise<void> {
-    const ALLOWED_ONLY = ['nats', 'typeorm', 'bullmq', 'di', 'http', 'imports'] as const;
+    const ALLOWED_ONLY = ['nats', 'typeorm', 'bullmq', 'di', 'http', 'imports', 'fe'] as const;
     if (args.only && !ALLOWED_ONLY.includes(args.only as (typeof ALLOWED_ONLY)[number])) {
         process.stderr.write(
             `error: --only=${args.only} not yet supported; available: ${ALLOWED_ONLY.join(', ')}\n`,
@@ -528,7 +528,7 @@ async function cmdBuild(args: ParsedArgs): Promise<void> {
     }
 
     // Determine which domains are enabled
-    const enabled: Record<string, boolean> = {
+    const enabled: Record<StrictDomainName, boolean> = {
         nats: cfg.domains?.nats !== false,
         typeorm: cfg.domains?.typeorm !== false,
         bullmq: cfg.domains?.bullmq !== false,
@@ -586,6 +586,7 @@ async function cmdDiagnose(args: ParsedArgs): Promise<void> {
     const di = result.diagnostics.di;
     const hd = result.diagnostics.http;
     const im = result.diagnostics.imports;
+    const fe = result.diagnostics.fe;
     process.stdout.write(`\n--- diagnostics for ${cfg.id} ---\n`);
     process.stdout.write(`[nats]    literal=${n.counts.literal} pattern=${n.counts.pattern} dynamic=${n.counts.dynamic} unresolved=${n.counts.unresolved}\n`);
     process.stdout.write(`[typeorm] resolved=${t.counts.resolved} unresolvedEntity=${t.counts.unresolvedEntity} unowned=${t.counts.unowned} entityWarnings=${t.counts.entityDecoratorWarnings}\n`);
@@ -593,6 +594,7 @@ async function cmdDiagnose(args: ParsedArgs): Promise<void> {
     process.stdout.write(`[di]      modules=${di.counts.modules} imports=${di.counts.imports} providers=${di.counts.providers} exports=${di.counts.exports} controllers=${di.counts.controllers} unresolvedRefs=${di.counts.unresolvedRefs} unowned=${di.counts.unowned}\n`);
     process.stdout.write(`[http]    total=${hd.counts.totalSites} literal=${hd.counts.literal} envRef=${hd.counts.envRef} pattern=${hd.counts.pattern} unresolved=${hd.counts.unresolved} internal=${hd.counts.internal} external=${hd.counts.external} unowned=${hd.counts.unowned}\n`);
     process.stdout.write(`[imports] static=${im.counts.totalStatic} dynamic=${im.counts.totalDynamic} cjsRequire=${im.counts.totalCjsRequire} resolved=${im.counts.resolvedToOwner} external/unres=${im.counts.externalOrUnresolved} unresolvedInternal=${im.counts.unresolvedInternal}\n`);
+    process.stdout.write(`[fe]      unresolvedImports=${fe.counts.unresolvedImports} unresolvedRenders=${fe.counts.unresolvedRenders} unowned=${fe.counts.unowned}\n`);
 
     if (n.unresolved.length > 0) {
         process.stdout.write(`\nTop 10 unresolved NATS subjects:\n`);
@@ -617,6 +619,20 @@ async function cmdDiagnose(args: ParsedArgs): Promise<void> {
         process.stdout.write(`\nTop 10 unresolved internal imports (likely typo'd alias or broken path):\n`);
         for (const u of im.unresolvedImports.slice(0, 10)) {
             process.stdout.write(`  ${u.location.file}:${u.location.line}  '${u.specifier}'\n`);
+        }
+    }
+
+    if (fe.unresolved.length > 0) {
+        process.stdout.write(`\nTop 10 unresolved FE references (fe-imports / fe-renders):\n`);
+        for (const u of fe.unresolved.slice(0, 10)) {
+            process.stdout.write(`  ${u.kind}  '${u.ref}'  reason=${u.reason}\n`);
+        }
+    }
+
+    if (fe.unowned.length > 0) {
+        process.stdout.write(`\nTop 10 unowned FE nodes (outside appsGlob/libsGlob):\n`);
+        for (const u of fe.unowned.slice(0, 10)) {
+            process.stdout.write(`  ${u.kind}  ${u.file}\n`);
         }
     }
 
