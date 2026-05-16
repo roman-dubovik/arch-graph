@@ -41,6 +41,7 @@
         <a href="#bench">Benchmark</a>
         <a href="#install">Install</a>
         <a href="#queries">Query</a>
+        <a href="comparison.html">Compare</a>
         <a href="#contribute">Contribute</a>
         <a class="nav-cta" href="https://github.com/roman-dubovik/arch-graph" rel="noopener" target="_blank">GitHub</a>
       </nav>
@@ -418,6 +419,102 @@
           <strong>Skeptical of our numbers?</strong> Reproduce the same comparison on your own repo:
           <code>arch-graph compare --graphify path/to/graphify-out</code>. Auto-generates 10 questions from your real graph, writes <code>arch-graph-out/compare-report.md</code>. Without <code>--graphify</code> you still get a graph-size-only summary.
         </p>
+
+        <div class="matrix-block">
+          <h3 class="subsection-title">Coverage at a glance</h3>
+          <p class="prose">Numbers above show <em>how well</em> arch-graph answers. This compact matrix shows <em>what</em> it sees that adjacent tools structurally don't — the uniqueness-defining rows from the full comparison. <span class="cell ok" aria-hidden="true">✓</span> first-class, <span class="cell partial" aria-hidden="true">◐</span> partial / inferred, <span class="cell no" aria-hidden="true">✗</span> not covered by construction.</p>
+          <div class="table-wrap reveal">
+            <table class="matrix-table">
+              <thead>
+                <tr>
+                  <th scope="col" class="capability-col">Capability</th>
+                  <th scope="col">arch-graph</th>
+                  <th scope="col">graphify</th>
+                  <th scope="col">@nestjs/<wbr>devtools-<wbr>integration</th>
+                  <th scope="col">@riaskov/<wbr>nestjs-graph-<wbr>visualizer</th>
+                  <th scope="col">dependency-<wbr>cruiser</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row">NATS pub/sub edges</th>
+                  <td><span class="cell ok">✓</span></td>
+                  <td><span class="cell partial">◐</span></td>
+                  <td><span class="cell no">✗</span></td>
+                  <td><span class="cell no">✗</span></td>
+                  <td><span class="cell no">✗</span></td>
+                </tr>
+                <tr>
+                  <th scope="row">BullMQ producer/consumer</th>
+                  <td><span class="cell ok">✓</span></td>
+                  <td><span class="cell partial">◐</span></td>
+                  <td><span class="cell no">✗</span></td>
+                  <td><span class="cell no">✗</span></td>
+                  <td><span class="cell no">✗</span></td>
+                </tr>
+                <tr>
+                  <th scope="row">TypeORM <code>@InjectRepository</code> → table</th>
+                  <td><span class="cell ok">✓</span></td>
+                  <td><span class="cell partial">◐</span></td>
+                  <td><span class="cell no">✗</span></td>
+                  <td><span class="cell no">✗</span></td>
+                  <td><span class="cell no">✗</span></td>
+                </tr>
+                <tr>
+                  <th scope="row">HTTP inter-service calls</th>
+                  <td><span class="cell ok">✓</span></td>
+                  <td><span class="cell partial">◐</span></td>
+                  <td><span class="cell partial">◐</span></td>
+                  <td><span class="cell no">✗</span></td>
+                  <td><span class="cell no">✗</span></td>
+                </tr>
+                <tr>
+                  <th scope="row">NestJS DI graph</th>
+                  <td><span class="cell ok">✓ static</span></td>
+                  <td><span class="cell partial">◐</span></td>
+                  <td><span class="cell ok">✓ runtime</span></td>
+                  <td><span class="cell ok">✓ static</span></td>
+                  <td><span class="cell no">✗</span></td>
+                </tr>
+                <tr>
+                  <th scope="row">TS imports</th>
+                  <td><span class="cell ok">✓</span></td>
+                  <td><span class="cell partial">◐</span></td>
+                  <td><span class="cell no">✗</span></td>
+                  <td><span class="cell no">✗</span></td>
+                  <td><span class="cell ok">✓ best</span></td>
+                </tr>
+                <tr>
+                  <th scope="row"><code>file:line</code> on every edge</th>
+                  <td><span class="cell ok">✓</span></td>
+                  <td><span class="cell no">✗</span></td>
+                  <td><span class="cell no">✗</span></td>
+                  <td><span class="cell no">✗</span></td>
+                  <td><span class="cell no">✗</span></td>
+                </tr>
+                <tr>
+                  <th scope="row">Static (no boot required)</th>
+                  <td><span class="cell ok">✓</span></td>
+                  <td><span class="cell partial">◐ AST</span></td>
+                  <td><span class="cell no">✗</span></td>
+                  <td><span class="cell ok">✓</span></td>
+                  <td><span class="cell ok">✓</span></td>
+                </tr>
+                <tr>
+                  <th scope="row">Deterministic (no LLM)</th>
+                  <td><span class="cell ok">✓</span></td>
+                  <td><span class="cell no">✗</span></td>
+                  <td><span class="cell ok">✓</span></td>
+                  <td><span class="cell ok">✓</span></td>
+                  <td><span class="cell ok">✓</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="matrix-foot">
+            Only the uniqueness-defining rows shown — <a class="link" href="comparison.html">full comparison →</a> covers 22 capabilities × 9 tools, with per-tool analysis and honest "where arch-graph loses" framing.
+          </p>
+        </div>
       </div>
     </section>
 
