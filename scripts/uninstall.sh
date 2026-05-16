@@ -55,6 +55,17 @@ EOF
     esac
 done
 
+# ---- safety: only operate on a real arch-graph install --------------------
+# Without this guard, a misconfigured ARCH_GRAPH_HOME (e.g. pointing at $HOME
+# or a leaked path from an older layout) would let `rm -rf` run on it.
+if [ -d "$INSTALL_DIR" ]; then
+    if [ ! -f "$INSTALL_DIR/package.json" ] || ! grep -q '"name": *"arch-graph"' "$INSTALL_DIR/package.json" 2>/dev/null; then
+        err "$INSTALL_DIR does not look like an arch-graph install (no package.json with name=\"arch-graph\")."
+        err "  Refusing to remove. Set ARCH_GRAPH_HOME correctly, or delete the dir manually."
+        exit 1
+    fi
+fi
+
 # ---- inventory -------------------------------------------------------------
 
 INSTALL_PRESENT=0

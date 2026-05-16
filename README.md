@@ -42,7 +42,13 @@ The interactive teardown wizard walks you through every scope (project / MCP / g
 arch-graph uninstall          # interactive TTY wizard — recommended
 ```
 
-**How does it know which projects to clean?** A small registry at `$XDG_STATE_HOME/arch-graph/registry.json` (default `~/.local/state/arch-graph/registry.json`) is updated by `arch-graph init`, `arch-graph claude install`, and `arch-graph hook install` — every entry-point that touches a project. The wizard reads the registry, shows per-project inventory, and lets you clean every known project in one shot. Entries auto-prune when their directory disappears.
+**How does it know which projects to clean?** A small registry at `$ARCH_GRAPH_REGISTRY` (override), else `$XDG_STATE_HOME/arch-graph/registry.json` (default `~/.local/state/arch-graph/registry.json`). It's updated by `arch-graph init`, `arch-graph claude install`, and `arch-graph hook install` — every entry-point that touches a project. The wizard reads the registry, shows per-project inventory, and lets you clean every known project in one shot. Entries auto-prune when their directory disappears.
+
+**Safety:**
+- Multi-project sweep on non-TTY (CI / `--yes`) requires explicit `--all-projects` — otherwise the wizard refuses and points you at `--repo .` for single-project mode. This is a guard against scripts that upgraded from older versions where `arch-graph uninstall --yes` was a single-project operation.
+- `arch-graph-out/` is only flagged for removal if it contains `graph.json` (our own output) — a coincidentally-named directory in an unrelated project won't be touched.
+- Global removal refuses to run unless the install dir contains a `package.json` with `"name": "arch-graph"` — guards against a misconfigured `ARCH_GRAPH_HOME` pointing at $HOME.
+- If you ran `arch-graph init` before the registry existed, run `arch-graph uninstall --repo .` from inside the project to clean it (one-time per pre-registry project).
 
 Single-project mode (skips the registry, only touches `--repo`):
 
@@ -53,12 +59,14 @@ arch-graph uninstall --repo /path/to/some-project --project --yes
 Non-interactive scope flags (for CI or scripts):
 
 ```sh
-arch-graph uninstall --project   # all known projects: config / out / CLAUDE.md / hook
-arch-graph uninstall --mcp       # MCP entries in ~/.claude.json
-arch-graph uninstall --global    # ~/.arch-graph + symlink + global skill
-arch-graph uninstall --all       # everything above
-arch-graph uninstall --yes       # auto-pick scopes that have anything to remove
+arch-graph uninstall --project --all-projects    # all known projects: config / out / CLAUDE.md / hook
+arch-graph uninstall --mcp                       # MCP entries in ~/.claude.json
+arch-graph uninstall --global                    # ~/.arch-graph + symlink + global skill
+arch-graph uninstall --all --all-projects        # everything above
+arch-graph uninstall --yes --all-projects        # auto-pick scopes that have anything to remove
 ```
+
+`--all-projects` is required whenever the registry has ≥2 projects and we're running non-interactively. With 0 or 1 registered projects, you can omit it.
 
 Without flags on a non-TTY (CI pipe), it prints an inventory and exits with no side effects — dry-run by default.
 

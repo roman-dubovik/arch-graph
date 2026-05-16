@@ -100,16 +100,19 @@ Usage:
 
   arch-graph install-skill    (writes ~/.claude/skills/arch-graph/SKILL.md)
 
-  arch-graph uninstall  [--project|--mcp|--global|--all] [--yes] [--repo <path>]
-                        Interactive teardown wizard: removes project artefacts
-                        across ALL known projects (config / out / CLAUDE.md
-                        section / git hook), MCP entries in ~/.claude.json, and
-                        the global install. Project list comes from the
-                        registry at $XDG_STATE_HOME/arch-graph/registry.json,
-                        populated by init / claude install / hook install.
-                        --repo X confines the wizard to a single project.
-                        Without flags on a TTY: walks you through each scope.
-                        Without flags off a TTY: dry-run.
+  arch-graph uninstall  [--project|--mcp|--global|--all] [--yes]
+                        [--repo <path>] [--all-projects]
+                        Interactive teardown wizard. Cleans project artefacts
+                        across ALL known projects (from $ARCH_GRAPH_REGISTRY,
+                        else $XDG_STATE_HOME/arch-graph/registry.json), MCP
+                        entries in ~/.claude.json, and the global install.
+                        Registry is populated by init / claude install / hook
+                        install.
+                        --repo X            single-project mode (registry ignored).
+                        --all-projects      required for non-TTY sweep over ≥2
+                                            registered projects (data-loss guard).
+                        TTY no-flags: walks you through each scope.
+                        Non-TTY no-flags: dry-run.
 
   arch-graph compare    [--out <dir>] [--graphify <path>] [--questions <n>] [--report <path>] [--quiet] [--share]
                         Side-by-side context-cost comparison: arch-graph vs an

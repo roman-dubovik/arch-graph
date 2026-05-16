@@ -63,6 +63,11 @@ describe('parseUninstallArgs', () => {
         const a = parseUninstallArgs(['--bogus']);
         expect(a.scopes.size).toBe(0);
     });
+
+    it('--all-projects → allProjects=true', () => {
+        expect(parseUninstallArgs(['--all-projects']).allProjects).toBe(true);
+        expect(parseUninstallArgs([]).allProjects).toBeFalsy();
+    });
 });
 
 // ─── inventoryProject ────────────────────────────────────────────────────────
@@ -555,6 +560,9 @@ describe('removeGlobalInstall', () => {
     it('fallback (no uninstall.sh) → spawns rm and deletes installDir', async () => {
         const dir = await mkdtemp(join(tmpdir(), 'ag-test-'));
         try {
+            // Sentinel: must have package.json with name=arch-graph or
+            // removeGlobalInstall refuses outright.
+            await writeFile(join(dir, 'package.json'), JSON.stringify({ name: 'arch-graph' }));
             // No scripts/uninstall.sh in this fake install dir → fallback path.
             await mkdir(join(dir, 'bin'));
             await writeFile(join(dir, 'bin', 'arch-graph'), '#!/bin/sh\n');
@@ -570,8 +578,7 @@ describe('removeGlobalInstall', () => {
     it('uninstall.sh path → invokes it with --yes', async () => {
         const dir = await mkdtemp(join(tmpdir(), 'ag-test-'));
         try {
-            // Plant a tiny stub uninstall.sh that just signals success and
-            // touches a sentinel so we know it ran with the right flag.
+            await writeFile(join(dir, 'package.json'), JSON.stringify({ name: 'arch-graph' }));
             await mkdir(join(dir, 'scripts'), { recursive: true });
             const sentinel = join(dir, 'ran-with');
             await writeFile(
@@ -651,18 +658,126 @@ describe('buildInventory', () => {
         }
     });
 
-    it('no override + cwd has artefacts but not in registry → cwd included opportunistically', async () => {
+    it('no override + cwd has artefacts but is NOT in registry → NOT included (data-loss guard)', async () => {
         const cwd = await mkdtemp(join(tmpdir(), 'ag-cwd-'));
         try {
+            // Stage what looks like arch-graph artefacts in a dir nobody asked us to clean.
             await writeFile(join(cwd, 'arch-graph.config.ts'), 'export default {};');
+            await mkdir(join(cwd, 'arch-graph-out'));
+            await writeFile(join(cwd, 'arch-graph-out', 'graph.json'), '{}');
             await withRegistry(async () => {
                 const inv = await buildInventory(null, cwd, '/none', '/none');
-                expect(inv.projects.length).toBe(1);
-                expect(inv.projects[0]!.path).toBe(resolve(cwd));
-                expect(inv.projects[0]!.inv.config).toBeTruthy();
+                // The bug we're guarding against: opportunistic cwd inclusion would
+                // have put this dir into the sweep without consent.
+                expect(inv.projects).toEqual([]);
             });
         } finally {
             await rm(cwd, { recursive: true, force: true });
+        }
+    });
+
+    it('no double-include when cwd is in registry', async () => {
+        const cwd = await mkdtemp(join(tmpdir(), 'ag-cwd-'));
+        try {
+            await writeFile(join(cwd, 'arch-graph.config.ts'), 'x');
+            await withRegistry(async () => {
+                await registerProject(cwd);
+                const inv = await buildInventory(null, cwd, '/none', '/none');
+                expect(inv.projects.length).toBe(1);
+                expect(inv.projects[0]!.path).toBe(resolve(cwd));
+            });
+        } finally {
+            await rm(cwd, { recursive: true, force: true });
+        }
+    });
+});
+
+// ─── provenance + sentinel guards ────────────────────────────────────────────
+
+describe('inventoryProject provenance', () => {
+    it('arch-graph-out/ WITHOUT graph.json → not flagged (might be unrelated dir)', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 'ag-test-'));
+        try {
+            // Coincidentally-named directory with no arch-graph output.
+            await mkdir(join(dir, 'arch-graph-out'));
+            await writeFile(join(dir, 'arch-graph-out', 'random.txt'), 'not-ours');
+            const inv = await inventoryProject(dir);
+            expect(inv.outDir).toBeNull();
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+        }
+    });
+
+    it('arch-graph-out/graph.json present → flagged as ours', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 'ag-test-'));
+        try {
+            await mkdir(join(dir, 'arch-graph-out'));
+            await writeFile(join(dir, 'arch-graph-out', 'graph.json'), '{"nodes":[]}');
+            const inv = await inventoryProject(dir);
+            expect(inv.outDir).not.toBeNull();
+            expect(inv.outDir!.path).toBe(resolve(dir, 'arch-graph-out'));
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+        }
+    });
+});
+
+describe('removeGlobalInstall sentinel', () => {
+    it('refuses installDir without package.json:name="arch-graph"', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 'ag-test-'));
+        try {
+            // package.json missing entirely
+            const r = removeGlobalInstall(dir);
+            expect(r.exitCode).toBe(1);
+            expect(r.stderr).toMatch(/refusing to remove/);
+            // Dir still on disk:
+            expect(existsSync(dir)).toBe(true);
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+        }
+    });
+
+    it('refuses installDir with mismatched package.json name', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 'ag-test-'));
+        try {
+            await writeFile(join(dir, 'package.json'), JSON.stringify({ name: 'other-package' }));
+            const r = removeGlobalInstall(dir);
+            expect(r.exitCode).toBe(1);
+            expect(r.stderr).toMatch(/refusing to remove/);
+            expect(existsSync(dir)).toBe(true);
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+        }
+    });
+
+    it('accepts installDir with package.json:name=arch-graph + no uninstall.sh → fallback rm path', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 'ag-test-'));
+        try {
+            await writeFile(join(dir, 'package.json'), JSON.stringify({ name: 'arch-graph' }));
+            const r = removeGlobalInstall(dir);
+            expect(r.exitCode).toBe(0);
+            expect(existsSync(dir)).toBe(false);
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+        }
+    });
+
+    it('accepts installDir with package.json + scripts/uninstall.sh → script path', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 'ag-test-'));
+        try {
+            await writeFile(join(dir, 'package.json'), JSON.stringify({ name: 'arch-graph' }));
+            await mkdir(join(dir, 'scripts'), { recursive: true });
+            const ran = join(dir, 'ran');
+            await writeFile(
+                join(dir, 'scripts', 'uninstall.sh'),
+                `#!/bin/sh\necho "$@" > "${ran}"\nexit 0\n`,
+                { mode: 0o755 },
+            );
+            const r = removeGlobalInstall(dir);
+            expect(r.exitCode).toBe(0);
+            expect((await readFile(ran, 'utf8')).trim()).toBe('--yes');
+        } finally {
+            await rm(dir, { recursive: true, force: true });
         }
     });
 });
@@ -721,7 +836,7 @@ describe('runUninstallWizard', () => {
             const out = await captureStdout(async () => {
                 await withNonTty(async () => {
                     await withEnv({ HOME: home, ARCH_GRAPH_HOME: dir, ARCH_GRAPH_BIN_DIR: join(dir, 'bin') }, async () => {
-                        await runUninstallWizard({ scopes: new Set(), repoOverride: dir, yes: false });
+                        await runUninstallWizard({ scopes: new Set(), repoOverride: dir, yes: false, allProjects: false });
                     });
                 });
             });
@@ -833,9 +948,10 @@ describe('runUninstallWizard', () => {
                 join(home, '.claude.json'),
                 JSON.stringify({ projects: { '/p1': { mcpServers: { 'arch-graph': {} } } } }),
             );
-            // Global "install" with stub uninstall.sh
+            // Global "install" with stub uninstall.sh + sentinel package.json
             const fakeInstall = join(dir, 'fake-install');
             await mkdir(join(fakeInstall, 'scripts'), { recursive: true });
+            await writeFile(join(fakeInstall, 'package.json'), JSON.stringify({ name: 'arch-graph' }));
             const ran = join(fakeInstall, 'ran');
             await writeFile(
                 join(fakeInstall, 'scripts', 'uninstall.sh'),
@@ -880,7 +996,7 @@ describe('runUninstallWizard', () => {
             await captureStdout(async () => {
                 await withNonTty(async () => {
                     await withEnv({ HOME: home, ARCH_GRAPH_HOME: dir, ARCH_GRAPH_BIN_DIR: join(dir, 'bin') }, async () => {
-                        await runUninstallWizard({ scopes: new Set(), repoOverride: dir, yes: false });
+                        await runUninstallWizard({ scopes: new Set(), repoOverride: dir, yes: false, allProjects: false });
                     });
                 });
             });

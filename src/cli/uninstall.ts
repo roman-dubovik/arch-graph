@@ -23,7 +23,7 @@
 // `claude` CLI — keeps the dep boundary clean (some users install arch-graph
 // without Claude Code itself).
 
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { readFile, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { createInterface } from 'node:readline/promises';
@@ -50,11 +50,20 @@ export interface UninstallArgs {
     /**
      * Single-project override. When non-null, the wizard treats this path as
      * the ONLY project to consider — registry is ignored. Default (null) means
-     * "scan the project registry (+ cwd if not yet registered)".
+     * "scan the project registry".
      */
     repoOverride: string | null;
     /** skip the global confirmation prompt (still respects scope selection). */
     yes: boolean;
+    /**
+     * Explicit acknowledgement that a non-TTY project-scope sweep over MULTIPLE
+     * registered projects is intentional. Without this, multi-project sweep
+     * from a non-TTY context (CI, `--yes`) is refused with an actionable
+     * error — see runUninstallWizard. Has no effect in TTY interactive mode.
+     * Optional in the type so old callers don't have to set it explicitly;
+     * undefined === false at the wizard.
+     */
+    allProjects?: boolean;
 }
 
 export type UninstallScope = 'project' | 'mcp' | 'global';
@@ -63,6 +72,7 @@ export function parseUninstallArgs(argv: string[]): UninstallArgs {
     const scopes = new Set<UninstallScope>();
     let repoOverride: string | null = null;
     let yes = false;
+    let allProjects = false;
 
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i]!;
@@ -75,6 +85,8 @@ export function parseUninstallArgs(argv: string[]): UninstallArgs {
             scopes.add('global');
         } else if (a === '--yes' || a === '-y') {
             yes = true;
+        } else if (a === '--all-projects') {
+            allProjects = true;
         } else if (a === '--repo' && argv[i + 1]) {
             repoOverride = argv[++i]!;
         } else if (a.startsWith('--repo=')) {
@@ -82,7 +94,7 @@ export function parseUninstallArgs(argv: string[]): UninstallArgs {
         }
     }
 
-    return { scopes, repoOverride: repoOverride ? resolve(repoOverride) : null, yes };
+    return { scopes, repoOverride: repoOverride ? resolve(repoOverride) : null, yes, allProjects };
 }
 
 // ─── inventory types ─────────────────────────────────────────────────────────
@@ -146,19 +158,16 @@ export async function buildInventory(
         const inv = await inventoryProject(repoOverride);
         projects.push({ path: repoOverride, inv });
     } else {
+        // Registry-driven. We do NOT opportunistically scan cwd:
+        // - if cwd is in the registry, it's listed below.
+        // - if cwd has stray files but isn't registered, removing them based
+        //   on filename alone is a data-loss risk (e.g. a co-located `arch-graph-out/`
+        //   directory written manually by a user, or a stale registry entry
+        //   whose path got reused for an unrelated project).
+        // Users with pre-registry installs are pointed at `--repo .` via the
+        // empty-state hint in renderInventory.
         const known = await listProjects();
-        const cwdAbs = resolve(cwd);
-        const paths = [...known];
-        if (!paths.includes(cwdAbs)) {
-            // Include cwd opportunistically — covers the case where the user
-            // ran arch-graph init in a project that pre-dates the registry,
-            // or just touched files manually.
-            const cwdInv = await inventoryProject(cwdAbs);
-            if (hasAnyProject(cwdInv)) {
-                paths.push(cwdAbs);
-            }
-        }
-        for (const p of paths) {
+        for (const p of known) {
             const inv = await inventoryProject(p);
             projects.push({ path: p, inv });
         }
@@ -182,7 +191,11 @@ export async function inventoryProject(repo: string): Promise<ProjectInventory> 
     if (existsSync(cfg)) inv.config = cfg;
 
     const out = resolve(repo, 'arch-graph-out');
-    if (existsSync(out)) {
+    // Provenance check: only flag `arch-graph-out/` for removal if it
+    // contains our own output file. Without this, a directory that happens
+    // to be named `arch-graph-out/` in an unrelated project (or a stale
+    // registry entry whose path got reused) would be `rm -rf`'d on uninstall.
+    if (existsSync(out) && existsSync(resolve(out, 'graph.json'))) {
         const size = await dirSize(out);
         inv.outDir = { path: out, sizeBytes: size };
     }
@@ -275,7 +288,8 @@ export function renderInventory(inv: Inventory): string {
     const lines: string[] = [];
 
     if (inv.projects.length === 0) {
-        lines.push('Project artefacts: (no projects registered, cwd is clean)');
+        lines.push('Project artefacts: (no projects registered)');
+        lines.push('  hint: if this project pre-dates the registry, run `arch-graph uninstall --repo .`');
     } else if (inv.projects.length === 1) {
         // Single-project rendering — same shape as before for back-compat.
         const { path, inv: p } = inv.projects[0]!;
@@ -408,12 +422,44 @@ export async function removeMcpRegistrations(inv: McpInventory): Promise<void> {
     await writeFile(inv.configPath, JSON.stringify(root, null, 2) + '\n', 'utf8');
 }
 
+/**
+ * Verify that `installDir` looks like an arch-graph clone before allowing any
+ * destructive operation against it. Reads `<installDir>/package.json` and
+ * checks `name === "arch-graph"`. Returns false on any I/O / parse error —
+ * i.e. fail-closed for unrecognized layouts.
+ *
+ * Without this guard, a misconfigured `ARCH_GRAPH_HOME=/Users/me` would let
+ * `removeGlobalInstall` issue `rm -rf /Users/me`.
+ */
+function isArchGraphInstall(installDir: string): boolean {
+    try {
+        const pkg = JSON.parse(readFileSync(resolve(installDir, 'package.json'), 'utf8'));
+        return pkg && typeof pkg === 'object' && pkg.name === 'arch-graph';
+    } catch {
+        return false;
+    }
+}
+
 export function removeGlobalInstall(installDir: string): { exitCode: number; stdout: string; stderr: string } {
+    // Refuse to touch anything that doesn't look like an arch-graph install.
+    // The most common foot-gun: an old/leaked `ARCH_GRAPH_HOME` pointing at a
+    // user's $HOME, or at a directory that contained an arch-graph install
+    // years ago and now holds unrelated work.
+    if (!isArchGraphInstall(installDir)) {
+        return {
+            exitCode: 1,
+            stdout: '',
+            stderr:
+                `⚠ arch-graph: refusing to remove ${installDir} — no arch-graph package.json found there.\n` +
+                `  Set ARCH_GRAPH_HOME correctly, or delete the install dir manually.\n`,
+        };
+    }
+
     const script = resolve(installDir, 'scripts', 'uninstall.sh');
     if (!existsSync(script)) {
         // Older install without uninstall.sh — fall back to direct rm. This
         // shouldn't happen for fresh installs but keeps the wizard usable on
-        // legacy layouts.
+        // legacy layouts. Still gated by isArchGraphInstall above.
         const linkAndSkill: string[] = [];
         const skill = resolve(homedir(), '.claude', 'skills', 'arch-graph');
         if (existsSync(skill)) linkAndSkill.push(skill);
@@ -543,6 +589,27 @@ export async function runUninstallWizard(args: UninstallArgs): Promise<void> {
     }
 
     if (interactive) output.write('\nProceeding...\n');
+
+    // ── Multi-project blast-radius gate ─────────────────────────────────────
+    // Non-TTY 'project' scope across ≥2 registered projects requires an
+    // explicit --all-projects acknowledgement OR --repo X. Without this,
+    // a CI script that used to do `arch-graph uninstall --yes` for one repo
+    // would now silently sweep every other project in the registry.
+    if (
+        scopes.has('project') &&
+        !interactive &&
+        !args.repoOverride &&
+        !args.allProjects &&
+        projectsWithArtefacts.length >= 2
+    ) {
+        process.stderr.write(
+            `⚠ arch-graph: ${projectsWithArtefacts.length} projects in registry have artefacts; refusing to sweep all of them without\n` +
+            `  explicit --all-projects (or use --repo <path> for a single project).\n` +
+            `  This guard exists so older scripts that ran \`arch-graph uninstall --yes\` for one repo don't\n` +
+            `  silently clean every other repo on the registry. The projects above show the sweep target.\n`,
+        );
+        process.exit(2);
+    }
 
     // ── Execute in safe order: project → mcp → global ────────────────────────
     if (scopes.has('project')) {
