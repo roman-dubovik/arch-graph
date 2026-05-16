@@ -10,7 +10,7 @@ import {
 } from 'ts-morph';
 
 import type { ArchGraphConfig } from '../../core/config.js';
-import type { TsImportSite } from '../../core/types.js';
+import type { TsImportResolution, TsImportSite } from '../../core/types.js';
 import { isExcludedSourceFile } from '../shared.js';
 
 /**
@@ -95,11 +95,11 @@ function buildStaticSite(
     const pos = sf.getLineAndColumnAtPos(imp.getStart());
     const typeOnly = imp.isTypeOnly();
 
-    const resolved = resolveSpecifier(sourceFile, specifier, imp.getModuleSpecifierSourceFile(), aliasResolver);
+    const resolution = resolveSpecifier(sourceFile, specifier, imp.getModuleSpecifierSourceFile(), aliasResolver, isAliasPrefix);
     return {
         sourceFile,
         specifier,
-        resolvedFilePath: resolved,
+        resolution,
         kind: 'static',
         typeOnly,
         specifierShape: classifySpecifier(specifier, isAliasPrefix),
@@ -124,7 +124,7 @@ function buildDynamicSite(
         return {
             sourceFile: sf.getFilePath(),
             specifier: arg.getText().slice(0, 80),
-            resolvedFilePath: null,
+            resolution: { kind: 'dynamic-non-literal' },
             kind: 'dynamic',
             typeOnly: false,
             // Non-literal specifier — can't classify shape. Mark as bare-external
@@ -135,11 +135,11 @@ function buildDynamicSite(
     }
     const specifier = (arg as Node).getText().replace(/^['"`]|['"`]$/g, '');
     const pos = sf.getLineAndColumnAtPos(call.getStart());
-    const resolved = resolveSpecifier(sf.getFilePath(), specifier, undefined, aliasResolver);
+    const resolution = resolveSpecifier(sf.getFilePath(), specifier, undefined, aliasResolver, isAliasPrefix);
     return {
         sourceFile: sf.getFilePath(),
         specifier,
-        resolvedFilePath: resolved,
+        resolution,
         kind: 'dynamic',
         typeOnly: false,
         specifierShape: classifySpecifier(specifier, isAliasPrefix),
@@ -148,9 +148,10 @@ function buildDynamicSite(
 }
 
 /**
- * Classify the specifier's shape for downstream diagnostics. Mapper uses this
- * to distinguish "alias didn't resolve" (= broken `paths`, surface in
- * `unresolvedInternal`) from "external package" (= node_modules, expected).
+ * Classify the specifier's shape for downstream diagnostics and consumers of
+ * `TsImportSite`. Captures the *form* of the specifier (relative, alias, etc.)
+ * independently of the resolution outcome — e.g. a relative specifier that
+ * fails to resolve still carries `specifierShape: 'relative'`.
  */
 function classifySpecifier(
     specifier: string,
@@ -163,38 +164,73 @@ function classifySpecifier(
 }
 
 /**
- * Three-stage resolver. Returns absolute path of the resolved file, or `null`
- * if external / unresolvable.
+ * Extract the canonical npm package name from a module specifier.
  *
- *   1. If ts-morph already resolved the spec → done. (Fast path for relatives
- *      whose target is in the Project.)
+ * Examples:
+ *   `@nestjs/common/decorators` → `@nestjs/common`
+ *   `react/jsx-runtime`         → `react`
+ *   `@scope/pkg`                → `@scope/pkg`
+ *   `node:fs`                   → `node:fs`
+ */
+function packageNameOf(specifier: string): string {
+    if (specifier.startsWith('@')) {
+        // Scoped: keep first two segments (`@scope/pkg`)
+        const parts = specifier.split('/');
+        return parts.length >= 2 ? `${parts[0]!}/${parts[1]!}` : specifier;
+    }
+    // Unscoped: keep everything before the first `/`
+    const slash = specifier.indexOf('/');
+    return slash === -1 ? specifier : specifier.slice(0, slash);
+}
+
+/**
+ * Five-stage resolver. Returns a `TsImportResolution` describing the outcome.
+ *
+ *   1. If ts-morph already resolved the spec → `resolved`. (Fast path for
+ *      relatives whose target is in the Project.)
  *   2. Relative spec (`./` or `../`) → resolve from sourceFile dir and probe
- *      `.ts`, `.tsx`, `/index.ts`, `/index.tsx`. This catches files outside
- *      the Project glob (e.g. when a lib imports across glob boundaries).
- *   3. Alias (anything not relative and not a bare `pkg`/`@scope/pkg` form
- *      already in node_modules) → run through the tsconfig paths resolver.
+ *      `.ts`, `.tsx`, `/index.ts`, `/index.tsx`. Failure → `broken-relative`.
+ *   3. Node.js builtin (`node:fs`) → `external`.
+ *   4. Alias match (`isAliasPrefix` is true) → probe on disk via aliasResolver.
+ *      Hit → `resolved`. Miss → `broken-alias` reason `alias-prefix-matched-file-not-found`.
+ *   5. No alias match but not relative / builtin → `external` with canonical
+ *      npm package name (`packageNameOf`). No further probing.
  *
- * Bare specifiers (`react`, `@nestjs/common`) drop through to `null` — they
- * point into node_modules and aren't graph-relevant.
+ * Previously this returned `string | null`; the new union surfaces each failure
+ * mode distinctly so consumers can branch without coupling to `specifierShape`.
  */
 function resolveSpecifier(
     sourceFilePath: string,
     specifier: string,
     tsMorphResolved: SourceFile | undefined,
     aliasResolver: AliasResolver,
-): string | null {
-    if (tsMorphResolved) return tsMorphResolved.getFilePath();
+    isAliasPrefix: AliasPrefixCheck,
+): TsImportResolution {
+    if (tsMorphResolved) return { kind: 'resolved', filePath: tsMorphResolved.getFilePath() };
 
     if (specifier.startsWith('.')) {
-        return probeRelative(sourceFilePath, specifier);
+        const probed = probeRelative(sourceFilePath, specifier);
+        return probed !== null
+            ? { kind: 'resolved', filePath: probed }
+            : { kind: 'broken-relative', reason: 'file-not-found' };
     }
 
-    // Node.js builtin (`node:fs`, `fs`) — external.
-    if (specifier.startsWith('node:')) return null;
+    // Node.js builtin (`node:fs`, `node:path`) — external, expected.
+    if (specifier.startsWith('node:')) {
+        return { kind: 'external', packageName: specifier };
+    }
 
-    // Try alias resolution. If it doesn't match any alias prefix, assume
-    // node_modules / external.
-    return aliasResolver(specifier);
+    if (isAliasPrefix(specifier)) {
+        // Matched a tsconfig `paths` entry — try the on-disk probe.
+        const probed = aliasResolver(specifier);
+        return probed !== null
+            ? { kind: 'resolved', filePath: probed }
+            : { kind: 'broken-alias', reason: 'alias-prefix-matched-file-not-found' };
+    }
+
+    // Not relative, not builtin, not an alias prefix — bare npm package specifier
+    // (`react`, `@nestjs/common`, etc.). No further probing needed.
+    return { kind: 'external', packageName: packageNameOf(specifier) };
 }
 
 function probeRelative(sourceFilePath: string, specifier: string): string | null {
