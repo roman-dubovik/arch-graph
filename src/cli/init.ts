@@ -371,21 +371,7 @@ export async function runInitWizard(target: string): Promise<void> {
 
     // ── Git hook ──────────────────────────────────────────────────────────────
     if (hookMode !== 'none') {
-        // `hookInstallPreCommit` will be exported from hooks.ts once feat/hook-pre-commit
-        // is merged. Until then, both pre-commit and post-commit use the existing
-        // post-commit implementation, with a notice when pre-commit was requested.
-        const mod = hooksModule as typeof hooksModule & {
-            hookInstallPreCommit?: typeof hooksModule.hookInstall;
-        };
-
-        if (hookMode === 'pre-commit' && typeof mod.hookInstallPreCommit === 'function') {
-            await mod.hookInstallPreCommit({ repo: resolve('.') });
-        } else {
-            if (hookMode === 'pre-commit') {
-                output.write('  (pre-commit hook not yet available — installed post-commit hook instead)\n');
-            }
-            await hooksModule.hookInstall({ repo: resolve('.') });
-        }
+        await hooksModule.hookInstall({ repo: resolve('.'), mode: hookMode });
     }
 
     // ── First build ───────────────────────────────────────────────────────────
