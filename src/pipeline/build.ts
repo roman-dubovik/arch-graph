@@ -133,9 +133,13 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         typeorm.relations,
         typeorm.entities,
     );
-    process.stdout.write(
-        `  nodes: ${typeormMapped.nodes.length}, edges: ${typeormMapped.edges.length}, unresolved: ${typeormMapped.diagnostics.unresolvedEntities.length}, unowned: ${typeormMapped.diagnostics.unowned.length}, entityWarnings: ${typeormMapped.diagnostics.entityDecoratorWarnings.length}, relationsEmitted: ${typeormMapped.diagnostics.counts.relationsEmitted}, relationsResolved: ${typeormMapped.diagnostics.counts.relationsResolved}, unresolvedRelations: ${typeormMapped.diagnostics.counts.unresolvedRelations}\n`,
-    );
+    {
+        const c = typeormMapped.diagnostics.counts;
+        const reasons = `unparseable: ${c.unresolvedReasons.unparseable}, notIndexed: ${c.unresolvedReasons.notIndexed}`;
+        process.stdout.write(
+            `  nodes: ${typeormMapped.nodes.length}, edges: ${typeormMapped.edges.length}, unresolved: ${typeormMapped.diagnostics.unresolvedEntities.length}, unowned: ${typeormMapped.diagnostics.unowned.length}, entityWarnings: ${typeormMapped.diagnostics.entityDecoratorWarnings.length}, relationsEmitted: ${c.relationsEmitted}, relationsResolved: ${c.relationsResolved}, oneToManySkipped: ${c.oneToManySkipped}, unresolvedRelations: ${c.unresolvedRelations} (${reasons})\n`,
+        );
+    }
 
     // ---- BullMQ domain ----
     process.stdout.write(`extracting BullMQ...\n`);

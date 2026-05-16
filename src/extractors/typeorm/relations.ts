@@ -5,6 +5,7 @@ import {
     NoSubstitutionTemplateLiteral,
     Project,
     PropertyDeclaration,
+    SourceFile,
     StringLiteral,
     SyntaxKind,
 } from 'ts-morph';
@@ -102,19 +103,64 @@ export function extractRelations(project: Project, entityIndex: EntityIndex): Ty
  * `ownerClass` attribution is always the concrete entity — not the base class
  * that physically declares the property — because the relation semantically
  * belongs to the entity that inherits it.
+ *
+ * A `seen` Set guards against degenerate circular base-class chains that can
+ * arise when ts-morph operates on a partial or malformed AST. TypeScript's type
+ * system forbids cyclic class extension, but getBaseClass() has been observed to
+ * return unexpected results in edge cases. The cycle guard is O(1) per step.
  */
-function getAllProperties(cls: ClassDeclaration): PropertyDeclaration[] {
-    const ownProps = cls.getProperties();
+export function getAllProperties(
+    cls: ClassDeclaration,
+    seen = new Set<ClassDeclaration>(),
+): PropertyDeclaration[] {
+    if (seen.has(cls)) {
+        process.stderr.write(
+            `[typeorm/relations] BUG: circular base class chain at ${cls.getName?.() ?? '<anon>'}; truncating.\n`,
+        );
+        return [];
+    }
+    seen.add(cls);
     const base = cls.getBaseClass();
-    if (!base) return ownProps;
+    if (!base) return cls.getProperties();
     // Concrete own props first; base props appended (base may itself have a base)
-    return [...ownProps, ...getAllProperties(base)];
+    return [...cls.getProperties(), ...getAllProperties(base, seen)];
 }
 
 type ResolveResult =
     | { targetClass: string; resolvedTarget: import('../../core/types.js').TypeOrmEntity; reason?: never; raw?: never }
     | { targetClass: string; resolvedTarget: null; reason: 'not-indexed'; raw?: never }
     | { targetClass: null; resolvedTarget: null; reason: 'unparseable'; raw: string };
+
+/**
+ * Build a per-source-file set of local names that resolve to `forwardRef` from
+ * `@nestjs/common`. Handles both canonical (`import { forwardRef }`) and aliased
+ * (`import { forwardRef as fr }`) import forms.
+ *
+ * Cached lazily per source file so repeated calls for the same file are O(1).
+ * Uses the decorator's own source file (`dec.getSourceFile()`) to handle
+ * inherited properties that may be declared in a different file than the entity.
+ */
+const forwardRefAliasCache = new WeakMap<SourceFile, Set<string>>();
+
+function getForwardRefNames(sf: SourceFile): Set<string> {
+    const cached = forwardRefAliasCache.get(sf);
+    if (cached) return cached;
+
+    const names = new Set<string>();
+    for (const decl of sf.getImportDeclarations()) {
+        if (decl.getModuleSpecifierValue() !== '@nestjs/common') continue;
+        for (const named of decl.getNamedImports()) {
+            const origName = named.getName(); // text of the imported symbol
+            if (origName === 'forwardRef') {
+                // `import { forwardRef }` or `import { forwardRef as X }`
+                const alias = named.getAliasNode();
+                names.add(alias ? alias.getText() : origName);
+            }
+        }
+    }
+    forwardRefAliasCache.set(sf, names);
+    return names;
+}
 
 function resolveTarget(
     dec: import('ts-morph').Decorator,
@@ -141,11 +187,18 @@ function resolveTarget(
         }
 
         // forwardRef(() => Foo) — NestJS pattern for circular entity imports.
-        // The arrow body is a CallExpression whose callee is `forwardRef`, and
-        // whose first argument is itself an arrow returning an Identifier.
+        // The arrow body is a CallExpression whose callee resolves to the `forwardRef`
+        // export from `@nestjs/common`. Aliased imports (`import { forwardRef as fr }`)
+        // are detected by walking the source-file's import declarations (Option B).
         if (body.getKind() === SyntaxKind.CallExpression) {
             const call = body as CallExpression;
-            if (call.getExpression().getText() === 'forwardRef') {
+            const calleeText = call.getExpression().getText();
+            // Use the decorator's own source file — the decorator may be inherited
+            // and live in a different file than the entity class being iterated.
+            const forwardRefNames = getForwardRefNames(dec.getSourceFile());
+            const isForwardRef =
+                calleeText === 'forwardRef' || forwardRefNames.has(calleeText);
+            if (isForwardRef) {
                 const inner = call.getArguments()[0];
                 if (inner && inner.getKind() === SyntaxKind.ArrowFunction) {
                     const innerArrow = inner as ArrowFunction;
