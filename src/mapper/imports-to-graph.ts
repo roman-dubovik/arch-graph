@@ -73,15 +73,17 @@ export function mapImportsToGraph(
             totalStatic++;
         }
 
-        if (site.resolvedFilePath === null) {
-            // Unresolved. Three buckets:
-            //   - bare-external / builtin → node_modules / node:fs — expected, not a bug
-            //   - relative / alias        → graph-relevant target we failed to find;
-            //                                this IS the regression signal (typo'd
-            //                                alias, broken `paths`, moved file)
-            if (site.specifierShape === 'bare-external' || site.specifierShape === 'builtin') {
+        const res = site.resolution;
+        if (res.kind !== 'resolved') {
+            // Not resolved to a file. Route to the appropriate diagnostic bucket.
+            //   - external / dynamic-non-literal → node_modules / node:fs / non-literal
+            //     dynamic specifier — expected, not a bug
+            //   - broken-alias / broken-relative  → graph-relevant target we failed to find;
+            //     this IS the regression signal (typo'd alias, broken `paths`, moved file)
+            if (res.kind === 'external' || res.kind === 'dynamic-non-literal') {
                 externalOrUnresolved++;
             } else {
+                // broken-alias or broken-relative
                 unresolvedInternal++;
                 if (site.kind === 'static') unresolvedImports.push(site);
             }
@@ -89,7 +91,7 @@ export function mapImportsToGraph(
         }
 
         const sourceOwner = ownership.findOwner(site.sourceFile);
-        const targetOwner = ownership.findOwner(site.resolvedFilePath);
+        const targetOwner = ownership.findOwner(res.filePath);
 
         // Both unknown — outside apps/ and libs/. Not graph-relevant.
         if (sourceOwner.kind === 'unknown' && targetOwner.kind === 'unknown') {
@@ -113,9 +115,9 @@ export function mapImportsToGraph(
         // ---- File-level edges (opt-in) ----
         if (opts.fileLevel) {
             const fromFileId = `file:${site.sourceFile}`;
-            const toFileId = `file:${site.resolvedFilePath}`;
+            const toFileId = `file:${res.filePath}`;
             ensureFileNode(fileNodes, fromFileId, site.sourceFile);
-            ensureFileNode(fileNodes, toFileId, site.resolvedFilePath);
+            ensureFileNode(fileNodes, toFileId, res.filePath);
             const fileKey = `${fromFileId}->${toFileId}`;
             if (!fileEdges.has(fileKey)) {
                 fileEdges.set(fileKey, {
