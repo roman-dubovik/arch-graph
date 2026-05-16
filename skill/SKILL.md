@@ -27,26 +27,26 @@ arch-graph is **deterministic, fast, no LLM cost** — every edge was extracted 
 
 Follow these steps in order.
 
-### Step 1 — Detect install + graph
+### Step 1 — Detect install + config
 
 ```bash
 if ! command -v arch-graph >/dev/null 2>&1; then
-    echo "arch-graph is not installed. Run: bash scripts/install.sh (from the repo) or follow https://… README install steps."
+    echo "arch-graph is not installed. Run: bash scripts/install.sh (from the repo) or follow the README install steps."
     exit 1
 fi
 
 # Is there a config in the current dir?
 if [ ! -f arch-graph.config.ts ] && [ ! -f arch-graph.config.json ]; then
-    echo "No arch-graph.config.ts here. Run \`arch-graph init\` and fill in id/root/appsGlob, then re-run."
+    echo "No arch-graph.config.ts here. Run \`arch-graph init\` to set one up, then re-run."
     exit 1
 fi
 ```
 
 If both checks pass, continue.
 
-### Step 2 — Build (or freshness-check)
+### Step 2 — Freshness check
 
-The graph is static. Check whether `arch-graph-out/graph.json` exists and is newer than the newest `.ts` file in the repo:
+The pre-commit hook (when installed) keeps the graph coherent — it rebuilds and stages `graph.json`, `diagnostics.json`, `validation.json`, `graph.mermaid` before each commit that touches `.ts` files. Even so, verify:
 
 ```bash
 if [ ! -f arch-graph-out/graph.json ]; then
@@ -61,72 +61,103 @@ else
 fi
 ```
 
-If the build's regression gate fails (exit code 3), surface the message but continue — the user may still want a partial answer.
+If the build's recall gate fails (exit code 3 with `--strict`, otherwise always exit 0), surface the message but continue — the user may still want a partial answer.
 
-### Step 3 — Answer using the graph
+### Step 3 — Answer using CLI query subcommands (preferred)
 
-Prefer **the MCP server** if it's installed and configured (`arch-graph mcp` — see `arch-graph mcp --help`). MCP exposes typed tools: `subject_publishers`, `subject_subscribers`, `queue_producers`, `queue_consumers`, `service_dependencies`, `service_dependents`, `module_imports`, `table_users`, `path`, `explain`, `query`, `stats`. They're cheap and structured. For diagnostics (unresolved / dynamic call-sites the extractor couldn't pin down) read `arch-graph-out/diagnostics.json` directly — no MCP tool for it.
+**Prefer the CLI query subcommands.** They read `arch-graph-out/graph.json` directly — no MCP server startup, no stdio overhead, fully structured JSON output. This is the most efficient path.
 
-Otherwise read `arch-graph-out/graph.json` directly with `jq`. Edges are `{id, from, to, kind, file?, line?, dynamic?, subjectPattern?, meta?}` — not `source`/`target`/`label`/`location`. Common shapes:
+Match the user's question to the right subcommand:
 
-**"Who publishes / subscribes to a subject?"**
+**"Who publishes / subscribes to a NATS subject?"**
 ```bash
-# subjects are nodes with kind=nats-subject and id `nats:<subject>` — edges
-# point from owner (service/lib) to subject for senders, subject to owner for
-# subscribers.
+arch-graph who-publishes user.created --json
+arch-graph who-subscribes user.created --json
+# or --table for human-readable output
+```
+
+**"What does a service depend on? What depends on it?"**
+```bash
+arch-graph deps-of platform-api --json
+arch-graph dependents-of auth-service --json
+```
+
+**"BullMQ queue — who produces / consumes?"**
+```bash
+arch-graph queue-producers email-queue --json
+arch-graph queue-consumers email-queue --json
+```
+
+**"TypeORM table — which services access it?"**
+```bash
+arch-graph table-users user --json
+```
+
+**"NestJS module — what does it import?"**
+```bash
+arch-graph module-imports AuthModule --json
+```
+
+**"Shortest path between two nodes?"**
+```bash
+arch-graph path service:platform-api service:notification-service --json
+```
+
+**"Graph overview / sanity check?"**
+```bash
+arch-graph stats --table
+```
+
+Options: `--out <dir>` (default `./arch-graph-out`), `--json` (default), `--table`.
+Exit codes: `0` = found, `4` = not found (node missing from graph), `1` = bad args / I/O error.
+
+For unresolved / dynamic call-sites (things the extractor couldn't pin down), read `arch-graph-out/diagnostics.json` directly — there is no query subcommand for it.
+
+### Fallback 1 — MCP server (if installed)
+
+If `arch-graph mcp` is configured in the editor's MCP client, use its typed tools: `subject_publishers`, `subject_subscribers`, `queue_producers`, `queue_consumers`, `service_dependencies`, `service_dependents`, `module_imports`, `table_users`, `path`, `explain`, `query`, `stats`. MCP is slightly more expressive (the `explain` and `query` tools) but requires a running server.
+
+### Fallback 2 — jq on graph.json (last resort)
+
+If neither the CLI nor MCP is available, query `arch-graph-out/graph.json` with `jq`. Edges are `{id, from, to, kind, file?, line?, dynamic?, subjectPattern?, meta?}` — not `source`/`target`/`label`/`location`. Node id prefixes: `nats:<subject>`, `service:<id>`, `db-table:<name>`, `queue:<name>`, `module:<ClassName>`.
+
+```bash
+# Who publishes on a subject?
 jq --arg s 'nats:user.created' '
   .edges[] | select(
     ((.kind=="nats-publish" or .kind=="nats-request") and .to==$s)
     or ((.kind=="nats-subscribe" or .kind=="nats-reply") and .from==$s)
   ) | {kind, from, to, file, line}
 ' arch-graph-out/graph.json
-```
 
-**"What does service X depend on?"**
-```bash
+# What does service X depend on?
 jq --arg s 'service:platform-api' '.edges[] | select(.from==$s) | {kind, to, file, line}' arch-graph-out/graph.json
-```
 
-**"Shortest path between two services?"**
-Without MCP, load both nodes and do a BFS in Python or just walk edges in jq. With MCP, call the `path` tool (`{from, to, kindFilter?}`).
-
-**"Module DI — who imports / provides this?"**
-```bash
-# DI edges are kind=di-import / di-provides / di-exports / di-controller, all
-# prefixed `di-` (not `module-`). Module nodes have id `module:<ClassName>`.
+# Module DI — who imports this module?
 jq --arg m 'module:AuthModule' '.edges[] | select(.to==$m and (.kind | startswith("di-"))) | {kind, from, file, line}' arch-graph-out/graph.json
-```
 
-**"All unresolved sites in domain D?"**
-```bash
-# Site-level diagnostics. NATS / TypeORM / BullMQ / HTTP / imports site types
-# nest their source location as `.location.file` / `.location.line`.
+# All unresolved NATS sites (diagnostics)
 jq '.nats.unresolved[] | {file: .location.file, line: .location.line, via}' arch-graph-out/diagnostics.json
 # also: .typeorm.unresolvedEntities, .bullmq.unresolved, .http.unresolved, .imports.unresolvedImports
 ```
 
 ### Step 4 — Honesty in the answer
 
-- Quote the `location.file:line` of every extracted edge you cite.
+- Quote the `file:line` of every extracted edge you cite.
 - If a relevant call-site is in `diagnostics.json` as `unresolved` (e.g. dynamic NATS subject), say so explicitly — do not pretend the graph "doesn't see it".
 - If the user asks about HTTP / BullMQ / DI and `validation.json` shows the domain has zero ground-truth, mention that the domain may not be in use (rather than reporting "no results, therefore no calls").
 - Never invent an edge. The whole value proposition is determinism — be precise about what the graph says.
 
 ## Maintenance
 
-Re-run `arch-graph build` after touching `.ts` files. Or install the git hook once:
-
 ```bash
-arch-graph hook install        # post-commit auto-rebuild on .ts changes
-arch-graph hook status         # check
-arch-graph hook uninstall      # remove
-```
-
-For always-on integration with Claude Code in this project:
-
-```bash
-arch-graph claude install      # writes a section to ./CLAUDE.md
-arch-graph claude uninstall    # removes it
+arch-graph build                            # rebuild manually after touching .ts files
+arch-graph hook install                     # pre-commit hook (default, recommended)
+arch-graph hook install --mode=post-commit  # post-commit hook (optional)
+arch-graph hook status                      # check installed mode
+arch-graph hook uninstall                   # remove
+arch-graph claude install --skill           # write CLAUDE.md section + skill file
+arch-graph claude uninstall                 # remove CLAUDE.md section
 ```
 
 ## Limitations (honest)
@@ -135,4 +166,4 @@ arch-graph claude uninstall    # removes it
 - **Dynamic subjects** (`subject.${id}`) become `unresolved` entries in `diagnostics.json`, not edges.
 - **Decorator-only sources.** Wrapper publish / subscribe APIs need to be declared in `arch-graph.config.ts` (`nats.wrapperPublishApis`, `wrapperSubscribeApis`).
 - **TS-import resolution** uses `tsconfig.base.json` paths — exotic alias setups may produce `externalOrUnresolved` entries.
-- **Recall gates** (validation.json) are the floor: 95% for NATS / TypeORM / BullMQ / DI / HTTP, 80% for TS imports. Anything below is a build-time hard failure.
+- **Recall gates** (`validation.json`) are the floor: 95% for NATS / TypeORM / BullMQ / DI / HTTP, 80% for TS imports. `arch-graph build --strict` hard-fails (exit 3) when any enabled domain drops below floor; without `--strict`, the build is advisory (always exit 0).
