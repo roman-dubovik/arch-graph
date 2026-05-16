@@ -401,22 +401,46 @@ export type DiModuleRef =
  * Resolved reference inside `providers: [...]` / `exports: [...]`.
  *
  *   - bare identifier `FooService`             → `class` (provider class name)
- *   - object literal `{ provide, useClass }`   → `useClass`, `useValue`, `useFactory`, `useExisting`
+ *   - bare string literal `'MY_TOKEN'`         → `token-ref` (string re-export of a token declared elsewhere)
+ *   - object literal `{ provide, useClass }`   → `token` with one of:
  *       - `useClass: Foo`     → name = `Foo`,    providerKind = 'class'
  *       - `useExisting: Foo`  → name = `Foo`,    providerKind = 'existing'
  *       - `useValue: ...`     → name = provideTokenText, providerKind = 'value'
  *       - `useFactory: ...`   → name = provideTokenText, providerKind = 'factory'
- *       - (none of the above) → providerKind = 'unknown'
+ *   - object literal `{ provide }` without useX → `unresolved` (reason: 'provide-without-use-key')
  *   - anything else (spread, ternary)          → `unresolved`
+ *
+ * The `token-ref` variant models the NestJS pattern of re-exporting a token by its
+ * string name: `exports: ['MY_TOKEN']`. The token was declared (with `useClass/Value/Factory`)
+ * elsewhere in the same module; here it is only referenced by name.
  */
 export type DiProviderRef =
     | { kind: 'class'; name: string }
     | {
           kind: 'token';
           name: string;
-          providerKind: 'class' | 'existing' | 'value' | 'factory' | 'unknown';
+          providerKind: 'class' | 'existing' | 'value' | 'factory';
           /** Original `provide:` token text when it differs from `name` (e.g. `provide: TOKEN, useClass: FooImpl`). */
           provideToken?: string;
+      }
+    | {
+          /**
+           * Bare string (or no-substitution template) literal in `providers` / `exports` position:
+           *   `exports: ['MY_TOKEN']`
+           *
+           * The token may be declared in this module's `providers` array via
+           * `{ provide: 'MY_TOKEN', useX: ... }`, or it may have been provided by an
+           * imported module and re-exported here by string name. This ref is a pointer-by-name
+           * to that declaration, not a new provider definition.
+           *
+           * No `providerKind` is set on this ref's edge; the concrete kind is carried by the
+           * companion `di-provides` edge (which may live in this module or an imported one).
+           * If the companion is missing entirely (orphan re-export of a token nobody defines),
+           * the resulting `provider:<name>` graph node will have empty `meta` — there is
+           * intentionally no synthetic placeholder.
+           */
+          kind: 'token-ref';
+          name: string;
       }
     | { kind: 'unresolved'; raw: string; reason: string };
 
