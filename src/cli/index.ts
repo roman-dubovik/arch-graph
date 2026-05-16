@@ -480,7 +480,7 @@ function printValidationTable(rows: DomainRow[]): void {
 // Strict-mode gate (same semantics as the old hard-fail, but collected here)
 // ---------------------------------------------------------------------------
 
-function computeStrictFails(
+export function computeStrictFails(
     validation: BuildValidation,
     enabled: Record<string, boolean>,
 ): string[] {
@@ -855,7 +855,12 @@ async function main(): Promise<void> {
     }
 }
 
-main().catch((err) => {
-    process.stderr.write(`fatal: ${err}\n${(err as Error)?.stack ?? ''}\n`);
-    process.exit(1);
-});
+// Guard against running during vitest imports — the CLI is not a library and
+// the top-level `main()` call must only fire when executed as a script, not
+// when the module is imported by a test that only needs exported functions.
+if (process.env['VITEST'] === undefined) {
+    main().catch((err) => {
+        process.stderr.write(`fatal: ${err}\n${(err as Error)?.stack ?? ''}\n`);
+        process.exit(1);
+    });
+}

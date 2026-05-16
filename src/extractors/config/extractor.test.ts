@@ -139,6 +139,29 @@ export class TplService {
         expect(result.diagnostics.length).toBeGreaterThan(0);
     });
 
+    it('extracts key from NoSubstitutionTemplateLiteral (backtick with no substitution)', () => {
+        // configService.get(`DB_PASSWORD`) uses a NoSubstitutionTemplateLiteral —
+        // the extractor must handle it identically to a plain string literal.
+        const project = inMemoryProject({
+            '/app/db.service.ts': `
+import { ConfigService } from '@nestjs/config';
+export class DbService {
+    constructor(private readonly configService: ConfigService) {}
+    getPassword() {
+        return this.configService.get(\`DB_PASSWORD\`);
+    }
+}
+`,
+        });
+        const result = extractConfig(project);
+        const field = result.fields.find((f) => f.key === 'DB_PASSWORD');
+        expect(field).toBeDefined();
+        expect(field!.source).toBe('configService');
+        expect(field!.consumerClass).toBe('DbService');
+        // No diagnostic should be emitted for a pure backtick literal
+        expect(result.diagnostics).toHaveLength(0);
+    });
+
     it('skips test files', () => {
         const project = inMemoryProject({
             '/app/config.spec.ts': `

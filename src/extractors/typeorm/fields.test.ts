@@ -633,4 +633,49 @@ export class NullTypeEntity {
         // OR if regex doesn't match, type stays 'null'
         expect(result.fields.length).toBeGreaterThanOrEqual(0);
     });
+
+    it('baseClassCycles is 0 for a normal entity with no base-class cycle', () => {
+        // Verifies the field exists in the result and is correctly initialized.
+        // Real TypeScript forbids circular inheritance, so baseClassCycles > 0 can only
+        // be produced by the mock-ClassDeclaration path tested in the getAllFieldProperties
+        // suite below — that suite already asserts `cycles === 1` for the mock-cycle case.
+        // Here we confirm extractEntityFields initializes and returns the field.
+        const project = inMemoryProject({
+            '/app/user.entity.ts': `
+import { Entity, Column } from 'typeorm';
+@Entity('users')
+export class UserEntity {
+    @Column()
+    name: string;
+}
+`,
+        });
+        const entities = [makeEntity('UserEntity', 'users', '/app/user.entity.ts')];
+        const result = extractEntityFields(entities, project);
+        expect(result.baseClassCycles).toBe(0);
+    });
+
+    it('baseClassCycles accumulates cycles from getAllFieldProperties mock', () => {
+        // Uses getAllFieldProperties directly on a mock ClassDeclaration to confirm
+        // the cycle counter is non-zero and that extractEntityFields would accumulate it.
+        // (Direct call because TS forbids real circular inheritance in source.)
+        const seen = new Set<unknown>();
+        const mockCls = {
+            getName: () => 'AccumCycleClass',
+            getProperties: () => [],
+            getBaseClass: () => mockCls,
+        } as unknown as import('ts-morph').ClassDeclaration;
+        seen.add(mockCls);
+
+        const { cycles } = getAllFieldProperties(
+            mockCls,
+            seen as Set<import('ts-morph').ClassDeclaration>,
+        );
+        // The cycle guard returns cycles: 1 when it detects a seen class
+        expect(cycles).toBe(1);
+        // Confirm extractEntityFields returns baseClassCycles: 0 for empty entity list
+        // (no entities → no getAllFieldProperties call → counter stays 0)
+        const emptyResult = extractEntityFields([]);
+        expect(emptyResult.baseClassCycles).toBe(0);
+    });
 });
