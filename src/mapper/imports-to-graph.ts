@@ -192,9 +192,11 @@ export function mapImportsToGraph(
         diagnostics: {
             unresolvedImports,
             dynamicImports,
+            cjsRequires: [],
             counts: {
                 totalStatic,
                 totalDynamic,
+                totalCjsRequire: 0,
                 resolvedToOwner,
                 externalOrUnresolved,
                 unresolvedInternal,

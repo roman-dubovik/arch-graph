@@ -169,6 +169,7 @@ const EDGE_SYNTAX: Record<EdgeKind, string> = {
     'db-read': '--o|read|',
     'db-write': '--o|write|',
     'db-access': '--o|db|',
+    'db-relation': '--o|rel|',
     // DI/import edges intentionally use the same dotted arrow as the async kinds —
     // a longer dot syntax (`-..->`) renders identically but trips some Mermaid
     // versions. Visual de-emphasis comes from the edge label, not extra dots.
@@ -176,6 +177,9 @@ const EDGE_SYNTAX: Record<EdgeKind, string> = {
     'di-provides': '-.->|provides|',
     'di-exports': '-.->|exports|',
     'di-controller': '-.->|controller|',
+    'di-guard': '-.->|guard|',
+    'di-interceptor': '-.->|interceptor|',
+    'di-pipe': '-.->|pipe|',
     'ts-import': '-.->|import|',
     'lib-usage': '-.->|lib|',
 };
@@ -196,10 +200,14 @@ const EDGE_DOMAIN: Record<EdgeKind, DomainKey> = {
     'db-read': 'typeorm',
     'db-write': 'typeorm',
     'db-access': 'typeorm',
+    'db-relation': 'typeorm',
     'di-import': 'di',
     'di-provides': 'di',
     'di-exports': 'di',
     'di-controller': 'di',
+    'di-guard': 'di',
+    'di-interceptor': 'di',
+    'di-pipe': 'di',
     'ts-import': 'ts-import',
     'lib-usage': 'lib',
 };
