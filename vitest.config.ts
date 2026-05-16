@@ -8,12 +8,15 @@ export default defineConfig({
             provider: 'v8',
             reporter: ['text', 'json-summary', 'html'],
             reportsDirectory: './coverage',
+            include: [
+                'src/extractors/typeorm/relations.ts',
+                'src/mapper/typeorm-to-graph.ts',
+            ],
             exclude: [
                 'node_modules/**',
                 'dist/**',
                 'arch-graph-out/**',
                 'poc/**',
-                '.worktrees/**',
                 '**/*.test.ts',
                 '**/__fixtures__/**',
                 'src/cli/**',
@@ -41,6 +44,8 @@ export default defineConfig({
                     // src/extractors/di/filter-chain/**
                     // src/extractors/typeorm/relations/**
                     // src/extractors/imports/cjs/**
+                    'src/extractors/typeorm/relations.ts',
+                    'src/mapper/typeorm-to-graph.ts',
                 ],
             },
         },
