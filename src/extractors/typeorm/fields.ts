@@ -57,6 +57,12 @@ export interface EntityFieldSite {
 export interface DbEntityFieldExtractResult {
     fields: EntityFieldSite[];
     diagnostics: Array<{ file: string; line: number; message: string }>;
+    /**
+     * Number of circular base-class chains detected and truncated by the cycle guard
+     * in `getAllFieldProperties`. Mirrors the `baseClassCycles` counter in the relations
+     * extractor result — surfaced so the pipeline can include it in `DbEntityFieldsDiagnostics`.
+     */
+    baseClassCycles: number;
 }
 
 const FIELD_DECORATORS = new Set<string>([
@@ -207,7 +213,7 @@ export function extractEntityFields(
     const fields: EntityFieldSite[] = [];
     const diagnostics: Array<{ file: string; line: number; message: string }> = [];
 
-    if (entities.length === 0) return { fields, diagnostics };
+    if (entities.length === 0) return { fields, diagnostics, baseClassCycles: 0 };
 
     // Build lookup: className → TypeOrmEntity
     const entityByClass = new Map<string, TypeOrmEntity>();
@@ -219,6 +225,8 @@ export function extractEntityFields(
     const sourceFiles = project
         ? project.getSourceFiles().filter((sf) => !isExcludedSourceFile(sf))
         : [];
+
+    let baseClassCycles = 0;
 
     for (const sf of sourceFiles) {
         if (!sf.getFullText().includes('@Entity')) continue;
@@ -246,8 +254,11 @@ export function extractEntityFields(
 
             const tableName = tableNameOf(entity);
 
-            // Walk own + inherited properties via base-class chain
-            const { props } = getAllFieldProperties(cls);
+            // Walk own + inherited properties via base-class chain.
+            // Destructure both fields — cycles must be accumulated so circular
+            // base-class chains are observable at the pipeline level, not just on stderr.
+            const { props, cycles: fieldCycles } = getAllFieldProperties(cls);
+            baseClassCycles += fieldCycles;
 
             for (const prop of props) {
                 for (const dec of prop.getDecorators()) {
@@ -286,5 +297,5 @@ export function extractEntityFields(
         }
     }
 
-    return { fields, diagnostics };
+    return { fields, diagnostics, baseClassCycles };
 }

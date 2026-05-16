@@ -347,6 +347,15 @@ export interface ConfigDiagnostics {
 export interface DbEntityFieldsDiagnostics {
     /** Combined extractor + mapper diagnostics. file/line are optional (mapper messages carry no location). */
     messages: Array<{ message: string; file?: string; line?: number }>;
+    counts: {
+        /**
+         * Number of circular base-class chains detected and truncated by the cycle guard
+         * in `getAllFieldProperties`. Mirrors `TypeOrmDiagnostics.counts.baseClassCycles`
+         * so consumers are not blind to the stderr-only signal when entity fields are
+         * extracted via the base-class chain walk.
+         */
+        baseClassCycles: number;
+    };
 }
 
 /**

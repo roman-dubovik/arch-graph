@@ -421,6 +421,9 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
                 ...dbEntityFields.diagnostics,
                 ...entityFieldsMapped.diagnostics,
             ],
+            counts: {
+                baseClassCycles: dbEntityFields.baseClassCycles,
+            },
         },
         scoped: {
             markerCount: scoped.markers.length,
