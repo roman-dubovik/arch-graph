@@ -384,6 +384,57 @@ function buildDomainRows(
         rows.push({ name: 'fe', recall, resolve: NaN, floor: 0.9, status, tips });
     }
 
+    // ---- endpoint (Var 2) ----
+    if (validation.endpoint) {
+        const vr = validation.endpoint;
+        const en = enabled.endpoint!;
+        let status: DomainStatus;
+        let recall = NaN;
+        if (!en) {
+            status = 'disabled';
+        } else if (vr.groundTruthCount === 0) {
+            status = 'no-gt';
+        } else {
+            recall = vr.recall ?? 1;
+            status = recall >= 0.95 ? 'ok' : 'warn';
+        }
+        rows.push({ name: 'endpoint', recall, resolve: NaN, floor: 0.95, status, tips: [] });
+    }
+
+    // ---- config (Var 2) ----
+    if (validation.config) {
+        const vc = validation.config;
+        const en = enabled.config!;
+        let status: DomainStatus;
+        let recall = NaN;
+        if (!en) {
+            status = 'disabled';
+        } else if (vc.groundTruthCount === 0) {
+            status = 'no-gt';
+        } else {
+            recall = vc.recall ?? 1;
+            status = recall >= 0.9 ? 'ok' : 'warn';
+        }
+        rows.push({ name: 'config', recall, resolve: NaN, floor: 0.9, status, tips: [] });
+    }
+
+    // ---- db-entity-field (Var 2) ----
+    if (validation.dbEntityFields) {
+        const vf = validation.dbEntityFields;
+        const en = enabled.dbEntityFields!;
+        let status: DomainStatus;
+        let recall = NaN;
+        if (!en) {
+            status = 'disabled';
+        } else if (vf.groundTruthCount === 0) {
+            status = 'no-gt';
+        } else {
+            recall = vf.recall ?? 1;
+            status = recall >= 0.95 ? 'ok' : 'warn';
+        }
+        rows.push({ name: 'db-entity-field', recall, resolve: NaN, floor: 0.95, status, tips: [] });
+    }
+
     return rows;
 }
 
@@ -464,7 +515,7 @@ function printValidationTable(rows: DomainRow[]): void {
 // ---------------------------------------------------------------------------
 
 async function cmdBuild(args: ParsedArgs): Promise<void> {
-    const ALLOWED_ONLY = ['nats', 'typeorm', 'bullmq', 'di', 'http', 'imports', 'fe'] as const;
+    const ALLOWED_ONLY = ['nats', 'typeorm', 'bullmq', 'di', 'http', 'imports', 'fe', 'endpoint', 'config', 'db-entity-field'] as const;
     if (args.only && !ALLOWED_ONLY.includes(args.only as (typeof ALLOWED_ONLY)[number])) {
         process.stderr.write(
             `error: --only=${args.only} not yet supported; available: ${ALLOWED_ONLY.join(', ')}\n`,
@@ -536,6 +587,9 @@ async function cmdBuild(args: ParsedArgs): Promise<void> {
         http: cfg.domains?.http !== false,
         imports: cfg.domains?.imports !== false,
         fe: cfg.domains?.fe !== false,
+        endpoint: cfg.domains?.endpoint !== false,
+        config: cfg.domains?.config !== false,
+        dbEntityFields: cfg.domains?.dbEntityFields !== false,
     };
 
     // Build per-domain rows for advisory table
@@ -736,7 +790,12 @@ async function main(): Promise<void> {
     }
 }
 
-main().catch((err) => {
-    process.stderr.write(`fatal: ${err}\n${(err as Error)?.stack ?? ''}\n`);
-    process.exit(1);
-});
+// Guard against running during vitest imports — the CLI is not a library and
+// the top-level `main()` call must only fire when executed as a script, not
+// when the module is imported by a test that only needs exported functions.
+if (process.env['VITEST'] === undefined) {
+    main().catch((err) => {
+        process.stderr.write(`fatal: ${err}\n${(err as Error)?.stack ?? ''}\n`);
+        process.exit(1);
+    });
+}

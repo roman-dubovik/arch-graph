@@ -10,11 +10,11 @@ import type { BuildValidation } from '../core/types.js';
 // ---------------------------------------------------------------------------
 
 /** Domain names understood by the strict-mode gate. Typo-resistant union. */
-export type StrictDomainName = 'nats' | 'typeorm' | 'bullmq' | 'di' | 'http' | 'imports' | 'fe';
+export type StrictDomainName = 'nats' | 'typeorm' | 'bullmq' | 'di' | 'http' | 'imports' | 'fe' | 'endpoint' | 'config' | 'dbEntityFields';
 
 export function computeStrictFails(
     validation: BuildValidation,
-    enabled: Record<StrictDomainName, boolean>,
+    enabled: Partial<Record<StrictDomainName, boolean>>,
 ): string[] {
     const fails: string[] = [];
     const n = validation.nats.summary;
@@ -81,6 +81,27 @@ export function computeStrictFails(
         strictGateRecall('fe', 'components', f.groundTruthComponents, f.recallComponents, fails, 0.9);
         strictGateRecall('fe', 'routes', f.groundTruthRoutes, f.recallRoutes, fails, 0.9);
         strictGateRecall('fe', 'hooks', f.groundTruthHooks, f.recallHooks, fails, 0.9);
+    }
+    if (enabled.endpoint && validation.endpoint) {
+        const e = validation.endpoint;
+        if (e.groundTruthCount === 0) {
+            fails.push(`endpoint: zero ground-truth — set domains.endpoint=false if this project has no NestJS HTTP endpoints`);
+        }
+        if (!e.meetsFloor) fails.push(`endpoint recall ${pct(e.recall ?? 0)} (< 95%)`);
+    }
+    if (enabled.config && validation.config) {
+        const c = validation.config;
+        if (c.groundTruthCount === 0) {
+            fails.push(`config: zero ground-truth — set domains.config=false if this project has no configService/process.env usage`);
+        }
+        if (!c.meetsFloor) fails.push(`config recall ${pct(c.recall ?? 0)} (< 90%)`);
+    }
+    if (enabled.dbEntityFields && validation.dbEntityFields) {
+        const dbf = validation.dbEntityFields;
+        if (dbf.groundTruthCount === 0) {
+            fails.push(`db-entity-field: zero ground-truth — set domains.dbEntityFields=false if this project has no TypeORM @Column entities`);
+        }
+        if (!dbf.meetsFloor) fails.push(`db-entity-field recall ${pct(dbf.recall ?? 0)} (< 95%)`);
     }
 
     return fails;

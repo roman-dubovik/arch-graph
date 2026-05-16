@@ -709,6 +709,61 @@ describe('buildIdMap — triple collision (loop inside collision handler)', () =
 });
 
 // ============================================================================
+// Variant 2 NodeKind shapes
+// ============================================================================
+
+describe('renderMermaid — Variant 2 NodeKind shapes', () => {
+    it('renders endpoint node with flag shape >...]', () => {
+        const nodes: GraphNode[] = [{ id: 'endpoint:GET /users', kind: 'endpoint', label: 'GET /users' }];
+        const { body } = renderMermaid(nodes, [], 200);
+        // Flag shape: id>"label"]
+        expect(body).toContain('>"GET /users"]');
+    });
+
+    it('renders config-field node with trapezoid shape [/.../]', () => {
+        const nodes: GraphNode[] = [{ id: 'config:DB_URL', kind: 'config-field', label: 'DB_URL' }];
+        const { body } = renderMermaid(nodes, [], 200);
+        expect(body).toContain('[/"DB_URL"/]');
+    });
+
+    it('renders scoped-marker node with stadium shape (["..."])', () => {
+        const nodes: GraphNode[] = [{ id: 'scoped:marker1', kind: 'scoped-marker', label: 'marker1' }];
+        const { body } = renderMermaid(nodes, [], 200);
+        expect(body).toContain('(["marker1"])');
+    });
+
+    it('renders db-entity-field node with rectangle shape ["..."]', () => {
+        const nodes: GraphNode[] = [{ id: 'dbf:users.email', kind: 'db-entity-field', label: 'email' }];
+        const { body } = renderMermaid(nodes, [], 200);
+        expect(body).toContain('["email"]');
+    });
+
+    it('renders new EdgeKind endpoint-of in EDGE_SYNTAX', () => {
+        const nodes: GraphNode[] = [
+            { id: 'endpoint:GET /a', kind: 'endpoint', label: 'GET /a' },
+            { id: 'service:svc', kind: 'service', label: 'svc' },
+        ];
+        const edges: GraphEdge[] = [
+            { id: 'e1', from: 'endpoint:GET /a', to: 'service:svc', kind: 'endpoint-of' },
+        ];
+        const { body } = renderMermaid(nodes, edges, 200);
+        expect(body).toContain('endpoint-of');
+    });
+
+    it('renders new EdgeKind entity-has-field in EDGE_SYNTAX', () => {
+        const nodes: GraphNode[] = [
+            { id: 'db-table:users', kind: 'db-table', label: 'users' },
+            { id: 'dbf:users.email', kind: 'db-entity-field', label: 'email' },
+        ];
+        const edges: GraphEdge[] = [
+            { id: 'e2', from: 'db-table:users', to: 'dbf:users.email', kind: 'entity-has-field' },
+        ];
+        const { body } = renderMermaid(nodes, edges, 200);
+        expect(body).toContain('has-field');
+    });
+});
+
+// ============================================================================
 // parseSliceMode
 // ============================================================================
 
@@ -747,6 +802,18 @@ describe('parseSliceMode', () => {
 
     it('parses domain:lib', () => {
         expect(parseSliceMode('domain:lib')).toEqual({ kind: 'domain', domain: 'lib' });
+    });
+
+    it('parses domain:endpoint', () => {
+        expect(parseSliceMode('domain:endpoint')).toEqual({ kind: 'domain', domain: 'endpoint' });
+    });
+
+    it('parses domain:config', () => {
+        expect(parseSliceMode('domain:config')).toEqual({ kind: 'domain', domain: 'config' });
+    });
+
+    it('parses domain:scoped', () => {
+        expect(parseSliceMode('domain:scoped')).toEqual({ kind: 'domain', domain: 'scoped' });
     });
 
     it('throws on unknown mode', () => {

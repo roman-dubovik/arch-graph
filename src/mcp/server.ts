@@ -68,6 +68,11 @@ const EDGE_KIND_CHECK: Record<EdgeKind, null> = {
     'fe-imports': null,
     'fe-renders': null,
     'fe-routes-to': null,
+    'endpoint-of': null,
+    'endpoint-calls': null,
+    'config-read-by': null,
+    'entity-has-field': null,
+    'scoped': null,
 };
 const EDGE_KIND_VALUES = Object.keys(EDGE_KIND_CHECK) as [EdgeKind, ...EdgeKind[]];
 

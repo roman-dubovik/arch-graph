@@ -67,7 +67,12 @@ export type NodeKind =
     | 'fe-page'
     | 'fe-component'
     | 'fe-route'
-    | 'fe-hook';
+    | 'fe-hook'
+    | 'endpoint'
+    | 'config-field'
+    /** STUB: extractor returns empty in v1 — see B8 in design doc */
+    | 'scoped-marker'
+    | 'db-entity-field';
 
 /**
  * Exhaustiveness-gate pattern for NodeKind.
@@ -89,6 +94,10 @@ const NODE_KIND_CHECK: Record<NodeKind, null> = {
     'fe-component': null,
     'fe-route': null,
     'fe-hook': null,
+    'endpoint': null,
+    'config-field': null,
+    'scoped-marker': null,
+    'db-entity-field': null,
 };
 
 /** All valid NodeKind values — used for runtime validation and zod enum schemas. */
@@ -115,7 +124,13 @@ export type EdgeKind =
     | 'lib-usage'
     | 'fe-imports'
     | 'fe-renders'
-    | 'fe-routes-to';
+    | 'fe-routes-to'
+    | 'endpoint-of'
+    | 'endpoint-calls'
+    | 'config-read-by'
+    | 'entity-has-field'
+    /** STUB: reserved for forward-compat — no scoped edges emitted in v1; see B8 in design doc */
+    | 'scoped';
 
 export interface GraphNode {
     id: string;
@@ -318,6 +333,52 @@ export interface TypeOrmDiagnostics {
     };
 }
 
+/**
+ * Diagnostics for the Variant 2 endpoint domain.
+ * Merges extractor-level (non-literal arg) and mapper-level (unowned file) messages.
+ */
+export interface EndpointDiagnostics {
+    /** Combined extractor + mapper diagnostics. file/line are optional (mapper messages carry no location). */
+    messages: Array<{ message: string; file?: string; line?: number }>;
+}
+
+/**
+ * Diagnostics for the Variant 2 config-field domain.
+ * Merges extractor-level (non-literal key) and mapper-level (unowned file) messages.
+ */
+export interface ConfigDiagnostics {
+    /** Combined extractor + mapper diagnostics. file/line are optional (mapper messages carry no location). */
+    messages: Array<{ message: string; file?: string; line?: number }>;
+}
+
+/**
+ * Diagnostics for the Variant 2 db-entity-field domain.
+ * Merges extractor-level (not-in-index) and mapper-level (duplicate fields) messages.
+ */
+export interface DbEntityFieldsDiagnostics {
+    /** Combined extractor + mapper diagnostics. file/line are optional (mapper messages carry no location). */
+    messages: Array<{ message: string; file?: string; line?: number }>;
+    counts: {
+        /**
+         * Number of circular base-class chains detected and truncated by the cycle guard
+         * in `getAllFieldProperties`. Mirrors `TypeOrmDiagnostics.counts.baseClassCycles`
+         * so consumers are not blind to the stderr-only signal when entity fields are
+         * extracted via the base-class chain walk.
+         */
+        baseClassCycles: number;
+    };
+}
+
+/**
+ * Diagnostics for the Variant 2 scoped-marker domain (stub).
+ */
+export interface ScopedDiagnostics {
+    /** Number of scoped-marker sites found (0 in v1 stub). */
+    markerCount: number;
+    /** Extractor-level messages. */
+    messages: Array<{ file: string; line: number; message: string }>;
+}
+
 export interface DiagnosticsReport {
     projectId: string;
     timestamp: string;
@@ -329,6 +390,14 @@ export interface DiagnosticsReport {
     imports: ImportsDiagnostics;
     fe: import('../mapper/fe-to-graph.js').FeDiagnostics;
     cycles: CyclesDiagnostics;
+    /** Variant 2 — endpoint domain diagnostics. */
+    endpoint?: EndpointDiagnostics;
+    /** Variant 2 — config-field domain diagnostics. */
+    config?: ConfigDiagnostics;
+    /** Variant 2 — db-entity-field domain diagnostics. */
+    dbEntityFields?: DbEntityFieldsDiagnostics;
+    /** Variant 2 — scoped-marker domain diagnostics (stub). */
+    scoped?: ScopedDiagnostics;
     /**
      * Populated only when `arch-graph semantic build` has been run.
      * Optional so plain `arch-graph build` keeps the same diagnostics.json
@@ -435,6 +504,33 @@ export interface TypeOrmValidationReport {
     extraInjections: TypeOrmInjectionSite[];
 }
 
+/**
+ * A single ground-truth entry from the db-entity-field validator regex scan.
+ * Named here so `DbEntityFieldsValidationResult.groundTruth` has a concrete type
+ * (avoids anonymous inline object — mirrors `TypeOrmGroundTruthEntry` pattern).
+ */
+export interface DbEntityFieldGroundTruthEntry {
+    file: string;
+    line: number;
+    matchedText: string;
+    decorator: string;
+}
+
+/**
+ * Validation result for the Variant 2 db-entity-field domain.
+ * Mirrors `EndpointValidationResult` / `ConfigValidationResult` shape.
+ */
+export interface DbEntityFieldsValidationResult {
+    /** Ground-truth entries found by `@Column*` decorator regex. */
+    groundTruth: DbEntityFieldGroundTruthEntry[];
+    /** Number of detected column decorator occurrences via ground-truth regex. */
+    groundTruthCount: number;
+    /** Recall: groundTruth > 0 ? extracted / groundTruth : null. */
+    recall: number | null;
+    /** Recall floor 95%. True if recall >= 0.95 or no ground truth detected. */
+    meetsFloor: boolean;
+}
+
 export interface BuildValidation {
     projectId: string;
     timestamp: string;
@@ -445,6 +541,12 @@ export interface BuildValidation {
     http: HttpValidationReport;
     imports: ImportsValidationReport;
     fe: import('../validation/fe-validator.js').FeValidationReport;
+    /** Variant 2 — endpoint validation report. */
+    endpoint?: import('../validation/endpoint-validator.js').EndpointValidationResult;
+    /** Variant 2 — config-field validation report. */
+    config?: import('../validation/config-validator.js').ConfigValidationResult;
+    /** Variant 2 — db-entity-field validation report. */
+    dbEntityFields?: DbEntityFieldsValidationResult;
 }
 
 // ============================================================================

@@ -11,6 +11,10 @@ import { extractHttp } from '../extractors/http/extractor.js';
 import { extractImports } from '../extractors/imports/extractor.js';
 import { extractNats } from '../extractors/nats/extractor.js';
 import { extractTypeOrm } from '../extractors/typeorm/extractor.js';
+import { extractEndpoints } from '../extractors/endpoint/extractor.js';
+import { extractConfig } from '../extractors/config/extractor.js';
+import { extractScoped } from '../extractors/scoped/extractor.js';
+import { extractEntityFields } from '../extractors/typeorm/fields.js';
 import { mapBullMqToGraph } from '../mapper/bullmq-to-graph.js';
 import { mapDiToGraph } from '../mapper/di-to-graph.js';
 import { mapFeToGraph } from '../mapper/fe-to-graph.js';
@@ -18,6 +22,9 @@ import { mapHttpToGraph } from '../mapper/http-to-graph.js';
 import { mapImportsToGraph } from '../mapper/imports-to-graph.js';
 import { assembleGraph, buildNatsDiagnostics, mapNatsToGraph } from '../mapper/nats-to-graph.js';
 import { mapTypeOrmToGraph } from '../mapper/typeorm-to-graph.js';
+import { mapEndpointsToGraph } from '../mapper/endpoint-to-graph.js';
+import { mapConfigToGraph } from '../mapper/config-to-graph.js';
+import { mapEntityFieldsToGraph } from '../mapper/entity-fields-to-graph.js';
 import { enumerateBullMqGroundTruth, buildBullMqReport } from '../validation/bullmq-validator.js';
 import { enumerateDiGroundTruth, buildDiReport } from '../validation/di-validator.js';
 import { enumerateFeGroundTruth, buildFeReport } from '../validation/fe-validator.js';
@@ -26,6 +33,9 @@ import { enumerateHttpGroundTruth, buildHttpReport } from '../validation/http-va
 import { buildImportsReport, enumerateImportsGroundTruth } from '../validation/imports-validator.js';
 import { enumerateSenders } from '../validation/senders.js';
 import { enumerateTypeOrmGroundTruth, buildTypeOrmReport } from '../validation/typeorm-validator.js';
+import { validateEndpoints } from '../validation/endpoint-validator.js';
+import { validateConfig } from '../validation/config-validator.js';
+import { validateDbEntityFields } from '../validation/db-entity-fields-validator.js';
 import { buildReport as buildNatsReport } from '../validation/validator.js';
 import { detectCycles } from '../detectors/cycles.js';
 
@@ -321,6 +331,81 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         `  nodes: ${feMapped.nodes.length}, edges: ${feMapped.edges.length}, unresolved: ${feMapped.diagnostics.unresolved.length}, unowned: ${feMapped.diagnostics.unowned.length}\n`,
     );
 
+    // ---- Endpoint domain (Var 2) ----
+    process.stdout.write(`extracting endpoints...\n`);
+    t0 = Date.now();
+    const endpoints = await stage(`[${cfg.id}] endpoint.extract`, () => extractEndpoints(project));
+    process.stdout.write(
+        `  ${endpoints.endpoints.length} endpoint sites, ${endpoints.diagnostics.length} diagnostics in ${Date.now() - t0}ms\n`,
+    );
+
+    process.stdout.write(`validating endpoints against ground truth...\n`);
+    const endpointValidation = await stage(`[${cfg.id}] endpoint.GT`, () =>
+        validateEndpoints(cfg, endpoints.endpoints.length),
+    );
+    process.stdout.write(
+        `  groundTruth: ${endpointValidation.groundTruthCount}, recall: ${endpointValidation.recall !== null ? pct(endpointValidation.recall) : 'N/A'}\n`,
+    );
+
+    process.stdout.write(`mapping endpoints to graph...\n`);
+    const endpointsMapped = mapEndpointsToGraph(endpoints.endpoints, ownership);
+    process.stdout.write(
+        `  nodes: ${endpointsMapped.nodes.length}, edges: ${endpointsMapped.edges.length}\n`,
+    );
+
+    // ---- Config domain (Var 2) ----
+    process.stdout.write(`extracting config callsites...\n`);
+    t0 = Date.now();
+    const config = await stage(`[${cfg.id}] config.extract`, () => extractConfig(project));
+    process.stdout.write(
+        `  ${config.fields.length} config callsites, ${config.diagnostics.length} diagnostics in ${Date.now() - t0}ms\n`,
+    );
+
+    process.stdout.write(`validating config against ground truth...\n`);
+    const configValidation = await stage(`[${cfg.id}] config.GT`, () =>
+        validateConfig(cfg, config.fields.length),
+    );
+    process.stdout.write(
+        `  groundTruth: ${configValidation.groundTruthCount}, recall: ${configValidation.recall !== null ? pct(configValidation.recall) : 'N/A'}\n`,
+    );
+
+    process.stdout.write(`mapping config to graph...\n`);
+    const configMapped = mapConfigToGraph(config.fields, ownership);
+    process.stdout.write(
+        `  nodes: ${configMapped.nodes.length}, edges: ${configMapped.edges.length}\n`,
+    );
+
+    // ---- Scoped-marker domain (Var 2 stub) ----
+    process.stdout.write(`extracting scoped markers (stub)...\n`);
+    const scoped = await stage(`[${cfg.id}] scoped.extract`, () => extractScoped(project));
+    process.stdout.write(
+        `  ${scoped.markers.length} scoped sites (stub: awaiting corpus signal)\n`,
+    );
+
+    // ---- db-entity-field domain (Var 2) ----
+    process.stdout.write(`extracting db entity fields...\n`);
+    t0 = Date.now();
+    const dbEntityFields = await stage(`[${cfg.id}] dbEntityFields.extract`, () =>
+        extractEntityFields(Array.from(typeorm.entities.entries()), project),
+    );
+    process.stdout.write(
+        `  ${dbEntityFields.fields.length} entity fields, ${dbEntityFields.diagnostics.length} diagnostics in ${Date.now() - t0}ms\n`,
+    );
+
+    process.stdout.write(`validating db entity fields against ground truth...\n`);
+    const dbEntityFieldsValidation = await stage(`[${cfg.id}] dbEntityFields.GT`, () =>
+        validateDbEntityFields(cfg, dbEntityFields.fields.length),
+    );
+    process.stdout.write(
+        `  groundTruth: ${dbEntityFieldsValidation.groundTruthCount}, recall: ${dbEntityFieldsValidation.recall !== null ? pct(dbEntityFieldsValidation.recall) : 'N/A'}\n`,
+    );
+
+    process.stdout.write(`mapping db entity fields to graph...\n`);
+    const entityFieldsMapped = mapEntityFieldsToGraph(dbEntityFields.fields);
+    process.stdout.write(
+        `  nodes: ${entityFieldsMapped.nodes.length}, edges: ${entityFieldsMapped.edges.length}\n`,
+    );
+
     // ---- Compose ----
     const graph = assembleGraph(cfg.root, [
         natsMapped,
@@ -330,6 +415,9 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         httpMapped,
         importsMapped,
         feMapped,
+        endpointsMapped,
+        configMapped,
+        entityFieldsMapped,
     ]);
 
     // ---- Cycle detection ----
@@ -353,6 +441,34 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         imports: importsMapped.diagnostics,
         fe: feMapped.diagnostics,
         cycles: cyclesDiagnostics,
+        endpoint: {
+            // Merge: extractor-level (non-literal arg) + mapper-level (unowned files)
+            messages: [
+                ...endpoints.diagnostics,
+                ...endpointsMapped.diagnostics,
+            ],
+        },
+        config: {
+            // Merge: extractor-level (non-literal key) + mapper-level (unowned files)
+            messages: [
+                ...config.diagnostics,
+                ...configMapped.diagnostics,
+            ],
+        },
+        dbEntityFields: {
+            // Merge: extractor-level (not-in-index) + mapper-level (duplicate fields)
+            messages: [
+                ...dbEntityFields.diagnostics,
+                ...entityFieldsMapped.diagnostics,
+            ],
+            counts: {
+                baseClassCycles: dbEntityFields.baseClassCycles,
+            },
+        },
+        scoped: {
+            markerCount: scoped.markers.length,
+            messages: scoped.diagnostics,
+        },
     };
     const validation: BuildValidation = {
         projectId: cfg.id,
@@ -364,6 +480,9 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         http: httpValidation,
         imports: importsValidation,
         fe: feValidation,
+        endpoint: endpointValidation,
+        config: configValidation,
+        dbEntityFields: dbEntityFieldsValidation,
     };
 
     return { graph, diagnostics, validation };
@@ -378,7 +497,7 @@ function pct(n: number): string {
  * Otherwise a fatal NATS-grep failure surfaces as a bare `ENOENT: ...` with
  * no indication of which pipeline phase produced it.
  */
-async function stage<T>(label: string, fn: () => Promise<T>): Promise<T> {
+async function stage<T>(label: string, fn: () => T | Promise<T>): Promise<Awaited<T>> {
     try {
         return await fn();
     } catch (err) {
