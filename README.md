@@ -223,6 +223,16 @@ This is a **static** extractor. It does not see runtime configuration, container
 
 To extend coverage, add an extractor under `src/extractors/<domain>/` and wire it into `src/pipeline/build.ts` and a `mapper/` that emits typed edges. The validation harness in `src/validation/` is the contract — every extractor must produce a ground-truth comparison that gates `arch-graph build` at the configured recall floor.
 
+## Adjacent tools
+
+arch-graph isn't the only graph extractor in this space, and on some questions it isn't the best one. If you're picking a tool, weigh these honestly:
+
+- **[@nestjs/devtools-integration](https://www.npmjs.com/package/@nestjs/devtools-integration)** — official, runtime-based. Boots your app via `NestFactory.create()` and snapshots the live module/provider graph. More authoritative than any static tool on what DI actually wires up at boot (including conditional bootstrap). Different category (live runtime vs static); doesn't extract NATS subjects, BullMQ queues, or TypeORM table edges as typed edges.
+- **[@riaskov/nestjs-graph-visualizer](https://www.npmjs.com/package/@riaskov/nestjs-graph-visualizer)** — static + Nest-aware, methodologically closest to arch-graph. Narrower scope: NestJS module DI only, no cross-cutting NATS / BullMQ / inter-service HTTP. Output is Mermaid / DOT / SVG, not JSON.
+- **[dependency-cruiser](https://github.com/sverweij/dependency-cruiser)** — generic TypeScript import graph, battle-tested across module systems. Doesn't see NestJS semantics; all decorators collapse to plain imports. arch-graph won't dominate it on raw file-imports — we'd expect a near-tie there, and a win by construction on any NATS / BullMQ / TypeORM question dep-cruiser is structurally incapable of answering.
+
+Honourable mentions for narrower / different categories: [nestjs-spelunker](https://github.com/jmcdo29/nestjs-spelunker) (runtime DI grapher), [nestjs-doctor](https://nestjs.doctor/docs) (lint + HTML report), [madge](https://github.com/pahen/madge) / [arkit](https://github.com/dyatko/arkit) (older / diagram-first import graphers), [scip-typescript](https://github.com/sourcegraph/scip-typescript) (code-intel refs/defs, different abstraction).
+
 ## Benchmark
 
 Quantitative comparison with graphify across 5 NestJS monorepos lives in `bench/report.md`. Key finding: arch-graph used **7.6× fewer LLM context tokens** than graphify on the run there (688k vs 5.2M tokens across the same 15 questions, same compression aggressiveness, same `cl100k_base` encoder), because it returns typed structured results instead of raw graph dumps. Mean recall under the substring-presence necessary-condition heuristic was 100% (arch-graph) vs 39% (graphify) on that suite — a permissive "did the context even contain the answer" check, not an end-to-end LLM eval. The five reference projects are anonymized as `Project A`–`E`. The yaml in `bench/questions.yaml` has since been extended to 30 questions; re-running needs the private reference monorepos and is not reflected in the numbers above. To reproduce on your own monorepos, drop one `configs/<id>.config.ts` per project and run `bash bench/run.sh` — see `bench/README.md`.
@@ -237,9 +247,11 @@ arch-graph build                                     # build your graph
 arch-graph compare --graphify graphify-out/          # see side-by-side
 ```
 
-`arch-graph compare` auto-generates 10 questions from real nodes in your graph (NATS subjects, queues, DB tables, services, modules), counts `cl100k_base` tokens for each tool's compact context, and writes a markdown report at `arch-graph-out/compare-report.md`. Without `--graphify` it prints a graph-size-only summary — useful before deciding whether to run graphify.
+`arch-graph compare` auto-generates 10 questions from real nodes in your graph (NATS subjects, queues, DB tables, services, modules), counts `cl100k_base` tokens for each tool's compact context, and writes a markdown report at `arch-graph-out/compare-report.md`. Without `--graphify` we auto-detect `./graphify-out/`; if nothing's found you get a graph-size-only summary plus a friendly install hint.
 
-See `arch-graph compare --help` for flags (`--questions`, `--report`, `--quiet`).
+**Contribute your numbers.** Run `arch-graph compare --share` to generate an **anonymized** snippet (counts only — no project / subject / queue / service names) and open a pre-filled GitHub Discussion under `benchmark-contributions`. The preview is shown before anything leaves your machine. All contributions land in the [public Discussions](https://github.com/roman-dubovik/arch-graph/discussions) — they're how the multi-repo benchmark grows beyond our 5 reference monorepos.
+
+See `arch-graph compare --help` for flags (`--questions`, `--report`, `--quiet`, `--share`).
 
 ## Development
 
