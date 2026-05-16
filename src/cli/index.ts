@@ -354,6 +354,17 @@ function buildDomainRows(
         rows.push({ name: 'imports', recall, resolve: NaN, floor: 0.8, status, tips });
     }
 
+    // ---- FE (React/Next.js) ----
+    {
+        const v = validation.fe.summary;
+        let status: DomainStatus;
+        let recall = NaN;
+        const recalls = [v.recallComponents, v.recallRoutes, v.recallHooks];
+        recall = Math.min(...recalls);
+        status = recall >= 0.9 ? 'ok' : 'warn';
+        rows.push({ name: 'fe', recall, resolve: NaN, floor: 0.9, status, tips: [] });
+    }
+
     return rows;
 }
 
@@ -440,6 +451,7 @@ function computeStrictFails(
     const d = validation.di.summary;
     const h = validation.http.summary;
     const i = validation.imports.summary;
+    const f = validation.fe.summary;
 
     // Per-role zero-GT: handlers misconfig and senders misconfig fail independently.
     if (enabled.nats) {
@@ -488,6 +500,11 @@ function computeStrictFails(
         } else if (i.recallStatic < 0.8) {
             fails.push(`imports recall ${pct(i.recallStatic)} (< 80%)`);
         }
+    }
+    if (enabled.fe) {
+        strictGateRecall('fe', 'components', 1, f.recallComponents, fails, 0.9);
+        strictGateRecall('fe', 'routes', 1, f.recallRoutes, fails, 0.9);
+        strictGateRecall('fe', 'hooks', 1, f.recallHooks, fails, 0.9);
     }
 
     return fails;
@@ -592,6 +609,7 @@ async function cmdBuild(args: ParsedArgs): Promise<void> {
         di: cfg.domains?.di !== false,
         http: cfg.domains?.http !== false,
         imports: cfg.domains?.imports !== false,
+        fe: cfg.domains?.fe !== false,
     };
 
     // Build per-domain rows for advisory table
