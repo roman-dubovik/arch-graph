@@ -1,9 +1,11 @@
 import type {
     DiControllerRef,
     DiDiagnostics,
+    DiFilterChainRef,
     DiModuleRef,
     DiModuleSite,
     DiProviderRef,
+    EdgeKind,
     GraphEdge,
     GraphNode,
 } from '../core/types.js';
@@ -39,6 +41,8 @@ export function mapDiToGraph(
     modules: DiModuleSite[],
     moduleIndex: DiModuleIndex,
     ownership: OwnershipRegistry,
+    filterChain: DiFilterChainRef[] = [],
+    skippedAnonymousFiles: string[] = [],
 ): MapDiResult {
     const moduleNodes = new Map<string, GraphNode>();
     const providerNodes = new Map<string, GraphNode>();
@@ -123,13 +127,106 @@ export function mapDiToGraph(
         }
     }
 
+    // Filter-chain edges: @UseGuards / @UseInterceptors / @UsePipes
+    //
+    // Policy: only emit an edge when BOTH the enclosing class (fromId) AND the
+    // target class (toId) are already present in `providerNodes` from a real
+    // `@Module.controllers/providers` registration. Classes that exist only
+    // here (e.g. globally-registered guards via `app.useGlobalGuards(...)`) are
+    // NOT fabricated — creating phantom `provider:<class>` nodes violates the
+    // design rule at line 39 ("emitting a sentinel ... would pollute the graph").
+    //
+    // Refs whose source or target isn't in providerNodes are routed to
+    // `unresolvedFilterRefs` with a structured reason for diagnostics.
+    const UNRESOLVED_FILTER_CAP = 200;
+    const unresolvedFilterRefs: DiFilterChainRef[] = [];
+    let unresolvedFilterRefsTruncated = false;
+    let truncatedFilterRefs = 0;
+    let guardsCount = 0;
+    let interceptorsCount = 0;
+    let pipesCount = 0;
+    let dedupDropped = 0;
+
+    function pushUnresolvedFilter(ref: DiFilterChainRef): void {
+        if (unresolvedFilterRefs.length >= UNRESOLVED_FILTER_CAP) {
+            unresolvedFilterRefsTruncated = true;
+            truncatedFilterRefs++;
+            return;
+        }
+        unresolvedFilterRefs.push(ref);
+    }
+
+    for (const ref of filterChain) {
+        if (ref.kind === 'unresolved') {
+            pushUnresolvedFilter(ref);
+            continue;
+        }
+
+        const fromId = `provider:${ref.enclosingClass}`;
+        if (!providerNodes.has(fromId)) {
+            // enclosingClass not registered in any @Module — route to diagnostics
+            pushUnresolvedFilter({
+                ...ref,
+                kind: 'unresolved',
+                raw: ref.enclosingClass,
+                reason: 'source-not-in-di-graph',
+            } as DiFilterChainRef);
+            continue;
+        }
+
+        const toId = `provider:${ref.name}`;
+        if (!providerNodes.has(toId)) {
+            // target guard/interceptor/pipe not registered in any @Module — route to diagnostics
+            pushUnresolvedFilter({
+                ...ref,
+                kind: 'unresolved',
+                raw: ref.name,
+                reason: 'target-not-in-di-graph',
+            } as DiFilterChainRef);
+            continue;
+        }
+
+        const edgeKind = filterDecoratorToEdgeKind(ref.decorator);
+        const attachedToStr =
+            ref.attachedTo.kind === 'class'
+                ? 'class'
+                : `method:${ref.attachedTo.methodName}`;
+        const meta: Record<string, unknown> = {
+            decorator: ref.decorator,
+            attachedTo: attachedToStr,
+            ...(ref.kind === 'instance' ? { instantiated: true } : {}),
+        };
+
+        // Dedup key includes attachedTo so that the same guard on two different
+        // methods of the same controller produces two distinct edges.
+        const key = `${edgeKind}:${fromId}->${toId}:${attachedToStr}`;
+        if (!edges.has(key)) {
+            edges.set(key, {
+                id: key,
+                from: fromId,
+                to: toId,
+                kind: edgeKind,
+                file: ref.location.file,
+                line: ref.location.line,
+                meta,
+            });
+            if (ref.decorator === 'UseGuards') guardsCount++;
+            else if (ref.decorator === 'UseInterceptors') interceptorsCount++;
+            else pipesCount++;
+        } else {
+            dedupDropped++;
+        }
+    }
+
     return {
         nodes: [...moduleNodes.values(), ...providerNodes.values()],
         edges: [...edges.values()],
         diagnostics: {
             unresolvedRefs,
             unowned,
-            unresolvedFilterRefs: [],
+            unresolvedFilterRefs,
+            unresolvedFilterRefsTruncated,
+            skippedAnonymousFiles,
             counts: {
                 modules: modules.length,
                 imports: importsCount,
@@ -138,10 +235,12 @@ export function mapDiToGraph(
                 controllers: controllersCount,
                 unresolvedRefs: unresolvedRefs.length,
                 unowned: unowned.length,
-                guards: 0,
-                interceptors: 0,
-                pipes: 0,
-                unresolvedFilterRefs: 0,
+                guards: guardsCount,
+                interceptors: interceptorsCount,
+                pipes: pipesCount,
+                unresolvedFilterRefs: unresolvedFilterRefs.length,
+                dedupDropped,
+                truncatedFilterRefs,
             },
         },
     };
@@ -251,4 +350,11 @@ function refMeta(ref: DiModuleRef | DiProviderRef | DiControllerRef): Record<str
         return { refKind: 'token-ref' };
     }
     return {};
+}
+
+
+function filterDecoratorToEdgeKind(decorator: DiFilterChainRef['decorator']): EdgeKind {
+    if (decorator === 'UseGuards') return 'di-guard';
+    if (decorator === 'UseInterceptors') return 'di-interceptor';
+    return 'di-pipe';
 }

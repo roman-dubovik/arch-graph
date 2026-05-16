@@ -612,8 +612,22 @@ export interface DiDiagnostics {
     /**
      * `@UseGuards / @UseInterceptors / @UsePipes` decorations whose arguments
      * couldn't be resolved to a class identifier (spread, ternary, factory call).
+     * Also includes refs where the enclosing class or target class is not registered
+     * in providerNodes (reason: 'target-not-in-di-graph' or 'source-not-in-di-graph').
+     *
+     * Capped at 200 entries. Check `unresolvedFilterRefsTruncated` for overflow.
      */
     unresolvedFilterRefs: DiFilterChainRef[];
+    /**
+     * True when `unresolvedFilterRefs` reached the 200-entry cap and additional
+     * entries were discarded.
+     */
+    unresolvedFilterRefsTruncated: boolean;
+    /**
+     * Source files that were skipped during filter-chain extraction because they
+     * contained only anonymous / default-export classes with no getName().
+     */
+    skippedAnonymousFiles: string[];
     counts: {
         modules: number;
         imports: number;
@@ -626,6 +640,16 @@ export interface DiDiagnostics {
         interceptors: number;
         pipes: number;
         unresolvedFilterRefs: number;
+        /**
+         * Number of filter-chain refs that were dropped by the dedup key.
+         * Allows consumers to verify:
+         *   guards + interceptors + pipes + unresolvedFilterRefs.length + dedupDropped + truncatedFilterRefs === filterChain.length
+         */
+        dedupDropped: number;
+        /**
+         * Filter-chain refs that exceeded the 200-cap in unresolvedFilterRefs and were not retained.
+         */
+        truncatedFilterRefs: number;
     };
 }
 
