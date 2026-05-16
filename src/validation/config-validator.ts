@@ -1,31 +1,109 @@
 /**
- * Config-field validator — placeholder for Variant 2, Task B10.
+ * Config-field validator — Variant 2, Task B10.
  *
- * Ground-truth regex detection of `configService.get(...)` and `process.env.*` callsites.
+ * Ground-truth regex detection of:
+ *   - configService.get(...)
+ *   - configService.getOrThrow(...)
+ *   - process.env.KEY
+ *
  * Target recall: ≥ 90% (callsite detection has known false-negatives on dynamic key construction).
- *
- * Implementation: B10 (real validator with regex detection).
  */
 
+import type { ArchGraphConfig } from '../core/config.js';
+import { buildLineStarts, offsetToLineCol } from './line-index.js';
+import { iterateSourceFiles } from './scan.js';
+import { stripComments } from './strip-comments.js';
+
+export interface ConfigGroundTruthEntry {
+    file: string;
+    line: number;
+    matchedText: string;
+    kind: 'configService' | 'process.env';
+}
+
 export interface ConfigValidationResult {
-    /** Number of detected configService.get/getOrThrow + process.env callsites via ground-truth regex. */
+    /** Ground-truth entries found by regex. */
+    groundTruth: ConfigGroundTruthEntry[];
+    /** Number of detected callsites via ground-truth regex. */
     groundTruthCount: number;
     /** Recall: groundTruth > 0 ? extracted / groundTruth : null. */
     recall: number | null;
+    /** Recall floor 90%. True if recall >= 0.90 or no ground truth detected. */
+    meetsFloor: boolean;
 }
 
 /**
- * Validate config-field extraction via ground-truth regex detection.
- *
- * This is a placeholder stub returning zero results. The full implementation
- * will be added in B10.
+ * Regex for configService.get(...) and configService.getOrThrow(...).
+ * Matches the method call with an opening paren/whitespace following.
  */
-export function validateConfig(
-    _sourceFiles: string[],
-    _extractedCount: number,
-): ConfigValidationResult {
+const CONFIG_SERVICE_RE = /\bconfigService\.(get|getOrThrow)\s*(?:<[^>]*>)?\s*\(/g;
+
+/**
+ * Regex for process.env.IDENTIFIER member accesses.
+ * Captures the env var name in group 1.
+ */
+const PROCESS_ENV_RE = /\bprocess\.env\.([A-Za-z_][A-Za-z0-9_]*)/g;
+
+/**
+ * Enumerate ground-truth config callsites by regex.
+ */
+export async function enumerateConfigGroundTruth(
+    cfg: ArchGraphConfig,
+): Promise<ConfigGroundTruthEntry[]> {
+    const out: ConfigGroundTruthEntry[] = [];
+
+    for await (const { file, content } of iterateSourceFiles(cfg, 'config GT')) {
+        if (!content.includes('configService') && !content.includes('process.env')) continue;
+
+        const stripped = stripComments(content);
+        const lineStarts = buildLineStarts(stripped);
+
+        for (const m of stripped.matchAll(CONFIG_SERVICE_RE)) {
+            const offset = m.index!;
+            const { line } = offsetToLineCol(offset, lineStarts);
+            out.push({
+                file,
+                line,
+                matchedText: m[0].trim(),
+                kind: 'configService',
+            });
+        }
+
+        for (const m of stripped.matchAll(PROCESS_ENV_RE)) {
+            const offset = m.index!;
+            const { line } = offsetToLineCol(offset, lineStarts);
+            out.push({
+                file,
+                line,
+                matchedText: m[0].trim(),
+                kind: 'process.env',
+            });
+        }
+    }
+
+    return out;
+}
+
+/**
+ * Validate config extraction: compare extracted count to ground-truth count.
+ * Recall floor is 90%.
+ */
+export async function validateConfig(
+    cfg: ArchGraphConfig,
+    extractedCount: number,
+): Promise<ConfigValidationResult> {
+    const groundTruth = await enumerateConfigGroundTruth(cfg);
+    const groundTruthCount = groundTruth.length;
+
+    const recall =
+        groundTruthCount > 0 ? Math.min(extractedCount / groundTruthCount, 1) : null;
+
+    const meetsFloor = recall === null || recall >= 0.90;
+
     return {
-        groundTruthCount: 0,
-        recall: null,
+        groundTruth,
+        groundTruthCount,
+        recall,
+        meetsFloor,
     };
 }
