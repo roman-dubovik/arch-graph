@@ -19,7 +19,7 @@ import { runInitWizard } from './init.js';
 import { installSkill } from './skill.js';
 import { parseQueryArgs, QUERY_CMDS, runQueryCommand } from './query-commands.js';
 import { parseCompareArgs, runCompareCommand } from './compare-command.js';
-import { parseSemanticArgs, runSemanticBuild } from './semantic-commands.js';
+import { parseSemanticArgs, runSemanticBuild, runSemanticSearch } from './semantic-commands.js';
 import {
     tipsForBullmq,
     tipsForDi,
@@ -120,6 +120,14 @@ Usage:
                         optional graphify graph.json on this same repo.
                         Auto-detects ./graphify-out/ if --graphify omitted.
                         --share: contribute anonymized counts to the public bench.
+
+Semantic sidecar (optional — requires `semantic build` first):
+  arch-graph semantic build   [--out <dir>] [--config <path>] [--repo <id>]
+                              Embed all graph nodes and write arch-graph-out/semantic/.
+  arch-graph semantic search  "<query>" [--out <dir>] [--repo <id>] [--k <n>]
+                              [--json|--table] [--kinds k1,k2,...]
+                              Cosine kNN search over the semantic sidecar.
+                              Exit codes: 0=found, 4=empty results, 1=sidecar missing.
 
 Graph query subcommands (read arch-graph-out/graph.json):
   arch-graph who-publishes  <subject>      NATS publishers of subject (e.g. user.created)
@@ -720,7 +728,12 @@ async function main(): Promise<void> {
     if (cmd === 'semantic') {
         const { sub, ...rest } = parseSemanticArgs(argv.slice(1));
         if (sub === 'build') return runSemanticBuild({ sub, ...rest });
-        process.stderr.write(`unknown subcommand: semantic ${sub}\n  Usage: arch-graph semantic build [--out <dir>] [--config <path>] [--repo <id>]\n`);
+        if (sub === 'search') return runSemanticSearch({ sub, ...rest });
+        process.stderr.write(
+            `unknown subcommand: semantic ${sub}\n` +
+            `  Usage: arch-graph semantic build [--out <dir>] [--config <path>] [--repo <id>]\n` +
+            `         arch-graph semantic search "<query>" [--out <dir>] [--repo <id>] [--k <n>] [--json|--table] [--kinds k1,k2,...]\n`,
+        );
         process.exit(1);
     }
     if (cmd === 'install-skill') {

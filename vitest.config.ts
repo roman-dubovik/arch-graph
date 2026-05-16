@@ -118,6 +118,13 @@ export default defineConfig({
                     functions: 85,
                     branches: 70,
                 },
+                // Task 3 — Semantic search CLI (standard gate: 95/95/95/90)
+                'src/semantic/search.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
                 // Task 2 — Semantic build CLI (standard gate: 95/95/95/90)
                 'src/semantic/builder.ts': {
                     lines: 95,

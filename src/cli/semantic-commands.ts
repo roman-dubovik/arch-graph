@@ -1,25 +1,29 @@
 /**
- * CLI handler for `arch-graph semantic build`.
+ * CLI handlers for `arch-graph semantic build` and `arch-graph semantic search`.
  *
  * Follows the two-word subcommand dispatch pattern used by `claude` and `hook`
  * in src/cli/index.ts. The handler is dispatched before `parseArgs()` so that
  * positionals are never mis-interpreted as config paths.
  *
- * Shape:
+ * Shapes:
  *   arch-graph semantic build [--out <dir>] [--config <path>] [--repo <id>]
+ *   arch-graph semantic search "<query>" [--out <dir>] [--repo <id>] [--k <n>]
+ *                              [--json|--table] [--kinds k1,k2,...]
  *
  * Exit codes:
- *   0 — success (non-zero skipped count is NOT a hard failure; it is diagnostic)
- *   1 — hard failure (config missing, model load failure, etc.)
+ *   build:  0 success, 1 hard failure
+ *   search: 0 found, 4 empty results, 1 hard failure (sidecar missing, etc.)
  */
 import { join, resolve } from 'node:path';
 import { Project } from 'ts-morph';
 
 import { loadConfig } from '../core/config.js';
 import { buildSemanticIndex } from '../semantic/builder.js';
-import { embed } from '../semantic/embedder.js';
+import { embed, embedOne } from '../semantic/embedder.js';
 import { readFile as readFileGraph } from 'node:fs/promises';
 import type { ArchGraph } from '../core/types.js';
+import { semanticSearch } from '../semantic/search.js';
+import type { SearchResult } from '../semantic/search.js';
 
 // ---------------------------------------------------------------------------
 // Arg parsing
@@ -30,6 +34,14 @@ export interface SemanticArgs {
     config: string;
     out: string;
     repo?: string;
+    /** search: the query string (first positional after "search") */
+    query?: string;
+    /** search: number of results to return */
+    k?: number;
+    /** search: output format (default: json) */
+    format: 'json' | 'table';
+    /** search: node kinds whitelist */
+    kinds?: string[];
 }
 
 /**
@@ -42,6 +54,14 @@ export function parseSemanticArgs(argv: string[]): SemanticArgs {
     let config = './arch-graph.config.ts';
     let out = './arch-graph-out';
     let repo: string | undefined;
+    let query: string | undefined;
+    let k: number | undefined;
+    let format: 'json' | 'table' = 'json';
+    let kinds: string[] | undefined;
+
+    // For 'search', the first non-flag argument after the subcommand is the query.
+    // We collect it separately.
+    const positionals: string[] = [];
 
     for (let i = 0; i < rest.length; i++) {
         const a = rest[i]!;
@@ -57,10 +77,29 @@ export function parseSemanticArgs(argv: string[]): SemanticArgs {
             repo = rest[++i];
         } else if (a.startsWith('--repo=')) {
             repo = a.slice('--repo='.length);
+        } else if ((a === '--k' || a === '-k') && rest[i + 1]) {
+            k = parseInt(rest[++i]!, 10);
+        } else if (a.startsWith('--k=')) {
+            k = parseInt(a.slice('--k='.length), 10);
+        } else if (a === '--json') {
+            format = 'json';
+        } else if (a === '--table') {
+            format = 'table';
+        } else if (a === '--kinds' && rest[i + 1]) {
+            kinds = rest[++i]!.split(',').map((s) => s.trim()).filter(Boolean);
+        } else if (a.startsWith('--kinds=')) {
+            kinds = a.slice('--kinds='.length).split(',').map((s) => s.trim()).filter(Boolean);
+        } else if (!a.startsWith('-')) {
+            positionals.push(a);
         }
     }
 
-    return { sub: sub ?? '', config, out, repo };
+    // First positional after the subcommand is the query for 'search'
+    if ((sub === 'search') && positionals.length > 0) {
+        query = positionals[0];
+    }
+
+    return { sub: sub ?? '', config, out, repo, query, k, format, kinds };
 }
 
 // ---------------------------------------------------------------------------
@@ -183,4 +222,79 @@ export async function runSemanticBuild(args: SemanticArgs): Promise<void> {
     }
 
     // Exit 0 — non-zero skipped count is diagnostic, not failure (per AC 6).
+}
+
+// ---------------------------------------------------------------------------
+// semantic search handler
+// ---------------------------------------------------------------------------
+
+/**
+ * Render search results as an aligned table.
+ * Columns: score (6 chars), kind (16 chars), label (32 chars), path.
+ */
+function renderTable(results: SearchResult[]): string {
+    const lines: string[] = [];
+    const header = [
+        'SCORE '.padEnd(8),
+        'KIND'.padEnd(18),
+        'LABEL'.padEnd(34),
+        'PATH',
+    ].join('  ');
+    lines.push(header);
+    lines.push('-'.repeat(header.length));
+    for (const r of results) {
+        const score = r.score.toFixed(4).padEnd(8);
+        const kind = (r.kind as string).padEnd(18);
+        const label = r.label.length > 32
+            ? r.label.slice(0, 29) + '...'
+            : r.label.padEnd(34);
+        const path = r.path ?? '';
+        lines.push([score, kind, label, path].join('  '));
+    }
+    return lines.join('\n');
+}
+
+/**
+ * Run `semantic search` — embed query, kNN over sidecar, print results.
+ */
+export async function runSemanticSearch(args: SemanticArgs): Promise<void> {
+    if (!args.query) {
+        process.stderr.write(
+            'arch-graph semantic search: missing query argument.\n' +
+            '  Usage: arch-graph semantic search "<query>" [--out <dir>] [--repo <id>] [--k <n>] [--json|--table] [--kinds k1,k2,...]\n',
+        );
+        process.exit(1);
+    }
+
+    const outDir = resolve(args.out);
+    const isJson = args.format !== 'table';
+
+    const { output, exitCode, stderrWarning } = await semanticSearch({
+        query: args.query,
+        outDir,
+        embedder: embedOne,
+        topK: args.k,
+        kinds: args.kinds,
+    });
+
+    // Emit hash-drift or other warnings to stderr
+    if (stderrWarning) {
+        process.stderr.write(stderrWarning);
+    }
+
+    if (isJson) {
+        process.stdout.write(JSON.stringify(output, null, 2) + '\n');
+    } else {
+        if (output.error) {
+            process.stderr.write(
+                `arch-graph semantic search: ${output.hint ?? output.error}\n`,
+            );
+        } else if (output.results.length === 0) {
+            process.stdout.write('No results found.\n');
+        } else {
+            process.stdout.write(renderTable(output.results) + '\n');
+        }
+    }
+
+    process.exit(exitCode);
 }
