@@ -4,12 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>arch-graph — Static architecture graph for NestJS monorepos</title>
-  <meta name="description" content="arch-graph extracts NATS, BullMQ, TypeORM, NestJS DI, HTTP, and TS imports from a NestJS monorepo into a typed graph. Deterministic. No LLM at build time. 7.6× fewer LLM context tokens than graphify and 100% recall on our 15-question architecture benchmark (substring-presence heuristic)." />
+  <meta name="description" content="arch-graph extracts NATS, BullMQ, TypeORM, NestJS DI, HTTP, and TS imports from a NestJS monorepo into a typed graph. Deterministic. No LLM at build time. 12.3× fewer LLM context tokens than graphify and 100% recall on architecture benchmarks (substring-presence heuristic)." />
   <meta name="theme-color" content="#0a0a0f" />
 
   <meta property="og:type" content="website" />
   <meta property="og:title" content="arch-graph — Static architecture graph for NestJS monorepos" />
-  <meta property="og:description" content="Deterministic. No LLM at build time. 7.6× fewer LLM context tokens than graphify and 100% recall on our 15-question architecture benchmark." />
+  <meta property="og:description" content="Deterministic. No LLM at build time. 12.3× fewer LLM context tokens than graphify and 100% recall on architecture benchmarks." />
   <meta property="og:url" content="https://roman-dubovik.github.io/arch-graph/" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -115,16 +115,16 @@
 
         <ul class="hero-stats" aria-label="Headline benchmark numbers">
           <li>
-            <span class="stat-num">7.6×</span>
+            <span class="stat-num">12.3×</span>
             <span class="stat-label">fewer LLM tokens</span>
           </li>
           <li>
             <span class="stat-num">100%</span>
-            <span class="stat-label">recall on bench suite</span>
+            <span class="stat-label">recall on architecture queries</span>
           </li>
           <li>
-            <span class="stat-num">5</span>
-            <span class="stat-label">reference monorepos benchmarked</span>
+            <span class="stat-num">10%</span>
+            <span class="stat-label">graphify recall on the same set</span>
           </li>
           <li>
             <span class="stat-num">0</span>
@@ -320,33 +320,33 @@
     <section class="section section-bench" id="bench" aria-labelledby="bench-title">
       <div class="container">
         <p class="section-eyebrow">Measured</p>
-        <h2 id="bench-title" class="section-title">Measured on 5 NestJS monorepos.</h2>
-        <p class="section-lead">15 architecture-grade questions in the run below (the YAML now defines 30; re-running needs the private reference repos). Same compression aggressiveness, same encoder (cl100k_base), same questions for both tools. Recall is a substring-presence necessary-condition heuristic, not an end-to-end LLM eval.</p>
+        <h2 id="bench-title" class="section-title">Measured on real NestJS monorepos.</h2>
+        <p class="section-lead">Fresh head-to-head re-run via <code>arch-graph compare</code> on two private reference monorepos with existing graphify output. 20 auto-generated questions (10 per project) sampled from real nodes in each graph. Same compression, same <code>cl100k_base</code> encoder, same questions for both tools. Recall is a substring-presence necessary-condition heuristic, not an end-to-end LLM eval.</p>
 
         <div class="bench-cards reveal">
           <div class="bench-card highlight">
-            <p class="bench-card-label">Avg tokens per answered question</p>
-            <p class="bench-card-row"><span class="bench-card-tool">arch-graph</span><span class="bench-card-num">45,896</span></p>
-            <p class="bench-card-row dim"><span class="bench-card-tool">graphify</span><span class="bench-card-num">579,770</span></p>
-            <p class="bench-card-foot">arch ran on all 15 questions; graphify on 9. 12.6× per answered Q.</p>
+            <p class="bench-card-label">Avg tokens per question</p>
+            <p class="bench-card-row"><span class="bench-card-tool">arch-graph</span><span class="bench-card-num">41,626</span></p>
+            <p class="bench-card-row dim"><span class="bench-card-tool">graphify</span><span class="bench-card-num">510,577</span></p>
+            <p class="bench-card-foot">12.3× fewer tokens. Same 20 questions, same compression.</p>
           </div>
           <div class="bench-card">
             <p class="bench-card-label">Mean recall (substring-presence)</p>
             <p class="bench-card-row"><span class="bench-card-tool">arch-graph</span><span class="bench-card-num">100%</span></p>
-            <p class="bench-card-row dim"><span class="bench-card-tool">graphify</span><span class="bench-card-num">39%</span></p>
-            <p class="bench-card-foot">On the 15-question bench suite. Necessary-condition heuristic, not an LLM eval.</p>
+            <p class="bench-card-row dim"><span class="bench-card-tool">graphify</span><span class="bench-card-num">10%</span></p>
+            <p class="bench-card-foot">~10× higher recall on architecture queries. Necessary-condition, not an LLM eval.</p>
           </div>
           <div class="bench-card">
-            <p class="bench-card-label">Total tokens · 15 questions</p>
-            <p class="bench-card-row"><span class="bench-card-tool">arch-graph</span><span class="bench-card-num">688K</span></p>
-            <p class="bench-card-row dim"><span class="bench-card-tool">graphify</span><span class="bench-card-num">5.2M</span></p>
-            <p class="bench-card-foot">Same compression aggressiveness, same cl100k_base encoder, same 15 questions.</p>
+            <p class="bench-card-label">Total tokens · 20 questions</p>
+            <p class="bench-card-row"><span class="bench-card-tool">arch-graph</span><span class="bench-card-num">832K</span></p>
+            <p class="bench-card-row dim"><span class="bench-card-tool">graphify</span><span class="bench-card-num">10.2M</span></p>
+            <p class="bench-card-foot">Same compression aggressiveness, same <code>cl100k_base</code> encoder, same questions.</p>
           </div>
           <div class="bench-card">
             <p class="bench-card-label">Build cost</p>
             <p class="bench-card-row"><span class="bench-card-tool">arch-graph</span><span class="bench-card-num">deterministic</span></p>
             <p class="bench-card-row dim"><span class="bench-card-tool">graphify</span><span class="bench-card-num">LLM-driven</span></p>
-            <p class="bench-card-foot">ts-morph only. No network. No LLM.</p>
+            <p class="bench-card-foot">ts-morph only. No network. No LLM at build time.</p>
           </div>
         </div>
 
@@ -369,19 +369,19 @@
               <tr>
                 <th scope="row">A</th>
                 <td>large</td>
-                <td class="mono">894 / 1,532</td>
-                <td class="mono">65,763</td>
+                <td class="mono">805 / 1,430</td>
+                <td class="mono">59,835</td>
                 <td><span class="pill ok">100%</span></td>
                 <td class="mono">11,440 / 10,588</td>
                 <td class="mono">718,155</td>
-                <td><span class="pill warn">42%</span></td>
+                <td><span class="pill warn">16%</span></td>
               </tr>
               <tr>
                 <th scope="row">B</th>
                 <td>large</td>
-                <td class="mono">898 / 1,222</td>
-                <td class="mono">63,101</td>
-                <td><span class="pill ok">100%</span></td>
+                <td class="mono">897 / 1,212</td>
+                <td class="mono">—</td>
+                <td class="mono dim">—</td>
                 <td class="mono dim">unavailable</td>
                 <td class="mono dim">—</td>
                 <td class="mono dim">—</td>
@@ -389,39 +389,19 @@
               <tr>
                 <th scope="row">C</th>
                 <td>medium</td>
-                <td class="mono">358 / 552</td>
-                <td class="mono">23,679</td>
+                <td class="mono">357 / 543</td>
+                <td class="mono">23,416</td>
                 <td><span class="pill ok">100%</span></td>
                 <td class="mono">5,163 / 4,664</td>
                 <td class="mono">302,999</td>
-                <td><span class="pill warn">33%</span></td>
-              </tr>
-              <tr>
-                <th scope="row">D</th>
-                <td>small</td>
-                <td class="mono">245 / 352</td>
-                <td class="mono">16,391</td>
-                <td><span class="pill ok">100%</span></td>
-                <td class="mono dim">unavailable</td>
-                <td class="mono dim">—</td>
-                <td class="mono dim">—</td>
-              </tr>
-              <tr>
-                <th scope="row">E</th>
-                <td>small</td>
-                <td class="mono">144 / 189</td>
-                <td class="mono">8,570</td>
-                <td><span class="pill ok">100%</span></td>
-                <td class="mono dim">unavailable</td>
-                <td class="mono dim">—</td>
-                <td class="mono dim">—</td>
+                <td><span class="pill warn">4%</span></td>
               </tr>
             </tbody>
           </table>
         </div>
 
         <p class="prose dim small">
-          Recall uses a substring-presence heuristic: for each question, we check whether every ground-truth label appears in the tool's compressed context. It's a permissive necessary-condition — "did the tool's output even contain the answer". Three of the five projects had no available graphify graph (graphify ships as a Claude skill, not a CLI); they're shown as <span class="dim">unavailable</span>. Full methodology: <a class="link" href="https://github.com/roman-dubovik/arch-graph/blob/main/bench/report.md" rel="noopener" target="_blank">bench/report.md →</a>
+          Recall uses a substring-presence heuristic: for each question, we check whether every ground-truth label appears in the tool's compressed context. It's a permissive necessary-condition — "did the tool's output even contain the answer". Project B's graphify graph wasn't available (graphify ships as a Claude skill, not a CLI). Full methodology: <a class="link" href="https://github.com/roman-dubovik/arch-graph/blob/main/bench/report.md" rel="noopener" target="_blank">bench/report.md →</a>
         </p>
 
         <p class="prose">
