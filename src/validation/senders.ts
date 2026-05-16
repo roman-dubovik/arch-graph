@@ -1,9 +1,6 @@
-import fg from 'fast-glob';
-import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
-
 import type { ArchGraphConfig } from '../core/config.js';
 import type { GroundTruthEntry } from '../core/types.js';
+import { iterateSourceFiles } from './scan.js';
 import { stripComments } from './strip-comments.js';
 
 /**
@@ -13,26 +10,7 @@ import { stripComments } from './strip-comments.js';
  * или один из wrapper-классов из конфига. Затем grep .send/.emit/.publish/.request(.
  */
 export async function enumerateSenders(cfg: ArchGraphConfig): Promise<GroundTruthEntry[]> {
-    const root = resolve(cfg.root);
     const wrappers = cfg.nats?.wrapperPublishApis ?? [];
-
-    const files = await fg(
-        [`${cfg.appsGlob}/**/*.ts`, ...(cfg.libsGlob ? [`${cfg.libsGlob}/**/*.ts`] : [])],
-        {
-            cwd: root,
-            absolute: true,
-            ignore: [
-                '**/node_modules/**',
-                '**/dist/**',
-                '**/.claude/**',
-                '**/.worktrees/**',
-                '**/*.spec.ts',
-                '**/*.test.ts',
-                '**/*.d.ts',
-                ...(cfg.excludeGlobs?.map((g) => `**${g}**`) ?? []),
-            ],
-        },
-    );
 
     const natsTypes = new Set<string>(['ClientProxy', 'ClientNats', ...wrappers.map((a) => a.class)]);
     const natsMethods = new Set(['send', 'emit', 'publish', 'request']);
@@ -43,16 +21,7 @@ export async function enumerateSenders(cfg: ArchGraphConfig): Promise<GroundTrut
     const importNestjsMicroservices = /from\s+['"]@nestjs\/microservices['"]/;
     const out: GroundTruthEntry[] = [];
 
-    for (const file of files) {
-        let content: string;
-        try {
-            content = await readFile(file, 'utf8');
-        } catch (err) {
-            const e = err as NodeJS.ErrnoException;
-            if (e.code === 'ENOENT') continue;
-            throw new Error(`ground-truth read failed for ${file}: ${e.code ?? e.message}`, { cause: err });
-        }
-
+    for await (const { file, content } of iterateSourceFiles(cfg, 'senders GT')) {
         // Strip comments first so a commented-out import line doesn't false-positive
         // the file as a NATS sender (drives phantom GT entries with no extractor match).
         const stripped = stripComments(content);
