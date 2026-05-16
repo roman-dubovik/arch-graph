@@ -10,7 +10,7 @@ import {
 } from 'ts-morph';
 
 import type { ArchGraphConfig } from '../../core/config.js';
-import type { TsImportResolution, TsImportSite } from '../../core/types.js';
+import type { TsDynamicResolution, TsImportSite, TsStaticResolution } from '../../core/types.js';
 import { isExcludedSourceFile } from '../shared.js';
 
 /**
@@ -112,7 +112,7 @@ function buildDynamicSite(
     call: CallExpression,
     aliasResolver: AliasResolver,
     isAliasPrefix: AliasPrefixCheck,
-): TsImportSite | null {
+): (TsImportSite & { kind: 'dynamic' }) | null {
     const args = call.getArguments();
     if (args.length === 0) return null;
     const arg = args[0]!;
@@ -121,10 +121,14 @@ function buildDynamicSite(
     const kind = arg.getKind();
     if (kind !== SyntaxKind.StringLiteral && kind !== SyntaxKind.NoSubstitutionTemplateLiteral) {
         const pos = sf.getLineAndColumnAtPos(call.getStart());
+        // Non-literal argument: resolution is structurally impossible.
+        // `dynamic-non-literal` can only appear on a `kind: 'dynamic'` site — the
+        // type system enforces this via the TsImportSite discriminated union.
+        const resolution: TsDynamicResolution = { kind: 'dynamic-non-literal' };
         return {
             sourceFile: sf.getFilePath(),
             specifier: arg.getText().slice(0, 80),
-            resolution: { kind: 'dynamic-non-literal' },
+            resolution,
             kind: 'dynamic',
             typeOnly: false,
             // Non-literal specifier — can't classify shape. Mark as bare-external
@@ -184,7 +188,7 @@ function packageNameOf(specifier: string): string {
 }
 
 /**
- * Five-stage resolver. Returns a `TsImportResolution` describing the outcome.
+ * Five-stage resolver. Returns a `TsStaticResolution` describing the outcome.
  *
  *   1. If ts-morph already resolved the spec → `resolved`. (Fast path for
  *      relatives whose target is in the Project.)
@@ -196,8 +200,11 @@ function packageNameOf(specifier: string): string {
  *   5. No alias match but not relative / builtin → `external` with canonical
  *      npm package name (`packageNameOf`). No further probing.
  *
- * Previously this returned `string | null`; the new union surfaces each failure
- * mode distinctly so consumers can branch without coupling to `specifierShape`.
+ * Returns `TsStaticResolution` (not the wider `TsDynamicResolution`) — this
+ * function is called from both static and literal-dynamic import paths. The
+ * `dynamic-non-literal` variant is produced directly in `buildDynamicSite`
+ * (before this function is called) and is intentionally absent here, which
+ * enforces the structural invariant that only `kind: 'dynamic'` sites carry it.
  */
 function resolveSpecifier(
     sourceFilePath: string,
@@ -205,7 +212,7 @@ function resolveSpecifier(
     tsMorphResolved: SourceFile | undefined,
     aliasResolver: AliasResolver,
     isAliasPrefix: AliasPrefixCheck,
-): TsImportResolution {
+): TsStaticResolution {
     if (tsMorphResolved) return { kind: 'resolved', filePath: tsMorphResolved.getFilePath() };
 
     if (specifier.startsWith('.')) {
