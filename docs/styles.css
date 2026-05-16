@@ -644,10 +644,15 @@ td.dim, .dim { color: var(--text-mute); }
   margin: 32px 0 0;
   padding: 0;
   display: grid;
+  /* minmax(0, 1fr) lets grid items shrink below their content's intrinsic width
+   * — without this, a wide code-block inside an .install-step forces the column
+   * (and therefore the page) wider than the viewport on mobile. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 20px;
   counter-reset: step;
 }
 .install-step {
+  min-width: 0; /* allow grid item to shrink below content width — see .install-steps */
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0));
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -880,13 +885,16 @@ td.dim, .dim { color: var(--text-mute); }
 .bench-cards > *,
 .query-cards > *,
 .install-cards > *,
+.install-steps > *,
+.install-step,
 .domain-list > *,
 .section > *,
 .container > * {
   min-width: 0;
 }
 .code-block,
-.table-wrap {
+.table-wrap,
+pre {
   max-width: 100%;
 }
 
@@ -911,11 +919,15 @@ td.dim, .dim { color: var(--text-mute); }
   .section { padding: 72px 0; }
   .hero { padding: 80px 0 64px; min-height: auto; }
 
+  /* minmax(0, 1fr) instead of plain 1fr — lets the grid item shrink below its
+   * content's intrinsic width (an unwrapped code-block line otherwise expands
+   * the grid track and pushes the layout wider than the viewport). */
   .bench-cards,
   .query-cards,
-  .install-cards { grid-template-columns: 1fr; }
+  .install-cards,
+  .install-steps { grid-template-columns: minmax(0, 1fr); }
 
-  .domain-list { grid-template-columns: 1fr; }
+  .domain-list { grid-template-columns: minmax(0, 1fr); }
 
   .footer-row { grid-template-columns: 1fr; gap: 20px; }
   .footer-meta { text-align: left; }
