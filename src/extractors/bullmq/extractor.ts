@@ -32,7 +32,7 @@ export { isExcludedSourceFile };
  * Queue-name resolution:
  *   - string literal               → `{ kind: 'literal', name }`
  *   - identifier resolved via QueueNameIndex pre-pass → `{ kind: 'const', name, identifier }`
- *   - anything else                → `{ kind: 'unresolved', raw }`
+ *   - anything else                → `{ kind: 'unresolved', raw, reason }`
  *
  * Not yet handled: per-job names (`@Process('jobName')` inside `@Processor`),
  * `BullModule.forFeature()` factory variants, wrapper producer/consumer classes.
@@ -137,7 +137,7 @@ function buildProcessorSite(
 
 function resolveDecoratorArg(dec: Decorator, queueNames: QueueNameIndex): BullMqQueueRef {
     const args = dec.getArguments();
-    if (args.length === 0) return { kind: 'unresolved', raw: '<no-arg>' };
+    if (args.length === 0) return { kind: 'unresolved', raw: '<no-arg>', reason: 'no-arg' };
     return resolveQueueArg(args[0]!, queueNames);
 }
 
@@ -151,7 +151,7 @@ function resolveQueueArg(node: Node, queueNames: QueueNameIndex): BullMqQueueRef
         const identifier = node.getText();
         const value = queueNames.get(identifier);
         if (value !== undefined) return { kind: 'const', name: value, identifier };
-        return { kind: 'unresolved', raw: identifier };
+        return { kind: 'unresolved', raw: identifier, reason: 'unindexed-identifier' };
     }
     if (kind === SyntaxKind.PropertyAccessExpression) {
         // Only resolve when the full dotted name is in the index. Tail-only matches
@@ -161,7 +161,7 @@ function resolveQueueArg(node: Node, queueNames: QueueNameIndex): BullMqQueueRef
         const text = node.getText();
         const value = queueNames.get(text);
         if (value !== undefined) return { kind: 'const', name: value, identifier: text };
-        return { kind: 'unresolved', raw: text };
+        return { kind: 'unresolved', raw: text, reason: 'unindexed-identifier' };
     }
     if (kind === SyntaxKind.ObjectLiteralExpression) {
         // `@nestjs/bullmq` v10+ overloads `@Processor` and `@InjectQueue` with an
@@ -170,9 +170,9 @@ function resolveQueueArg(node: Node, queueNames: QueueNameIndex): BullMqQueueRef
         const nameProp = findProp(node as ObjectLiteralExpression, 'name');
         const init = nameProp?.getInitializer();
         if (init) return resolveQueueArg(init, queueNames);
-        return { kind: 'unresolved', raw: '<options-no-name>' };
+        return { kind: 'unresolved', raw: '<options-no-name>', reason: 'options-no-name' };
     }
-    return { kind: 'unresolved', raw: node.getText().slice(0, 80) };
+    return { kind: 'unresolved', raw: node.getText().slice(0, 80), reason: 'dynamic-expression' };
 }
 
 /**
@@ -214,14 +214,14 @@ function collectRegistrations(
 
 function resolveRegistrationArg(arg: Node, queueNames: QueueNameIndex): BullMqQueueRef {
     if (arg.getKind() !== SyntaxKind.ObjectLiteralExpression) {
-        return { kind: 'unresolved', raw: arg.getText().slice(0, 80) };
+        return { kind: 'unresolved', raw: arg.getText().slice(0, 80), reason: 'non-object-arg' };
     }
     const obj = arg as ObjectLiteralExpression;
     const nameProp = findProp(obj, 'name');
-    if (!nameProp) return { kind: 'unresolved', raw: '<no-name>' };
-    const init = nameProp.getInitializer();
-    if (!init) return { kind: 'unresolved', raw: '<shorthand>' };
-    return resolveQueueArg(init, queueNames);
+    if (!nameProp) return { kind: 'unresolved', raw: '<no-name>', reason: 'no-name-property' };
+    // `findProp` only returns `PropertyAssignment` nodes, which always carry an
+    // initializer — `getInitializer()` is non-null by construction.
+    return resolveQueueArg(nameProp.getInitializer()!, queueNames);
 }
 
 function findProp(obj: ObjectLiteralExpression, name: string): PropertyAssignment | null {
