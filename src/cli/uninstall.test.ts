@@ -568,7 +568,8 @@ describe('removeGlobalInstall', () => {
             await writeFile(join(dir, 'bin', 'arch-graph'), '#!/bin/sh\n');
 
             const result = removeGlobalInstall(dir);
-            expect(result.exitCode).toBe(0);
+            expect(result.kind).toBe('done');
+            if (result.kind === 'done') expect(result.exitCode).toBe(0);
             expect(existsSync(dir)).toBe(false);
         } finally {
             await rm(dir, { recursive: true, force: true });
@@ -588,7 +589,8 @@ describe('removeGlobalInstall', () => {
             );
 
             const result = removeGlobalInstall(dir);
-            expect(result.exitCode).toBe(0);
+            expect(result.kind).toBe('done');
+            if (result.kind === 'done') expect(result.exitCode).toBe(0);
             const ranWith = await readFile(sentinel, 'utf8');
             expect(ranWith.trim()).toBe('--yes');
         } finally {
@@ -723,46 +725,61 @@ describe('inventoryProject provenance', () => {
 });
 
 describe('removeGlobalInstall sentinel', () => {
-    it('refuses installDir without package.json:name="arch-graph"', async () => {
+    it('refuses installDir without package.json — reason=missing-package-json', async () => {
         const dir = await mkdtemp(join(tmpdir(), 'ag-test-'));
         try {
-            // package.json missing entirely
             const r = removeGlobalInstall(dir);
-            expect(r.exitCode).toBe(1);
-            expect(r.stderr).toMatch(/refusing to remove/);
-            // Dir still on disk:
+            expect(r.kind).toBe('refused');
+            if (r.kind === 'refused') {
+                expect(r.reason).toBe('missing-package-json');
+                expect(r.stderr).toMatch(/refusing to remove/);
+            }
             expect(existsSync(dir)).toBe(true);
         } finally {
             await rm(dir, { recursive: true, force: true });
         }
     });
 
-    it('refuses installDir with mismatched package.json name', async () => {
+    it('refuses installDir with mismatched package.json name — reason=wrong-name', async () => {
         const dir = await mkdtemp(join(tmpdir(), 'ag-test-'));
         try {
             await writeFile(join(dir, 'package.json'), JSON.stringify({ name: 'other-package' }));
             const r = removeGlobalInstall(dir);
-            expect(r.exitCode).toBe(1);
-            expect(r.stderr).toMatch(/refusing to remove/);
+            expect(r.kind).toBe('refused');
+            if (r.kind === 'refused') expect(r.reason).toBe('wrong-name');
             expect(existsSync(dir)).toBe(true);
         } finally {
             await rm(dir, { recursive: true, force: true });
         }
     });
 
-    it('accepts installDir with package.json:name=arch-graph + no uninstall.sh → fallback rm path', async () => {
+    it('refuses installDir with corrupt package.json — reason=parse-error', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 'ag-test-'));
+        try {
+            await writeFile(join(dir, 'package.json'), 'not json{{{');
+            const r = removeGlobalInstall(dir);
+            expect(r.kind).toBe('refused');
+            if (r.kind === 'refused') expect(r.reason).toBe('parse-error');
+            expect(existsSync(dir)).toBe(true);
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+        }
+    });
+
+    it('accepts installDir + no uninstall.sh → fallback rm path', async () => {
         const dir = await mkdtemp(join(tmpdir(), 'ag-test-'));
         try {
             await writeFile(join(dir, 'package.json'), JSON.stringify({ name: 'arch-graph' }));
             const r = removeGlobalInstall(dir);
-            expect(r.exitCode).toBe(0);
+            expect(r.kind).toBe('done');
+            if (r.kind === 'done') expect(r.exitCode).toBe(0);
             expect(existsSync(dir)).toBe(false);
         } finally {
             await rm(dir, { recursive: true, force: true });
         }
     });
 
-    it('accepts installDir with package.json + scripts/uninstall.sh → script path', async () => {
+    it('accepts installDir + scripts/uninstall.sh → script path with --yes', async () => {
         const dir = await mkdtemp(join(tmpdir(), 'ag-test-'));
         try {
             await writeFile(join(dir, 'package.json'), JSON.stringify({ name: 'arch-graph' }));
@@ -774,7 +791,8 @@ describe('removeGlobalInstall sentinel', () => {
                 { mode: 0o755 },
             );
             const r = removeGlobalInstall(dir);
-            expect(r.exitCode).toBe(0);
+            expect(r.kind).toBe('done');
+            if (r.kind === 'done') expect(r.exitCode).toBe(0);
             expect((await readFile(ran, 'utf8')).trim()).toBe('--yes');
         } finally {
             await rm(dir, { recursive: true, force: true });
@@ -979,6 +997,109 @@ describe('runUninstallWizard', () => {
             expect(ranWith.trim()).toBe('--yes');
         } finally {
             await rm(dir, { recursive: true, force: true });
+            await rm(home, { recursive: true, force: true });
+        }
+    });
+
+    it('multi-project non-TTY refusal gate — without --all-projects, exits 2', async () => {
+        const a = await mkdtemp(join(tmpdir(), 'ag-a-'));
+        const b = await mkdtemp(join(tmpdir(), 'ag-b-'));
+        const home = await mkdtemp(join(tmpdir(), 'ag-home-'));
+        try {
+            // Two registered projects, each with an artefact:
+            await writeFile(join(a, 'arch-graph.config.ts'), 'x');
+            await writeFile(join(b, 'arch-graph.config.ts'), 'x');
+            const regDir = await mkdtemp(join(tmpdir(), 'ag-reg-'));
+            const registryFile = join(regDir, 'r.json');
+            const prevReg = process.env.ARCH_GRAPH_REGISTRY;
+            process.env.ARCH_GRAPH_REGISTRY = registryFile;
+            try {
+                await registerProject(a);
+                await registerProject(b);
+
+                let exitCode: number | undefined;
+                const origExit = process.exit;
+                process.exit = ((code?: number) => { exitCode = code; throw new Error('exit'); }) as typeof process.exit;
+                let stderr = '';
+                const origErr = process.stderr.write.bind(process.stderr);
+                process.stderr.write = ((chunk: string | Buffer) => {
+                    stderr += typeof chunk === 'string' ? chunk : chunk.toString();
+                    return true;
+                }) as typeof process.stderr.write;
+
+                try {
+                    await captureStdout(async () => {
+                        await withNonTty(async () => {
+                            await withEnv({ HOME: home, ARCH_GRAPH_HOME: a, ARCH_GRAPH_BIN_DIR: join(a, 'bin') }, async () => {
+                                try {
+                                    await runUninstallWizard({
+                                        scopes: new Set(['project']),
+                                        repoOverride: null,
+                                        yes: false,
+                                    });
+                                } catch (e) {
+                                    // Expected — our exit stub throws to unwind.
+                                }
+                            });
+                        });
+                    });
+                } finally {
+                    process.exit = origExit;
+                    process.stderr.write = origErr;
+                }
+
+                expect(exitCode).toBe(2);
+                expect(stderr).toMatch(/refusing to sweep all of them/);
+                // Files untouched:
+                expect(existsSync(join(a, 'arch-graph.config.ts'))).toBe(true);
+                expect(existsSync(join(b, 'arch-graph.config.ts'))).toBe(true);
+            } finally {
+                if (prevReg === undefined) delete process.env.ARCH_GRAPH_REGISTRY;
+                else process.env.ARCH_GRAPH_REGISTRY = prevReg;
+                await rm(regDir, { recursive: true, force: true });
+            }
+        } finally {
+            await rm(a, { recursive: true, force: true });
+            await rm(b, { recursive: true, force: true });
+            await rm(home, { recursive: true, force: true });
+        }
+    });
+
+    it('multi-project + --all-projects → gate does NOT fire, sweep proceeds', async () => {
+        const a = await mkdtemp(join(tmpdir(), 'ag-a-'));
+        const b = await mkdtemp(join(tmpdir(), 'ag-b-'));
+        const home = await mkdtemp(join(tmpdir(), 'ag-home-'));
+        try {
+            await writeFile(join(a, 'arch-graph.config.ts'), 'x');
+            await writeFile(join(b, 'arch-graph.config.ts'), 'x');
+            const regDir = await mkdtemp(join(tmpdir(), 'ag-reg-'));
+            const prevReg = process.env.ARCH_GRAPH_REGISTRY;
+            process.env.ARCH_GRAPH_REGISTRY = join(regDir, 'r.json');
+            try {
+                await registerProject(a);
+                await registerProject(b);
+                await captureStdout(async () => {
+                    await withNonTty(async () => {
+                        await withEnv({ HOME: home, ARCH_GRAPH_HOME: a, ARCH_GRAPH_BIN_DIR: join(a, 'bin') }, async () => {
+                            await runUninstallWizard({
+                                scopes: new Set(['project']),
+                                repoOverride: null,
+                                yes: false,
+                                allProjects: true,
+                            });
+                        });
+                    });
+                });
+                expect(existsSync(join(a, 'arch-graph.config.ts'))).toBe(false);
+                expect(existsSync(join(b, 'arch-graph.config.ts'))).toBe(false);
+            } finally {
+                if (prevReg === undefined) delete process.env.ARCH_GRAPH_REGISTRY;
+                else process.env.ARCH_GRAPH_REGISTRY = prevReg;
+                await rm(regDir, { recursive: true, force: true });
+            }
+        } finally {
+            await rm(a, { recursive: true, force: true });
+            await rm(b, { recursive: true, force: true });
             await rm(home, { recursive: true, force: true });
         }
     });

@@ -262,6 +262,23 @@ describe('load tolerance (corrupt registry)', () => {
         });
     });
 
+    it('version mismatch + subsequent registerProject → file NOT overwritten (frozen sentinel)', async () => {
+        await withRegistry(async (reg) => {
+            await mkdir(join(reg, '..'), { recursive: true });
+            const futureContent = JSON.stringify({ version: 99, projects: [{ path: '/x', lastSeen: 'y', extra: 'v2-stuff' }] });
+            await writeFile(reg, futureContent);
+
+            const dir = await mkdtemp(join(tmpdir(), 'ag-fresh-'));
+            try {
+                await registerProject(dir);
+                // If frozen sentinel works, file is byte-identical to what we wrote.
+                expect(await readFile(reg, 'utf8')).toBe(futureContent);
+            } finally {
+                await rm(dir, { recursive: true, force: true });
+            }
+        });
+    });
+
     it('valid JSON but wrong shape → empty', async () => {
         await withRegistry(async (reg) => {
             await mkdir(join(reg, '..'), { recursive: true });
