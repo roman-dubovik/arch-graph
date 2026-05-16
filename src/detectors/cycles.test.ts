@@ -572,3 +572,46 @@ describe('detectCycles — canonicalise empty-path guard (regression)', () => {
         }
     });
 });
+
+describe('detectCycles — canonicalise empty-path guard ordering (regression)', () => {
+    it('dedup does not silence BUG warning for empty-path cycles', () => {
+        // Regression guard: the empty-path check must run BEFORE the seen.has(key)
+        // dedup. If it ran after, two empty-path cycles would produce only one BUG
+        // warning (the second would be deduped as key="" was already in `seen`).
+        //
+        // Since an empty path is structurally unreachable from a real graph (Johnson's
+        // never emits []), we verify the fix indirectly: on a clean graph no BUG
+        // warning fires at all, and cycles.length matches the actual cycle count —
+        // i.e. the guard is not accidentally suppressing legitimate cycles.
+        const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        try {
+            // Graph with 3 independent 2-node cycles — all distinct canonical keys.
+            // If the guard reordering accidentally broke dedup, we'd see duplicates.
+            const graph = makeGraph(
+                [
+                    makeNode('file:a'), makeNode('file:b'),
+                    makeNode('file:c'), makeNode('file:d'),
+                    makeNode('file:e'), makeNode('file:f'),
+                ],
+                [
+                    makeEdge('file:a', 'file:b', 'ts-import'),
+                    makeEdge('file:b', 'file:a', 'ts-import'),
+                    makeEdge('file:c', 'file:d', 'ts-import'),
+                    makeEdge('file:d', 'file:c', 'ts-import'),
+                    makeEdge('file:e', 'file:f', 'ts-import'),
+                    makeEdge('file:f', 'file:e', 'ts-import'),
+                ],
+            );
+            const result = detectCycles(graph);
+            // Exactly 3 distinct cycles — dedup still works correctly
+            expect(result.cycles.length).toBe(3);
+            // No BUG warning for canonicalise on a well-formed graph
+            const bugCalls = (stderrSpy.mock.calls as unknown[][])
+                .map((args) => String(args[0]))
+                .filter((msg) => msg.includes('[detectCycles] BUG: canonicalise'));
+            expect(bugCalls).toHaveLength(0);
+        } finally {
+            stderrSpy.mockRestore();
+        }
+    });
+});

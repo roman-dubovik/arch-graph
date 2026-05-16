@@ -33,6 +33,45 @@ export interface BuildResult {
 }
 
 /**
+ * Wrapper around `detectCycles` that degrades gracefully on RangeError (stack
+ * overflow on very large graphs) and re-throws any other unexpected error.
+ *
+ * Extracted so tests can import this function directly and exercise the same
+ * error-handling paths that production uses — no inline copy required.
+ *
+ * @param graph  The assembled ArchGraph to analyse.
+ * @param detect Injected detector — defaults to the real `detectCycles`. Pass a
+ *               throwing stub in tests to exercise the catch branches without
+ *               building a real graph.
+ * @param write  Output channel for user-visible progress messages. Defaults to
+ *               `process.stdout.write` (progress belongs on stdout, not stderr).
+ */
+export function safeDetectCycles(
+    graph: ArchGraph,
+    detect: (g: ArchGraph) => CyclesDiagnostics = detectCycles,
+    write: (msg: string) => void = (m) => process.stdout.write(m),
+): CyclesDiagnostics {
+    try {
+        return detect(graph);
+    } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (err instanceof RangeError) {
+            // Stack overflow on a very large graph — degrade gracefully and record
+            // the failure structurally so consumers can detect degraded-mode runs.
+            write(`  cycles: detection skipped (stack overflow on large graph)\n`);
+            return {
+                cycles: [],
+                counts: { tsImport: 0, libUsage: 0, diImport: 0 },
+                error: `RangeError: ${message}`,
+            };
+        }
+        // Unknown errors are bugs — surface them loudly and fail the build.
+        write(`  cycles: detection failed: ${message}\n`);
+        throw err;
+    }
+}
+
+/**
  * Single-pass multi-domain build:
  *   1. Discover services + libs (ownership)
  *   2. Load all .ts sources into one ts-morph Project
@@ -245,26 +284,7 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
 
     // ---- Cycle detection ----
     process.stdout.write(`detecting cycles...\n`);
-    let cyclesDiagnostics: CyclesDiagnostics;
-    try {
-        cyclesDiagnostics = detectCycles(graph);
-    } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        if (err instanceof RangeError) {
-            // Stack overflow on a very large graph — degrade gracefully and record
-            // the failure structurally so consumers can detect degraded-mode runs.
-            process.stdout.write(`  cycles: detection skipped (stack overflow on large graph)\n`);
-            cyclesDiagnostics = {
-                cycles: [],
-                counts: { tsImport: 0, libUsage: 0, diImport: 0 },
-                error: `RangeError: ${message}`,
-            };
-        } else {
-            // Unknown errors are bugs — surface them loudly and fail the build.
-            process.stdout.write(`  cycles: detection failed: ${message}\n`);
-            throw err;
-        }
-    }
+    const cyclesDiagnostics = safeDetectCycles(graph);
     {
         const c = cyclesDiagnostics.counts;
         process.stdout.write(

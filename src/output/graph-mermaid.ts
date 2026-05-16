@@ -271,8 +271,17 @@ export function renderMermaid(
     const { map: idMap, collisionGroups } = buildIdMap(nodes);
 
     lines.push('flowchart LR');
-    // Header comment goes INSIDE the diagram (after the directive) — some Mermaid
+    // Header comments go INSIDE the diagram (after the directive) — some Mermaid
     // renderers require the first non-empty line to be the diagram directive.
+    //
+    // Degraded-run warning: emitted when cycle detection was skipped (e.g. stack
+    // overflow on a very large graph). Consumers who only look at graph.mermaid
+    // will see this comment even if they never read diagnostics.json.
+    if (cycles?.error) {
+        lines.push(
+            `    %% WARNING: cycle detection was skipped (${cycles.error}). Cycle styling may be incomplete.`,
+        );
+    }
     if (nodes.length > largeGraphThreshold) {
         lines.push(
             `    %% graph has ${nodes.length} nodes, ${edges.length} edges — consider per-service slicing`,
