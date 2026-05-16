@@ -34,6 +34,20 @@ Verify:
 arch-graph --help
 ```
 
+**Uninstall:**
+
+```sh
+# inside each project that ran `arch-graph init` (while CLI still on PATH):
+arch-graph claude uninstall
+arch-graph hook uninstall
+rm -rf arch-graph-out arch-graph.config.ts
+
+# then global removal:
+bash ~/.arch-graph/scripts/uninstall.sh --yes
+```
+
+Without `--yes` the script prints a dry-run of what it would remove. Honours `ARCH_GRAPH_HOME` and `ARCH_GRAPH_BIN_DIR` the same way `install.sh` does.
+
 ## Quick start
 
 ```sh

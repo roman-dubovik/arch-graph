@@ -140,5 +140,5 @@ Optional integrations:
   arch-graph claude install --skill   # tell Claude Code to use the graph
   arch-graph hook install             # auto-rebuild on every commit
 
-Uninstall: rm -rf $INSTALL_DIR $LINK
+Uninstall: bash $INSTALL_DIR/scripts/uninstall.sh --yes
 EOF
