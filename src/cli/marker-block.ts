@@ -1,5 +1,5 @@
 // Utilities for managing delimited (marked) sections inside text files.
-// Used by claude.ts and hooks.ts to install/replace/strip arch-graph blocks.
+// Provides idempotent replace, strip, and append operations for marker-delimited blocks.
 
 /**
  * Replace the content (and surrounding markers) of an existing marked block.
