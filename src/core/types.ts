@@ -244,9 +244,32 @@ export interface TypeOrmDiagnostics {
         entityDecoratorWarnings: number;
         /** Number of `db-relation` edges emitted (after dedup + Policy A `@OneToMany` skip). */
         relationsEmitted: number;
-        /** Number of input relations where `resolvedTarget !== null`, before Policy A filtering. */
+        /**
+         * Number of input relations where `resolvedTarget !== null`, counted BEFORE
+         * Policy A `@OneToMany` filtering. A `@OneToMany` with a resolved target is
+         * included in this count even though it never produces an edge.
+         */
         relationsResolved: number;
         unresolvedRelations: number;
+        /**
+         * Number of `@OneToMany` relations skipped under Policy A (FK lives on the
+         * `@ManyToOne` side; emitting both would produce duplicate reverse edges).
+         * Surfaced in the pipeline log for observability.
+         */
+        oneToManySkipped: number;
+        /**
+         * Breakdown of unresolved relations by reason.
+         *   `unparseable` — decorator argument could not be parsed (dynamic expression, etc.)
+         *   `notIndexed`  — parsed target class name not found in entity index
+         *
+         * Invariant: `unparseable + notIndexed === unresolvedRelations`
+         * (Policy A — @OneToMany — is filtered before unresolved bucketing; unresolved
+         * @OneToMany relations are NOT counted here.)
+         */
+        unresolvedReasons: {
+            unparseable: number;
+            notIndexed: number;
+        };
     };
 }
 

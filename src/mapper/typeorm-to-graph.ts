@@ -107,21 +107,30 @@ export function mapTypeOrmToGraph(
     // ---- db-relation edges from @ManyToOne / @ManyToMany / @OneToOne ----
     // Policy A: skip @OneToMany — the FK is owned by @ManyToOne on the other entity.
     // Emitting both would produce two edges in opposite directions for the same FK.
+    // Note: @OneToMany relations that are also unresolved are NOT counted in
+    // unresolvedReasons — Policy A filters them before unresolved bucketing.
     const unresolvedRelations: TypeOrmRelation[] = [];
     let relationsEmitted = 0;
     let relationsResolved = 0;
+    let oneToManySkipped = 0;
+    const unresolvedReasons = { unparseable: 0, notIndexed: 0 };
 
     for (const rel of relations) {
-        // Policy A: @OneToMany is the inverse mirror of @ManyToOne — skip it entirely.
-        if (rel.decorator === 'OneToMany') continue;
+        // Count resolved relations BEFORE Policy A filtering (matches JSDoc on the field).
+        if (rel.resolvedTarget) relationsResolved++;
 
-        if (!rel.resolvedTarget) {
-            unresolvedRelations.push(rel);
+        // Policy A: @OneToMany is the inverse mirror of @ManyToOne — skip it entirely.
+        if (rel.decorator === 'OneToMany') {
+            oneToManySkipped++;
             continue;
         }
 
-        // Count all resolved relations (before Policy A filtering for emitted count).
-        relationsResolved++;
+        if (!rel.resolvedTarget) {
+            unresolvedRelations.push(rel);
+            if (rel.reason === 'unparseable') unresolvedReasons.unparseable++;
+            else if (rel.reason === 'not-indexed') unresolvedReasons.notIndexed++;
+            continue;
+        }
 
         // Owner entity lookup for table name (entityIndex is guaranteed non-null here)
         const ownerEntity = entityIndex!.get(rel.ownerClass) ?? null;
@@ -201,6 +210,8 @@ export function mapTypeOrmToGraph(
                 relationsEmitted,
                 relationsResolved,
                 unresolvedRelations: unresolvedRelations.length,
+                oneToManySkipped,
+                unresolvedReasons,
             },
         },
     };

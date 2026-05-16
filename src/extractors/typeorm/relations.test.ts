@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import type { ClassDeclaration } from 'ts-morph';
 
 import { inMemoryProject } from '../../__fixtures__/in-memory-project.js';
 import { buildEntityIndex } from './entity-index.js';
-import { extractRelations } from './relations.js';
+import { extractRelations, getAllProperties } from './relations.js';
 
 // ---------------------------------------------------------------------------
 // Helper: build an entity index + extract relations from the same project
@@ -701,5 +702,106 @@ describe('extractRelations — table name propagation', () => {
 
         expect(relations).toHaveLength(1);
         expect(relations[0]!.resolvedTarget?.tableSource.table).toBe('customers');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Regression: getAllProperties cycle guard (CRITICAL fix)
+// ---------------------------------------------------------------------------
+
+describe('getAllProperties — cycle guard', () => {
+    it('returns [] and does not infinite-loop when getBaseClass() creates a cycle', () => {
+        // TypeScript forbids cyclic class extension, but ts-morph's getBaseClass()
+        // can return unexpected results on partial / malformed ASTs. We simulate that
+        // by hand-rolling a stub whose getBaseClass() returns itself.
+        const stub = {
+            getName: () => 'CyclicClass',
+            getProperties: () => [],
+            getBaseClass: function () { return this; },
+        } as unknown as ClassDeclaration;
+
+        // Must terminate (no stack overflow) and return an empty array.
+        const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const result = getAllProperties(stub);
+        expect(result).toEqual([]);
+        // A diagnostic message must have been written to stderr.
+        expect(stderrSpy).toHaveBeenCalledWith(
+            expect.stringContaining('[typeorm/relations] BUG: circular base class chain'),
+        );
+        stderrSpy.mockRestore();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Regression: aliased forwardRef import (HIGH fix)
+// ---------------------------------------------------------------------------
+
+describe('extractRelations — aliased forwardRef', () => {
+    it('resolves `import { forwardRef as fr }` usage to the entity index', () => {
+        const { relations } = setup({
+            '/apps/svc/order.entity.ts': `
+                import { Entity, ManyToOne } from 'typeorm';
+                import { forwardRef as fr } from '@nestjs/common';
+                @Entity()
+                export class Order {
+                    @ManyToOne(() => fr(() => User))
+                    user: User;
+                }
+            `,
+            '/apps/svc/user.entity.ts': `
+                import { Entity } from 'typeorm';
+                @Entity()
+                export class User {}
+            `,
+        });
+
+        expect(relations).toHaveLength(1);
+        const rel = relations[0]!;
+        expect(rel.targetClass).toBe('User');
+        expect(rel.resolvedTarget).not.toBeNull();
+        expect(rel.resolvedTarget?.className).toBe('User');
+        expect(rel.reason).toBeUndefined();
+    });
+
+    it('falls to unparseable for aliased forwardRef with non-arrow inner arg', () => {
+        const { relations } = setup({
+            '/apps/svc/order.entity.ts': `
+                import { Entity, ManyToOne } from 'typeorm';
+                import { forwardRef as fr } from '@nestjs/common';
+                @Entity()
+                export class Order {
+                    @ManyToOne(() => fr(getTarget()))
+                    user: any;
+                }
+            `,
+        });
+
+        expect(relations).toHaveLength(1);
+        const rel = relations[0]!;
+        expect(rel.targetClass).toBeNull();
+        expect(rel.resolvedTarget).toBeNull();
+        expect(rel.reason).toBe('unparseable');
+    });
+
+    it('does NOT treat an unrelated alias as forwardRef', () => {
+        // `fr` here is imported from a different module — should NOT be treated as forwardRef.
+        const { relations } = setup({
+            '/apps/svc/order.entity.ts': `
+                import { Entity, ManyToOne } from 'typeorm';
+                import { someHelper as fr } from './helpers';
+                @Entity()
+                export class Order {
+                    @ManyToOne(() => fr(() => User))
+                    user: User;
+                }
+            `,
+        });
+
+        // Arrow body is a CallExpression (fr(...)) but fr is not forwardRef — unparseable
+        expect(relations).toHaveLength(1);
+        const rel = relations[0]!;
+        expect(rel.targetClass).toBeNull();
+        expect(rel.resolvedTarget).toBeNull();
+        expect(rel.reason).toBe('unparseable');
     });
 });
