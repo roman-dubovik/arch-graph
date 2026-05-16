@@ -22,10 +22,10 @@ import { performance } from 'node:perf_hooks';
 
 import yaml from 'js-yaml';
 
-import { archGraphAdapter } from './adapters/arch-graph.js';
-import { graphifyAdapter } from './adapters/graphify.js';
-import type { BenchAdapter } from './adapters/compact.js';
-import { countTokens, disposeTokens } from './tokens.js';
+import { archGraphAdapter } from '../src/compare/adapters/arch-graph.js';
+import { graphifyAdapter } from '../src/compare/adapters/graphify.js';
+import type { BenchAdapter } from '../src/compare/adapters/compact.js';
+import { countTokens, disposeTokens } from '../src/compare/tokens.js';
 
 // ─── types ────────────────────────────────────────────────────────────────
 

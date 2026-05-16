@@ -225,6 +225,20 @@ To extend coverage, add an extractor under `src/extractors/<domain>/` and wire i
 
 Quantitative comparison with graphify across 5 NestJS monorepos lives in `bench/report.md`. Key finding: arch-graph uses **7.6× fewer LLM context tokens** than graphify per architectural question (688k vs 5.2M tokens across 15 questions), because it returns typed structured results instead of raw graph dumps. The five reference projects are anonymized as `Project A`–`E` in the report. To reproduce on your own monorepos, drop one `configs/<id>.config.ts` per project and run `bash bench/run.sh` — see `bench/README.md`.
 
+## Compare on your own repo
+
+Skeptical of the numbers above? Reproduce the comparison on your own codebase:
+
+```sh
+arch-graph build                                     # build your graph
+/graphify /path/to/repo                              # in Claude Code, optionally
+arch-graph compare --graphify graphify-out/          # see side-by-side
+```
+
+`arch-graph compare` auto-generates 10 questions from real nodes in your graph (NATS subjects, queues, DB tables, services, modules), counts `cl100k_base` tokens for each tool's compact context, and writes a markdown report at `arch-graph-out/compare-report.md`. Without `--graphify` it prints a graph-size-only summary — useful before deciding whether to run graphify.
+
+See `arch-graph compare --help` for flags (`--questions`, `--report`, `--quiet`).
+
 ## Development
 
 ```sh

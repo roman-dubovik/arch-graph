@@ -16,7 +16,7 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 
-import type { ArchGraph } from '../../src/core/types.js';
+import type { ArchGraph } from '../../core/types.js';
 import { type BenchAdapter, type CompactGraph, serializeContext } from './compact.js';
 
 async function loadArchGraph(path: string): Promise<ArchGraph> {
