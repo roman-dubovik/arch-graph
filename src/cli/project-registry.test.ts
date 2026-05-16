@@ -218,12 +218,47 @@ describe('unregisterProject', () => {
 });
 
 describe('load tolerance (corrupt registry)', () => {
-    it('corrupt JSON → behaves as empty', async () => {
+    it('corrupt JSON → behaves as empty AND moves the bad file aside', async () => {
         await withRegistry(async (reg) => {
             await mkdir(join(reg, '..'), { recursive: true });
             await writeFile(reg, 'not json{{{');
             const list = await listProjects();
             expect(list).toEqual([]);
+            // The corrupt file should have been renamed to a .corrupt-<ts> sibling
+            // instead of being overwritten on the next save.
+            expect(existsSync(reg)).toBe(false);
+            const fs = await import('node:fs/promises');
+            const siblings = await fs.readdir(join(reg, '..'));
+            const corrupt = siblings.find((f) => f.startsWith('registry.json.corrupt-'));
+            expect(corrupt).toBeTruthy();
+        });
+    });
+
+    it('corrupt JSON + subsequent register → starts fresh, does not overwrite original', async () => {
+        await withRegistry(async (reg) => {
+            await mkdir(join(reg, '..'), { recursive: true });
+            await writeFile(reg, 'corrupt{{{');
+            // Trigger a load (which renames the bad file) + a write
+            const dir = await mkdtemp(join(tmpdir(), 'ag-fresh-'));
+            try {
+                await registerProject(dir);
+                const data = JSON.parse(await readFile(reg, 'utf8'));
+                expect(data.projects.length).toBe(1);
+                expect(data.projects[0].path).toBe(resolve(dir));
+            } finally {
+                await rm(dir, { recursive: true, force: true });
+            }
+        });
+    });
+
+    it('version mismatch → empty result, file preserved (no rename)', async () => {
+        await withRegistry(async (reg) => {
+            await mkdir(join(reg, '..'), { recursive: true });
+            await writeFile(reg, JSON.stringify({ version: 99, projects: [] }));
+            const list = await listProjects();
+            expect(list).toEqual([]);
+            // Future-version file is left in place — DO NOT rename.
+            expect(existsSync(reg)).toBe(true);
         });
     });
 
