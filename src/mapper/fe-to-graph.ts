@@ -3,9 +3,9 @@
  *
  * Node kinds emitted:
  *   fe-page      — one per FePage (Next.js page/route segment)
- *   fe-component — one per FeComponent
+ *   fe-component — one per FeComponent (file-qualified to avoid cross-file collisions)
  *   fe-route     — one per FeRoute (unique URL pattern)
- *   fe-hook      — one per FeHook
+ *   fe-hook      — one per FeHook (file-qualified)
  *
  * Edge kinds emitted:
  *   fe-imports   — page/component → component (via import declarations)
@@ -17,13 +17,15 @@ import type { GraphEdge, GraphNode } from '../core/types.js';
 import type { FeExtractResult } from '../extractors/fe/types.js';
 import { OwnershipRegistry } from '../core/service-registry.js';
 
+export interface FeDiagnostics {
+    unresolved: Array<{ kind: string; ref: string; reason: string }>;
+    unowned: Array<{ kind: string; file: string }>;
+}
+
 export interface MapFeResult {
     nodes: GraphNode[];
     edges: GraphEdge[];
-    diagnostics: {
-        unresolved: Array<{ kind: string; ref: string; reason: string }>;
-        unowned: Array<{ kind: string; file: string }>;
-    };
+    diagnostics: FeDiagnostics;
 }
 
 /**
@@ -38,14 +40,23 @@ export function mapFeToGraph(
 ): MapFeResult {
     const nodeMap = new Map<string, GraphNode>();
     const edgeMap = new Map<string, GraphEdge>();
-    const unresolved: MapFeResult['diagnostics']['unresolved'] = [];
-    const unowned: MapFeResult['diagnostics']['unowned'] = [];
+    const unresolved: FeDiagnostics['unresolved'] = [];
+    const unowned: FeDiagnostics['unowned'] = [];
+
+    // Carry over unresolved imports from extractor (P0-5)
+    for (const u of extractorOutput.unresolvedImports) {
+        unresolved.push({
+            kind: 'fe-imports',
+            ref: u.specifier,
+            reason: u.error,
+        });
+    }
 
     // -----------------------------------------------------------------------
-    // 1. Component nodes  →  fe-component
+    // 1. Component nodes  →  fe-component (file-qualified IDs, P1-2)
     // -----------------------------------------------------------------------
     for (const comp of extractorOutput.components) {
-        const nodeId = `fe-component:${comp.name}`;
+        const nodeId = `fe-component:${comp.file}#${comp.name}`;
         if (!nodeMap.has(nodeId)) {
             nodeMap.set(nodeId, {
                 id: nodeId,
@@ -62,10 +73,10 @@ export function mapFeToGraph(
     }
 
     // -----------------------------------------------------------------------
-    // 2. Hook nodes  →  fe-hook
+    // 2. Hook nodes  →  fe-hook (file-qualified IDs, P1-2)
     // -----------------------------------------------------------------------
     for (const hook of extractorOutput.hooks) {
-        const nodeId = `fe-hook:${hook.name}`;
+        const nodeId = `fe-hook:${hook.file}#${hook.name}`;
         if (!nodeMap.has(nodeId)) {
             nodeMap.set(nodeId, {
                 id: nodeId,
@@ -122,16 +133,27 @@ export function mapFeToGraph(
 
     // -----------------------------------------------------------------------
     // 5. fe-renders edges: component → component (via JSX)
+    //    Lookup is file-scoped: renders carry fromFile, look up toName within
+    //    renders from the same fromFile first, then globally (P1-2).
     // -----------------------------------------------------------------------
-    // Build a name→nodeId lookup for components
-    const nameToNodeId = new Map<string, string>();
+    // Build (file, name) → nodeId lookup for renders
+    const fileNameToNodeId = new Map<string, string>(); // key: `${file}#${name}`
+    const nameToNodeIds = new Map<string, string[]>();  // fallback: name → [nodeIds]
     for (const comp of extractorOutput.components) {
-        nameToNodeId.set(comp.name, `fe-component:${comp.name}`);
+        const nodeId = `fe-component:${comp.file}#${comp.name}`;
+        fileNameToNodeId.set(`${comp.file}#${comp.name}`, nodeId);
+        const existing = nameToNodeIds.get(comp.name) ?? [];
+        existing.push(nodeId);
+        nameToNodeIds.set(comp.name, existing);
     }
 
     for (const render of extractorOutput.renders) {
-        const fromId = `fe-component:${render.fromName}`;
-        const toId = nameToNodeId.get(render.toName);
+        const fromId = `fe-component:${render.fromFile}#${render.fromName}`;
+
+        // Prefer file-local target first, then any file with that name
+        const toId =
+            fileNameToNodeId.get(`${render.fromFile}#${render.toName}`) ??
+            (nameToNodeIds.get(render.toName)?.[0] ?? undefined);
 
         if (!toId) {
             // toName not found in extracted components — could be external/unresolved
@@ -158,30 +180,39 @@ export function mapFeToGraph(
     //    We only emit an edge when the imported file resolves to a known
     //    component node, and the source is a page or component.
     // -----------------------------------------------------------------------
-    // Build a file→[componentNodeId] lookup
-    const fileToComponents = new Map<string, string[]>();
+    // Build a file→[nodeId] lookup
+    const fileToNodes = new Map<string, string[]>();
     for (const comp of extractorOutput.components) {
-        const existing = fileToComponents.get(comp.file) ?? [];
-        existing.push(`fe-component:${comp.name}`);
-        fileToComponents.set(comp.file, existing);
+        const nodeId = `fe-component:${comp.file}#${comp.name}`;
+        const existing = fileToNodes.get(comp.file) ?? [];
+        existing.push(nodeId);
+        fileToNodes.set(comp.file, existing);
     }
     for (const page of extractorOutput.pages) {
         const key = page.file;
-        if (!fileToComponents.has(key)) fileToComponents.set(key, []);
+        if (!fileToNodes.has(key)) fileToNodes.set(key, []);
         const pageNodeId = `fe-page:${page.name}`;
-        fileToComponents.get(key)!.push(pageNodeId);
+        fileToNodes.get(key)!.push(pageNodeId);
     }
 
     const importedEdgesAdded = new Set<string>();
     for (const imp of extractorOutput.imports) {
-        if (!imp.resolvedFile) continue;
+        if (!imp.resolvedFile) {
+            // Push to diagnostics when resolvedFile is null (P0-5)
+            unresolved.push({
+                kind: 'fe-imports',
+                ref: imp.specifier,
+                reason: 'unresolved-file',
+            });
+            continue;
+        }
 
         // Find target components in the resolved file
-        const targetNodes = fileToComponents.get(imp.resolvedFile);
+        const targetNodes = fileToNodes.get(imp.resolvedFile);
         if (!targetNodes || targetNodes.length === 0) continue;
 
         // Find source nodes (page or component) in the source file
-        const sourceNodes = fileToComponents.get(imp.sourceFile);
+        const sourceNodes = fileToNodes.get(imp.sourceFile);
         if (!sourceNodes || sourceNodes.length === 0) continue;
 
         for (const fromId of sourceNodes) {
@@ -203,7 +234,7 @@ export function mapFeToGraph(
     }
 
     // -----------------------------------------------------------------------
-    // 7. Ownership check (unowned nodes)
+    // 7. Ownership check (unowned nodes) — components, pages, hooks, routes (P1-3)
     // -----------------------------------------------------------------------
     for (const comp of extractorOutput.components) {
         const owner = ownership.findOwner(comp.file);
@@ -215,6 +246,18 @@ export function mapFeToGraph(
         const owner = ownership.findOwner(page.file);
         if (owner.kind === 'unknown') {
             unowned.push({ kind: 'fe-page', file: page.file });
+        }
+    }
+    for (const hook of extractorOutput.hooks) {
+        const owner = ownership.findOwner(hook.file);
+        if (owner.kind === 'unknown') {
+            unowned.push({ kind: 'fe-hook', file: hook.file });
+        }
+    }
+    for (const route of extractorOutput.routes) {
+        const owner = ownership.findOwner(route.pageFile);
+        if (owner.kind === 'unknown') {
+            unowned.push({ kind: 'fe-route', file: route.pageFile });
         }
     }
 

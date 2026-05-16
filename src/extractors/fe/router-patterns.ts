@@ -51,8 +51,9 @@ export function deriveRoute(file: string, root: string): { route: string; router
         // `index` → `/`
         seg = seg.replace(/\/index$/, '').replace(/^index$/, '');
 
-        // Convert dynamic segments: [...slug] → *, [id] → :id
+        // Convert dynamic segments: [[...slug]] → *, [...slug] → *, [id] → :id
         seg = seg
+            .replace(/\[\[\.\.\.(\w+)\]\]/g, '*')
             .replace(/\[\.\.\.(\w+)\]/g, '*')
             .replace(/\[(\w+)\]/g, ':$1');
 
@@ -65,8 +66,17 @@ export function deriveRoute(file: string, root: string): { route: string; router
     if (appMatch) {
         let seg = (appMatch[1] ?? '').replace(/\/$/, '');
 
-        // Strip route groups: (group)/
-        seg = seg.replace(/\([^)]+\)\//g, '');
+        // Parallel routes: any segment starting with @ (e.g. @modal) → skip
+        if (/(?:^|\/)@/.test(seg)) return null;
+
+        // Intercepting routes: (.)/  (..)/  (...)/  → skip
+        if (/(?:^|\/)\.+\)\//.test(seg) || /(?:^|\/)\(\.+\)/.test(seg)) return null;
+
+        // Strip route groups (plain groups like (group)/, but NOT intercepting routes above)
+        seg = seg.replace(/\([^.)][^)]*\)\//g, '').replace(/\([^.)][^)]*\)$/, '');
+
+        // Optional catch-all: [[...slug]] → /* (must come before single [...])
+        seg = seg.replace(/\[\[\.\.\.(\w+)\]\]/g, '*');
 
         // Convert dynamic segments
         seg = seg

@@ -327,7 +327,7 @@ export interface DiagnosticsReport {
     di: DiDiagnostics;
     http: HttpDiagnostics;
     imports: ImportsDiagnostics;
-    fe: { unresolved: any[]; unowned: any[] };
+    fe: import('../mapper/fe-to-graph.js').FeDiagnostics;
     cycles: CyclesDiagnostics;
     /**
      * Populated only when `arch-graph semantic build` has been run.
@@ -444,7 +444,7 @@ export interface BuildValidation {
     di: DiValidationReport;
     http: HttpValidationReport;
     imports: ImportsValidationReport;
-    fe: { summary: { recallComponents: number; recallRoutes: number; recallHooks: number } };
+    fe: import('../validation/fe-validator.js').FeValidationReport;
 }
 
 // ============================================================================

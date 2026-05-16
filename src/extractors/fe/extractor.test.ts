@@ -239,3 +239,109 @@ describe('extractFe — route deduplication', () => {
         expect(indexRoutes).toHaveLength(1);
     });
 });
+
+// ---------------------------------------------------------------------------
+// P0-1: .ts files extract hooks only (no components, renders, imports)
+// ---------------------------------------------------------------------------
+describe('extractFe — .ts file hook extraction (P0-1)', () => {
+    it('extracts hooks from .ts files', async () => {
+        const project = inMemoryProject({
+            '/root/apps/web/useAuth.ts': `
+                import { useState } from 'react';
+                export function useAuth() { const [user] = useState(null); return user; }
+            `,
+        });
+        const result = await extractFe(minimalCfg('/root'), project);
+        expect(result.hooks.some((h) => h.name === 'useAuth')).toBe(true);
+    });
+
+    it('does NOT extract components from .ts files', async () => {
+        const project = inMemoryProject({
+            '/root/apps/web/NotAComponent.ts': `export const Button = () => 42;`,
+        });
+        const result = await extractFe(minimalCfg('/root'), project);
+        expect(result.components).toHaveLength(0);
+    });
+
+    it('does NOT collect imports from .ts files', async () => {
+        const project = inMemoryProject({
+            '/root/apps/web/utils.ts': `
+                import { something } from './other';
+                export function useSomething() { return something; }
+            `,
+        });
+        const result = await extractFe(minimalCfg('/root'), project);
+        // imports array should not contain entries from .ts files
+        expect(result.imports.every((i) => !i.sourceFile.endsWith('.ts'))).toBe(true);
+    });
+
+    it('skips .spec.ts files', async () => {
+        const project = inMemoryProject({
+            '/root/apps/web/useAuth.spec.ts': `
+                import { useState } from 'react';
+                export function useAuth() { const [x] = useState(0); return x; }
+            `,
+        });
+        const result = await extractFe(minimalCfg('/root'), project);
+        expect(result.hooks).toHaveLength(0);
+    });
+
+    it('skips .test.ts files', async () => {
+        const project = inMemoryProject({
+            '/root/apps/web/useAuth.test.ts': `
+                import { useState } from 'react';
+                export function useAuth() { const [x] = useState(0); return x; }
+            `,
+        });
+        const result = await extractFe(minimalCfg('/root'), project);
+        expect(result.hooks).toHaveLength(0);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// unresolvedImports field
+// ---------------------------------------------------------------------------
+describe('extractFe — unresolvedImports', () => {
+    it('result includes unresolvedImports array', async () => {
+        const project = inMemoryProject({
+            '/root/apps/web/Page.tsx': `export const Page = () => <div/>;`,
+        });
+        const result = await extractFe(minimalCfg('/root'), project);
+        expect(result).toHaveProperty('unresolvedImports');
+        expect(Array.isArray(result.unresolvedImports)).toBe(true);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Route dedup branch (pageResult.route already in routeMap)
+// ---------------------------------------------------------------------------
+describe('extractFe — route map deduplication (duplicate patterns)', () => {
+    it('keeps first pageFile when two pages produce the same route pattern', async () => {
+        // Two pages would only collide if in a monorepo config spanning multiple apps
+        // but we can simulate this with our minimalCfg having two files with same pattern
+        const project = inMemoryProject({
+            '/root/apps/web/pages/about.tsx': `export default function About1() { return <div/>; }`,
+            '/root/apps/mobile/pages/about.tsx': `export default function About2() { return <div/>; }`,
+        });
+        // Both resolve to /about — second should be deduped in routeMap
+        const result = await extractFe({ id: 'test', root: '/root', appsGlob: 'apps/**' }, project);
+        const aboutRoutes = result.routes.filter((r) => r.pattern === '/about');
+        expect(aboutRoutes).toHaveLength(1);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// @-aliased imports
+// ---------------------------------------------------------------------------
+describe('extractFe — @-aliased imports', () => {
+    it('collects @-aliased imports', async () => {
+        const project = inMemoryProject({
+            '/root/apps/web/Page.tsx': `
+                import { Button } from '@/components/Button';
+                export const Page = () => <div/>;
+            `,
+        });
+        const result = await extractFe(minimalCfg('/root'), project);
+        expect(result.imports.some((i) => i.specifier === '@/components/Button')).toBe(true);
+    });
+});

@@ -62,6 +62,23 @@ function varStatementIsNamed(node: Node): { exported: boolean; defaultExport: bo
     return { exported, defaultExport: isDefault };
 }
 
+/**
+ * Collect rendered component names (uppercase JSX tags) from a node subtree.
+ * Used to build per-component render references.
+ */
+function collectRenderedNames(node: Node): Set<string> {
+    const names = new Set<string>();
+    for (const jsxEl of node.getDescendantsOfKind(SyntaxKind.JsxOpeningElement)) {
+        const tagName = jsxEl.getTagNameNode().getText();
+        if (/^[A-Z]/.test(tagName)) names.add(tagName);
+    }
+    for (const jsxSelf of node.getDescendantsOfKind(SyntaxKind.JsxSelfClosingElement)) {
+        const tagName = jsxSelf.getTagNameNode().getText();
+        if (/^[A-Z]/.test(tagName)) names.add(tagName);
+    }
+    return names;
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -72,10 +89,18 @@ export interface ReactExtractionResult {
     renders: FeRender[];
 }
 
+export interface ReactExtractionOptions {
+    /** When true, only extract hooks and skip component/render detection. */
+    hooksOnly: boolean;
+}
+
 /**
  * Scan one SourceFile for React components, hooks, and JSX render references.
  */
-export function extractReactPatterns(sf: SourceFile): ReactExtractionResult {
+export function extractReactPatterns(
+    sf: SourceFile,
+    options: ReactExtractionOptions = { hooksOnly: false },
+): ReactExtractionResult {
     const file = sf.getFilePath();
     const components: FeComponent[] = [];
     const hooks: FeHook[] = [];
@@ -91,21 +116,27 @@ export function extractReactPatterns(sf: SourceFile): ReactExtractionResult {
         const name = varDecl.getName();
 
         // ---- React.memo(...) wrapper ----
-        if (Node.isCallExpression(init)) {
+        if (!options.hooksOnly && Node.isCallExpression(init)) {
             const callText = init.getExpression().getText();
             if (callText === 'React.memo' || callText === 'memo') {
                 const { exported, defaultExport } = varStatementIsNamed(varDecl);
                 if (!seenComponents.has(name)) {
                     seenComponents.add(name);
                     const { line, column } = sf.getLineAndColumnAtPos(varDecl.getStart());
-                    components.push({
+                    const comp: FeComponent = {
                         name,
                         kind: 'memo',
                         file,
                         location: { file, line, column },
                         exported: exported || defaultExport,
                         defaultExport,
-                    });
+                    };
+                    components.push(comp);
+                    // memo wraps an inner node — collect renders from the entire init
+                    const renderedNames = collectRenderedNames(init);
+                    for (const toName of renderedNames) {
+                        renders.push({ fromFile: file, fromName: name, toName, location: { file, line, column } });
+                    }
                 }
                 continue;
             }
@@ -116,14 +147,19 @@ export function extractReactPatterns(sf: SourceFile): ReactExtractionResult {
                 if (!seenComponents.has(name)) {
                     seenComponents.add(name);
                     const { line, column } = sf.getLineAndColumnAtPos(varDecl.getStart());
-                    components.push({
+                    const comp: FeComponent = {
                         name,
                         kind: 'forwardRef',
                         file,
                         location: { file, line, column },
                         exported: exported || defaultExport,
                         defaultExport,
-                    });
+                    };
+                    components.push(comp);
+                    const renderedNames = collectRenderedNames(init);
+                    for (const toName of renderedNames) {
+                        renders.push({ fromFile: file, fromName: name, toName, location: { file, line, column } });
+                    }
                 }
                 continue;
             }
@@ -137,6 +173,8 @@ export function extractReactPatterns(sf: SourceFile): ReactExtractionResult {
             }
             continue;
         }
+
+        if (options.hooksOnly) continue;
 
         // ---- Arrow function component ----
         if (!Node.isArrowFunction(init)) continue;
@@ -155,6 +193,11 @@ export function extractReactPatterns(sf: SourceFile): ReactExtractionResult {
                 exported: exported || defaultExport,
                 defaultExport,
             });
+            // Scope renders to this component's arrow body (P1-1)
+            const renderedNames = collectRenderedNames(init);
+            for (const toName of renderedNames) {
+                renders.push({ fromFile: file, fromName: name, toName, location: { file, line, column } });
+            }
         }
     }
 
@@ -174,6 +217,8 @@ export function extractReactPatterns(sf: SourceFile): ReactExtractionResult {
             }
             continue;
         }
+
+        if (options.hooksOnly) continue;
 
         // Component: uppercase name, body returns JSX
         if (!/^[A-Z]/.test(name)) continue;
@@ -195,69 +240,55 @@ export function extractReactPatterns(sf: SourceFile): ReactExtractionResult {
                 exported: exported || defaultExport,
                 defaultExport,
             });
+            // Scope renders to this function body (P1-1)
+            const renderedNames = collectRenderedNames(fn);
+            for (const toName of renderedNames) {
+                renders.push({ fromFile: file, fromName: name, toName, location: { file, line, column } });
+            }
         }
     }
 
     // -----------------------------------------------------------------------
     // 3. Class components: class X extends React.Component / React.PureComponent
     // -----------------------------------------------------------------------
-    for (const cls of sf.getClasses()) {
-        const extendsExpr = cls.getExtends()?.getExpression().getText() ?? '';
-        if (
-            extendsExpr !== 'React.Component' &&
-            extendsExpr !== 'React.PureComponent' &&
-            extendsExpr !== 'Component' &&
-            extendsExpr !== 'PureComponent'
-        ) {
-            continue;
-        }
+    if (!options.hooksOnly) {
+        for (const cls of sf.getClasses()) {
+            const extendsExpr = cls.getExtends()?.getExpression().getText() ?? '';
+            if (
+                extendsExpr !== 'React.Component' &&
+                extendsExpr !== 'React.PureComponent' &&
+                extendsExpr !== 'Component' &&
+                extendsExpr !== 'PureComponent'
+            ) {
+                continue;
+            }
 
-        const name = cls.getName();
-        /* v8 ignore next 1 */
-        if (!name) continue;
+            const name = cls.getName();
+            /* v8 ignore next 1 */
+            if (!name) continue;
 
-        /* v8 ignore next 1 */
-        const mods = cls.getModifiers() ?? [];
-        const exported = mods.some((m) => m.getKind() === SyntaxKind.ExportKeyword);
-        const defaultExport = mods.some((m) => m.getKind() === SyntaxKind.DefaultKeyword);
+            /* v8 ignore next 1 */
+            const mods = cls.getModifiers() ?? [];
+            const exported = mods.some((m) => m.getKind() === SyntaxKind.ExportKeyword);
+            const defaultExport = mods.some((m) => m.getKind() === SyntaxKind.DefaultKeyword);
 
-        if (!seenComponents.has(name)) {
-            seenComponents.add(name);
-            const { line, column } = sf.getLineAndColumnAtPos(cls.getStart());
-            components.push({
-                name,
-                kind: 'class',
-                file,
-                location: { file, line, column },
-                exported: exported || defaultExport,
-                defaultExport,
-            });
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // 4. JSX render references (file-level): collect JSX tag names used as
-    //    components (uppercase). Attributed to the first detected component.
-    // -----------------------------------------------------------------------
-    const renderedNames = new Set<string>();
-    for (const jsxEl of sf.getDescendantsOfKind(SyntaxKind.JsxOpeningElement)) {
-        const tagName = jsxEl.getTagNameNode().getText();
-        if (/^[A-Z]/.test(tagName)) renderedNames.add(tagName);
-    }
-    for (const jsxSelf of sf.getDescendantsOfKind(SyntaxKind.JsxSelfClosingElement)) {
-        const tagName = jsxSelf.getTagNameNode().getText();
-        if (/^[A-Z]/.test(tagName)) renderedNames.add(tagName);
-    }
-
-    if (renderedNames.size > 0 && components.length > 0) {
-        const fromComp = components[0]!;
-        for (const toName of renderedNames) {
-            renders.push({
-                fromFile: file,
-                fromName: fromComp.name,
-                toName,
-                location: fromComp.location,
-            });
+            if (!seenComponents.has(name)) {
+                seenComponents.add(name);
+                const { line, column } = sf.getLineAndColumnAtPos(cls.getStart());
+                components.push({
+                    name,
+                    kind: 'class',
+                    file,
+                    location: { file, line, column },
+                    exported: exported || defaultExport,
+                    defaultExport,
+                });
+                // Scope renders to the class body (P1-1)
+                const renderedNames = collectRenderedNames(cls);
+                for (const toName of renderedNames) {
+                    renders.push({ fromFile: file, fromName: name, toName, location: { file, line, column } });
+                }
+            }
         }
     }
 

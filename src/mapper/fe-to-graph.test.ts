@@ -3,6 +3,8 @@
  *
  * Covers: component/hook/route/page nodes, fe-imports/fe-renders/fe-routes-to edges,
  * deduplication, unresolved render refs, unowned diagnostics, empty input.
+ *
+ * Node IDs are file-qualified: fe-component:<file>#<name>, fe-hook:<file>#<name>.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -26,7 +28,7 @@ function makeOwnership(
 }
 
 function emptyExtract(): FeExtractResult {
-    return { components: [], hooks: [], routes: [], pages: [], renders: [], imports: [] };
+    return { components: [], hooks: [], routes: [], pages: [], renders: [], imports: [], unresolvedImports: [] };
 }
 
 // ---------------------------------------------------------------------------
@@ -46,25 +48,45 @@ describe('mapFeToGraph — empty input', () => {
 // Component nodes
 // ---------------------------------------------------------------------------
 describe('mapFeToGraph — component nodes', () => {
-    it('emits fe-component node for each component', () => {
+    it('emits fe-component node for each component with file-qualified id', () => {
+        const FILE = '/app/Button.tsx';
         const extract: FeExtractResult = {
             ...emptyExtract(),
             components: [
-                { name: 'Button', kind: 'arrow', file: '/app/Button.tsx', location: { file: '/app/Button.tsx', line: 1, column: 0 }, exported: true, defaultExport: false },
+                { name: 'Button', kind: 'arrow', file: FILE, location: { file: FILE, line: 1, column: 0 }, exported: true, defaultExport: false },
             ],
         };
         const { nodes } = mapFeToGraph(extract, makeOwnership());
-        expect(nodes.some((n) => n.id === 'fe-component:Button' && n.kind === 'fe-component')).toBe(true);
+        const nodeId = `fe-component:${FILE}#Button`;
+        expect(nodes.some((n) => n.id === nodeId && n.kind === 'fe-component')).toBe(true);
     });
 
-    it('deduplicates components with same name', () => {
-        const comp = { name: 'Button', kind: 'arrow' as const, file: '/app/Button.tsx', location: { file: '/app/Button.tsx', line: 1, column: 0 }, exported: true, defaultExport: false };
+    it('emits distinct nodes for same-named components in different files', () => {
+        const FILE1 = '/app/Button.tsx';
+        const FILE2 = '/app/Button2.tsx';
         const extract: FeExtractResult = {
             ...emptyExtract(),
-            components: [comp, { ...comp, file: '/app/Button2.tsx' }],
+            components: [
+                { name: 'Button', kind: 'arrow', file: FILE1, location: { file: FILE1, line: 1, column: 0 }, exported: true, defaultExport: false },
+                { name: 'Button', kind: 'arrow', file: FILE2, location: { file: FILE2, line: 1, column: 0 }, exported: true, defaultExport: false },
+            ],
         };
         const { nodes } = mapFeToGraph(extract, makeOwnership());
-        expect(nodes.filter((n) => n.id === 'fe-component:Button')).toHaveLength(1);
+        // Both should be present (no cross-file dedup)
+        expect(nodes.filter((n) => n.kind === 'fe-component')).toHaveLength(2);
+        expect(nodes.some((n) => n.id === `fe-component:${FILE1}#Button`)).toBe(true);
+        expect(nodes.some((n) => n.id === `fe-component:${FILE2}#Button`)).toBe(true);
+    });
+
+    it('deduplicates components with same file and name', () => {
+        const FILE = '/app/Button.tsx';
+        const comp = { name: 'Button', kind: 'arrow' as const, file: FILE, location: { file: FILE, line: 1, column: 0 }, exported: true, defaultExport: false };
+        const extract: FeExtractResult = {
+            ...emptyExtract(),
+            components: [comp, comp],
+        };
+        const { nodes } = mapFeToGraph(extract, makeOwnership());
+        expect(nodes.filter((n) => n.id === `fe-component:${FILE}#Button`)).toHaveLength(1);
     });
 });
 
@@ -72,13 +94,39 @@ describe('mapFeToGraph — component nodes', () => {
 // Hook nodes
 // ---------------------------------------------------------------------------
 describe('mapFeToGraph — hook nodes', () => {
-    it('emits fe-hook node', () => {
+    it('emits fe-hook node with file-qualified id', () => {
+        const FILE = '/app/useCounter.ts';
         const extract: FeExtractResult = {
             ...emptyExtract(),
-            hooks: [{ name: 'useCounter', file: '/app/useCounter.ts', location: { file: '/app/useCounter.ts', line: 1, column: 0 } }],
+            hooks: [{ name: 'useCounter', file: FILE, location: { file: FILE, line: 1, column: 0 } }],
         };
         const { nodes } = mapFeToGraph(extract, makeOwnership());
-        expect(nodes.some((n) => n.id === 'fe-hook:useCounter' && n.kind === 'fe-hook')).toBe(true);
+        expect(nodes.some((n) => n.id === `fe-hook:${FILE}#useCounter` && n.kind === 'fe-hook')).toBe(true);
+    });
+
+    it('deduplicates hook nodes with same file and name', () => {
+        const FILE = '/app/useAuth.ts';
+        const hook = { name: 'useAuth', file: FILE, location: { file: FILE, line: 1, column: 0 } };
+        const extract: FeExtractResult = {
+            ...emptyExtract(),
+            hooks: [hook, hook],
+        };
+        const { nodes } = mapFeToGraph(extract, makeOwnership());
+        expect(nodes.filter((n) => n.id === `fe-hook:${FILE}#useAuth`)).toHaveLength(1);
+    });
+
+    it('emits distinct nodes for same-named hooks in different files', () => {
+        const FILE1 = '/app/useAuth.ts';
+        const FILE2 = '/lib/useAuth.ts';
+        const extract: FeExtractResult = {
+            ...emptyExtract(),
+            hooks: [
+                { name: 'useAuth', file: FILE1, location: { file: FILE1, line: 1, column: 0 } },
+                { name: 'useAuth', file: FILE2, location: { file: FILE2, line: 1, column: 0 } },
+            ],
+        };
+        const { nodes } = mapFeToGraph(extract, makeOwnership());
+        expect(nodes.filter((n) => n.kind === 'fe-hook')).toHaveLength(2);
     });
 });
 
@@ -116,28 +164,57 @@ describe('mapFeToGraph — routes and pages', () => {
 // ---------------------------------------------------------------------------
 describe('mapFeToGraph — fe-renders edges', () => {
     it('emits fe-renders edge when both components are known', () => {
+        const PAGE_FILE = '/app/Page.tsx';
+        const BTN_FILE = '/app/Button.tsx';
         const extract: FeExtractResult = {
             ...emptyExtract(),
             components: [
-                { name: 'Page', kind: 'arrow', file: '/app/Page.tsx', location: { file: '/app/Page.tsx', line: 1, column: 0 }, exported: true, defaultExport: false },
-                { name: 'Button', kind: 'arrow', file: '/app/Button.tsx', location: { file: '/app/Button.tsx', line: 1, column: 0 }, exported: true, defaultExport: false },
+                { name: 'Page', kind: 'arrow', file: PAGE_FILE, location: { file: PAGE_FILE, line: 1, column: 0 }, exported: true, defaultExport: false },
+                { name: 'Button', kind: 'arrow', file: BTN_FILE, location: { file: BTN_FILE, line: 1, column: 0 }, exported: true, defaultExport: false },
             ],
             renders: [
-                { fromFile: '/app/Page.tsx', fromName: 'Page', toName: 'Button', location: { file: '/app/Page.tsx', line: 2, column: 0 } },
+                { fromFile: PAGE_FILE, fromName: 'Page', toName: 'Button', location: { file: PAGE_FILE, line: 2, column: 0 } },
             ],
         };
         const { edges } = mapFeToGraph(extract, makeOwnership());
-        expect(edges.some((e) => e.kind === 'fe-renders' && e.from === 'fe-component:Page' && e.to === 'fe-component:Button')).toBe(true);
+        expect(edges.some((e) =>
+            e.kind === 'fe-renders' &&
+            e.from === `fe-component:${PAGE_FILE}#Page` &&
+            e.to === `fe-component:${BTN_FILE}#Button`,
+        )).toBe(true);
     });
 
-    it('routes unresolved render to diagnostics', () => {
+    it('prefers same-file component for render target', () => {
+        // If Button exists in the same file as Page, use that one
+        const FILE = '/app/Page.tsx';
+        const OTHER_FILE = '/app/Other.tsx';
         const extract: FeExtractResult = {
             ...emptyExtract(),
             components: [
-                { name: 'Page', kind: 'arrow', file: '/app/Page.tsx', location: { file: '/app/Page.tsx', line: 1, column: 0 }, exported: true, defaultExport: false },
+                { name: 'Page', kind: 'arrow', file: FILE, location: { file: FILE, line: 1, column: 0 }, exported: true, defaultExport: false },
+                { name: 'Button', kind: 'arrow', file: FILE, location: { file: FILE, line: 5, column: 0 }, exported: true, defaultExport: false },
+                { name: 'Button', kind: 'arrow', file: OTHER_FILE, location: { file: OTHER_FILE, line: 1, column: 0 }, exported: true, defaultExport: false },
             ],
             renders: [
-                { fromFile: '/app/Page.tsx', fromName: 'Page', toName: 'UnknownComp', location: { file: '/app/Page.tsx', line: 2, column: 0 } },
+                { fromFile: FILE, fromName: 'Page', toName: 'Button', location: { file: FILE, line: 2, column: 0 } },
+            ],
+        };
+        const { edges } = mapFeToGraph(extract, makeOwnership());
+        const renderEdge = edges.find((e) => e.kind === 'fe-renders');
+        expect(renderEdge).toBeDefined();
+        // Should use the same-file Button
+        expect(renderEdge!.to).toBe(`fe-component:${FILE}#Button`);
+    });
+
+    it('routes unresolved render to diagnostics', () => {
+        const FILE = '/app/Page.tsx';
+        const extract: FeExtractResult = {
+            ...emptyExtract(),
+            components: [
+                { name: 'Page', kind: 'arrow', file: FILE, location: { file: FILE, line: 1, column: 0 }, exported: true, defaultExport: false },
+            ],
+            renders: [
+                { fromFile: FILE, fromName: 'Page', toName: 'UnknownComp', location: { file: FILE, line: 2, column: 0 } },
             ],
         };
         const { edges, diagnostics } = mapFeToGraph(extract, makeOwnership());
@@ -151,22 +228,24 @@ describe('mapFeToGraph — fe-renders edges', () => {
 // ---------------------------------------------------------------------------
 describe('mapFeToGraph — fe-imports edges', () => {
     it('emits fe-imports edge from page to component when resolved file matches', () => {
+        const BTN_FILE = '/app/components/Button.tsx';
+        const PAGE_FILE = '/app/pages/index.tsx';
         const extract: FeExtractResult = {
             ...emptyExtract(),
             components: [
-                { name: 'Button', kind: 'arrow', file: '/app/components/Button.tsx', location: { file: '/app/components/Button.tsx', line: 1, column: 0 }, exported: true, defaultExport: false },
+                { name: 'Button', kind: 'arrow', file: BTN_FILE, location: { file: BTN_FILE, line: 1, column: 0 }, exported: true, defaultExport: false },
             ],
             pages: [
-                { name: 'HomePage', file: '/app/pages/index.tsx', location: { file: '/app/pages/index.tsx', line: 1, column: 0 }, route: '/', router: 'pages' },
+                { name: 'HomePage', file: PAGE_FILE, location: { file: PAGE_FILE, line: 1, column: 0 }, route: '/', router: 'pages' },
             ],
-            routes: [{ pattern: '/', pageFile: '/app/pages/index.tsx' }],
+            routes: [{ pattern: '/', pageFile: PAGE_FILE }],
             imports: [
                 {
-                    sourceFile: '/app/pages/index.tsx',
-                    resolvedFile: '/app/components/Button.tsx',
+                    sourceFile: PAGE_FILE,
+                    resolvedFile: BTN_FILE,
                     importedName: 'Button',
                     specifier: '../components/Button',
-                    location: { file: '/app/pages/index.tsx', line: 2, column: 0 },
+                    location: { file: PAGE_FILE, line: 2, column: 0 },
                 },
             ],
         };
@@ -174,10 +253,10 @@ describe('mapFeToGraph — fe-imports edges', () => {
         const e = edges.find((e) => e.kind === 'fe-imports');
         expect(e).toBeDefined();
         expect(e!.from).toBe('fe-page:HomePage');
-        expect(e!.to).toBe('fe-component:Button');
+        expect(e!.to).toBe(`fe-component:${BTN_FILE}#Button`);
     });
 
-    it('skips import when resolvedFile is null', () => {
+    it('skips import when resolvedFile is null and records in diagnostics', () => {
         const extract: FeExtractResult = {
             ...emptyExtract(),
             components: [
@@ -193,8 +272,10 @@ describe('mapFeToGraph — fe-imports edges', () => {
                 },
             ],
         };
-        const { edges } = mapFeToGraph(extract, makeOwnership());
+        const { edges, diagnostics } = mapFeToGraph(extract, makeOwnership());
         expect(edges.filter((e) => e.kind === 'fe-imports')).toHaveLength(0);
+        // null resolvedFile pushes to diagnostics (P0-5)
+        expect(diagnostics.unresolved.some((u) => u.kind === 'fe-imports' && u.reason === 'unresolved-file')).toBe(true);
     });
 });
 
@@ -202,16 +283,6 @@ describe('mapFeToGraph — fe-imports edges', () => {
 // Deduplication of nodes
 // ---------------------------------------------------------------------------
 describe('mapFeToGraph — node deduplication', () => {
-    it('deduplicates hook nodes with same name', () => {
-        const hook = { name: 'useAuth', file: '/app/useAuth.ts', location: { file: '/app/useAuth.ts', line: 1, column: 0 } };
-        const extract: FeExtractResult = {
-            ...emptyExtract(),
-            hooks: [hook, { ...hook, file: '/app/useAuth2.ts' }],
-        };
-        const { nodes } = mapFeToGraph(extract, makeOwnership());
-        expect(nodes.filter((n) => n.id === 'fe-hook:useAuth')).toHaveLength(1);
-    });
-
     it('deduplicates route nodes with same pattern', () => {
         const extract: FeExtractResult = {
             ...emptyExtract(),
@@ -237,7 +308,7 @@ describe('mapFeToGraph — node deduplication', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Page in same file as component (fileToComponents already has entry)
+// Page in same file as component (fileToNodes already has entry)
 // ---------------------------------------------------------------------------
 describe('mapFeToGraph — page colocated with component', () => {
     it('handles page and component in same file', () => {
@@ -254,7 +325,7 @@ describe('mapFeToGraph — page colocated with component', () => {
         };
         const { nodes, edges } = mapFeToGraph(extract, makeOwnership());
         // Both fe-component and fe-page nodes should exist
-        expect(nodes.some((n) => n.kind === 'fe-component' && n.id === 'fe-component:Hero')).toBe(true);
+        expect(nodes.some((n) => n.kind === 'fe-component' && n.id === `fe-component:${FILE}#Hero`)).toBe(true);
         expect(nodes.some((n) => n.kind === 'fe-page' && n.id === 'fe-page:HomePage')).toBe(true);
         expect(edges.some((e) => e.kind === 'fe-routes-to')).toBe(true);
     });
@@ -265,27 +336,29 @@ describe('mapFeToGraph — page colocated with component', () => {
 // ---------------------------------------------------------------------------
 describe('mapFeToGraph — fe-imports deduplication', () => {
     it('does not emit duplicate fe-imports edge for same (from, to) pair', () => {
+        const PAGE_FILE = '/app/pages/index.tsx';
+        const BTN_FILE = '/app/components/Button.tsx';
         const extract: FeExtractResult = {
             ...emptyExtract(),
             components: [
-                { name: 'Page', kind: 'arrow', file: '/app/pages/index.tsx', location: { file: '/app/pages/index.tsx', line: 1, column: 0 }, exported: true, defaultExport: false },
-                { name: 'Button', kind: 'arrow', file: '/app/components/Button.tsx', location: { file: '/app/components/Button.tsx', line: 1, column: 0 }, exported: true, defaultExport: false },
+                { name: 'Page', kind: 'arrow', file: PAGE_FILE, location: { file: PAGE_FILE, line: 1, column: 0 }, exported: true, defaultExport: false },
+                { name: 'Button', kind: 'arrow', file: BTN_FILE, location: { file: BTN_FILE, line: 1, column: 0 }, exported: true, defaultExport: false },
             ],
             imports: [
                 {
-                    sourceFile: '/app/pages/index.tsx',
-                    resolvedFile: '/app/components/Button.tsx',
+                    sourceFile: PAGE_FILE,
+                    resolvedFile: BTN_FILE,
                     importedName: 'Button',
                     specifier: '../components/Button',
-                    location: { file: '/app/pages/index.tsx', line: 2, column: 0 },
+                    location: { file: PAGE_FILE, line: 2, column: 0 },
                 },
                 // Duplicate import
                 {
-                    sourceFile: '/app/pages/index.tsx',
-                    resolvedFile: '/app/components/Button.tsx',
+                    sourceFile: PAGE_FILE,
+                    resolvedFile: BTN_FILE,
                     importedName: 'Button',
                     specifier: '../components/Button',
-                    location: { file: '/app/pages/index.tsx', line: 3, column: 0 },
+                    location: { file: PAGE_FILE, line: 3, column: 0 },
                 },
             ],
         };
@@ -295,18 +368,19 @@ describe('mapFeToGraph — fe-imports deduplication', () => {
     });
 
     it('skips import where target file has no components', () => {
+        const PAGE_FILE = '/app/pages/index.tsx';
         const extract: FeExtractResult = {
             ...emptyExtract(),
             components: [
-                { name: 'Page', kind: 'arrow', file: '/app/pages/index.tsx', location: { file: '/app/pages/index.tsx', line: 1, column: 0 }, exported: true, defaultExport: false },
+                { name: 'Page', kind: 'arrow', file: PAGE_FILE, location: { file: PAGE_FILE, line: 1, column: 0 }, exported: true, defaultExport: false },
             ],
             imports: [
                 {
-                    sourceFile: '/app/pages/index.tsx',
+                    sourceFile: PAGE_FILE,
                     resolvedFile: '/app/utils/helpers.tsx',  // no component here
                     importedName: 'formatDate',
                     specifier: '../utils/helpers',
-                    location: { file: '/app/pages/index.tsx', line: 2, column: 0 },
+                    location: { file: PAGE_FILE, line: 2, column: 0 },
                 },
             ],
         };
@@ -316,18 +390,19 @@ describe('mapFeToGraph — fe-imports deduplication', () => {
 
     it('skips self-loop edge (fromId === toId)', () => {
         // A component that imports from the same file (self-import) should not produce an edge
+        const FILE = '/app/Button.tsx';
         const extract: FeExtractResult = {
             ...emptyExtract(),
             components: [
-                { name: 'Button', kind: 'arrow', file: '/app/Button.tsx', location: { file: '/app/Button.tsx', line: 1, column: 0 }, exported: true, defaultExport: false },
+                { name: 'Button', kind: 'arrow', file: FILE, location: { file: FILE, line: 1, column: 0 }, exported: true, defaultExport: false },
             ],
             imports: [
                 {
-                    sourceFile: '/app/Button.tsx',
-                    resolvedFile: '/app/Button.tsx',  // self-import
+                    sourceFile: FILE,
+                    resolvedFile: FILE,  // self-import
                     importedName: 'Button',
                     specifier: './Button',
-                    location: { file: '/app/Button.tsx', line: 1, column: 0 },
+                    location: { file: FILE, line: 1, column: 0 },
                 },
             ],
         };
@@ -336,15 +411,16 @@ describe('mapFeToGraph — fe-imports deduplication', () => {
     });
 
     it('skips import where source file has no components or pages', () => {
+        const BTN_FILE = '/app/components/Button.tsx';
         const extract: FeExtractResult = {
             ...emptyExtract(),
             components: [
-                { name: 'Button', kind: 'arrow', file: '/app/components/Button.tsx', location: { file: '/app/components/Button.tsx', line: 1, column: 0 }, exported: true, defaultExport: false },
+                { name: 'Button', kind: 'arrow', file: BTN_FILE, location: { file: BTN_FILE, line: 1, column: 0 }, exported: true, defaultExport: false },
             ],
             imports: [
                 {
                     sourceFile: '/app/utils/noncomponent.tsx',  // no component in source
-                    resolvedFile: '/app/components/Button.tsx',
+                    resolvedFile: BTN_FILE,
                     importedName: 'Button',
                     specifier: '../components/Button',
                     location: { file: '/app/utils/noncomponent.tsx', line: 1, column: 0 },
@@ -362,22 +438,24 @@ describe('mapFeToGraph — fe-imports deduplication', () => {
 describe('mapFeToGraph — unowned diagnostics', () => {
     it('reports unowned component', () => {
         const ownership = makeOwnership([{ id: 'web', rootDir: '/apps/web' }]);
+        const FILE = '/tmp/Orphan.tsx';
         const extract: FeExtractResult = {
             ...emptyExtract(),
             components: [
-                { name: 'Orphan', kind: 'arrow', file: '/tmp/Orphan.tsx', location: { file: '/tmp/Orphan.tsx', line: 1, column: 0 }, exported: false, defaultExport: false },
+                { name: 'Orphan', kind: 'arrow', file: FILE, location: { file: FILE, line: 1, column: 0 }, exported: false, defaultExport: false },
             ],
         };
         const { diagnostics } = mapFeToGraph(extract, ownership);
-        expect(diagnostics.unowned.some((u) => u.file === '/tmp/Orphan.tsx')).toBe(true);
+        expect(diagnostics.unowned.some((u) => u.file === FILE)).toBe(true);
     });
 
     it('does not report owned component as unowned', () => {
         const ownership = makeOwnership([{ id: 'web', rootDir: '/apps/web' }]);
+        const FILE = '/apps/web/Button.tsx';
         const extract: FeExtractResult = {
             ...emptyExtract(),
             components: [
-                { name: 'Button', kind: 'arrow', file: '/apps/web/Button.tsx', location: { file: '/apps/web/Button.tsx', line: 1, column: 0 }, exported: true, defaultExport: false },
+                { name: 'Button', kind: 'arrow', file: FILE, location: { file: FILE, line: 1, column: 0 }, exported: true, defaultExport: false },
             ],
         };
         const { diagnostics } = mapFeToGraph(extract, ownership);
@@ -408,5 +486,42 @@ describe('mapFeToGraph — unowned diagnostics', () => {
         };
         const { diagnostics } = mapFeToGraph(extract, ownership);
         expect(diagnostics.unowned.filter((u) => u.kind === 'fe-page')).toHaveLength(0);
+    });
+
+    it('reports unowned hook', () => {
+        const ownership = makeOwnership([{ id: 'web', rootDir: '/apps/web' }]);
+        const FILE = '/tmp/useOrphan.ts';
+        const extract: FeExtractResult = {
+            ...emptyExtract(),
+            hooks: [{ name: 'useOrphan', file: FILE, location: { file: FILE, line: 1, column: 0 } }],
+        };
+        const { diagnostics } = mapFeToGraph(extract, ownership);
+        expect(diagnostics.unowned.some((u) => u.kind === 'fe-hook' && u.file === FILE)).toBe(true);
+    });
+
+    it('reports unowned route', () => {
+        const ownership = makeOwnership([{ id: 'web', rootDir: '/apps/web' }]);
+        const extract: FeExtractResult = {
+            ...emptyExtract(),
+            routes: [{ pattern: '/orphan', pageFile: '/tmp/pages/orphan.tsx' }],
+        };
+        const { diagnostics } = mapFeToGraph(extract, ownership);
+        expect(diagnostics.unowned.some((u) => u.kind === 'fe-route' && u.file === '/tmp/pages/orphan.tsx')).toBe(true);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Extractor unresolved imports forwarded to diagnostics (P0-5)
+// ---------------------------------------------------------------------------
+describe('mapFeToGraph — extractor unresolved imports in diagnostics', () => {
+    it('carries unresolved imports from extractor into diagnostics', () => {
+        const extract: FeExtractResult = {
+            ...emptyExtract(),
+            unresolvedImports: [
+                { file: '/app/Comp.tsx', specifier: '../missing', error: 'File not found' },
+            ],
+        };
+        const { diagnostics } = mapFeToGraph(extract, makeOwnership());
+        expect(diagnostics.unresolved.some((u) => u.kind === 'fe-imports' && u.ref === '../missing')).toBe(true);
     });
 });

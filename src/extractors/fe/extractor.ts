@@ -1,13 +1,13 @@
 /**
  * Frontend (React/Next.js) AST extractor.
  *
- * Walks all .tsx/.jsx source files in the project and detects:
- *   - React components (arrow, function, class, memo, forwardRef)
- *   - Custom hooks (use[A-Z]* with another hook call in body)
- *   - Next.js pages (Pages Router + App Router)
- *   - Routes derived from file paths
- *   - JSX render references (fe-renders edges)
- *   - Import references between FE files (fe-imports edges)
+ * Walks all .tsx/.jsx/.ts source files in the project and detects:
+ *   - React components (arrow, function, class, memo, forwardRef) — .tsx/.jsx only
+ *   - Custom hooks (use[A-Z]* with another hook call in body) — .tsx/.jsx/.ts
+ *   - Next.js pages (Pages Router + App Router) — .tsx/.jsx only
+ *   - Routes derived from file paths — .tsx/.jsx only
+ *   - JSX render references (fe-renders edges) — .tsx/.jsx only
+ *   - Import references between FE files (fe-imports edges) — .tsx/.jsx only
  */
 import { resolve } from 'node:path';
 
@@ -25,23 +25,37 @@ import type {
     FePage,
     FeRender,
     FeRoute,
+    FeUnresolvedImport,
 } from './types.js';
 
-// Extension filter — only scan JSX/TSX files for FE patterns.
-const FE_EXTENSIONS = new Set(['.tsx', '.jsx']);
+// Extension filter — JSX/TSX for full FE patterns; .ts for hooks only.
+const FE_FULL_EXTENSIONS = new Set(['.tsx', '.jsx']);
+const FE_HOOK_EXTENSIONS = new Set(['.ts']);
 
-function isFESourceFile(sf: SourceFile): boolean {
+function isFESourceFile(sf: SourceFile): { include: boolean; hooksOnly: boolean } {
     const p = sf.getFilePath();
-    // Exclude test/spec files even for .tsx/.jsx
-    if (p.endsWith('.spec.tsx') || p.endsWith('.test.tsx')) return false;
-    if (p.endsWith('.spec.jsx') || p.endsWith('.test.jsx')) return false;
+    // Exclude test/spec/declaration files
+    if (
+        p.endsWith('.spec.tsx') || p.endsWith('.test.tsx') ||
+        p.endsWith('.spec.jsx') || p.endsWith('.test.jsx') ||
+        p.endsWith('.spec.ts')  || p.endsWith('.test.ts')  ||
+        p.endsWith('.d.ts')
+    ) {
+        return { include: false, hooksOnly: false };
+    }
+    /* v8 ignore next 1 */
+    if (isExcludedSourceFile(sf)) return { include: false, hooksOnly: false };
+
     const ext = p.slice(p.lastIndexOf('.'));
-    return FE_EXTENSIONS.has(ext) && !isExcludedSourceFile(sf);
+    if (FE_FULL_EXTENSIONS.has(ext)) return { include: true, hooksOnly: false };
+    if (FE_HOOK_EXTENSIONS.has(ext)) return { include: true, hooksOnly: true };
+    /* v8 ignore next 1 */
+    return { include: false, hooksOnly: false };
 }
 
 /**
  * Extract FE components, hooks, pages, routes, renders, and imports
- * from all .tsx/.jsx files in the ts-morph project.
+ * from all .tsx/.jsx files (and hooks from .ts files) in the ts-morph project.
  */
 export async function extractFe(cfg: ArchGraphConfig, project: Project): Promise<FeExtractResult> {
     const root = resolve(cfg.root);
@@ -51,16 +65,40 @@ export async function extractFe(cfg: ArchGraphConfig, project: Project): Promise
     const allPages: FePage[] = [];
     const allRenders: FeRender[] = [];
     const allImports: FeImportRef[] = [];
+    const allUnresolvedImports: FeUnresolvedImport[] = [];
     const routeMap = new Map<string, FeRoute>(); // pattern → FeRoute (dedup)
 
     for (const sf of project.getSourceFiles()) {
-        if (!isFESourceFile(sf)) continue;
+        const { include, hooksOnly } = isFESourceFile(sf);
+        if (!include) continue;
 
         const file = sf.getFilePath();
 
-        // --- React patterns (components, hooks, renders) ---
-        const { components, hooks, renders } = extractReactPatterns(sf);
-        allComponents.push(...components);
+        if (hooksOnly) {
+            // .ts files: extract hooks only (no components, renders, pages, imports)
+            const { hooks } = extractReactPatterns(sf, { hooksOnly: true });
+            // Apply fallback name for safety (hooks always have a name from regex, but guard anyway)
+            for (const hook of hooks) {
+                /* v8 ignore next 3 */
+                if (!hook.name) {
+                    hook.name = `hook@${hook.location.line}`;
+                }
+                allHooks.push(hook);
+            }
+            continue;
+        }
+
+        // --- Full FE patterns (components, hooks, renders) for .tsx/.jsx ---
+        const { components, hooks, renders } = extractReactPatterns(sf, { hooksOnly: false });
+
+        // Apply fallback name for anonymous components (P1-4)
+        for (const comp of components) {
+            /* v8 ignore next 3 */
+            if (!comp.name) {
+                comp.name = `${comp.kind}@${comp.location.line}`;
+            }
+            allComponents.push(comp);
+        }
         allHooks.push(...hooks);
         allRenders.push(...renders);
 
@@ -86,8 +124,10 @@ export async function extractFe(cfg: ArchGraphConfig, project: Project): Promise
             try {
                 const resolved = importDecl.getModuleSpecifierSourceFile();
                 resolvedFile = resolved?.getFilePath() ?? null;
-            } catch {
-                // resolution failure — leave as null
+            } catch (err) /* v8 ignore next 4 */ {
+                // resolution failure — record for diagnostics
+                const msg = err instanceof Error ? err.message : String(err);
+                allUnresolvedImports.push({ file, specifier, error: msg });
             }
 
             // Collect all named + default imports
@@ -122,5 +162,6 @@ export async function extractFe(cfg: ArchGraphConfig, project: Project): Promise
         routes: [...routeMap.values()],
         renders: allRenders,
         imports: allImports,
+        unresolvedImports: allUnresolvedImports,
     };
 }

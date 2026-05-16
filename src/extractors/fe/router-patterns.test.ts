@@ -117,6 +117,49 @@ describe('deriveRoute — non-page files', () => {
     });
 });
 
+// ---------------------------------------------------------------------------
+// P1-5: App Router edge cases
+// ---------------------------------------------------------------------------
+describe('deriveRoute — App Router edge cases (P1-5)', () => {
+    it('parallel route @slot → null', () => {
+        // e.g. app/@modal/page.tsx — slot is not a real route
+        expect(deriveRoute(`${ROOT}/app/@modal/page.tsx`, ROOT)).toBeNull();
+    });
+
+    it('intercepting route (.) → null', () => {
+        expect(deriveRoute(`${ROOT}/app/(.)photo/page.tsx`, ROOT)).toBeNull();
+    });
+
+    it('intercepting route (..) → null', () => {
+        expect(deriveRoute(`${ROOT}/app/(..)(..)/photo/page.tsx`, ROOT)).toBeNull();
+    });
+
+    it('intercepting route (...) → null', () => {
+        expect(deriveRoute(`${ROOT}/app/(...)/photo/page.tsx`, ROOT)).toBeNull();
+    });
+
+    it('optional catch-all [[...slug]] → /*', () => {
+        expect(deriveRoute(`${ROOT}/app/[[...slug]]/page.tsx`, ROOT)).toEqual({
+            route: '/*',
+            router: 'app',
+        });
+    });
+
+    it('pages router optional catch-all [[...slug]] → /*', () => {
+        expect(deriveRoute(`${ROOT}/pages/[[...slug]].tsx`, ROOT)).toEqual({
+            route: '/*',
+            router: 'pages',
+        });
+    });
+
+    it('route group (marketing) is stripped → /about', () => {
+        expect(deriveRoute(`${ROOT}/app/(marketing)/about/page.tsx`, ROOT)).toEqual({
+            route: '/about',
+            router: 'app',
+        });
+    });
+});
+
 describe('deriveRoute — root with trailing slash', () => {
     it('handles root with trailing slash', () => {
         expect(deriveRoute('/app/pages/about.tsx', '/app/')).toEqual({ route: '/about', router: 'pages' });

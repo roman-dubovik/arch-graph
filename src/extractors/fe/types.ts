@@ -95,6 +95,13 @@ export interface FeImportRef {
 // Extractor aggregate result (returned by extractFe)
 // ---------------------------------------------------------------------------
 
+/** Import that could not be resolved by ts-morph (specifier + error message). */
+export interface FeUnresolvedImport {
+    file: string;
+    specifier: string;
+    error: string;
+}
+
 export interface FeExtractResult {
     components: FeComponent[];
     hooks: FeHook[];
@@ -105,4 +112,6 @@ export interface FeExtractResult {
     renders: FeRender[];
     /** Import links (file → file, filtered to .tsx/.jsx component imports). */
     imports: FeImportRef[];
+    /** Imports that failed ts-morph resolution (stored for diagnostics). */
+    unresolvedImports: FeUnresolvedImport[];
 }
