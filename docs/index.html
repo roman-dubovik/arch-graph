@@ -4,12 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>arch-graph — Static architecture graph for NestJS monorepos</title>
-  <meta name="description" content="arch-graph extracts NATS, BullMQ, TypeORM, NestJS DI, HTTP, and TS imports from a NestJS monorepo into a typed graph. Deterministic. No LLM at build time. 12.3× fewer LLM context tokens than graphify and 100% recall on architecture benchmarks (substring-presence heuristic)." />
+  <meta name="description" content="arch-graph extracts NATS, BullMQ, TypeORM, NestJS DI, HTTP, and TS imports from a NestJS monorepo into a typed graph. Deterministic. No LLM at build time. 14.8× fewer LLM context tokens than graphify and 100% recall on architecture benchmarks (substring-presence heuristic, 40 questions across 4 monorepos)." />
   <meta name="theme-color" content="#0a0a0f" />
 
   <meta property="og:type" content="website" />
   <meta property="og:title" content="arch-graph — Static architecture graph for NestJS monorepos" />
-  <meta property="og:description" content="Deterministic. No LLM at build time. 12.3× fewer LLM context tokens than graphify and 100% recall on architecture benchmarks." />
+  <meta property="og:description" content="Deterministic. No LLM at build time. 14.8× fewer LLM context tokens than graphify and 100% recall on architecture benchmarks (40 questions across 4 monorepos)." />
   <meta property="og:url" content="https://roman-dubovik.github.io/arch-graph/" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -115,7 +115,7 @@
 
         <ul class="hero-stats" aria-label="Headline benchmark numbers">
           <li>
-            <span class="stat-num">12.3×</span>
+            <span class="stat-num">14.8×</span>
             <span class="stat-label">fewer LLM tokens</span>
           </li>
           <li>
@@ -123,7 +123,7 @@
             <span class="stat-label">recall on architecture queries</span>
           </li>
           <li>
-            <span class="stat-num">10%</span>
+            <span class="stat-num">25%</span>
             <span class="stat-label">graphify recall on the same set</span>
           </li>
           <li>
@@ -320,26 +320,26 @@
     <section class="section section-bench" id="bench" aria-labelledby="bench-title">
       <div class="container">
         <p class="section-eyebrow">Measured</p>
-        <h2 id="bench-title" class="section-title">Measured on real NestJS monorepos.</h2>
-        <p class="section-lead">Fresh head-to-head re-run via <code>arch-graph compare</code> on two private reference monorepos with existing graphify output. 20 auto-generated questions (10 per project) sampled from real nodes in each graph. Same compression, same <code>cl100k_base</code> encoder, same questions for both tools. Recall is a substring-presence necessary-condition heuristic, not an end-to-end LLM eval.</p>
+        <h2 id="bench-title" class="section-title">Measured on 4 real NestJS monorepos.</h2>
+        <p class="section-lead">Head-to-head re-run via <code>arch-graph compare</code> on four private reference monorepos. 40 auto-generated questions total (10 per project) sampled from real nodes in each graph. Same compression, same <code>cl100k_base</code> encoder, same questions for both tools. Recall is a substring-presence necessary-condition heuristic, not an end-to-end LLM eval.</p>
 
         <div class="bench-cards reveal">
           <div class="bench-card highlight">
             <p class="bench-card-label">Avg tokens per question</p>
-            <p class="bench-card-row"><span class="bench-card-tool">arch-graph</span><span class="bench-card-num">41,626</span></p>
-            <p class="bench-card-row dim"><span class="bench-card-tool">graphify</span><span class="bench-card-num">510,577</span></p>
-            <p class="bench-card-foot">12.3× fewer tokens. Same 20 questions, same compression.</p>
+            <p class="bench-card-row"><span class="bench-card-tool">arch-graph</span><span class="bench-card-num">38,654</span></p>
+            <p class="bench-card-row dim"><span class="bench-card-tool">graphify</span><span class="bench-card-num">570,605</span></p>
+            <p class="bench-card-foot">14.8× fewer tokens. Same 40 questions, same compression.</p>
           </div>
           <div class="bench-card">
             <p class="bench-card-label">Mean recall (substring-presence)</p>
             <p class="bench-card-row"><span class="bench-card-tool">arch-graph</span><span class="bench-card-num">100%</span></p>
-            <p class="bench-card-row dim"><span class="bench-card-tool">graphify</span><span class="bench-card-num">10%</span></p>
-            <p class="bench-card-foot">~10× higher recall on architecture queries. Necessary-condition, not an LLM eval.</p>
+            <p class="bench-card-row dim"><span class="bench-card-tool">graphify</span><span class="bench-card-num">25%</span></p>
+            <p class="bench-card-foot">~4× higher recall on architecture queries. Necessary-condition, not an LLM eval.</p>
           </div>
           <div class="bench-card">
-            <p class="bench-card-label">Total tokens · 20 questions</p>
-            <p class="bench-card-row"><span class="bench-card-tool">arch-graph</span><span class="bench-card-num">832K</span></p>
-            <p class="bench-card-row dim"><span class="bench-card-tool">graphify</span><span class="bench-card-num">10.2M</span></p>
+            <p class="bench-card-label">Total tokens · 40 questions</p>
+            <p class="bench-card-row"><span class="bench-card-tool">arch-graph</span><span class="bench-card-num">1.55M</span></p>
+            <p class="bench-card-row dim"><span class="bench-card-tool">graphify</span><span class="bench-card-num">22.8M</span></p>
             <p class="bench-card-foot">Same compression aggressiveness, same <code>cl100k_base</code> encoder, same questions.</p>
           </div>
           <div class="bench-card">
@@ -382,9 +382,9 @@
                 <td class="mono">897 / 1,212</td>
                 <td class="mono">62,793</td>
                 <td><span class="pill ok">100%</span></td>
-                <td class="mono dim">unavailable</td>
-                <td class="mono dim">—</td>
-                <td class="mono dim">—</td>
+                <td class="mono">10,874 / 10,748<sup>†</sup></td>
+                <td class="mono">724,785</td>
+                <td><span class="pill warn">22%</span></td>
               </tr>
               <tr>
                 <th scope="row">C</th>
@@ -402,16 +402,16 @@
                 <td class="mono">144 / 189</td>
                 <td class="mono">8,570</td>
                 <td><span class="pill ok">100%</span></td>
-                <td class="mono dim">unavailable</td>
-                <td class="mono dim">—</td>
-                <td class="mono dim">—</td>
+                <td class="mono">6,128 / 11,622<sup>†</sup></td>
+                <td class="mono">536,483</td>
+                <td><span class="pill warn">57%</span></td>
               </tr>
             </tbody>
           </table>
         </div>
 
         <p class="prose dim small">
-          Recall uses a substring-presence heuristic: for each question, we check whether every ground-truth label appears in the tool's compressed context. It's a permissive necessary-condition — "did the tool's output even contain the answer". Projects B and D had no graphify graph available locally (graphify ships as a Claude skill, not a CLI, and its output wasn't pre-generated on those repos); arch-only stats shown. The headline ratios above are computed on A + C (the projects where both tools have output). Full methodology: <a class="link" href="https://github.com/roman-dubovik/arch-graph/blob/main/bench/report.md" rel="noopener" target="_blank">bench/report.md →</a>
+          Recall uses a substring-presence heuristic: for each question, we check whether every ground-truth label appears in the tool's compressed context. It's a permissive necessary-condition — "did the tool's output even contain the answer". <sup>†</sup> Projects B and D had graphify rebuilt fresh; the build ran in <strong>AST-only mode</strong> (LLM semantic pass was unavailable in the skill context where it was invoked), producing a larger, less-curated graph than a full graphify run would. This <em>inflates</em> graphify's token count and may overstate arch-graph's token advantage on those two projects. Recall, however, is measured on whatever was actually in the graph — that's the honest comparison. Projects A and C used pre-existing graphify-out (build mode unknown). Full methodology: <a class="link" href="https://github.com/roman-dubovik/arch-graph/blob/main/bench/report.md" rel="noopener" target="_blank">bench/report.md →</a>
         </p>
 
         <p class="prose">
