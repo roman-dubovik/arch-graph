@@ -17,57 +17,47 @@ Severity:
 
 ## Активные (deferred)
 
-### Block B — HTTP extractor
-
-- **[nice-to-have] [http] `AXIOS_CREATE_RE` поддерживает только depth-1 nested parens** — после cleanup-http регулярка хендлит `axios.create({ baseURL: getUrl() }).get(url)`, но `axios.create({ baseURL: build(getUrl()) })` (depth-2) всё ещё мисс. AST extractor ловит, regex GT — нет → false `extra` в diagnostics. Не recall miss, не gate failure. Решение: brace/paren-balanced регулярка или рекурсивный паттерн. На корпусе пока 0 кейсов depth ≥ 2.
-
-### Block C — TS-imports extractor
-
-- **[nice-to-have] [imports] mapper `else` branch без `never`-guard на `TsImportResolution`** — `src/mapper/imports-to-graph.ts` обрабатывает `resolved` / `external` / `dynamic-non-literal` явно, остальное (`broken-alias`, `broken-relative`) уходит в `else`. Если добавится 6-й variant — он молча упадёт в `unresolvedInternal`. Лоу-приоритет, тип-дизайн ОК. (type-design-analyzer, cleanup-imports-resolution re-review)
-
-- **[nice-to-have] [imports] `dynamic-non-literal` структурно не привязан к `kind: 'dynamic'`** — variant может появиться на `kind: 'static'` сайте формально валидно. На практике extractor так не делает, но тип не enforced. (type-design-analyzer, cleanup-imports-resolution)
-
-### Block D — Mermaid output
-
-- **[nice-to-have] [mermaid] dedup-comment в collision aggregation** — inline comment на ~line 101 говорит "same sanitizedId + same originalIds set", но dedup ключ только по `sanitizedId`. Лёгкое уточнение текста. (comment-analyzer, cleanup-mermaid-collisions)
-
 ### Block F — MCP server
 
-- **[convention] [mcp] `EdgeAnswer.role` + `kind` независимы — design decision** — в `NatsCallSite` они структурно сцеплены через DU, в `EdgeAnswer` — отдельные поля. Документировано в комментарии. (type-design convergence, conscious deviation)
-
-- **[nice-to-have] [mcp] JSDoc на never-default-arm в `query` switch** — после cleanup-mcp-exhaust default arm с `const _: never = action` есть, но без JSDoc. Будущий разработчик может принять за dead code. Стилевое улучшение. (pr-review-toolkit, cleanup-mcp-exhaust)
-
-### Cross-cutting
-
-- **[nice-to-have] [cli] `appendBlock` JSDoc неточен** — JSDoc говорит "Adds trailing newline", но trailing newline должен быть в самом `block` параметре, не добавляется функцией. Pre-existing неточность, унаследовано из claude.ts. (comment-analyzer, cleanup-marker-block)
+- **[convention] [mcp] `EdgeAnswer.role` + `kind` независимы — design decision** — в `NatsCallSite` они структурно сцеплены через DU, в `EdgeAnswer` — отдельные поля. Документировано в комментарии. Сознательное отступление, не bug. (type-design convergence, conscious deviation)
 
 ---
 
-## Закрыто в cleanup/axios-taint 2026-05-16
+## Закрыто в cleanup-passе #2 (2026-05-16)
 
-- **[feature-suggestion] [http] `axios.create()` client variable tracking** — deferred, no corpus signal.
-  Паттерн `const client = axios.create({ baseURL }); client.get(path)` не реализован.
-  Corpus check (2026-05-16) по 5 reference-проектам:
-  beribuy2=0, insyra=0, platform=1 (без `baseURL`, только `timeout`/`headers`), screenia=0, unpacks=0.
-  Итого: 0 сайтов с `baseURL` → реализация даст 0 новых resolved URL.
-  Реактивировать при появлении проекта использующего `axios.create({ baseURL })`.
-  (feature-suggestion, cleanup/axios-taint; см. комментарий в extractor.ts)
+Все 7 nice-to-have из предыдущей итерации обработаны (6 реализованы, 1 deferred с corpus-обоснованием):
+
+- **Block B** `AXIOS_CREATE_RE` depth-2 nested parens → **paren-balanced walker** (произвольная глубина) — `cleanup/axios-regex @ 8796b87`
+- **Block B** `axios.create()` client variable tracking → **deferred с corpus-проверкой** (5/5 проектов: 0 sites с `baseURL`) — `cleanup/axios-taint @ 7396359` + комментарий в `src/extractors/http/extractor.ts`
+- **Block C** mapper `else` без `never`-guard → **switch+never+stderr warning** — `cleanup/imports-tighten @ 4de6375`
+- **Block C** `dynamic-non-literal` не привязан к `kind: 'dynamic'` → **TsStaticResolution / TsDynamicResolution split** — `cleanup/imports-tighten @ 4de6375`
+- **Block D** Mermaid dedup-comment уточнение → исправлено — `cleanup/comments @ 3896398`
+- **Block F** JSDoc на never-default-arm в MCP → добавлен — `cleanup/comments @ 3896398`
+- **Cross-cutting** `appendBlock` JSDoc неточен → исправлен — `cleanup/comments @ 3896398`
 
 ---
 
-## Закрыто в cleanup-passе 2026-05 (для архива)
+## Закрыто в cleanup-passе #1 (2026-05)
 
-Все исходные 8 пунктов из ранжирования Тиер 1–3 закрыты в серии cleanup/* PR’ов:
+Все исходные 8 пунктов из ранжирования Тиер 1–3 закрыты:
 
 - **Block A** `DiProviderRef.token.providerKind: 'unknown'` → **token-ref variant** (003d348)
 - **Block B** `HttpDiagnostics.externalCalls` → **informational** (f6149b7)
 - **Block B** `.endsWith('.create')` over-match → AST structural check (f6149b7)
-- **Block B** `AXIOS_CREATE_RE` nested parens → depth-1 fix (f6149b7)
+- **Block B** `AXIOS_CREATE_RE` nested parens (depth-1) → fix (f6149b7)
 - **Block C** `TsImportSite.resolvedFilePath: string | null` → `TsImportResolution` DU (54e4151)
 - **Block D** `buildIdMap` collisions → `mermaid-collisions.json` artifact (7f00082)
 - **Block E** `BullMqQueueRef.unresolved.reason` → 6-variant DU (44b7b30)
 - **Block F** `RoutedAction` switch never-arm exhaustiveness → added (76aa016)
 - **Cross-cutting** marker-block helpers → `src/cli/marker-block.ts` (41915ac, aad1bc5)
+
+---
+
+## Out-of-scope (документировано отдельно)
+
+- **D1–D6** в `05-deferred-patterns.md` — спекулятивные паттерны (object-literal-arg для не-bullmq доменов, conditional literal union etc.). Ждут реальных проектов в корпусе с этими паттернами.
+- **Bench graphify-baseline** для 3 проектов (insyra/beribuy2/unpacks) — операционная задача (требует pre-built graphify-индексов на этих проектах), не code-change.
+- **gRPC / Kafka / SQS / cross-monorepo** — extractor domains за пределами текущего scope (см. README "Limitations & honesty").
 
 ---
 
