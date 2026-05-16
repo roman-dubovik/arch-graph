@@ -15,6 +15,17 @@
  * rotations.
  */
 
+// Output channel convention (applies to every process.{stdout,stderr}.write call
+// in this file):
+//   stderr — WARN/BUG messages that indicate unexpected internal state. These are
+//            not user-progress lines; CI log scrapers should treat them as warnings.
+//   stdout — User-facing progress or degradation notices (e.g. "detection skipped").
+//            These are surfaced via the `write` callback in safeDetectCycles (build.ts),
+//            not directly from this module.
+//
+// Currently this file only writes to stderr (BUG guards). Progress messages live
+// in safeDetectCycles (pipeline/build.ts) which owns the stdout channel.
+
 import type { ArchGraph, CyclesDiagnostics, GraphEdge, ImportCycle, SourceLoc } from '../core/types.js';
 
 // ============================================================================
@@ -80,16 +91,21 @@ function detectForKind(
 
     for (const cyclePath of rawCycles) {
         const normalised = canonicalise(cyclePath);
-        const key = normalised.join('\0');
-        if (seen.has(key)) continue;
-        seen.add(key);
 
+        // Guard against degenerate empty-path cycles BEFORE dedup so that every
+        // occurrence logs a BUG warning rather than being silently swallowed after
+        // the first empty key is added to `seen`.
         if (normalised.length === 0) {
             process.stderr.write(
                 `[detectCycles] BUG: canonicalise returned empty path for cycle on ${kind}; skipping.\n`,
             );
             continue;
         }
+
+        const key = normalised.join('\0');
+        if (seen.has(key)) continue;
+        seen.add(key);
+
         const edgeLocations = buildEdgeLocations(normalised, adj);
         result.push({ kind, nodes: normalised as [string, ...string[]], edgeLocations });
     }

@@ -595,6 +595,56 @@ describe('writeGraphMermaid — domain slice with cycles', () => {
     });
 });
 
+// ============================================================================
+// renderMermaid — degraded cycle detection warning
+// ============================================================================
+
+describe('renderMermaid — cycles.error warning comment', () => {
+    it('emits %% WARNING comment when cycles.error is set', () => {
+        const nodes = [makeNode('svc:a', 'service')];
+        const cycles: CyclesDiagnostics = {
+            cycles: [],
+            counts: { tsImport: 0, libUsage: 0, diImport: 0 },
+            error: 'RangeError: Maximum call stack size exceeded',
+        };
+        const { body } = renderMermaid(nodes, [], 200, cycles);
+        expect(body).toContain('%% WARNING: cycle detection was skipped');
+        expect(body).toContain('RangeError: Maximum call stack size exceeded');
+        expect(body).toContain('Cycle styling may be incomplete.');
+    });
+
+    it('does NOT emit %% WARNING comment when cycles.error is absent', () => {
+        const nodes = [makeNode('svc:a', 'service')];
+        const cycles: CyclesDiagnostics = {
+            cycles: [],
+            counts: { tsImport: 0, libUsage: 0, diImport: 0 },
+        };
+        const { body } = renderMermaid(nodes, [], 200, cycles);
+        expect(body).not.toContain('%% WARNING: cycle detection was skipped');
+    });
+
+    it('does NOT emit %% WARNING comment when cycles is undefined', () => {
+        const nodes = [makeNode('svc:a', 'service')];
+        const { body } = renderMermaid(nodes, [], 200, undefined);
+        expect(body).not.toContain('%% WARNING: cycle detection was skipped');
+    });
+
+    it('WARNING comment appears immediately after flowchart LR directive', () => {
+        const nodes = [makeNode('svc:a', 'service')];
+        const cycles: CyclesDiagnostics = {
+            cycles: [],
+            counts: { tsImport: 0, libUsage: 0, diImport: 0 },
+            error: 'RangeError: overflow',
+        };
+        const { body } = renderMermaid(nodes, [], 200, cycles);
+        const lines = body.split('\n');
+        const directiveIdx = lines.findIndex((l) => l === 'flowchart LR');
+        const warningIdx = lines.findIndex((l) => l.includes('%% WARNING'));
+        expect(directiveIdx).toBeGreaterThanOrEqual(0);
+        expect(warningIdx).toBe(directiveIdx + 1);
+    });
+});
+
 describe('renderMermaid — escapeMermaidLabel coverage', () => {
     it('escapes special characters in node labels', () => {
         const nodes: GraphNode[] = [

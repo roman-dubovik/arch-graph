@@ -538,6 +538,14 @@ async function cmdBuild(args: ParsedArgs): Promise<void> {
         }
     }
 
+    // Surface degraded cycle detection visibly so operators notice it immediately
+    // (diagnostics.json contains the error too, but few people read it proactively).
+    if (result.diagnostics.cycles.error) {
+        process.stdout.write(
+            `\n⚠ cycle detection degraded: ${result.diagnostics.cycles.error}. graph.mermaid may not show cycle highlights.\n`,
+        );
+    }
+
     if (!args.quiet) {
         process.stdout.write(`\n✓ graph.json:      ${outDir}/graph.json (${result.graph.nodes.length} nodes, ${result.graph.edges.length} edges)\n`);
         process.stdout.write(`✓ diagnostics.json: ${outDir}/diagnostics.json\n`);
@@ -647,6 +655,13 @@ async function cmdDiagnose(args: ParsedArgs): Promise<void> {
         for (const u of im.unresolvedImports.slice(0, 10)) {
             process.stdout.write(`  ${u.location.file}:${u.location.line}  '${u.specifier}'\n`);
         }
+    }
+
+    // Surface degraded cycle detection visibly (same as cmdBuild).
+    if (result.diagnostics.cycles.error) {
+        process.stdout.write(
+            `\n⚠ cycle detection degraded: ${result.diagnostics.cycles.error}. graph.mermaid may not show cycle highlights.\n`,
+        );
     }
 
     const outDir = resolve(args.out);

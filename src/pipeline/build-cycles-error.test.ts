@@ -1,59 +1,40 @@
 /**
  * Tests for the cycle-detection error handling added in the 2nd-round fix.
  *
- * These tests isolate the try/catch block in `runBuild` by mocking `detectCycles`
- * to throw controlled errors. The full pipeline is not exercised — only the
- * error-surfacing paths introduced in fix #2.
- *
- * We test the catch logic directly via a helper that mirrors the try/catch block
- * in build.ts, since mocking the full `runBuild` call chain would require
- * stubbing ts-morph, file system, and all extractors.
+ * These tests exercise `safeDetectCycles` — the helper extracted from `build.ts`
+ * in the 4th-round fix — so any future change to that function's error-handling
+ * logic is automatically caught here. No inline copy; tests use the real code.
  */
 
 import { describe, expect, it, vi } from 'vitest';
 
 import type { CyclesDiagnostics } from '../core/types.js';
+import { safeDetectCycles } from './build.js';
 
 // ---------------------------------------------------------------------------
-// Inline re-implementation of the try/catch block for isolated unit testing.
-// This mirrors the logic in src/pipeline/build.ts exactly, so if that block
-// is updated this test must be updated too.
+// Helpers
 // ---------------------------------------------------------------------------
 
-type DetectCyclesFn = () => CyclesDiagnostics;
-
-function runCycleDetection(detectCycles: DetectCyclesFn): CyclesDiagnostics {
-    let cyclesDiagnostics: CyclesDiagnostics;
-    try {
-        cyclesDiagnostics = detectCycles();
-    } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        if (err instanceof RangeError) {
-            process.stdout.write(`  cycles: detection skipped (stack overflow on large graph)\n`);
-            cyclesDiagnostics = {
-                cycles: [],
-                counts: { tsImport: 0, libUsage: 0, diImport: 0 },
-                error: `RangeError: ${message}`,
-            };
-        } else {
-            process.stdout.write(`  cycles: detection failed: ${message}\n`);
-            throw err;
-        }
-    }
-    return cyclesDiagnostics;
-}
+/** Minimal ArchGraph stub — safeDetectCycles only passes it through to `detect`. */
+const stubGraph = {
+    version: '1' as const,
+    buildAt: new Date().toISOString(),
+    root: '/project',
+    nodes: [],
+    edges: [],
+};
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('build.ts — cycle detection error handling', () => {
-    it('returns cycles normally when detectCycles succeeds', () => {
+describe('safeDetectCycles — cycle detection error handling', () => {
+    it('returns cycles normally when detect succeeds', () => {
         const expected: CyclesDiagnostics = {
             cycles: [],
             counts: { tsImport: 0, libUsage: 0, diImport: 0 },
         };
-        const result = runCycleDetection(() => expected);
+        const result = safeDetectCycles(stubGraph, () => expected);
         expect(result).toBe(expected);
         expect(result.error).toBeUndefined();
     });
@@ -61,9 +42,10 @@ describe('build.ts — cycle detection error handling', () => {
     it('degrades gracefully on RangeError (stack overflow) and sets error sentinel', () => {
         const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
         try {
-            const result = runCycleDetection(() => {
-                throw new RangeError('Maximum call stack size exceeded');
-            });
+            const result = safeDetectCycles(
+                stubGraph,
+                () => { throw new RangeError('Maximum call stack size exceeded'); },
+            );
             // Does NOT throw — degrades gracefully
             expect(result.cycles).toHaveLength(0);
             expect(result.counts).toEqual({ tsImport: 0, libUsage: 0, diImport: 0 });
@@ -83,9 +65,10 @@ describe('build.ts — cycle detection error handling', () => {
         try {
             const syntheticError = new TypeError('unexpected: null graph node');
             expect(() => {
-                runCycleDetection(() => {
-                    throw syntheticError;
-                });
+                safeDetectCycles(
+                    stubGraph,
+                    () => { throw syntheticError; },
+                );
             }).toThrow(syntheticError);
             // Failure message goes to stdout before re-throw
             const stdoutMessages = (stdoutSpy.mock.calls as unknown[][])
@@ -110,8 +93,30 @@ describe('build.ts — cycle detection error handling', () => {
             ],
             counts: { tsImport: 1, libUsage: 0, diImport: 0 },
         };
-        const result = runCycleDetection(() => expected);
+        const result = safeDetectCycles(stubGraph, () => expected);
         expect(result.cycles).toHaveLength(1);
         expect(result.error).toBeUndefined();
+    });
+
+    it('uses custom write channel when provided', () => {
+        const writes: string[] = [];
+        safeDetectCycles(
+            stubGraph,
+            () => { throw new RangeError('overflow'); },
+            (msg) => { writes.push(msg); },
+        );
+        expect(writes.some((m) => m.includes('stack overflow on large graph'))).toBe(true);
+    });
+
+    it('uses custom write channel for unknown-error failure message before re-throw', () => {
+        const writes: string[] = [];
+        expect(() => {
+            safeDetectCycles(
+                stubGraph,
+                () => { throw new TypeError('boom'); },
+                (msg) => { writes.push(msg); },
+            );
+        }).toThrow('boom');
+        expect(writes.some((m) => m.includes('cycles: detection failed'))).toBe(true);
     });
 });
