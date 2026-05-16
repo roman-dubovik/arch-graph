@@ -38,8 +38,9 @@ interface ParsedArgs {
     quiet: boolean;
     /**
      * Hard-fail mode for CI: exit 3 when any enabled domain falls below recall/resolve
-     * floor. Prints the table even in strict mode (good for CI logs). When combined
-     * with --quiet, the table is suppressed but exit 3 is preserved on failures.
+     * floor. By default (without --quiet) the per-domain table is printed so CI logs
+     * contain the context. With --quiet, the table is suppressed but exit 3 still fires
+     * on failures.
      */
     strict: boolean;
 }
@@ -101,8 +102,9 @@ Flags:
   --quiet   Suppress non-error stdout (progress + validation table). Used by
             the post-commit hook so commits aren't noisy.
   --strict  CI hard-fail mode: exit 3 if any enabled domain recall falls below
-            floor (≥95%, or ≥80% for imports). The per-domain table is always
-            printed so CI logs contain the context.
+            floor (≥95%, or ≥80% for imports). The per-domain table is printed
+            in strict mode (good for CI logs) — unless --quiet is also passed,
+            in which case the table is suppressed but exit 3 still fires.
 
 Defaults:
   --config  ./arch-graph.config.ts
@@ -417,42 +419,42 @@ function computeStrictFails(
     if (enabled.nats) {
         if (n.groundTruthHandlers === 0) fails.push(`nats: zero handler ground-truth — check subscribe decorators / wrapperSubscribeApis`);
         if (n.groundTruthSenders === 0) fails.push(`nats: zero sender ground-truth — check wrapperPublishApis (typo'd class name?)`);
-        strictGateRecall(true, 'nats', 'handlers', n.groundTruthHandlers, n.recallHandlers, fails);
-        strictGateRecall(true, 'nats', 'senders', n.groundTruthSenders, n.recallSenders, fails);
+        strictGateRecall('nats', 'handlers', n.groundTruthHandlers, n.recallHandlers, fails);
+        strictGateRecall('nats', 'senders', n.groundTruthSenders, n.recallSenders, fails);
     }
     if (enabled.typeorm) {
         if (t.groundTruthInjections === 0) fails.push(`typeorm: zero injection ground-truth — check appsGlob / @InjectRepository usage`);
         if (t.groundTruthEntities === 0) fails.push(`typeorm: zero entity ground-truth — check @Entity declarations in libs/`);
-        strictGateRecall(true, 'typeorm', 'injections', t.groundTruthInjections, t.recallInjections, fails);
-        strictGateRecall(true, 'typeorm', 'entities', t.groundTruthEntities, t.recallEntities, fails);
-        strictGateResolve(true, 'typeorm', t.totalInjections, t.resolveRate, fails);
+        strictGateRecall('typeorm', 'injections', t.groundTruthInjections, t.recallInjections, fails);
+        strictGateRecall('typeorm', 'entities', t.groundTruthEntities, t.recallEntities, fails);
+        strictGateResolve('typeorm', t.totalInjections, t.resolveRate, fails);
     }
     if (enabled.http) {
         if (h.groundTruthCalls === 0) {
             fails.push(`http: zero ground-truth — set domains.http=false if this project has no HTTP usage`);
         }
-        strictGateRecall(true, 'http', 'recall', h.groundTruthCalls, h.recallCalls, fails);
+        strictGateRecall('http', 'recall', h.groundTruthCalls, h.recallCalls, fails);
     }
     if (enabled.bullmq) {
         const anyGt = b.groundTruthProducers + b.groundTruthConsumers + b.groundTruthRegistrations;
         if (anyGt === 0) fails.push(`bullmq: zero ground-truth across producers/consumers/registrations — set domains.bullmq=false if this project has no BullMQ`);
-        strictGateRecall(true, 'bullmq', 'producers', b.groundTruthProducers, b.recallProducers, fails);
-        strictGateRecall(true, 'bullmq', 'consumers', b.groundTruthConsumers, b.recallConsumers, fails);
-        strictGateRecall(true, 'bullmq', 'registrations', b.groundTruthRegistrations, b.recallRegistrations, fails);
+        strictGateRecall('bullmq', 'producers', b.groundTruthProducers, b.recallProducers, fails);
+        strictGateRecall('bullmq', 'consumers', b.groundTruthConsumers, b.recallConsumers, fails);
+        strictGateRecall('bullmq', 'registrations', b.groundTruthRegistrations, b.recallRegistrations, fails);
         const totalSites = b.totalProducers + b.totalConsumers + b.totalRegistrations;
-        strictGateResolve(true, 'bullmq', totalSites, b.resolveRate, fails);
+        strictGateResolve('bullmq', totalSites, b.resolveRate, fails);
     }
     if (enabled.di) {
         if (d.groundTruthModules === 0) {
             fails.push(`di: zero @Module ground-truth — set domains.di=false if this project is not NestJS`);
         }
-        strictGateRecall(true, 'di', 'modules', d.groundTruthModules, d.recallModules, fails);
-        strictGateRecall(true, 'di', 'imports-fields', d.groundTruthImportsFields, d.recallImportsFields, fails);
-        strictGateRecall(true, 'di', 'providers-fields', d.groundTruthProvidersFields, d.recallProvidersFields, fails);
-        strictGateRecall(true, 'di', 'exports-fields', d.groundTruthExportsFields, d.recallExportsFields, fails);
-        strictGateRecall(true, 'di', 'controllers-fields', d.groundTruthControllersFields, d.recallControllersFields, fails);
+        strictGateRecall('di', 'modules', d.groundTruthModules, d.recallModules, fails);
+        strictGateRecall('di', 'imports-fields', d.groundTruthImportsFields, d.recallImportsFields, fails);
+        strictGateRecall('di', 'providers-fields', d.groundTruthProvidersFields, d.recallProvidersFields, fails);
+        strictGateRecall('di', 'exports-fields', d.groundTruthExportsFields, d.recallExportsFields, fails);
+        strictGateRecall('di', 'controllers-fields', d.groundTruthControllersFields, d.recallControllersFields, fails);
         const totalRefs = d.totalImports + d.totalProviders + d.totalExports + d.totalControllers;
-        strictGateResolve(true, 'di', totalRefs, d.resolveRate, fails);
+        strictGateResolve('di', totalRefs, d.resolveRate, fails);
     }
     if (enabled.imports) {
         if (i.groundTruthStatic === 0) {
@@ -466,7 +468,6 @@ function computeStrictFails(
 }
 
 function strictGateRecall(
-    _enabled: boolean,
     domain: string,
     field: string,
     gt: number,
@@ -479,7 +480,6 @@ function strictGateRecall(
 }
 
 function strictGateResolve(
-    _enabled: boolean,
     domain: string,
     total: number,
     rate: number,
