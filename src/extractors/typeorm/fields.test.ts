@@ -655,27 +655,34 @@ export class UserEntity {
         expect(result.baseClassCycles).toBe(0);
     });
 
-    it('baseClassCycles accumulates cycles from getAllFieldProperties mock', () => {
-        // Uses getAllFieldProperties directly on a mock ClassDeclaration to confirm
-        // the cycle counter is non-zero and that extractEntityFields would accumulate it.
-        // (Direct call because TS forbids real circular inheritance in source.)
-        const seen = new Set<unknown>();
-        const mockCls = {
-            getName: () => 'AccumCycleClass',
-            getProperties: () => [],
-            getBaseClass: () => mockCls,
-        } as unknown as import('ts-morph').ClassDeclaration;
-        seen.add(mockCls);
+    it('baseClassCycles accumulates cycles from getAllFieldProperties — injected stub', () => {
+        // Inject a stub that always reports cycles: 2, proving the += accumulator
+        // in extractEntityFields correctly sums up cycles from getAllFieldPropertiesFn.
+        // Without the `baseClassCycles += fieldCycles` line, this test would fail.
+        const project = inMemoryProject({
+            '/app/cycle.entity.ts': `
+import { Entity, Column } from 'typeorm';
+@Entity('cycle_table')
+export class CycleEntity {
+    @Column()
+    name: string;
+}
+`,
+        });
+        const entities = [makeEntity('CycleEntity', 'cycle_table', '/app/cycle.entity.ts')];
 
-        const { cycles } = getAllFieldProperties(
-            mockCls,
-            seen as Set<import('ts-morph').ClassDeclaration>,
-        );
-        // The cycle guard returns cycles: 1 when it detects a seen class
-        expect(cycles).toBe(1);
-        // Confirm extractEntityFields returns baseClassCycles: 0 for empty entity list
-        // (no entities → no getAllFieldProperties call → counter stays 0)
-        const emptyResult = extractEntityFields([]);
-        expect(emptyResult.baseClassCycles).toBe(0);
+        // Stub returns cycles: 2 and the real property list (so fields still get extracted)
+        const stubGetAllFieldProperties = (
+            cls: import('ts-morph').ClassDeclaration,
+        ): { props: import('ts-morph').PropertyDeclaration[]; cycles: number } => ({
+            props: cls.getProperties(),
+            cycles: 2,
+        });
+
+        const result = extractEntityFields(entities, project, stubGetAllFieldProperties);
+        // The stub reported cycles: 2 for one entity → accumulator must be 2
+        expect(result.baseClassCycles).toBe(2);
+        // Fields should still be extracted normally
+        expect(result.fields).toHaveLength(1);
     });
 });

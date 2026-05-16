@@ -205,10 +205,17 @@ export function getAllFieldProperties(
  * The project is needed to walk source files and find the actual class declarations.
  * Inherited @Column properties from abstract base classes are included via the
  * base-class chain walk.
+ *
+ * @param getAllFieldPropertiesFn - Optional override for the base-class walk function.
+ *   Defaults to the real `getAllFieldProperties`. Provided for testing cycle accumulation.
  */
 export function extractEntityFields(
     entities: TypeOrmEntity[],
     project?: Project,
+    getAllFieldPropertiesFn: (
+        cls: ClassDeclaration,
+        seen?: Set<ClassDeclaration>,
+    ) => { props: PropertyDeclaration[]; cycles: number } = getAllFieldProperties,
 ): DbEntityFieldExtractResult {
     const fields: EntityFieldSite[] = [];
     const diagnostics: Array<{ file: string; line: number; message: string }> = [];
@@ -257,7 +264,7 @@ export function extractEntityFields(
             // Walk own + inherited properties via base-class chain.
             // Destructure both fields — cycles must be accumulated so circular
             // base-class chains are observable at the pipeline level, not just on stderr.
-            const { props, cycles: fieldCycles } = getAllFieldProperties(cls);
+            const { props, cycles: fieldCycles } = getAllFieldPropertiesFn(cls);
             baseClassCycles += fieldCycles;
 
             for (const prop of props) {
