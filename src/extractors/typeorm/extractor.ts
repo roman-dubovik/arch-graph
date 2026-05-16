@@ -22,6 +22,8 @@ export interface ExtractTypeOrmResult {
     sites: TypeOrmInjectionSite[];
     entities: EntityIndex;
     relations: TypeOrmRelation[];
+    /** Number of cycle-guard triggers in `getAllProperties` during relation extraction. */
+    baseClassCycles: number;
 }
 
 export async function extractTypeOrm(
@@ -56,9 +58,9 @@ export async function extractTypeOrm(
         }
     }
 
-    const relations = extractRelations(project, entities);
+    const { relations, baseClassCycles } = extractRelations(project, entities);
 
-    return { sites, entities, relations };
+    return { sites, entities, relations, baseClassCycles };
 }
 
 function buildSite(

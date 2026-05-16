@@ -46,6 +46,7 @@ export function mapTypeOrmToGraph(
     entityWarnings: TypeOrmEntityDecoratorWarning[] = [],
     relations: TypeOrmRelation[] = [],
     entityIndex: EntityIndex | undefined = undefined,
+    baseClassCycles = 0,
 ): MapTypeOrmResult {
     if (relations.length > 0 && !entityIndex) {
         throw new Error('entityIndex is required when relations are provided');
@@ -113,7 +114,7 @@ export function mapTypeOrmToGraph(
     let relationsEmitted = 0;
     let relationsResolved = 0;
     let oneToManySkipped = 0;
-    const unresolvedReasons = { unparseable: 0, notIndexed: 0 };
+    const unresolvedReasons = { unparseable: 0, notIndexed: 0, ownerNotIndexed: 0 };
 
     for (const rel of relations) {
         // Count resolved relations BEFORE Policy A filtering (matches JSDoc on the field).
@@ -135,8 +136,11 @@ export function mapTypeOrmToGraph(
         // Owner entity lookup for table name (entityIndex is guaranteed non-null here)
         const ownerEntity = entityIndex!.get(rel.ownerClass) ?? null;
         if (!ownerEntity) {
-            // Owner not in index — treat as unresolved (defensive; extractor already filters)
+            // Owner not in index — treat as unresolved (defensive; extractor already filters).
+            // Increment ownerNotIndexed to maintain:
+            //   unparseable + notIndexed + ownerNotIndexed === unresolvedRelations.length
             unresolvedRelations.push(rel);
+            unresolvedReasons.ownerNotIndexed++;
             continue;
         }
 
@@ -212,6 +216,7 @@ export function mapTypeOrmToGraph(
                 unresolvedRelations: unresolvedRelations.length,
                 oneToManySkipped,
                 unresolvedReasons,
+                baseClassCycles,
             },
         },
     };

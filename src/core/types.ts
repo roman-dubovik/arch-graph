@@ -259,17 +259,30 @@ export interface TypeOrmDiagnostics {
         oneToManySkipped: number;
         /**
          * Breakdown of unresolved relations by reason.
-         *   `unparseable` — decorator argument could not be parsed (dynamic expression, etc.)
-         *   `notIndexed`  — parsed target class name not found in entity index
+         *   `unparseable`     — decorator argument could not be parsed (dynamic expression, etc.)
+         *   `notIndexed`      — parsed target class name not found in entity index
+         *   `ownerNotIndexed` — resolvedTarget is non-null but the ownerClass was not found in
+         *                       entityIndex (defensive branch; should be unreachable in a well-formed
+         *                       run, but is now tracked structurally so the invariant is maintained)
          *
-         * Invariant: `unparseable + notIndexed === unresolvedRelations`
+         * Invariant: `unparseable + notIndexed + ownerNotIndexed === unresolvedRelations`
          * (Policy A — @OneToMany — is filtered before unresolved bucketing; unresolved
          * @OneToMany relations are NOT counted here.)
          */
         unresolvedReasons: {
             unparseable: number;
             notIndexed: number;
+            /** Defensive counter: ownerClass absent from entityIndex despite resolvedTarget being set. */
+            ownerNotIndexed: number;
         };
+        /**
+         * Number of times the cycle-guard in `getAllProperties` was triggered: a
+         * circular base-class chain was detected and truncated. TypeScript's type
+         * system forbids actual cyclic extension, but ts-morph on a partial/malformed
+         * AST can return unexpected `getBaseClass()` results. Surfaced here so callers
+         * reading diagnostics are not blind to the stderr-only signal.
+         */
+        baseClassCycles: number;
     };
 }
 

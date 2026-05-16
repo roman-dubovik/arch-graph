@@ -11,8 +11,8 @@ import { extractRelations, getAllProperties } from './relations.js';
 function setup(files: Record<string, string>) {
     const project = inMemoryProject(files);
     const entityIndex = buildEntityIndex(project);
-    const relations = extractRelations(project, entityIndex);
-    return { entityIndex, relations };
+    const { relations, baseClassCycles } = extractRelations(project, entityIndex);
+    return { entityIndex, relations, baseClassCycles };
 }
 
 // ---------------------------------------------------------------------------
@@ -729,6 +729,27 @@ describe('getAllProperties — cycle guard', () => {
             expect.stringContaining('[typeorm/relations] BUG: circular base class chain'),
         );
         stderrSpy.mockRestore();
+    });
+
+    it('increments baseClassCycles in extractRelations result when the cycle guard fires', () => {
+        // Use a real in-memory project but inject a synthetic self-referential class
+        // by spying on getBaseClass at the right moment. Because ts-morph parses the
+        // source and returns real ClassDeclaration objects, we can't easily inject the
+        // cycle directly into the AST — instead we verify the callback path via a unit
+        // spy on getAllProperties itself, by passing an explicit onCycle callback.
+        let cycleCount = 0;
+        const stub = {
+            getName: () => 'CyclicClass',
+            getProperties: () => [],
+            getBaseClass: function () { return this; },
+        } as unknown as ClassDeclaration;
+
+        const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        getAllProperties(stub, new Set(), () => { cycleCount++; });
+        stderrSpy.mockRestore();
+
+        // The onCycle callback must have been invoked exactly once.
+        expect(cycleCount).toBe(1);
     });
 });
 

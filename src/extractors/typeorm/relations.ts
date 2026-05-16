@@ -17,6 +17,12 @@ import type { EntityIndex } from './entity-index.js';
 const RELATION_DECORATORS = ['ManyToOne', 'OneToMany', 'ManyToMany', 'OneToOne'] as const;
 type RelationDecorator = (typeof RELATION_DECORATORS)[number];
 
+export interface ExtractRelationsResult {
+    relations: TypeOrmRelation[];
+    /** Number of times the cycle guard in `getAllProperties` fired (should be 0 on healthy ASTs). */
+    baseClassCycles: number;
+}
+
 /**
  * Walks every source file and extracts relation decorators
  * (`@ManyToOne`, `@OneToMany`, `@ManyToMany`, `@OneToOne`) on properties of
@@ -43,8 +49,9 @@ type RelationDecorator = (typeof RELATION_DECORATORS)[number];
  * paths lead to the same base, its properties may appear twice; this is
  * structurally uncommon in TypeORM usage.
  */
-export function extractRelations(project: Project, entityIndex: EntityIndex): TypeOrmRelation[] {
+export function extractRelations(project: Project, entityIndex: EntityIndex): ExtractRelationsResult {
     const relations: TypeOrmRelation[] = [];
+    let baseClassCycles = 0;
 
     for (const sf of project.getSourceFiles()) {
         if (isExcludedSourceFile(sf)) continue;
@@ -60,7 +67,7 @@ export function extractRelations(project: Project, entityIndex: EntityIndex): Ty
             // Note: properties may live in base-class source files — the fast-path
             // text search is done per-property rather than per-file so we don't miss
             // relations declared on an abstract base that doesn't mention @Entity.
-            for (const prop of getAllProperties(cls)) {
+            for (const prop of getAllProperties(cls, new Set(), () => { baseClassCycles++; })) {
                 for (const decoratorName of RELATION_DECORATORS) {
                     const dec = prop.getDecorator(decoratorName);
                     if (!dec) continue;
@@ -88,7 +95,7 @@ export function extractRelations(project: Project, entityIndex: EntityIndex): Ty
         }
     }
 
-    return relations;
+    return { relations, baseClassCycles };
 }
 
 /**
@@ -108,22 +115,27 @@ export function extractRelations(project: Project, entityIndex: EntityIndex): Ty
  * arise when ts-morph operates on a partial or malformed AST. TypeScript's type
  * system forbids cyclic class extension, but getBaseClass() has been observed to
  * return unexpected results in edge cases. The cycle guard is O(1) per step.
+ *
+ * @param onCycle Optional callback invoked once per cycle detection. Used by
+ *   `extractRelations` to increment `baseClassCycles` in the returned diagnostics.
  */
 export function getAllProperties(
     cls: ClassDeclaration,
     seen = new Set<ClassDeclaration>(),
+    onCycle?: () => void,
 ): PropertyDeclaration[] {
     if (seen.has(cls)) {
         process.stderr.write(
             `[typeorm/relations] BUG: circular base class chain at ${cls.getName?.() ?? '<anon>'}; truncating.\n`,
         );
+        onCycle?.();
         return [];
     }
     seen.add(cls);
     const base = cls.getBaseClass();
     if (!base) return cls.getProperties();
     // Concrete own props first; base props appended (base may itself have a base)
-    return [...cls.getProperties(), ...getAllProperties(base, seen)];
+    return [...cls.getProperties(), ...getAllProperties(base, seen, onCycle)];
 }
 
 type ResolveResult =
