@@ -167,6 +167,16 @@ export function mapImportsToGraph(
                     ...(site.kind === 'dynamic' ? { meta: { dynamic: true } } : {}),
                     ...(site.kind === 'cjs-require' ? { meta: { cjsRequire: true } } : {}),
                 });
+            } else if (site.kind === 'dynamic') {
+                // Static walk runs first; when a dynamic import targets the same file,
+                // the dedup short-circuit above would silently drop `dynamic: true`.
+                // Merge it onto the existing edge's meta instead.
+                const existing = fileEdges.get(fileKey)!;
+                const meta = (existing.meta ?? {}) as Record<string, unknown>;
+                if (!meta.dynamic) {
+                    meta.dynamic = true;
+                    existing.meta = meta;
+                }
             } else if (site.kind === 'cjs-require') {
                 // Static walk runs first; when a cjs-require targets the same file,
                 // the dedup short-circuit above would silently drop `cjsRequire: true`.
