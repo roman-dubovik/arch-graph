@@ -358,6 +358,10 @@ export async function startMcpServer(opts: { out: string }): Promise<void> {
                     return jsonResult({ via: action.tool, result: graphStats(graph) });
                 case 'unknown':
                     return jsonResult({ via: 'unknown', hint: action.hint });
+                default: {
+                    const _: never = action;
+                    return jsonResult({ via: 'unknown', hint: 'unrouted action' });
+                }
             }
         },
     );
