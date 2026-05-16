@@ -20,7 +20,7 @@
  * mistaken for a rigged benchmark.
  */
 
-import { readFile, writeFile, stat, mkdir } from 'node:fs/promises';
+import { writeFile, stat, mkdir } from 'node:fs/promises';
 import { existsSync, statSync } from 'node:fs';
 import { resolve, basename, dirname } from 'node:path';
 
@@ -186,10 +186,6 @@ interface GeneratedQuestion {
     category: QuestionCategory;
     sourceLabel: string;
     question: string;
-    /** The node id (with prefix, e.g. `nats:user.created`) used to drive the query. */
-    nodeId: string;
-    /** Bare name used for label substring matching (lowercased counterparts). */
-    bareName: string;
     /** Substring labels that an LLM context must contain to "have the answer". */
     groundTruthLabels: string[];
 }
@@ -352,8 +348,6 @@ function drawQuestion(
             category: kind,
             sourceLabel,
             question: phraseFor(kind, bare),
-            nodeId: node.id,
-            bareName: bare,
             groundTruthLabels: labels,
         };
     }
@@ -429,42 +423,49 @@ function flattenDeps(r: Extract<GroupedDeps, { found: true }>): string[] {
 }
 
 // ---------------------------------------------------------------------------
-// Substring-presence scoring (matches bench/bench.ts:scorePR exactly).
+// Substring-presence scoring (matches the recall arm of `bench/bench.ts:scorePR`).
+// We don't need precision/matched/missed for the CLI report — recall is the
+// only axis surfaced — so this is the trimmed version.
 // ---------------------------------------------------------------------------
 
-interface Score {
-    recall: number;
-    matched: string[];
-    missed: string[];
-}
-
-function scoreSubstring(haystack: string, labels: string[]): Score {
+function recallSubstring(haystack: string, labels: string[]): number {
+    if (labels.length === 0) return 1.0;
     const lower = haystack.toLowerCase();
-    const matched: string[] = [];
-    const missed: string[] = [];
+    let matched = 0;
     for (const l of labels) {
-        if (lower.includes(l.toLowerCase())) matched.push(l);
-        else missed.push(l);
+        if (lower.includes(l.toLowerCase())) matched++;
     }
-    const recall = labels.length === 0 ? 1.0 : matched.length / labels.length;
-    return { recall, matched, missed };
+    return matched / labels.length;
 }
 
 // ---------------------------------------------------------------------------
 // Result types
 // ---------------------------------------------------------------------------
 
+/**
+ * Per-question scoring result. Graphify fields are jointly present-or-null —
+ * bundled into a nested struct so they can't drift apart structurally (the
+ * same DU refactor `bench/bench.ts:GraphifyQuestionResult` got, for the same
+ * reason).
+ */
 interface PerQuestionResult {
     qid: string;
     category: QuestionCategory;
     sourceLabel: string;
     question: string;
-    bareName: string;
     groundTruthLabels: string[];
     archTokens: number;
     archRecall: number;
-    graphifyTokens: number | null;
-    graphifyRecall: number | null;
+    /** `null` when --graphify wasn't passed. */
+    graphify: { tokens: number; recall: number } | null;
+}
+
+/** Bundled graphify metadata. `null` when --graphify wasn't passed. */
+interface GraphifyInfo {
+    path: string;
+    nodes: number;
+    edges: number;
+    sizeBytes: number;
 }
 
 interface CompareReport {
@@ -474,10 +475,8 @@ interface CompareReport {
     archEdges: number;
     archSizeBytes: number;
     archGraphPath: string;
-    graphifyPath: string | null;
-    graphifyNodes: number | null;
-    graphifyEdges: number | null;
-    graphifySizeBytes: number | null;
+    /** Jointly present-or-null with all graphify fields below. */
+    graphify: GraphifyInfo | null;
     questions: GeneratedQuestion[];
     results: PerQuestionResult[];
 }
@@ -606,83 +605,84 @@ export async function runCompareCommand(args: CompareArgs): Promise<void> {
         );
     }
 
-    // Resolve graphify if requested
-    let graphifyPath: string | null = null;
+    // Resolve graphify if requested. The path-resolution and graph.json load
+    // are both wrapped because either step can fail (path missing, malformed
+    // JSON, unexpected NetworkX shape) and a raw stack trace isn't useful.
     let graphifyContext: string | null = null;
-    let graphifyNodes: number | null = null;
-    let graphifyEdges: number | null = null;
-    let graphifySize: number | null = null;
+    let graphify: GraphifyInfo | null = null;
     if (args.graphify !== undefined) {
         try {
-            graphifyPath = resolveGraphifyPath(args.graphify);
+            const resolvedPath = resolveGraphifyPath(args.graphify);
+            const gLoaded = await graphifyAdapter.load(resolvedPath);
+            const gCompact = graphifyAdapter.compact(gLoaded.raw);
+            graphifyContext = graphifyAdapter.serialize(gCompact);
+            const gStat = await stat(resolvedPath);
+            graphify = {
+                path: resolvedPath,
+                nodes: gLoaded.nodeCount,
+                edges: gLoaded.edgeCount,
+                sizeBytes: gStat.size,
+            };
         } catch (err) {
-            process.stderr.write(`error: ${(err as Error).message}\n`);
+            process.stderr.write(`error: failed to load graphify graph: ${(err as Error).message}\n`);
             process.exit(1);
         }
-        const gLoaded = await graphifyAdapter.load(graphifyPath);
-        const gCompact = graphifyAdapter.compact(gLoaded.raw);
-        graphifyContext = graphifyAdapter.serialize(gCompact);
-        graphifyNodes = gLoaded.nodeCount;
-        graphifyEdges = gLoaded.edgeCount;
-        graphifySize = (await stat(graphifyPath)).size;
     }
 
-    // Token-count the contexts (one count each, reused across questions)
-    const archTokens = countTokens(archContext);
-    const graphifyTokens = graphifyContext === null ? null : countTokens(graphifyContext);
+    // Token-count the contexts (one count each, reused across questions).
+    // Wrap the tokenizer + report write in try/finally so the wasm-backed
+    // encoder is released even if rendering throws downstream.
+    try {
+        const archTokens = countTokens(archContext);
+        const graphifyTokens = graphifyContext === null ? null : countTokens(graphifyContext);
 
-    // Score per question
-    const results: PerQuestionResult[] = questions.map((q) => {
-        const archS = scoreSubstring(archContext, q.groundTruthLabels);
-        let gTokens: number | null = null;
-        let gRecall: number | null = null;
-        if (graphifyContext !== null) {
-            gTokens = graphifyTokens;
-            gRecall = scoreSubstring(graphifyContext, q.groundTruthLabels).recall;
-        }
-        return {
-            qid: q.qid,
-            category: q.category,
-            sourceLabel: q.sourceLabel,
-            question: q.question,
-            bareName: q.bareName,
-            groundTruthLabels: q.groundTruthLabels,
-            archTokens,
-            archRecall: archS.recall,
-            graphifyTokens: gTokens,
-            graphifyRecall: gRecall,
+        // Score per question
+        const results: PerQuestionResult[] = questions.map((q) => {
+            const archRecall = recallSubstring(archContext, q.groundTruthLabels);
+            const gResult =
+                graphifyContext !== null && graphifyTokens !== null
+                    ? {
+                          tokens: graphifyTokens,
+                          recall: recallSubstring(graphifyContext, q.groundTruthLabels),
+                      }
+                    : null;
+            return {
+                qid: q.qid,
+                category: q.category,
+                sourceLabel: q.sourceLabel,
+                question: q.question,
+                groundTruthLabels: q.groundTruthLabels,
+                archTokens,
+                archRecall,
+                graphify: gResult,
+            };
+        });
+
+        const report: CompareReport = {
+            repoRoot: archGraph.root,
+            archBuildAt: archGraph.buildAt,
+            archNodes: archLoaded.nodeCount,
+            archEdges: archLoaded.edgeCount,
+            archSizeBytes: archSize,
+            archGraphPath: archPath,
+            graphify,
+            questions,
+            results,
         };
-    });
 
-    const report: CompareReport = {
-        repoRoot: archGraph.root,
-        archBuildAt: archGraph.buildAt,
-        archNodes: archLoaded.nodeCount,
-        archEdges: archLoaded.edgeCount,
-        archSizeBytes: archSize,
-        archGraphPath: archPath,
-        graphifyPath,
-        graphifyNodes,
-        graphifyEdges,
-        graphifySizeBytes: graphifySize,
-        questions,
-        results,
-    };
+        if (!args.quiet) {
+            printStdout(report);
+        }
 
-    // stdout (unless quiet)
-    if (!args.quiet) {
-        printStdout(report);
+        const reportPath = args.report ? resolve(args.report) : resolve(outDir, 'compare-report.md');
+        await mkdir(dirname(reportPath), { recursive: true });
+        await writeFile(reportPath, renderMarkdown(report), 'utf8');
+        if (!args.quiet) {
+            process.stdout.write(`\nDetailed report → ${reportPath}\n`);
+        }
+    } finally {
+        disposeTokens();
     }
-
-    // markdown report
-    const reportPath = args.report ? resolve(args.report) : resolve(outDir, 'compare-report.md');
-    await mkdir(dirname(reportPath), { recursive: true });
-    await writeFile(reportPath, renderMarkdown(report), 'utf8');
-    if (!args.quiet) {
-        process.stdout.write(`\nDetailed report → ${reportPath}\n`);
-    }
-
-    disposeTokens();
 }
 
 // ---------------------------------------------------------------------------
@@ -690,7 +690,7 @@ export async function runCompareCommand(args: CompareArgs): Promise<void> {
 // ---------------------------------------------------------------------------
 
 function printStdout(rep: CompareReport): void {
-    if (rep.graphifyPath === null) {
+    if (rep.graphify === null) {
         // Size-only mode
         const totalTok = rep.results.length > 0 ? rep.results[0]!.archTokens : 0;
         process.stdout.write(`\narch-graph compare — graph size analysis (no graphify comparison)\n\n`);
@@ -704,13 +704,15 @@ function printStdout(rep: CompareReport): void {
         return;
     }
 
-    // Head-to-head mode
+    // Head-to-head mode — every result row carries a non-null `graphify` field
+    // because we're here only when the report-level `graphify` is set, and the
+    // two are produced together in one branch above.
     const archAvg = meanNumber(rep.results.map((r) => r.archTokens));
-    const gAvg = meanNumber(rep.results.map((r) => r.graphifyTokens ?? 0));
+    const gAvg = meanNumber(rep.results.map((r) => r.graphify?.tokens ?? 0));
     const archRecall = meanNumber(rep.results.map((r) => r.archRecall));
-    const gRecall = meanNumber(rep.results.map((r) => r.graphifyRecall ?? 0));
+    const gRecall = meanNumber(rep.results.map((r) => r.graphify?.recall ?? 0));
     const archTotal = rep.results.reduce((a, r) => a + r.archTokens, 0);
-    const gTotal = rep.results.reduce((a, r) => a + (r.graphifyTokens ?? 0), 0);
+    const gTotal = rep.results.reduce((a, r) => a + (r.graphify?.tokens ?? 0), 0);
 
     process.stdout.write(`\narch-graph compare — your repo vs your graphify\n\n`);
     process.stdout.write(
@@ -779,8 +781,8 @@ function renderMarkdown(rep: CompareReport): string {
         `## Setup`,
         `- Repo: \`${rep.repoRoot}\``,
         `- arch-graph: built at ${rep.archBuildAt}, ${rep.archNodes} nodes / ${rep.archEdges} edges (${fmtBytes(rep.archSizeBytes)})`,
-        rep.graphifyPath
-            ? `- graphify:   \`${rep.graphifyPath}\` — ${rep.graphifyNodes} nodes / ${rep.graphifyEdges} edges (${fmtBytes(rep.graphifySizeBytes)})`
+        rep.graphify !== null
+            ? `- graphify:   \`${rep.graphify.path}\` — ${rep.graphify.nodes} nodes / ${rep.graphify.edges} edges (${fmtBytes(rep.graphify.sizeBytes)})`
             : `- graphify:   _not provided — run \`/graphify ${rep.repoRoot}\` and rerun \`arch-graph compare --graphify ...\` for a head-to-head._`,
         ``,
         `## How we score`,
@@ -794,15 +796,16 @@ function renderMarkdown(rep: CompareReport): string {
     ];
 
     // Per-question table
-    const perQHeader = rep.graphifyPath
+    const hasGraphify = rep.graphify !== null;
+    const perQHeader = hasGraphify
         ? '| qid | category | source | arch tokens | arch recall | graphify tokens | graphify recall |'
         : '| qid | category | source | arch tokens | arch recall |';
-    const perQSep = rep.graphifyPath
+    const perQSep = hasGraphify
         ? '|---|---|---|---:|---:|---:|---:|'
         : '|---|---|---|---:|---:|';
     const perQRows = rep.results.map((r) => {
-        if (rep.graphifyPath) {
-            return `| ${r.qid} | ${r.category} | ${r.sourceLabel} | ${fmtNumber(r.archTokens)} | ${fmtPct(r.archRecall)} | ${fmtNumber(r.graphifyTokens ?? 0)} | ${fmtPct(r.graphifyRecall)} |`;
+        if (hasGraphify) {
+            return `| ${r.qid} | ${r.category} | ${r.sourceLabel} | ${fmtNumber(r.archTokens)} | ${fmtPct(r.archRecall)} | ${fmtNumber(r.graphify?.tokens ?? 0)} | ${fmtPct(r.graphify?.recall ?? null)} |`;
         }
         return `| ${r.qid} | ${r.category} | ${r.sourceLabel} | ${fmtNumber(r.archTokens)} | ${fmtPct(r.archRecall)} |`;
     });
@@ -823,10 +826,10 @@ function renderMarkdown(rep: CompareReport): string {
     const archRecall = meanNumber(rep.results.map((r) => r.archRecall));
     const archTotal = rep.results.reduce((a, r) => a + r.archTokens, 0);
     const aggLines: string[] = [`## Aggregate`, ``];
-    if (rep.graphifyPath) {
-        const gAvg = meanNumber(rep.results.map((r) => r.graphifyTokens ?? 0));
-        const gRecall = meanNumber(rep.results.map((r) => r.graphifyRecall ?? 0));
-        const gTotal = rep.results.reduce((a, r) => a + (r.graphifyTokens ?? 0), 0);
+    if (rep.graphify !== null) {
+        const gAvg = meanNumber(rep.results.map((r) => r.graphify?.tokens ?? 0));
+        const gRecall = meanNumber(rep.results.map((r) => r.graphify?.recall ?? 0));
+        const gTotal = rep.results.reduce((a, r) => a + (r.graphify?.tokens ?? 0), 0);
         aggLines.push(
             `| metric | arch-graph | graphify | ratio |`,
             `|---|---:|---:|---:|`,
