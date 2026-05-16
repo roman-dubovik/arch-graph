@@ -495,11 +495,11 @@ code {
 .core-orbit circle:nth-child(3) { animation-delay: 1.2s; }
 .core-orbit circle:nth-child(4) { animation-delay: 1.8s; }
 .core-orbit circle:nth-child(5) { animation-delay: 2.4s; }
-.flow-core {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: coreBreath 6s ease-in-out infinite;
-}
+/* NB: do NOT apply a CSS transform animation directly on .flow-core —
+ * CSS transforms override the SVG `transform="translate(600 260)"`
+ * attribute, dumping the whole group to (0,0). The brand-mark inside
+ * already has its own coreMarkBreathe animation; that's enough. */
+.flow-core { transform-origin: center; }
 
 /* Graph nodes */
 /* Obsidian-style graph cluster on the right side of the flow stage.
