@@ -50,6 +50,7 @@ export interface ExtractDiResult {
     modules: DiModuleSite[];
     moduleIndex: DiModuleIndex;
     filterChain: DiFilterChainRef[];
+    skippedAnonymousFiles: string[];
 }
 
 export async function extractDi(_cfg: ArchGraphConfig, project: Project): Promise<ExtractDiResult> {
@@ -99,9 +100,9 @@ export async function extractDi(_cfg: ArchGraphConfig, project: Project): Promis
         }
     }
 
-    const filterChain = extractFilterChain(project);
+    const { refs: filterChain, skippedAnonymousFiles } = extractFilterChain(project);
 
-    return { modules, moduleIndex, filterChain };
+    return { modules, moduleIndex, filterChain, skippedAnonymousFiles };
 }
 
 function fillSiteFromMetadata(site: DiModuleSite, obj: ObjectLiteralExpression): void {
