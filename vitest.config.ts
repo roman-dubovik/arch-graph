@@ -58,6 +58,18 @@ export default defineConfig({
                     functions: 95,
                     branches: 90,
                 },
+                'src/extractors/typeorm/relations.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                'src/mapper/typeorm-to-graph.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
             },
         },
     },

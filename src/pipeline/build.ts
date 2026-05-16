@@ -148,7 +148,7 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
     t0 = Date.now();
     const typeorm = await stage(`[${cfg.id}] typeorm.extract`, () => extractTypeOrm(cfg, project));
     process.stdout.write(
-        `  ${typeorm.sites.length} @InjectRepository sites, ${typeorm.entities.size()} @Entity classes in ${Date.now() - t0}ms\n`,
+        `  ${typeorm.sites.length} @InjectRepository sites, ${typeorm.entities.size()} @Entity classes, ${typeorm.relations.length} relations in ${Date.now() - t0}ms\n`,
     );
 
     process.stdout.write(`validating TypeORM against ground truth...\n`);
@@ -166,10 +166,21 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
     }
 
     process.stdout.write(`mapping TypeORM to graph...\n`);
-    const typeormMapped = mapTypeOrmToGraph(typeorm.sites, ownership, typeorm.entities.warnings);
-    process.stdout.write(
-        `  nodes: ${typeormMapped.nodes.length}, edges: ${typeormMapped.edges.length}, unresolved: ${typeormMapped.diagnostics.unresolvedEntities.length}, unowned: ${typeormMapped.diagnostics.unowned.length}, entityWarnings: ${typeormMapped.diagnostics.entityDecoratorWarnings.length}\n`,
+    const typeormMapped = mapTypeOrmToGraph(
+        typeorm.sites,
+        ownership,
+        typeorm.entities.warnings,
+        typeorm.relations,
+        typeorm.entities,
+        typeorm.baseClassCycles,
     );
+    {
+        const c = typeormMapped.diagnostics.counts;
+        const reasons = `unparseable: ${c.unresolvedReasons.unparseable}, notIndexed: ${c.unresolvedReasons.notIndexed}, ownerNotIndexed: ${c.unresolvedReasons.ownerNotIndexed}`;
+        process.stdout.write(
+            `  nodes: ${typeormMapped.nodes.length}, edges: ${typeormMapped.edges.length}, unresolved: ${typeormMapped.diagnostics.unresolvedEntities.length}, unowned: ${typeormMapped.diagnostics.unowned.length}, entityWarnings: ${typeormMapped.diagnostics.entityDecoratorWarnings.length}, relationsEmitted: ${c.relationsEmitted}, relationsResolved: ${c.relationsResolved}, oneToManySkipped: ${c.oneToManySkipped}, unresolvedRelations: ${c.unresolvedRelations} (${reasons}), baseClassCycles: ${c.baseClassCycles}\n`,
+        );
+    }
 
     // ---- BullMQ domain ----
     process.stdout.write(`extracting BullMQ...\n`);

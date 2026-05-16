@@ -5,12 +5,14 @@ import {
 } from 'ts-morph';
 
 import type { ArchGraphConfig } from '../../core/config.js';
-import type { TypeOrmInjectionSite } from '../../core/types.js';
+import type { TypeOrmInjectionSite, TypeOrmRelation } from '../../core/types.js';
 import { buildEntityIndex, EntityIndex, isExcludedSourceFile } from './entity-index.js';
+import { extractRelations } from './relations.js';
 
 /**
  * TypeORM extractor: `@InjectRepository(EntityClass)` (property + ctor-param)
- * resolved against the `@Entity` pre-pass index.
+ * resolved against the `@Entity` pre-pass index. Also extracts relation
+ * decorators (`@ManyToOne`, `@OneToMany`, `@ManyToMany`, `@OneToOne`).
  *
  * Skipped: read/write classification, multi-DataSource attribution
  * (`forFeature([...], 'dataSourceName')`) — both need runtime info AST lacks.
@@ -19,6 +21,9 @@ import { buildEntityIndex, EntityIndex, isExcludedSourceFile } from './entity-in
 export interface ExtractTypeOrmResult {
     sites: TypeOrmInjectionSite[];
     entities: EntityIndex;
+    relations: TypeOrmRelation[];
+    /** Number of cycle-guard triggers in `getAllProperties` during relation extraction. */
+    baseClassCycles: number;
 }
 
 export async function extractTypeOrm(
@@ -53,7 +58,9 @@ export async function extractTypeOrm(
         }
     }
 
-    return { sites, entities };
+    const { relations, baseClassCycles } = extractRelations(project, entities);
+
+    return { sites, entities, relations, baseClassCycles };
 }
 
 function buildSite(
