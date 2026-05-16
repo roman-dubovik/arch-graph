@@ -18,7 +18,18 @@ export default defineConfig({
                 // *from inside* a worktree (path contains `.worktrees/`).
                 '**/*.test.ts',
                 '**/__fixtures__/**',
-                'src/cli/**',
+                // Per-file: leave src/cli/ files OUT of coverage by default;
+                // include the ones with dedicated test files explicitly via the
+                // perFile thresholds map below (uninstall.ts is one).
+                'src/cli/index.ts',
+                'src/cli/init.ts',
+                'src/cli/claude.ts',
+                'src/cli/hooks.ts',
+                'src/cli/compare-command.ts',
+                'src/cli/query-commands.ts',
+                'src/cli/build-tips.ts',
+                'src/cli/skill.ts',
+                'src/cli/marker-block.ts',
                 'src/mcp/**',
                 'src/compare/**',
                 'bench/**',
@@ -81,6 +92,18 @@ export default defineConfig({
                     statements: 95,
                     functions: 95,
                     branches: 90,
+                },
+                'src/cli/uninstall.ts': {
+                    // Lower than the standard 95/95/95/90 floor: the TTY-only
+                    // `askForScopes` path (readline prompts) is not unit-tested
+                    // — it would require stubbing process.stdin's TTY mode and
+                    // mocking `node:readline/promises`. That branch is exercised
+                    // manually + by the integration test (which covers the
+                    // non-TTY scope-flag paths).
+                    lines: 80,
+                    statements: 80,
+                    functions: 90,
+                    branches: 70,
                 },
             },
         },

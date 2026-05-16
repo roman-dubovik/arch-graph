@@ -535,6 +535,49 @@ PIPE_COUNT=$(jq '[.edges[] | select(.kind == "di-pipe")] | length' "$GRAPH") \
 step_ok
 
 # ---------------------------------------------------------------------------
+# Step 8: arch-graph uninstall --project --yes (interactive wizard, scoped)
+# ---------------------------------------------------------------------------
+
+step_start 8 "uninstall --project --yes"
+
+cd "$FIXTURE"
+
+# Re-install project artefacts that step 6 already removed, so we can verify
+# the wizard's --project mode removes them in one shot.
+arch-graph claude install --skill >/dev/null 2>&1 || fail "claude install (re-setup) failed"
+arch-graph hook install >/dev/null 2>&1 || fail "hook install (re-setup) failed"
+
+[ -f "$FIXTURE/CLAUDE.md" ] || fail "re-setup didn't create CLAUDE.md"
+grep -q "<!-- arch-graph:start -->" "$FIXTURE/CLAUDE.md" \
+    || fail "re-setup CLAUDE.md missing arch-graph block"
+[ -f "$FIXTURE/.git/hooks/pre-commit" ] \
+    || fail "re-setup didn't create pre-commit hook"
+
+# Run the wizard with --project --yes (non-TTY-safe scope flag).
+UNINSTALL_ERR=$(arch-graph uninstall --project --yes 2>&1) \
+    || fail "arch-graph uninstall --project --yes failed: $UNINSTALL_ERR"
+
+# CLAUDE.md section gone
+if [ -f "$FIXTURE/CLAUDE.md" ]; then
+    grep -q "<!-- arch-graph:start -->" "$FIXTURE/CLAUDE.md" \
+        && fail "uninstall --project: CLAUDE.md still contains arch-graph marker"
+fi
+
+# pre-commit hook gone (was empty after marker strip, so file deleted)
+if [ -f "$FIXTURE/.git/hooks/pre-commit" ]; then
+    grep -q "# >>> arch-graph >>>" "$FIXTURE/.git/hooks/pre-commit" \
+        && fail "uninstall --project: pre-commit still contains arch-graph marker"
+fi
+
+# config + out dir gone
+[ ! -f "$FIXTURE/arch-graph.config.ts" ] \
+    || fail "uninstall --project: arch-graph.config.ts still present"
+[ ! -d "$FIXTURE/arch-graph-out" ] \
+    || fail "uninstall --project: arch-graph-out/ still present"
+
+step_ok
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 

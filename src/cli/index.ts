@@ -100,6 +100,13 @@ Usage:
 
   arch-graph install-skill    (writes ~/.claude/skills/arch-graph/SKILL.md)
 
+  arch-graph uninstall  [--project|--mcp|--global|--all] [--yes] [--repo <path>]
+                        Interactive teardown wizard: removes project artefacts
+                        (config / out / CLAUDE.md section / git hook), MCP entries
+                        in ~/.claude.json, and the global install via
+                        scripts/uninstall.sh. Without flags on a TTY: walks you
+                        through each scope. Without flags off a TTY: dry-run.
+
   arch-graph compare    [--out <dir>] [--graphify <path>] [--questions <n>] [--report <path>] [--quiet] [--share]
                         Side-by-side context-cost comparison: arch-graph vs an
                         optional graphify graph.json on this same repo.
@@ -704,6 +711,11 @@ async function main(): Promise<void> {
     }
     if (cmd === 'install-skill') {
         return installSkill();
+    }
+    if (cmd === 'uninstall') {
+        const { parseUninstallArgs, runUninstallWizard } = await import('./uninstall.js');
+        const uargs = parseUninstallArgs(argv.slice(1));
+        return runUninstallWizard(uargs);
     }
     if (cmd === 'compare') {
         // Dispatch before parseArgs() — compare-specific flags like --graphify

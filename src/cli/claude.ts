@@ -11,8 +11,8 @@ import { fileURLToPath } from 'node:url';
 
 import { appendBlock, replaceMarkedSection, stripMarkedSection } from './marker-block.js';
 
-const MARK_START = '<!-- arch-graph:start -->';
-const MARK_END = '<!-- arch-graph:end -->';
+export const MARK_START = '<!-- arch-graph:start -->';
+export const MARK_END = '<!-- arch-graph:end -->';
 
 // Resolve <package-root>/claude-md.template.md — works whether invoked via tsx
 // from src/cli/, compiled from dist/cli/, or symlinked through bin/arch-graph.

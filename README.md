@@ -36,17 +36,29 @@ arch-graph --help
 
 **Uninstall:**
 
-```sh
-# inside each project that ran `arch-graph init` (while CLI still on PATH):
-arch-graph claude uninstall
-arch-graph hook uninstall
-rm -rf arch-graph-out arch-graph.config.ts
+The interactive teardown wizard walks you through every scope (project / MCP / global):
 
-# then global removal:
-bash ~/.arch-graph/scripts/uninstall.sh --yes
+```sh
+arch-graph uninstall          # interactive TTY wizard — recommended
 ```
 
-Without `--yes` the script prints a dry-run of what it would remove. Honours `ARCH_GRAPH_HOME` and `ARCH_GRAPH_BIN_DIR` the same way `install.sh` does.
+Non-interactive scope flags (for CI or scripts):
+
+```sh
+arch-graph uninstall --project   # inside the project: config / out / CLAUDE.md / hook
+arch-graph uninstall --mcp       # MCP entry in ~/.claude.json
+arch-graph uninstall --global    # ~/.arch-graph + symlink + global skill
+arch-graph uninstall --all       # everything above
+arch-graph uninstall --yes       # auto-pick scopes that have anything to remove
+```
+
+Without flags on a non-TTY (CI pipe), it prints an inventory and exits with no side effects — dry-run by default.
+
+Standalone shell-only fallback (no node needed, removes only global install):
+
+```sh
+bash ~/.arch-graph/scripts/uninstall.sh --yes
+```
 
 ## Quick start
 
