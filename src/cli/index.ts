@@ -18,6 +18,7 @@ import { hookInstall, hookStatus, hookUninstall, parseHookArgs } from './hooks.j
 import { runInitWizard } from './init.js';
 import { installSkill } from './skill.js';
 import { parseQueryArgs, QUERY_CMDS, runQueryCommand } from './query-commands.js';
+import { parseCompareArgs, runCompareCommand } from './compare-command.js';
 import {
     tipsForBullmq,
     tipsForDi,
@@ -98,6 +99,11 @@ Usage:
   arch-graph hook status      [--repo <path>]
 
   arch-graph install-skill    (writes ~/.claude/skills/arch-graph/SKILL.md)
+
+  arch-graph compare    [--out <dir>] [--graphify <path>] [--questions <n>] [--report <path>] [--quiet]
+                        Side-by-side context-cost comparison: arch-graph vs an
+                        optional graphify graph.json on this same repo.
+                        Without --graphify: prints a graph-size-only summary.
 
 Graph query subcommands (read arch-graph-out/graph.json):
   arch-graph who-publishes  <subject>      NATS publishers of subject (e.g. user.created)
@@ -679,6 +685,13 @@ async function main(): Promise<void> {
     }
     if (cmd === 'install-skill') {
         return installSkill();
+    }
+    if (cmd === 'compare') {
+        // Dispatch before parseArgs() — compare-specific flags like --graphify
+        // and --questions aren't in the generic flag parser, and we don't want
+        // positionals to be mis-interpreted as a config path.
+        const cargs = parseCompareArgs(argv.slice(1));
+        return runCompareCommand(cargs);
     }
 
     // Query subcommands: dispatch before flag-parser so positionals aren't

@@ -23,6 +23,7 @@
         "test:integration:remote": "bash scripts/integration-test.sh --remote"
     },
     "dependencies": {
+        "@dqbd/tiktoken": "^1.0.22",
         "@modelcontextprotocol/sdk": "^1.29.0",
         "fast-glob": "^3.3.2",
         "jiti": "^2.4.2",
@@ -30,7 +31,6 @@
         "zod": "^4.0.0"
     },
     "devDependencies": {
-        "@dqbd/tiktoken": "^1.0.22",
         "@types/js-yaml": "^4.0.9",
         "@types/node": "^20.0.0",
         "js-yaml": "^4.1.1",
