@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>arch-graph — Static architecture graph for NestJS monorepos</title>
+  <meta name="description" content="arch-graph extracts NATS, BullMQ, TypeORM, NestJS DI, HTTP, and TS imports from a NestJS monorepo into a typed graph. Deterministic. Validated. No LLM. 7.6x fewer tokens than graphify, 100% recall." />
+  <meta name="theme-color" content="#0a0a0f" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="arch-graph — Static architecture graph for NestJS monorepos" />
+  <meta property="og:description" content="Deterministic. Validated. No LLM. 7.6x fewer tokens than graphify, 100% recall on architecture questions." />
+  <meta property="og:url" content="https://roman-dubovik.github.io/arch-graph/" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" />
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <header class="site-header" role="banner">
+    <div class="container header-row">
+      <a class="brand" href="#top" aria-label="arch-graph home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="6" cy="16" r="3"></circle>
+            <circle cx="26" cy="7" r="3"></circle>
+            <circle cx="26" cy="25" r="3"></circle>
+            <path d="M9 14 L23 9"></path>
+            <path d="M9 18 L23 23"></path>
+          </svg>
+        </span>
+        <span class="brand-text">arch-graph</span>
+      </a>
+      <nav class="site-nav" aria-label="Primary">
+        <a href="#problem">Why</a>
+        <a href="#flow">How</a>
+        <a href="#bench">Benchmark</a>
+        <a href="#install">Install</a>
+        <a href="#queries">CLI</a>
+        <a class="nav-cta" href="https://github.com/roman-dubovik/arch-graph" rel="noopener" target="_blank">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- ──────────────────────────────────────────────── HERO ─────────── -->
+    <section class="hero" id="top">
+      <div class="hero-bg" aria-hidden="true">
+        <svg class="hero-graph" viewBox="0 0 1200 600" preserveAspectRatio="xMidYMid slice">
+          <defs>
+            <radialGradient id="nodeGlow" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="rgba(125,211,252,0.55)"></stop>
+              <stop offset="100%" stop-color="rgba(125,211,252,0)"></stop>
+            </radialGradient>
+            <linearGradient id="edgeStroke" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="rgba(139,158,255,0)"></stop>
+              <stop offset="50%" stop-color="rgba(139,158,255,0.55)"></stop>
+              <stop offset="100%" stop-color="rgba(139,158,255,0)"></stop>
+            </linearGradient>
+          </defs>
+          <!-- Edges (semi-static, drawn first so nodes overlay) -->
+          <g class="hero-edges" stroke="url(#edgeStroke)" stroke-width="1" fill="none">
+            <path d="M120 140 L320 200"></path>
+            <path d="M320 200 L520 100"></path>
+            <path d="M320 200 L500 320"></path>
+            <path d="M520 100 L760 180"></path>
+            <path d="M500 320 L720 400"></path>
+            <path d="M720 400 L920 340"></path>
+            <path d="M760 180 L1000 220"></path>
+            <path d="M120 440 L300 480"></path>
+            <path d="M300 480 L520 420"></path>
+            <path d="M520 420 L720 400"></path>
+            <path d="M900 480 L1080 460"></path>
+            <path d="M720 400 L900 480"></path>
+            <path d="M1000 220 L1080 460"></path>
+          </g>
+          <!-- Pulsing nodes -->
+          <g class="hero-nodes">
+            <g transform="translate(120 140)"><circle r="18" fill="url(#nodeGlow)"></circle><circle r="3" class="dot dot-1"></circle></g>
+            <g transform="translate(320 200)"><circle r="18" fill="url(#nodeGlow)"></circle><circle r="3" class="dot dot-2"></circle></g>
+            <g transform="translate(520 100)"><circle r="18" fill="url(#nodeGlow)"></circle><circle r="3" class="dot dot-3"></circle></g>
+            <g transform="translate(500 320)"><circle r="18" fill="url(#nodeGlow)"></circle><circle r="3" class="dot dot-4"></circle></g>
+            <g transform="translate(760 180)"><circle r="18" fill="url(#nodeGlow)"></circle><circle r="3" class="dot dot-5"></circle></g>
+            <g transform="translate(720 400)"><circle r="18" fill="url(#nodeGlow)"></circle><circle r="3" class="dot dot-6"></circle></g>
+            <g transform="translate(1000 220)"><circle r="18" fill="url(#nodeGlow)"></circle><circle r="3" class="dot dot-7"></circle></g>
+            <g transform="translate(120 440)"><circle r="18" fill="url(#nodeGlow)"></circle><circle r="3" class="dot dot-8"></circle></g>
+            <g transform="translate(300 480)"><circle r="18" fill="url(#nodeGlow)"></circle><circle r="3" class="dot dot-9"></circle></g>
+            <g transform="translate(520 420)"><circle r="18" fill="url(#nodeGlow)"></circle><circle r="3" class="dot dot-10"></circle></g>
+            <g transform="translate(900 480)"><circle r="18" fill="url(#nodeGlow)"></circle><circle r="3" class="dot dot-11"></circle></g>
+            <g transform="translate(1080 460)"><circle r="18" fill="url(#nodeGlow)"></circle><circle r="3" class="dot dot-12"></circle></g>
+          </g>
+        </svg>
+        <div class="hero-vignette"></div>
+      </div>
+
+      <div class="container hero-content">
+        <p class="eyebrow">v0.1.0 · Node ≥ 20 · No build step</p>
+        <h1 class="hero-title"><span class="title-mono">arch-graph</span></h1>
+        <p class="hero-tagline">Static architecture graph for NestJS monorepos. <span class="hl">Deterministic.</span> <span class="hl">Validated.</span> <span class="hl-accent">No LLM.</span></p>
+
+        <div class="hero-ctas">
+          <a class="btn btn-primary" href="#install">
+            Get started
+            <span class="btn-arrow" aria-hidden="true">→</span>
+          </a>
+          <a class="btn btn-ghost" href="https://github.com/roman-dubovik/arch-graph" rel="noopener" target="_blank">
+            View on GitHub
+          </a>
+        </div>
+
+        <ul class="hero-stats" aria-label="Headline benchmark numbers">
+          <li>
+            <span class="stat-num">7.6×</span>
+            <span class="stat-label">fewer LLM tokens</span>
+          </li>
+          <li>
+            <span class="stat-num">100%</span>
+            <span class="stat-label">recall on architecture Qs</span>
+          </li>
+          <li>
+            <span class="stat-num">5</span>
+            <span class="stat-label">monorepos validated</span>
+          </li>
+          <li>
+            <span class="stat-num">0</span>
+            <span class="stat-label">LLM calls at build time</span>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ──────────────────────────────────────────── PROBLEM ─────────── -->
+    <section class="section section-problem" id="problem" aria-labelledby="problem-title">
+      <div class="container narrow">
+        <p class="section-eyebrow">The problem</p>
+        <h2 id="problem-title" class="section-title">Twelve services in. Nobody knows what depends on what.</h2>
+        <p class="prose reveal">
+          You're 12 services into a NestJS monorepo. Who publishes <code>user.created</code>? Which service depends on <code>users_table</code>? What breaks if you rename <code>auth-lib</code>? Each question is a 15-minute grep session — or a 30-second LLM hallucination. arch-graph turns the entire monorepo into a typed graph you can query in milliseconds, with every answer citing <code>file:line</code>.
+        </p>
+      </div>
+    </section>
+
+    <!-- ─────────────────────────────────────── ARCH DIAGRAM ─────────── -->
+    <section class="section section-flow" id="flow" aria-labelledby="flow-title">
+      <div class="container">
+        <p class="section-eyebrow">How it works</p>
+        <h2 id="flow-title" class="section-title">Sources flow in. A typed graph grows out.</h2>
+        <p class="section-lead">
+          Every <code>@Module</code>, <code>@InjectQueue</code>, <code>@MessagePattern</code>, <code>@InjectRepository</code>, <code>axios.get()</code> and <code>import</code> statement gets parsed by <code>ts-morph</code>, classified by domain extractor, resolved to typed nodes and edges, and emitted as <code>graph.json</code>.
+        </p>
+
+        <div class="flow-stage reveal" role="img" aria-label="Animated diagram: NestJS source decorators feeding into arch-graph extractors that emit a typed graph with services, NATS subjects, DB tables, queues, modules, and providers connected by typed edges.">
+          <svg class="flow-svg" viewBox="0 0 1200 540" preserveAspectRatio="xMidYMid meet">
+            <defs>
+              <linearGradient id="flowLane" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="rgba(139,158,255,0)"></stop>
+                <stop offset="50%" stop-color="rgba(139,158,255,0.4)"></stop>
+                <stop offset="100%" stop-color="rgba(139,158,255,0)"></stop>
+              </linearGradient>
+              <linearGradient id="flowLaneOut" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="rgba(125,211,252,0)"></stop>
+                <stop offset="50%" stop-color="rgba(125,211,252,0.45)"></stop>
+                <stop offset="100%" stop-color="rgba(125,211,252,0)"></stop>
+              </linearGradient>
+              <radialGradient id="coreGlow" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="rgba(139,158,255,0.35)"></stop>
+                <stop offset="60%" stop-color="rgba(139,158,255,0.08)"></stop>
+                <stop offset="100%" stop-color="rgba(139,158,255,0)"></stop>
+              </radialGradient>
+              <marker id="arrowHead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(125,211,252,0.7)"></path>
+              </marker>
+              <marker id="arrowHeadIn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(139,158,255,0.7)"></path>
+              </marker>
+            </defs>
+
+            <!-- Column labels -->
+            <text class="flow-col-label" x="170" y="40" text-anchor="middle">Source code</text>
+            <text class="flow-col-label" x="600" y="40" text-anchor="middle">arch-graph</text>
+            <text class="flow-col-label" x="1030" y="40" text-anchor="middle">Typed graph</text>
+
+            <!-- Left column: source tokens -->
+            <g class="src-tokens">
+              <g class="src-token st-1" transform="translate(40 80)">
+                <rect width="260" height="44" rx="8"></rect>
+                <text x="16" y="27" class="mono">@Module(...)</text>
+              </g>
+              <g class="src-token st-2" transform="translate(40 140)">
+                <rect width="260" height="44" rx="8"></rect>
+                <text x="16" y="27" class="mono">@InjectQueue('emails')</text>
+              </g>
+              <g class="src-token st-3" transform="translate(40 200)">
+                <rect width="260" height="44" rx="8"></rect>
+                <text x="16" y="27" class="mono">@MessagePattern('user.created')</text>
+              </g>
+              <g class="src-token st-4" transform="translate(40 260)">
+                <rect width="260" height="44" rx="8"></rect>
+                <text x="16" y="27" class="mono">@InjectRepository(User)</text>
+              </g>
+              <g class="src-token st-5" transform="translate(40 320)">
+                <rect width="260" height="44" rx="8"></rect>
+                <text x="16" y="27" class="mono">axios.get(...)</text>
+              </g>
+              <g class="src-token st-6" transform="translate(40 380)">
+                <rect width="260" height="44" rx="8"></rect>
+                <text x="16" y="27" class="mono">import { Foo } from '...'</text>
+              </g>
+            </g>
+
+            <!-- Lanes from source → core -->
+            <g class="flow-lanes-in" stroke="url(#flowLane)" stroke-width="2" fill="none">
+              <path d="M310 102 Q 430 102 480 220"></path>
+              <path d="M310 162 Q 430 162 490 230"></path>
+              <path d="M310 222 Q 430 222 500 250"></path>
+              <path d="M310 282 Q 430 282 500 280"></path>
+              <path d="M310 342 Q 430 342 490 290"></path>
+              <path d="M310 402 Q 430 402 480 300"></path>
+            </g>
+
+            <!-- Travelling pulses on the in-lanes -->
+            <g class="flow-pulses-in" fill="rgba(139,158,255,0.95)">
+              <circle r="3" class="pulse pulse-in-1"><animateMotion dur="6s" repeatCount="indefinite" path="M310 102 Q 430 102 480 220"></animateMotion></circle>
+              <circle r="3" class="pulse pulse-in-2"><animateMotion dur="6s" begin="0.8s" repeatCount="indefinite" path="M310 162 Q 430 162 490 230"></animateMotion></circle>
+              <circle r="3" class="pulse pulse-in-3"><animateMotion dur="6s" begin="1.6s" repeatCount="indefinite" path="M310 222 Q 430 222 500 250"></animateMotion></circle>
+              <circle r="3" class="pulse pulse-in-4"><animateMotion dur="6s" begin="2.4s" repeatCount="indefinite" path="M310 282 Q 430 282 500 280"></animateMotion></circle>
+              <circle r="3" class="pulse pulse-in-5"><animateMotion dur="6s" begin="3.2s" repeatCount="indefinite" path="M310 342 Q 430 342 490 290"></animateMotion></circle>
+              <circle r="3" class="pulse pulse-in-6"><animateMotion dur="6s" begin="4s" repeatCount="indefinite" path="M310 402 Q 430 402 480 300"></animateMotion></circle>
+            </g>
+
+            <!-- Core extractor -->
+            <g class="flow-core" transform="translate(600 260)">
+              <circle r="130" fill="url(#coreGlow)"></circle>
+              <rect x="-95" y="-50" width="190" height="100" rx="14" class="core-card"></rect>
+              <text x="0" y="-18" class="core-title" text-anchor="middle">ts-morph</text>
+              <text x="0" y="6" class="core-sub" text-anchor="middle">extractors</text>
+              <text x="0" y="30" class="core-mono mono" text-anchor="middle">→ graph.json</text>
+              <g class="core-orbit">
+                <circle cx="0" cy="-80" r="3"></circle>
+                <circle cx="76" cy="-25" r="3"></circle>
+                <circle cx="47" cy="65" r="3"></circle>
+                <circle cx="-47" cy="65" r="3"></circle>
+                <circle cx="-76" cy="-25" r="3"></circle>
+              </g>
+            </g>
+
+            <!-- Lanes from core → graph -->
+            <g class="flow-lanes-out" stroke="url(#flowLaneOut)" stroke-width="2" fill="none">
+              <path d="M720 220 Q 820 180 900 130"></path>
+              <path d="M720 250 Q 820 220 920 210"></path>
+              <path d="M720 280 Q 820 280 920 290"></path>
+              <path d="M720 290 Q 820 320 910 370"></path>
+              <path d="M720 300 Q 820 360 900 440"></path>
+            </g>
+
+            <!-- Right column: typed graph nodes -->
+            <g class="graph-nodes">
+              <g class="g-node gn-1" transform="translate(900 110)">
+                <rect width="240" height="40" rx="8"></rect>
+                <circle cx="18" cy="20" r="6" class="gn-kind kind-service"></circle>
+                <text x="36" y="25" class="mono">service:platform-api</text>
+              </g>
+              <g class="g-node gn-2" transform="translate(920 190)">
+                <rect width="240" height="40" rx="8"></rect>
+                <circle cx="18" cy="20" r="6" class="gn-kind kind-nats"></circle>
+                <text x="36" y="25" class="mono">nats-subject:user.created</text>
+              </g>
+              <g class="g-node gn-3" transform="translate(920 270)">
+                <rect width="240" height="40" rx="8"></rect>
+                <circle cx="18" cy="20" r="6" class="gn-kind kind-db"></circle>
+                <text x="36" y="25" class="mono">db-table:users</text>
+              </g>
+              <g class="g-node gn-4" transform="translate(910 350)">
+                <rect width="240" height="40" rx="8"></rect>
+                <circle cx="18" cy="20" r="6" class="gn-kind kind-queue"></circle>
+                <text x="36" y="25" class="mono">queue:emails</text>
+              </g>
+              <g class="g-node gn-5" transform="translate(900 420)">
+                <rect width="240" height="40" rx="8"></rect>
+                <circle cx="18" cy="20" r="6" class="gn-kind kind-module"></circle>
+                <text x="36" y="25" class="mono">module:UsersModule</text>
+              </g>
+            </g>
+
+            <!-- Travelling pulses on out-lanes -->
+            <g class="flow-pulses-out" fill="rgba(125,211,252,0.95)">
+              <circle r="3" class="pulse pulse-out-1"><animateMotion dur="6s" begin="2.4s" repeatCount="indefinite" path="M720 220 Q 820 180 900 130"></animateMotion></circle>
+              <circle r="3" class="pulse pulse-out-2"><animateMotion dur="6s" begin="3.2s" repeatCount="indefinite" path="M720 250 Q 820 220 920 210"></animateMotion></circle>
+              <circle r="3" class="pulse pulse-out-3"><animateMotion dur="6s" begin="4s" repeatCount="indefinite" path="M720 280 Q 820 280 920 290"></animateMotion></circle>
+              <circle r="3" class="pulse pulse-out-4"><animateMotion dur="6s" begin="4.8s" repeatCount="indefinite" path="M720 290 Q 820 320 910 370"></animateMotion></circle>
+              <circle r="3" class="pulse pulse-out-5"><animateMotion dur="6s" begin="5.6s" repeatCount="indefinite" path="M720 300 Q 820 360 900 440"></animateMotion></circle>
+            </g>
+
+            <!-- Edge legends between graph nodes (typed edges) -->
+            <g class="graph-edges" stroke="rgba(228,228,231,0.18)" stroke-width="1" fill="none">
+              <path d="M1020 150 Q 1080 180 1040 190" marker-end="url(#arrowHead)"></path>
+              <path d="M1020 230 Q 1080 250 1040 270" marker-end="url(#arrowHead)"></path>
+              <path d="M1020 310 Q 1080 330 1030 350" marker-end="url(#arrowHead)"></path>
+              <path d="M1020 390 Q 1080 410 1020 420" marker-end="url(#arrowHead)"></path>
+            </g>
+          </svg>
+
+          <ul class="flow-legend" aria-label="Edge kinds emitted">
+            <li><span class="dot kind-service"></span> service</li>
+            <li><span class="dot kind-nats"></span> nats-publish · nats-subscribe</li>
+            <li><span class="dot kind-db"></span> db-access</li>
+            <li><span class="dot kind-queue"></span> queue-produce · queue-consume</li>
+            <li><span class="dot kind-module"></span> di-import · di-provides</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ──────────────────────────────────────────── BENCH ─────────────── -->
+    <section class="section section-bench" id="bench" aria-labelledby="bench-title">
+      <div class="container">
+        <p class="section-eyebrow">Measured</p>
+        <h2 id="bench-title" class="section-title">Measured on 5 NestJS monorepos.</h2>
+        <p class="section-lead">15 architecture-grade questions. Same compression. Same encoder (cl100k_base). Substring-presence recall.</p>
+
+        <div class="bench-cards reveal">
+          <div class="bench-card highlight">
+            <p class="bench-card-label">Avg tokens per question</p>
+            <p class="bench-card-row"><span class="bench-card-tool">arch-graph</span><span class="bench-card-num">45,896</span></p>
+            <p class="bench-card-row dim"><span class="bench-card-tool">graphify</span><span class="bench-card-num">347,861</span></p>
+            <p class="bench-card-foot">7.6× fewer tokens.</p>
+          </div>
+          <div class="bench-card">
+            <p class="bench-card-label">Mean recall</p>
+            <p class="bench-card-row"><span class="bench-card-tool">arch-graph</span><span class="bench-card-num">100%</span></p>
+            <p class="bench-card-row dim"><span class="bench-card-tool">graphify</span><span class="bench-card-num">39%</span></p>
+            <p class="bench-card-foot">2.5× higher recall on architecture Qs.</p>
+          </div>
+          <div class="bench-card">
+            <p class="bench-card-label">Total tokens · 15 questions</p>
+            <p class="bench-card-row"><span class="bench-card-tool">arch-graph</span><span class="bench-card-num">688K</span></p>
+            <p class="bench-card-row dim"><span class="bench-card-tool">graphify</span><span class="bench-card-num">5.2M</span></p>
+            <p class="bench-card-foot">Same compression, same encoder.</p>
+          </div>
+          <div class="bench-card">
+            <p class="bench-card-label">Build cost</p>
+            <p class="bench-card-row"><span class="bench-card-tool">arch-graph</span><span class="bench-card-num">deterministic</span></p>
+            <p class="bench-card-row dim"><span class="bench-card-tool">graphify</span><span class="bench-card-num">LLM-driven</span></p>
+            <p class="bench-card-foot">ts-morph only. No network. No LLM.</p>
+          </div>
+        </div>
+
+        <h3 class="subsection-title">Per-project breakdown</h3>
+        <div class="table-wrap reveal">
+          <table class="bench-table">
+            <thead>
+              <tr>
+                <th scope="col">Project</th>
+                <th scope="col">Size</th>
+                <th scope="col">arch nodes / edges</th>
+                <th scope="col">arch tokens</th>
+                <th scope="col">arch recall</th>
+                <th scope="col">graphify nodes / edges</th>
+                <th scope="col">graphify tokens</th>
+                <th scope="col">graphify recall</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">A</th>
+                <td>large</td>
+                <td class="mono">894 / 1,532</td>
+                <td class="mono">65,763</td>
+                <td><span class="pill ok">100%</span></td>
+                <td class="mono">11,440 / 10,588</td>
+                <td class="mono">718,155</td>
+                <td><span class="pill warn">42%</span></td>
+              </tr>
+              <tr>
+                <th scope="row">B</th>
+                <td>large</td>
+                <td class="mono">898 / 1,222</td>
+                <td class="mono">63,101</td>
+                <td><span class="pill ok">100%</span></td>
+                <td class="mono dim">unavailable</td>
+                <td class="mono dim">—</td>
+                <td class="mono dim">—</td>
+              </tr>
+              <tr>
+                <th scope="row">C</th>
+                <td>medium</td>
+                <td class="mono">358 / 552</td>
+                <td class="mono">23,679</td>
+                <td><span class="pill ok">100%</span></td>
+                <td class="mono">5,163 / 4,664</td>
+                <td class="mono">302,999</td>
+                <td><span class="pill warn">33%</span></td>
+              </tr>
+              <tr>
+                <th scope="row">D</th>
+                <td>small</td>
+                <td class="mono">245 / 352</td>
+                <td class="mono">16,391</td>
+                <td><span class="pill ok">100%</span></td>
+                <td class="mono dim">unavailable</td>
+                <td class="mono dim">—</td>
+                <td class="mono dim">—</td>
+              </tr>
+              <tr>
+                <th scope="row">E</th>
+                <td>small</td>
+                <td class="mono">144 / 189</td>
+                <td class="mono">8,570</td>
+                <td><span class="pill ok">100%</span></td>
+                <td class="mono dim">unavailable</td>
+                <td class="mono dim">—</td>
+                <td class="mono dim">—</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p class="prose dim small">
+          Recall uses a substring-presence heuristic: for each question, we check whether every ground-truth label appears in the tool's compressed context. It's a permissive necessary-condition — "did the tool's output even contain the answer". Three of the five projects had no available graphify graph (graphify ships as a Claude skill, not a CLI); they're shown as <span class="dim">unavailable</span>. Full methodology: <a class="link" href="https://github.com/roman-dubovik/arch-graph/blob/main/bench/report.md" rel="noopener" target="_blank">bench/report.md →</a>
+        </p>
+      </div>
+    </section>
+
+    <!-- ──────────────────────────────────────────── INSTALL ───────────── -->
+    <section class="section section-install" id="install" aria-labelledby="install-title">
+      <div class="container">
+        <p class="section-eyebrow">Quick start</p>
+        <h2 id="install-title" class="section-title">Three commands.</h2>
+
+        <ol class="install-steps">
+          <li class="install-step reveal">
+            <div class="step-head">
+              <span class="step-num">1</span>
+              <h3>Install</h3>
+            </div>
+            <p>Clone, run the installer. Symlinks <code>arch-graph</code> into <code>~/.local/bin</code>. Requires Node ≥ 20.</p>
+            <div class="code-block">
+              <button class="copy-btn" type="button" aria-label="Copy install command">Copy</button>
+              <pre><code class="lang-sh">git clone https://github.com/roman-dubovik/arch-graph ~/.arch-graph
+bash ~/.arch-graph/scripts/install.sh</code></pre>
+            </div>
+          </li>
+
+          <li class="install-step reveal">
+            <div class="step-head">
+              <span class="step-num">2</span>
+              <h3>Init</h3>
+            </div>
+            <p>Interactive wizard. Picks defaults, writes <code>arch-graph.config.ts</code>, optionally installs the Claude Code skill and git hook.</p>
+            <div class="code-block">
+              <button class="copy-btn" type="button" aria-label="Copy init command">Copy</button>
+              <pre><code class="lang-sh">cd path/to/your/nestjs-monorepo
+arch-graph init</code></pre>
+            </div>
+          </li>
+
+          <li class="install-step reveal">
+            <div class="step-head">
+              <span class="step-num">3</span>
+              <h3>Build</h3>
+            </div>
+            <p>Emits <code>graph.json</code>, <code>diagnostics.json</code>, <code>validation.json</code>, <code>graph.mermaid</code> — plus an advisory recall table per domain.</p>
+            <div class="code-block">
+              <button class="copy-btn" type="button" aria-label="Copy build command">Copy</button>
+              <pre><code class="lang-sh">arch-graph build               # advisory: always exit 0
+arch-graph build --strict      # CI: exit 3 if recall drops below floor</code></pre>
+            </div>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- ──────────────────────────────────────────── DOMAINS ───────────── -->
+    <section class="section section-domains" id="domains" aria-labelledby="domains-title">
+      <div class="container">
+        <p class="section-eyebrow">What it knows</p>
+        <h2 id="domains-title" class="section-title">Six domains. Validated on every build.</h2>
+
+        <div class="table-wrap reveal">
+          <table class="domain-table">
+            <thead>
+              <tr>
+                <th scope="col">Domain</th>
+                <th scope="col">Edge kinds</th>
+                <th scope="col">Recall (measured)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">NATS</th>
+                <td class="mono">nats-publish · nats-subscribe · nats-request · nats-reply</td>
+                <td><span class="pill ok">100%</span></td>
+              </tr>
+              <tr>
+                <th scope="row">TypeORM</th>
+                <td class="mono">db-access · db-read · db-write</td>
+                <td><span class="pill ok">100%</span></td>
+              </tr>
+              <tr>
+                <th scope="row">BullMQ</th>
+                <td class="mono">queue-produce · queue-consume</td>
+                <td><span class="pill ok">100%</span></td>
+              </tr>
+              <tr>
+                <th scope="row">NestJS DI</th>
+                <td class="mono">di-import · di-provides · di-exports · di-controller</td>
+                <td><span class="pill ok">100%</span></td>
+              </tr>
+              <tr>
+                <th scope="row">HTTP</th>
+                <td class="mono">http-call · http-external</td>
+                <td><span class="pill ok">100%</span></td>
+              </tr>
+              <tr>
+                <th scope="row">TS imports</th>
+                <td class="mono">ts-import · lib-usage</td>
+                <td><span class="pill ok">100%</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ──────────────────────────────────────────── CLI ───────────────── -->
+    <section class="section section-cli" id="queries" aria-labelledby="cli-title">
+      <div class="container">
+        <p class="section-eyebrow">CLI</p>
+        <h2 id="cli-title" class="section-title">Query the graph from the terminal.</h2>
+        <p class="section-lead">Ten subcommands. <code>--json</code> by default, <code>--table</code> for humans. Exit code <code>4</code> for not-found.</p>
+
+        <div class="cli-grid">
+          <article class="cli-card reveal">
+            <h3 class="mono">who-publishes</h3>
+            <p>Find every service that publishes on a NATS subject. Cites <code>file:line</code>.</p>
+            <div class="code-block">
+              <button class="copy-btn" type="button" aria-label="Copy who-publishes example">Copy</button>
+              <pre><code class="lang-sh">arch-graph who-publishes user.created --table</code></pre>
+            </div>
+          </article>
+
+          <article class="cli-card reveal">
+            <h3 class="mono">deps-of</h3>
+            <p>List the outgoing dependencies of a service, grouped by edge kind.</p>
+            <div class="code-block">
+              <button class="copy-btn" type="button" aria-label="Copy deps-of example">Copy</button>
+              <pre><code class="lang-sh">arch-graph deps-of platform-api --table</code></pre>
+            </div>
+          </article>
+
+          <article class="cli-card reveal">
+            <h3 class="mono">path</h3>
+            <p>Shortest directed path between two nodes. Useful for "is X reachable from Y?".</p>
+            <div class="code-block">
+              <button class="copy-btn" type="button" aria-label="Copy path example">Copy</button>
+              <pre><code class="lang-sh">arch-graph path service:auth service:billing</code></pre>
+            </div>
+          </article>
+
+          <article class="cli-card reveal">
+            <h3 class="mono">stats</h3>
+            <p>Node + edge counts per kind. Sanity-check the graph after every build.</p>
+            <div class="code-block">
+              <button class="copy-btn" type="button" aria-label="Copy stats example">Copy</button>
+              <pre><code class="lang-sh">arch-graph stats</code></pre>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ──────────────────────────────────────────── CLAUDE ────────────── -->
+    <section class="section section-claude" id="claude" aria-labelledby="claude-title">
+      <div class="container narrow">
+        <p class="section-eyebrow">Integration</p>
+        <h2 id="claude-title" class="section-title">Always-on inside Claude Code.</h2>
+        <p class="prose">
+          <code>arch-graph claude install --skill</code> writes a delimited block into <code>./CLAUDE.md</code> telling Claude to consult the graph before answering architecture questions, and registers <code>~/.claude/skills/arch-graph/SKILL.md</code> globally. The pre-commit hook keeps the graph in lockstep with the code — every checkout in history is self-consistent.
+        </p>
+        <div class="code-block reveal">
+          <button class="copy-btn" type="button" aria-label="Copy Claude install command">Copy</button>
+          <pre><code class="lang-sh">arch-graph claude install --skill
+arch-graph hook install            # pre-commit, recommended</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ──────────────────────────────────────────── LIMITS ────────────── -->
+    <section class="section section-limits" id="limits" aria-labelledby="limits-title">
+      <div class="container">
+        <p class="section-eyebrow">Honesty</p>
+        <h2 id="limits-title" class="section-title">What it isn't.</h2>
+        <p class="section-lead">arch-graph is a static extractor. It does not see runtime configuration, container env values, or dynamically constructed identifiers.</p>
+
+        <ul class="limits-list">
+          <li class="reveal">
+            <h3>Static, not runtime</h3>
+            <p>If your subject name only exists at runtime (env vars, DI factories), arch-graph won't invent an edge. It records the gap in <code>diagnostics.json</code>.</p>
+          </li>
+          <li class="reveal">
+            <h3>Dynamic subjects → diagnostics</h3>
+            <p><code>publish(`subject.${userId}`)</code> becomes a diagnostic with <code>file:line</code>, not a guessed edge. No hallucinated topology.</p>
+          </li>
+          <li class="reveal">
+            <h3>Single monorepo</h3>
+            <p>No cross-repo graph yet. Multi-repo deployments need a separate stitching pass that isn't built.</p>
+          </li>
+          <li class="reveal">
+            <h3>NestJS-specific</h3>
+            <p>The extractors are tuned to NestJS decorators and a small set of wrapper conventions. General-purpose code analysis isn't the goal — graphify is.</p>
+          </li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer" role="contentinfo">
+    <div class="container footer-row">
+      <div>
+        <p class="footer-brand mono">arch-graph</p>
+        <p class="footer-sub">Made for NestJS architects who need answers, not guesses.</p>
+      </div>
+      <nav aria-label="Footer">
+        <ul>
+          <li><a href="https://github.com/roman-dubovik/arch-graph" rel="noopener" target="_blank">GitHub</a></li>
+          <li><a href="https://github.com/roman-dubovik/arch-graph/blob/main/bench/report.md" rel="noopener" target="_blank">Benchmark</a></li>
+          <li><a href="https://github.com/roman-dubovik/arch-graph/blob/main/README.md" rel="noopener" target="_blank">README</a></li>
+          <li><a href="https://github.com/roman-dubovik" rel="noopener" target="_blank">Author</a></li>
+        </ul>
+      </nav>
+      <p class="footer-meta">v0.1.0</p>
+    </div>
+  </footer>
+
+  <script src="scripts.js" defer></script>
+</body>
+</html>
