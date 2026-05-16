@@ -83,7 +83,10 @@ export interface HttpConfig {
 }
 
 /**
- * Helper for typed config authoring:
+ * Identity helper for typed config authoring. Only useful when arch-graph is
+ * available as a local package (e.g. `npm i -D arch-graph@file:~/.arch-graph`).
+ * The generated `arch-graph.config.ts` uses a plain `export default { ... }`
+ * so this helper is not required — `validateConfig` is duck-typed.
  *
  *   import { defineConfig } from 'arch-graph';
  *   export default defineConfig({ ... });

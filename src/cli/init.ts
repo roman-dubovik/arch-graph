@@ -131,14 +131,17 @@ export function buildConfigTemplate(a: WizardAnswers): string {
         ? `    // strictMode: true,  // fail build if recall drops below domain floor (CI-safe)\n`
         : '';
 
-    return `import { defineConfig } from 'arch-graph';
+    return `// arch-graph.config.ts — no import needed, arch-graph loads this directly.
+// For editor type-hints add arch-graph as a devDependency:
+//   npm i -D arch-graph@file:~/.arch-graph
+// then prefix the export: export default { ... } satisfies import('arch-graph').ArchGraphConfig;
 
-export default defineConfig({
+export default {
     id: ${q(a.projectId)},
     root: ${q(a.repoRoot)},
     appsGlob: ${q(a.appsGlob)},
     libsGlob: ${q(a.libsGlob)},
-${domainsBlock}${natsBlock}${importsBlock}${strictComment}});
+${domainsBlock}${natsBlock}${importsBlock}${strictComment}};
 `;
 }
 
@@ -248,9 +251,12 @@ async function askNatsWrapper(rl: Rl): Promise<{
 
 // ─── INIT_TEMPLATE (non-TTY fallback) ─────────────────────────────────────────
 
-export const INIT_TEMPLATE = `import { defineConfig } from 'arch-graph';
+export const INIT_TEMPLATE = `// arch-graph.config.ts — no import needed, arch-graph loads this directly.
+// For editor type-hints add arch-graph as a devDependency:
+//   npm i -D arch-graph@file:~/.arch-graph
+// then prefix the export: export default { ... } satisfies import('arch-graph').ArchGraphConfig;
 
-export default defineConfig({
+export default {
     id: 'my-project',
     root: '.',
     appsGlob: 'apps/*',
@@ -268,7 +274,7 @@ export default defineConfig({
         // produces 10k+ edges in medium monorepos. Turn on for file-graph drill-downs.
         // fileLevel: false,
     },
-});
+};
 `;
 
 // ─── main entry point ─────────────────────────────────────────────────────────

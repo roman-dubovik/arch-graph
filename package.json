@@ -18,7 +18,9 @@
         "dev": "tsx src/cli/index.ts",
         "build:graph": "tsx src/cli/index.ts build",
         "init": "tsx src/cli/index.ts init",
-        "diagnose": "tsx src/cli/index.ts diagnose"
+        "diagnose": "tsx src/cli/index.ts diagnose",
+        "test:integration": "bash scripts/integration-test.sh",
+        "test:integration:remote": "bash scripts/integration-test.sh --remote"
     },
     "dependencies": {
         "@modelcontextprotocol/sdk": "^1.29.0",
