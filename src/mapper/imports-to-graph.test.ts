@@ -519,6 +519,25 @@ describe('mapImportsToGraph — file-level edges dedup', () => {
         expect((fileEdges[0]!.meta as Record<string, unknown>).dynamic).toBe(true);
     });
 
+    it('static + import() + require to same file: edge carries both dynamic and cjsRequire', () => {
+        const ownership = makeOwnership(
+            [{ id: 'svc-a', rootDir: '/root/apps/svc-a' }],
+            [{ id: 'libs/shared', rootDir: '/root/libs/shared' }],
+        );
+        const resFile = '/root/libs/shared/index.ts';
+        const sites: TsImportSite[] = [
+            staticSite({ sourceFile: '/root/apps/svc-a/src/main.ts', specifier: 'x', resolvedFile: resFile }),
+            dynamicSite({ sourceFile: '/root/apps/svc-a/src/main.ts', specifier: 'x', resolvedFile: resFile }),
+            cjsSite({ sourceFile: '/root/apps/svc-a/src/main.ts', specifier: 'x', resolvedFile: resFile }),
+        ];
+        const result = mapImportsToGraph(sites, ownership, { fileLevel: true });
+        const fileEdges = result.edges.filter((e) => e.kind === 'ts-import');
+        expect(fileEdges).toHaveLength(1);
+        const meta = fileEdges[0]!.meta as Record<string, unknown>;
+        expect(meta.dynamic).toBe(true);
+        expect(meta.cjsRequire).toBe(true);
+    });
+
     it('same file→file pair deduped into one ts-import edge', () => {
         const ownership = makeOwnership(
             [{ id: 'svc-a', rootDir: '/root/apps/svc-a' }],
