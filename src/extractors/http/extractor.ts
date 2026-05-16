@@ -31,11 +31,20 @@ import { resolveUrl } from './url-resolver.js';
  *   - `axios.create({ baseURL })` cross-statement tracking — client variable bindings
  *     are not traced. Inline `axios.create({...}).get(url)` chains ARE detected (via
  *     a structural AST check: receiver must be `CallExpression` on callee `axios.create`)
- *     and emitted as unresolved so they balance the GT regex. Deferred because: across
- *     all 5 reference projects, `axios.create` is called without `baseURL` (only
- *     `timeout`/`headers`), so taint-tracking would yield zero useful URLs. A full
- *     implementation requires `Map<varName, ResolvedUrlBase>` with scope-boundary
- *     clearing (~150 LOC) for no gain on the current corpus.
+ *     and emitted as unresolved so they balance the GT regex.
+ *
+ *     DEFERRED — no corpus signal (verified 2026-05-16):
+ *       beribuy2  — 0 axios.create() calls
+ *       insyra    — 0 axios.create() calls
+ *       platform  — 1 axios.create() call (sync-client.ts:77), but NO `baseURL` property;
+ *                   uses `this.host` field prepended at each call-site instead
+ *       screenia  — 0 axios.create() calls
+ *       unpacks   — 0 axios.create() calls
+ *     Across all 5 reference projects, `axios.create` is never called with a `baseURL`
+ *     property, so taint-tracking would yield zero resolvable URLs. A full implementation
+ *     would require a `Map<varName, ResolvedUrlBase>` pre-pass with scope-boundary
+ *     clearing (~150 LOC). See REVIEWER-SUGGESTIONS.md — "Закрыто как deferred,
+ *     no corpus signal". Reactivate if a project with the `baseURL` pattern appears.
  *   - GraphQL / tRPC / gRPC — separate domain entirely.
  */
 

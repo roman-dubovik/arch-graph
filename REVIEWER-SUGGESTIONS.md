@@ -19,8 +19,6 @@ Severity:
 
 ### Block B — HTTP extractor
 
-- **[feature-suggestion] [http] `axios.create()` client variable tracking** — паттерн `const client = axios.create({baseURL}); client.get(path)` не отслеживается. Полноценная реализация требует таинт-анализа (привязка `baseURL` к переменной). **Отложено окончательно** — на 5 reference-проектах паттерн встречается 0 раз. Реактивируем при появлении проекта где этот стиль есть. (silent-failure-hunter, C2 fix follow-up; подтверждено при cleanup-http 2026-05)
-
 - **[nice-to-have] [http] `AXIOS_CREATE_RE` поддерживает только depth-1 nested parens** — после cleanup-http регулярка хендлит `axios.create({ baseURL: getUrl() }).get(url)`, но `axios.create({ baseURL: build(getUrl()) })` (depth-2) всё ещё мисс. AST extractor ловит, regex GT — нет → false `extra` в diagnostics. Не recall miss, не gate failure. Решение: brace/paren-balanced регулярка или рекурсивный паттерн. На корпусе пока 0 кейсов depth ≥ 2.
 
 ### Block C — TS-imports extractor
@@ -42,6 +40,18 @@ Severity:
 ### Cross-cutting
 
 - **[nice-to-have] [cli] `appendBlock` JSDoc неточен** — JSDoc говорит "Adds trailing newline", но trailing newline должен быть в самом `block` параметре, не добавляется функцией. Pre-existing неточность, унаследовано из claude.ts. (comment-analyzer, cleanup-marker-block)
+
+---
+
+## Закрыто в cleanup/axios-taint 2026-05-16
+
+- **[feature-suggestion] [http] `axios.create()` client variable tracking** — deferred, no corpus signal.
+  Паттерн `const client = axios.create({ baseURL }); client.get(path)` не реализован.
+  Corpus check (2026-05-16) по 5 reference-проектам:
+  beribuy2=0, insyra=0, platform=1 (без `baseURL`, только `timeout`/`headers`), screenia=0, unpacks=0.
+  Итого: 0 сайтов с `baseURL` → реализация даст 0 новых resolved URL.
+  Реактивировать при появлении проекта использующего `axios.create({ baseURL })`.
+  (feature-suggestion, cleanup/axios-taint; см. комментарий в extractor.ts)
 
 ---
 
