@@ -739,57 +739,66 @@ export interface HttpValidationReport {
 // ============================================================================
 
 /**
- * Discriminated union describing *how* a module specifier resolved (or failed to).
+ * Resolution outcomes that can appear on a *static* `import` declaration.
  *
- * Previously the field was `resolvedFilePath: string | null`, where `null`
- * collapsed two distinct failure modes — external packages (expected, not a bug)
- * and broken/missing path aliases (a real regression signal). This union makes
- * each outcome structurally distinct so consumers can exhaustively branch without
- * having to consult a companion `specifierShape` field.
+ * Does not include `dynamic-non-literal` — that variant is structurally
+ * impossible on a static import where the specifier is always a string literal
+ * known at parse time.
  *
  * Variants:
- *   - `resolved`           — specifier resolved to a file on disk; `filePath` is
- *                            the absolute path. This is the success case.
- *   - `external`           — specifier is a node_modules package or Node.js
- *                            builtin. `packageName` is the canonical npm package
- *                            name or Node.js builtin protocol URL extracted from
- *                            the specifier (e.g. `@nestjs/common` from
- *                            `@nestjs/common/decorators`, `react` from
- *                            `react/jsx-runtime`, `node:fs` from `node:fs`).
- *                            No graph edge.
- *   - `broken-alias`       — specifier matched a tsconfig `paths` prefix (so it
- *                            looks internal) but the on-disk probe failed.
- *                            Reason is always `'alias-prefix-matched-file-not-found'`:
- *                            the alias entry exists in `paths` but the mapped path
- *                            doesn't exist on disk (stale entry, moved file, build
- *                            artefact not generated). Real bug signal.
- *   - `broken-relative`    — specifier starts with `./` or `../` but the file
- *                            (with all TS-extension probes) doesn't exist on disk.
- *                            Reason is always `'file-not-found'`.
- *   - `dynamic-non-literal` — a dynamic `import(expr)` where `expr` is not a
- *                             string literal (variable, template-with-substitutions,
- *                             etc.). Resolution is structurally impossible without
- *                             taint analysis; this variant makes the intentional
- *                             skip explicit rather than leaking a `null`.
+ *   - `resolved`        — specifier resolved to a file on disk; `filePath` is
+ *                         the absolute path. This is the success case.
+ *   - `external`        — specifier is a node_modules package or Node.js
+ *                         builtin. `packageName` is the canonical npm package
+ *                         name (e.g. `@nestjs/common`) or Node builtin URL
+ *                         (e.g. `node:fs`). No graph edge.
+ *   - `broken-alias`    — specifier matched a tsconfig `paths` prefix but the
+ *                         on-disk probe failed. Real bug signal.
+ *   - `broken-relative` — specifier starts with `./` or `../` but no file was
+ *                         found on disk after all TS-extension probes.
  */
-export type TsImportResolution =
+export type TsStaticResolution =
     | { kind: 'resolved'; filePath: string }
     | { kind: 'external'; packageName: string }
     | { kind: 'broken-alias'; reason: 'alias-prefix-matched-file-not-found' }
-    | { kind: 'broken-relative'; reason: 'file-not-found' }
+    | { kind: 'broken-relative'; reason: 'file-not-found' };
+
+/**
+ * Resolution outcomes that can appear on a *dynamic* `import(...)` call.
+ *
+ * Extends `TsStaticResolution` with `dynamic-non-literal`: the case where the
+ * import argument is a variable / template-with-substitutions and resolution is
+ * structurally impossible without taint analysis.
+ *
+ *   - `dynamic-non-literal` — `import(expr)` where `expr` is not a string
+ *                             literal. The intentional skip is made explicit here
+ *                             rather than leaking a `null`.
+ */
+export type TsDynamicResolution =
+    | TsStaticResolution
     | { kind: 'dynamic-non-literal' };
+
+/**
+ * Back-compat alias: the full set of resolution outcomes across both static and
+ * dynamic import sites. Equals `TsDynamicResolution`.
+ *
+ * Exported so external consumers that already import `TsImportResolution` are
+ * not broken. New code should prefer the narrower `TsStaticResolution` or the
+ * wider `TsDynamicResolution` depending on the site kind.
+ */
+export type TsImportResolution = TsDynamicResolution;
 
 /**
  * One `import` declaration captured during the imports extractor walk.
  *
  *  - `specifier`  — raw module specifier text (e.g. `"@platform/messaging"`).
  *  - `resolution` — discriminated union describing the resolution outcome.
- *                   Replaces the old `resolvedFilePath: string | null`, which
- *                   conflated external packages and broken aliases under a single
- *                   `null`. See `TsImportResolution` for the full variant set.
- *  - `kind`       — discriminates static `import ...` vs dynamic `import(...)`.
- *                   Dynamic imports are captured for diagnostics but never gate
- *                   the recall metric (the regex GT only sees static).
+ *                   The `kind` field determines which resolution variants are
+ *                   structurally possible:
+ *                     `static`  → `TsStaticResolution`  (no `dynamic-non-literal`)
+ *                     `dynamic` → `TsDynamicResolution`  (all five variants)
+ *                   This invariant is enforced structurally by the DU below;
+ *                   the compiler rejects `{ kind: 'static', resolution: { kind: 'dynamic-non-literal' } }`.
  *  - `typeOnly`   — `import type { X } from ...`. Still produces graph edges:
  *                   a type-only dep is still a structural lib usage.
  *  - `specifierShape` — raw source-text classification of the specifier form.
@@ -797,15 +806,25 @@ export type TsImportResolution =
  *                   diagnostics and external consumers. Independent of
  *                   `resolution` (which describes the outcome, not the form).
  */
-export interface TsImportSite {
-    sourceFile: string;
-    specifier: string;
-    resolution: TsImportResolution;
-    kind: 'static' | 'dynamic';
-    typeOnly: boolean;
-    specifierShape: 'relative' | 'alias' | 'bare-external' | 'builtin';
-    location: SourceLoc;
-}
+export type TsImportSite =
+    | {
+          sourceFile: string;
+          specifier: string;
+          resolution: TsStaticResolution;
+          kind: 'static';
+          typeOnly: boolean;
+          specifierShape: 'relative' | 'alias' | 'bare-external' | 'builtin';
+          location: SourceLoc;
+      }
+    | {
+          sourceFile: string;
+          specifier: string;
+          resolution: TsDynamicResolution;
+          kind: 'dynamic';
+          typeOnly: boolean;
+          specifierShape: 'relative' | 'alias' | 'bare-external' | 'builtin';
+          location: SourceLoc;
+      };
 
 export interface ImportsDiagnostics {
     /**
