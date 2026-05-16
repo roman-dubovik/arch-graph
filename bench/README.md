@@ -8,11 +8,7 @@ questions, **how many LLM tokens does each tool need to deliver the answer?**
 ```
 bench/
 ├── questions.yaml          — 15 architecture-grade questions + ground truth
-├── adapters/
-│   ├── arch-graph.ts       — load + compact arch-graph's graph.json
-│   └── graphify.ts         — load + compact graphify's graph.json
-├── tokens.ts               — tiktoken (cl100k_base) wrapper
-├── bench.ts                — main runner
+├── bench.ts                — main runner (imports adapters + tokens from src/compare/)
 ├── run.sh                  — orchestrator (rebuild arch-graph + run bench)
 ├── report-template.md      — Mustache-ish template, filled by bench.ts
 ├── report.md               — generated output (git-ignored; see below)
@@ -53,8 +49,9 @@ invoke it. To produce a graphify graph for a project, run graphify as a
 Claude Code skill against the project root.
 
 The graph lands at `<project_root>/graphify-out/graph.json`. The bench
-adapter (`adapters/graphify.ts`) picks it up automatically from either
-`<project_root>/graphify-out/` or `bench/cache/<project>/graphify-out/`.
+adapter (`src/compare/adapters/graphify.ts`, shared with `arch-graph compare`)
+picks it up automatically from either `<project_root>/graphify-out/` or
+`bench/cache/<project>/graphify-out/`.
 
 ## How tokens are counted
 
