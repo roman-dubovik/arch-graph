@@ -157,6 +157,37 @@ export default defineConfig({
                     functions: 95,
                     branches: 90,
                 },
+                // Track A — FE Level 1 (standard gate: 95/95/95/90)
+                'src/extractors/fe/react-patterns.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                'src/extractors/fe/router-patterns.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                'src/extractors/fe/extractor.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                'src/mapper/fe-to-graph.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                'src/validation/fe-validator.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
             },
         },
     },

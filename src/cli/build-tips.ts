@@ -21,6 +21,7 @@ import type {
     TypeOrmDiagnostics,
     TypeOrmValidationReport,
 } from '../core/types.js';
+import type { FeValidationReport } from '../validation/fe-validator.js';
 
 // ---------------------------------------------------------------------------
 // NATS
@@ -252,6 +253,50 @@ export function tipsForImports(
     }
 
     tips.push(`Run \`arch-graph diagnose --only=imports\` for broken-path details`);
+
+    return tips;
+}
+
+// ---------------------------------------------------------------------------
+// FE (React/Next.js)
+// ---------------------------------------------------------------------------
+
+export function tipsForFe(validation: FeValidationReport): string[] {
+    const tips: string[] = [];
+    const {
+        recallComponents,
+        recallRoutes,
+        recallHooks,
+        groundTruthComponents,
+        groundTruthRoutes,
+        groundTruthHooks,
+    } = validation.summary;
+
+    if (groundTruthComponents > 0 && recallComponents < 0.9) {
+        const missed = groundTruthComponents - Math.round(recallComponents * groundTruthComponents);
+        tips.push(
+            `${missed} component(s) not extracted — check appsGlob includes frontend apps (e.g. apps/web/**)`,
+        );
+        tips.push(
+            `Verify recall with: npx tsx ...build --json | jq .validation.fe.summary`,
+        );
+    }
+
+    if (groundTruthRoutes > 0 && recallRoutes < 0.9) {
+        const missed = groundTruthRoutes - Math.round(recallRoutes * groundTruthRoutes);
+        tips.push(
+            `${missed} route(s) not extracted — ensure pages/ or app/ directories are under appsGlob`,
+        );
+    }
+
+    if (groundTruthHooks > 0 && recallHooks < 0.9) {
+        const missed = groundTruthHooks - Math.round(recallHooks * groundTruthHooks);
+        tips.push(
+            `${missed} hook(s) not extracted — hooks in .ts files are scanned; check appsGlob/libsGlob coverage`,
+        );
+    }
+
+    tips.push(`Run \`arch-graph diagnose --only=fe\` for missed component/route/hook details`);
 
     return tips;
 }
