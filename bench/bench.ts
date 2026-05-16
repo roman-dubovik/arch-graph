@@ -175,12 +175,24 @@ async function loadQuestions(path: string): Promise<Question[]> {
 
 // ─── project resolution ──────────────────────────────────────────────────
 
-async function getProjectInfo(projectId: string, repoRoot: string): Promise<ProjectInfo> {
+async function getProjectInfo(projectId: string, repoRoot: string): Promise<ProjectInfo | null> {
     // The config file pins the project's source root. We read it as text and
     // grep out the `root:` value — cheaper than importing the TS config here
     // (which would require ts-node bootstrap).
+    //
+    // The public repo ships only `configs/example.config.ts`; bench users
+    // bring their own `configs/<id>.config.ts` per project they want to
+    // benchmark. A missing config is a documented case — return null so the
+    // caller can skip the project with an informative message rather than
+    // crash the whole run.
     const cfgPath = resolve(repoRoot, `configs/${projectId}.config.ts`);
-    const txt = await readFile(cfgPath, 'utf8');
+    let txt: string;
+    try {
+        txt = await readFile(cfgPath, 'utf8');
+    } catch (e) {
+        if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null;
+        throw e;
+    }
     const m = txt.match(/root:\s*'([^']+)'/);
     if (!m) throw new Error(`could not parse 'root' from ${cfgPath}`);
     return {
@@ -273,8 +285,17 @@ async function main(): Promise<void> {
     // Build contexts (one per project, reused across all that project's questions)
     const ctxByProject = new Map<string, ProjectContexts>();
     const summaries: ProjectSummary[] = [];
+    const skippedProjects: string[] = [];
     for (const pid of projectIds) {
         const info = await getProjectInfo(pid, repoRoot);
+        if (info === null) {
+            skippedProjects.push(pid);
+            process.stdout.write(
+                `bench: ${pid} — SKIP (no configs/${pid}.config.ts). ` +
+                `Create the config to include this project. See bench/README.md.\n`,
+            );
+            continue;
+        }
         const t0 = performance.now();
         const ctx = await buildContexts(info, benchCacheRoot, adapters);
         const t1 = performance.now();

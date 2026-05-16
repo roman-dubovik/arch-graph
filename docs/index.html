@@ -262,7 +262,7 @@
               <g class="g-node gn-1" transform="translate(900 110)">
                 <rect width="240" height="40" rx="8"></rect>
                 <circle cx="18" cy="20" r="6" class="gn-kind kind-service"></circle>
-                <text x="36" y="25" class="mono">service:platform-api</text>
+                <text x="36" y="25" class="mono">service:order-api</text>
               </g>
               <g class="g-node gn-2" transform="translate(920 190)">
                 <rect width="240" height="40" rx="8"></rect>
@@ -324,10 +324,10 @@
 
         <div class="bench-cards reveal">
           <div class="bench-card highlight">
-            <p class="bench-card-label">Avg tokens per question</p>
+            <p class="bench-card-label">Avg tokens per answered question</p>
             <p class="bench-card-row"><span class="bench-card-tool">arch-graph</span><span class="bench-card-num">45,896</span></p>
-            <p class="bench-card-row dim"><span class="bench-card-tool">graphify</span><span class="bench-card-num">347,861</span></p>
-            <p class="bench-card-foot">7.6× fewer tokens.</p>
+            <p class="bench-card-row dim"><span class="bench-card-tool">graphify</span><span class="bench-card-num">579,770</span></p>
+            <p class="bench-card-foot">arch ran on all 15 questions; graphify on 9. 12.6× per answered Q.</p>
           </div>
           <div class="bench-card">
             <p class="bench-card-label">Mean recall</p>
@@ -548,7 +548,7 @@ arch-graph build --strict      # CI: exit 3 if recall drops below floor</code></
             <p>List the outgoing dependencies of a service, grouped by edge kind.</p>
             <div class="code-block">
               <button class="copy-btn" type="button" aria-label="Copy deps-of example">Copy</button>
-              <pre><code class="lang-sh">arch-graph deps-of platform-api --table</code></pre>
+              <pre><code class="lang-sh">arch-graph deps-of order-api --table</code></pre>
             </div>
           </article>
 
