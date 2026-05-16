@@ -857,14 +857,18 @@ td.dim, .dim { color: var(--text-mute); }
   color: var(--text-dim);
   margin: 0 0 14px;
 }
-/* Code block in CLI/MCP/Skill cards extends to bottom (margin-top: auto pushes it
- * down), so cards of varying text length still align their code regions. The inner
- * <pre> is vertically centered for a balanced look regardless of snippet height. */
+/* Code block in CLI/MCP/Skill cards FILLS the remaining card height
+ * (flex: 1 1 auto), keeping all three cards' code regions visually
+ * aligned regardless of how long each card's description text is.
+ * The inner <pre> is vertically centred for balance. */
 .cli-card .code-block {
-  margin-top: auto;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   justify-content: center;
+}
+.cli-card .code-block pre {
+  margin: 0;
 }
 
 /* ─────────────────────────────────────── CONTRIBUTE BANNER ─────────── */
