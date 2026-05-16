@@ -10,12 +10,18 @@ import { extractHttp } from '../extractors/http/extractor.js';
 import { extractImports } from '../extractors/imports/extractor.js';
 import { extractNats } from '../extractors/nats/extractor.js';
 import { extractTypeOrm } from '../extractors/typeorm/extractor.js';
+import { extractEndpoints } from '../extractors/endpoint/extractor.js';
+import { extractConfig } from '../extractors/config/extractor.js';
+import { extractScoped } from '../extractors/scoped/extractor.js';
+import { extractEntityFields } from '../extractors/typeorm/fields.js';
 import { mapBullMqToGraph } from '../mapper/bullmq-to-graph.js';
 import { mapDiToGraph } from '../mapper/di-to-graph.js';
 import { mapHttpToGraph } from '../mapper/http-to-graph.js';
 import { mapImportsToGraph } from '../mapper/imports-to-graph.js';
 import { assembleGraph, buildNatsDiagnostics, mapNatsToGraph } from '../mapper/nats-to-graph.js';
 import { mapTypeOrmToGraph } from '../mapper/typeorm-to-graph.js';
+import { mapEndpointsToGraph } from '../mapper/endpoint-to-graph.js';
+import { mapConfigToGraph } from '../mapper/config-to-graph.js';
 import { enumerateBullMqGroundTruth, buildBullMqReport } from '../validation/bullmq-validator.js';
 import { enumerateDiGroundTruth, buildDiReport } from '../validation/di-validator.js';
 import { enumerateHandlers } from '../validation/handlers.js';
@@ -23,6 +29,8 @@ import { enumerateHttpGroundTruth, buildHttpReport } from '../validation/http-va
 import { buildImportsReport, enumerateImportsGroundTruth } from '../validation/imports-validator.js';
 import { enumerateSenders } from '../validation/senders.js';
 import { enumerateTypeOrmGroundTruth, buildTypeOrmReport } from '../validation/typeorm-validator.js';
+import { validateEndpoints } from '../validation/endpoint-validator.js';
+import { validateConfig } from '../validation/config-validator.js';
 import { buildReport as buildNatsReport } from '../validation/validator.js';
 import { detectCycles } from '../detectors/cycles.js';
 
@@ -283,6 +291,63 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         `  nodes: ${importsMapped.nodes.length}, edges: ${importsMapped.edges.length}, unresolvedInternal: ${importsMapped.diagnostics.counts.unresolvedInternal}, externalOrUnresolved: ${importsMapped.diagnostics.counts.externalOrUnresolved}, dynamic: ${importsMapped.diagnostics.counts.totalDynamic}, cjsRequire: ${importsMapped.diagnostics.counts.totalCjsRequire}\n`,
     );
 
+    // ---- Endpoint domain (Var 2) ----
+    process.stdout.write(`extracting endpoints...\n`);
+    t0 = Date.now();
+    const endpoints = await stage(`[${cfg.id}] endpoint.extract`, () => extractEndpoints(project));
+    process.stdout.write(
+        `  ${endpoints.endpoints.length} endpoint sites in ${Date.now() - t0}ms\n`,
+    );
+
+    process.stdout.write(`validating endpoints against ground truth...\n`);
+    const endpointValidation = validateEndpoints(cfg.root, endpoints.endpoints.length);
+    process.stdout.write(
+        `  groundTruth: ${endpointValidation.groundTruthCount}, recall: ${endpointValidation.recall !== null ? pct(endpointValidation.recall) : 'N/A'}\n`,
+    );
+
+    process.stdout.write(`mapping endpoints to graph...\n`);
+    const endpointsMapped = mapEndpointsToGraph(endpoints.endpoints, ownership);
+    process.stdout.write(
+        `  nodes: ${endpointsMapped.nodes.length}, edges: ${endpointsMapped.edges.length}\n`,
+    );
+
+    // ---- Config domain (Var 2) ----
+    process.stdout.write(`extracting config callsites...\n`);
+    t0 = Date.now();
+    const config = await stage(`[${cfg.id}] config.extract`, () => extractConfig(project));
+    process.stdout.write(
+        `  ${config.fields.length} config callsites in ${Date.now() - t0}ms\n`,
+    );
+
+    process.stdout.write(`validating config against ground truth...\n`);
+    const configValidation = validateConfig(cfg.root, config.fields.length);
+    process.stdout.write(
+        `  groundTruth: ${configValidation.groundTruthCount}, recall: ${configValidation.recall !== null ? pct(configValidation.recall) : 'N/A'}\n`,
+    );
+
+    process.stdout.write(`mapping config to graph...\n`);
+    const configMapped = mapConfigToGraph(config.fields, ownership);
+    process.stdout.write(
+        `  nodes: ${configMapped.nodes.length}, edges: ${configMapped.edges.length}\n`,
+    );
+
+    // ---- Scoped-marker domain (Var 2 stub) ----
+    process.stdout.write(`extracting scoped markers (stub)...\n`);
+    const scoped = await stage(`[${cfg.id}] scoped.extract`, () => extractScoped(project));
+    process.stdout.write(
+        `  ${scoped.markers.length} scoped sites (stub: awaiting corpus signal)\n`,
+    );
+
+    // ---- db-entity-field domain (Var 2) ----
+    process.stdout.write(`extracting db entity fields...\n`);
+    t0 = Date.now();
+    const dbEntityFields = await stage(`[${cfg.id}] dbEntityFields.extract`, () =>
+        extractEntityFields(Array.from(typeorm.entities.entries())),
+    );
+    process.stdout.write(
+        `  ${dbEntityFields.fields.length} entity fields in ${Date.now() - t0}ms\n`,
+    );
+
     // ---- Compose ----
     const graph = assembleGraph(cfg.root, [
         natsMapped,
@@ -291,6 +356,8 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         diMapped,
         httpMapped,
         importsMapped,
+        endpointsMapped,
+        configMapped,
     ]);
 
     // ---- Cycle detection ----

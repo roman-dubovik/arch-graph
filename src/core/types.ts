@@ -63,7 +63,11 @@ export type NodeKind =
     | 'module'
     | 'provider'
     | 'file'
-    | 'external';
+    | 'external'
+    | 'endpoint'
+    | 'config-field'
+    | 'scoped-marker'
+    | 'db-entity-field';
 
 /**
  * Exhaustiveness-gate pattern for NodeKind.
@@ -81,6 +85,10 @@ const NODE_KIND_CHECK: Record<NodeKind, null> = {
     'provider': null,
     'file': null,
     'external': null,
+    'endpoint': null,
+    'config-field': null,
+    'scoped-marker': null,
+    'db-entity-field': null,
 };
 
 /** All valid NodeKind values — used for runtime validation and zod enum schemas. */
@@ -104,7 +112,12 @@ export type EdgeKind =
     | 'di-interceptor'
     | 'di-pipe'
     | 'ts-import'
-    | 'lib-usage';
+    | 'lib-usage'
+    | 'endpoint-of'
+    | 'endpoint-calls'
+    | 'config-read-by'
+    | 'entity-has-field'
+    | 'scoped';
 
 export interface GraphNode {
     id: string;
