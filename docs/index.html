@@ -421,6 +421,20 @@
         </p>
 
         <div class="matrix-block">
+          <h3 class="subsection-title">We also ran 4 other tools on the same 40 questions</h3>
+          <p class="prose">Short version — <strong>different tools answer different questions</strong>. Headline numbers from the same bench harness:</p>
+          <ul class="prose">
+            <li><strong>@nestjs/devtools-integration</strong> (official, runtime): 65,395 tokens · 9.2% mean recall. <strong>87.5% on module-imports</strong> (its native domain), <strong>0% on NATS / BullMQ / TypeORM / cross-service</strong>. Needed DB / NATS / JWT env stubs to bootstrap — in CI without secrets, 3 of 4 projects would fail at boot.</li>
+            <li><strong>nestjs-spelunker</strong> (runtime, DI-only): 13,535 tokens · 10.6% mean recall. Cheapest in tokens — it captures only the module-import layer. Needed a harness bypassing <code>onModuleInit</code> hooks (real hooks hit live external services).</li>
+            <li><strong>@riaskov/nst-graph-visualizer</strong> (advertised static, in practice runtime): partial · 1.3% mean recall. Failed to load the main app module on 3 of 4 projects — bidirectional TypeORM <code>forwardRef</code> in entity barrels created CJS require cycles. arch-graph's true-static AST mode doesn't hit this.</li>
+            <li><strong>dependency-cruiser</strong> (static, generic): nominal 40.8% recall, but that's <em>substring noise</em> — by default it doesn't parse TypeScript in directory mode, so the "matches" are file paths like <code>caniuse-lite/broadcastchannel.js</code>. 0% on real NestJS-architecture questions.</li>
+          </ul>
+          <p class="prose">
+            None of these are "broken" — they're built for different scopes. arch-graph wins where their scopes don't overlap: cross-cutting message-bus + data-layer edges, statically, with file:line. Read the full breakdown with per-tool caveats on the <a class="link" href="comparison.html#bench-numbers">comparison page →</a>
+          </p>
+        </div>
+
+        <div class="matrix-block">
           <h3 class="subsection-title">Coverage at a glance</h3>
           <p class="prose">Numbers above show <em>how well</em> arch-graph answers. This compact matrix shows <em>what</em> it sees that adjacent tools structurally don't — the uniqueness-defining rows from the full comparison. <span class="cell ok" aria-hidden="true">✓</span> first-class, <span class="cell partial" aria-hidden="true">◐</span> partial / inferred, <span class="cell no" aria-hidden="true">✗</span> not covered by construction.</p>
           <div class="table-wrap reveal">

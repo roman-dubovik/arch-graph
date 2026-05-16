@@ -339,6 +339,96 @@
       </div>
     </section>
 
+    <!-- ──────────────────────────────────────────── BENCH NUMBERS ───────── -->
+    <section class="section section-compare-bench" id="bench-numbers" aria-labelledby="bench-numbers-title">
+      <div class="container">
+        <p class="section-eyebrow">Measured</p>
+        <h2 id="bench-numbers-title" class="section-title">How they fared on the same 40 questions.</h2>
+        <p class="section-lead">We re-ran the 10 auto-generated questions per project (40 total) against each tool. Same compression rules, same <code>cl100k_base</code> encoder, same questions. Recall = substring-presence of arch-graph's ground-truth labels in the tool's compact context. <strong>Different tools answer different questions</strong> — read the caveats.</p>
+
+        <div class="table-wrap reveal">
+          <table class="comparison-table">
+            <thead>
+              <tr>
+                <th scope="col">Tool</th>
+                <th scope="col">Mode</th>
+                <th scope="col">Avg tokens</th>
+                <th scope="col">Mean recall</th>
+                <th scope="col">Coverage profile</th>
+                <th scope="col">Caveat</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">arch-graph</th>
+                <td>static</td>
+                <td class="mono">38,654</td>
+                <td><span class="cell full">100%</span></td>
+                <td>NATS · BullMQ · TypeORM · DI · HTTP · imports</td>
+                <td>baseline — questions auto-derived from arch-graph's own nodes, so it scores 100% by construction</td>
+              </tr>
+              <tr>
+                <th scope="row">graphify</th>
+                <td>LLM-driven</td>
+                <td class="mono">570,605</td>
+                <td><span class="cell partial">25%</span></td>
+                <td>generic semantic concepts</td>
+                <td>not designed for NestJS message-bus topology — strength is cross-cutting / "what's this codebase about"</td>
+              </tr>
+              <tr>
+                <th scope="row">@nestjs/devtools-integration</th>
+                <td>runtime (official)</td>
+                <td class="mono">65,395</td>
+                <td><span class="cell partial">9.2%</span></td>
+                <td>NestJS DI of one running app</td>
+                <td>scored <strong>87.5%</strong> on module-imports (its native domain), <strong>0%</strong> on NATS / BullMQ / TypeORM / cross-service. We stubbed DB / NATS / JWT / Redis env vars to make bootstrap succeed — in CI without secrets, 3 of 4 projects would fail at boot.</td>
+              </tr>
+              <tr>
+                <th scope="row">nestjs-spelunker</th>
+                <td>runtime</td>
+                <td class="mono">13,535</td>
+                <td><span class="cell partial">10.6%</span></td>
+                <td>NestJS module-import graph</td>
+                <td>cheapest in tokens (it captures only one architectural layer) — <strong>100% on module-imports</strong>, <strong>0%</strong> on cross-cutting questions. Bootstrap required a harness bypassing <code>onModuleInit</code> hooks (real <code>onModuleInit</code> hit live external services).</td>
+              </tr>
+              <tr>
+                <th scope="row">@riaskov/nst-graph-visualizer</th>
+                <td>runtime (despite "static" docs)</td>
+                <td class="mono">~125 (partial)</td>
+                <td><span class="cell none">1.3%</span></td>
+                <td>NestJS module decorators</td>
+                <td>documented as static AST, but in practice <code>require()</code>s the root module. On 3 of 4 projects it couldn't load the main app at all — bidirectional TypeORM <code>forwardRef</code> relations created CJS require cycles in entity barrel files (a common NestJS+TypeORM pattern).</td>
+              </tr>
+              <tr>
+                <th scope="row">dependency-cruiser</th>
+                <td>static, generic</td>
+                <td class="mono">~660,344†</td>
+                <td><span class="cell partial">40.8%†</span></td>
+                <td>file-level imports (best in class)</td>
+                <td><strong>†The recall number is misleading.</strong> By default <code>depcruise apps libs</code> walks only <code>.js/.mjs</code> — TypeScript is not parsed on a typical pnpm monorepo. The 40.8% comes from substring matches like <code>broadcast</code> against <code>caniuse-lite/broadcastchannel.js</code>, not from real architectural facts. <strong>0% on every NATS / BullMQ / TypeORM / module-import question.</strong> Per-category numbers are the honest signal.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 class="subsection-title">Reading the heuristic fairly</h3>
+        <p class="prose">
+          Our scoring (substring-presence of ground-truth labels) is a permissive <em>necessary-condition</em> heuristic: "did the tool's output even <em>contain</em> the answer". It's not an end-to-end LLM eval. The dependency-cruiser row demonstrates how the heuristic can mislead — a tool that extracts <em>no</em> NestJS-architecture facts can still score double-digit recall purely from file-path coincidences (<code>be-insyra</code> appears in <code>apps/be-insyra/webpack.config.js</code>). The per-category breakdown (NATS / BullMQ / TypeORM / DI / imports) is the more honest cut. arch-graph stays at 100% across every category by construction; every other tool's strength shows up as a single category spike.
+        </p>
+
+        <h3 class="subsection-title">What this benchmark <em>is</em> and <em>isn't</em></h3>
+        <ul class="prose">
+          <li><strong>It is:</strong> a fair side-by-side on the questions arch-graph is built to answer (NestJS architectural relationships, cited to file:line).</li>
+          <li><strong>It isn't:</strong> a verdict on which tool is "best". devtools answers the official-DI question; spelunker answers it cheapest; graphify handles cross-cutting concepts; dep-cruiser is rock-solid on plain TS file imports. arch-graph is built for the <em>intersection</em> they don't cover.</li>
+          <li><strong>Methodology gap:</strong> none of these are runtime-trace tools (OpenTelemetry service maps etc.). Those find edges static analysis can't — different category, complementary not competing.</li>
+        </ul>
+
+        <p class="prose dim small">
+          Each tool was run on 4 reference monorepos (the same projects used in the <a class="link" href="./index.html#bench">main bench</a>) with auto-generated questions from arch-graph's <code>compare</code> command. Per-project raw outputs + scoring details: see <a class="link" href="https://github.com/roman-dubovik/arch-graph/blob/main/bench/competitive-bench.md" rel="noopener" target="_blank">bench/competitive-bench.md</a> in the repo.
+        </p>
+      </div>
+    </section>
+
     <!-- ──────────────────────────────────────────── PER TOOL ─────────── -->
     <section class="section section-compare-tools" id="tools" aria-labelledby="tools-title">
       <div class="container">
