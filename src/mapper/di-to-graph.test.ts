@@ -822,3 +822,94 @@ describe('mapDiToGraph — empty inputs', () => {
         expect(diagnostics.counts.guards).toBe(0);
     });
 });
+
+// ---------------------------------------------------------------------------
+// skippedAnonymousFiles passthrough
+// ---------------------------------------------------------------------------
+
+describe('mapDiToGraph — skippedAnonymousFiles passthrough', () => {
+    it('passes through skippedAnonymousFiles from 5th param to diagnostics', () => {
+        const files = ['/apps/api/src/anon.controller.ts', '/apps/api/src/anon2.controller.ts'];
+        const { diagnostics } = mapDiToGraph([], IDX, EMPTY_OWNERSHIP, [], files);
+        expect(diagnostics.skippedAnonymousFiles).toEqual(files);
+        expect(diagnostics.skippedAnonymousFiles).toHaveLength(2);
+    });
+
+    it('defaults skippedAnonymousFiles to empty array when omitted', () => {
+        const { diagnostics } = mapDiToGraph([], IDX, EMPTY_OWNERSHIP, []);
+        expect(diagnostics.skippedAnonymousFiles).toEqual([]);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Count invariant: guards + interceptors + pipes + unresolvedFilterRefs.length
+//                  + dedupDropped === filterChain.length
+// ---------------------------------------------------------------------------
+
+describe('mapDiToGraph — count invariant', () => {
+    it('guards + interceptors + pipes + unresolvedFilterRefs + dedupDropped === filterChain.length', () => {
+        // Set up a module with one controller (CatsController) and three providers
+        // (AuthGuard, LoggingInterceptor, ValidationPipe) so resolved edges can be emitted.
+        const mod = moduleWithProvidersAndControllers('CatsController', [
+            'AuthGuard',
+            'LoggingInterceptor',
+            'ValidationPipe',
+        ]);
+
+        // Resolved guard → contributes 1 guard edge
+        const guardRef = makeFilterRef({
+            kind: 'class',
+            name: 'AuthGuard',
+            decorator: 'UseGuards',
+            enclosingClass: 'CatsController',
+            attachedTo: { kind: 'class' },
+        });
+
+        // Resolved interceptor → contributes 1 interceptor edge
+        const interceptorRef = makeFilterRef({
+            kind: 'class',
+            name: 'LoggingInterceptor',
+            decorator: 'UseInterceptors',
+            enclosingClass: 'CatsController',
+            attachedTo: { kind: 'class' },
+        });
+
+        // Resolved pipe → contributes 1 pipe edge
+        const pipeRef = makeFilterRef({
+            kind: 'class',
+            name: 'ValidationPipe',
+            decorator: 'UsePipes',
+            enclosingClass: 'CatsController',
+            attachedTo: { kind: 'class' },
+        });
+
+        // Unresolved ref (spread) → contributes 1 unresolvedFilterRef
+        const unresolvedRef = makeFilterRef({
+            kind: 'unresolved',
+            decorator: 'UseGuards',
+            enclosingClass: 'CatsController',
+        });
+
+        // Duplicate of guardRef → contributes 1 dedupDropped
+        const dupGuardRef = makeFilterRef({
+            kind: 'class',
+            name: 'AuthGuard',
+            decorator: 'UseGuards',
+            enclosingClass: 'CatsController',
+            attachedTo: { kind: 'class' }, // same attachedTo → same dedup key
+        });
+
+        const filterChain = [guardRef, interceptorRef, pipeRef, unresolvedRef, dupGuardRef];
+        const { diagnostics } = mapDiToGraph([mod], IDX, EMPTY_OWNERSHIP, filterChain);
+
+        const c = diagnostics.counts;
+        const lhs = c.guards + c.interceptors + c.pipes + c.unresolvedFilterRefs + c.dedupDropped;
+        expect(lhs).toBe(filterChain.length);
+        // Spot-check the individual counts
+        expect(c.guards).toBe(1);
+        expect(c.interceptors).toBe(1);
+        expect(c.pipes).toBe(1);
+        expect(c.unresolvedFilterRefs).toBe(1);
+        expect(c.dedupDropped).toBe(1);
+    });
+});
