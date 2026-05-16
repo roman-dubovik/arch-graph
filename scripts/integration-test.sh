@@ -319,25 +319,16 @@ echo "" | arch-graph init >/dev/null 2>&1 \
 
 assert_file_exists "$FIXTURE/arch-graph.config.ts" "arch-graph init"
 
-# Patch config to point at our fixture structure.
-# NOTE: We use `export default { ... }` (no `import { defineConfig }`) because
-# the arch-graph package is not published to npm and the install only places the
-# CLI binary on PATH — it does not add itself to node_modules of the user's project.
-# The loadConfig function accepts any plain exported object that satisfies
-# ArchGraphConfig (the validateConfig check is duck-typed, not class-based).
-cat > "$FIXTURE/arch-graph.config.ts" <<'EOF'
-export default {
-    id: 'nestjs-fixture',
-    root: '.',
-    appsGlob: 'apps/*',
-    libsGlob: 'libs/**',
-    nats: {
-        wrapperPublishApis: [],
-        wrapperSubscribeApis: [],
-    },
-    imports: {},
-};
-EOF
+# Patch the generated config: set id to match our fixture.
+# arch-graph init now emits a plain `export default { ... }` object (no package
+# import needed) so this sed is the only change needed. Other defaults (root '.',
+# appsGlob 'apps/*', libsGlob 'libs/**') already match the fixture layout.
+sed -i.bak \
+    -e "s/id: 'my-project'/id: 'nestjs-fixture'/" \
+    "$FIXTURE/arch-graph.config.ts"
+rm -f "$FIXTURE/arch-graph.config.ts.bak"
+grep -q "id: 'nestjs-fixture'" "$FIXTURE/arch-graph.config.ts" \
+    || fail "config patch failed — template id format may have drifted"
 
 step_ok
 
