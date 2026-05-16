@@ -58,9 +58,11 @@ export function mapImportsToGraph(
 
     const unresolvedImports: TsImportSite[] = [];
     const dynamicImports: TsImportSite[] = [];
+    const cjsRequires: TsImportSite[] = [];
 
     let totalStatic = 0;
     let totalDynamic = 0;
+    let totalCjsRequire = 0;
     let resolvedToOwner = 0;
     let externalOrUnresolved = 0;
     let unresolvedInternal = 0;
@@ -69,6 +71,9 @@ export function mapImportsToGraph(
         if (site.kind === 'dynamic') {
             totalDynamic++;
             dynamicImports.push(site);
+        } else if (site.kind === 'cjs-require') {
+            totalCjsRequire++;
+            cjsRequires.push(site);
         } else {
             totalStatic++;
         }
@@ -82,17 +87,27 @@ export function mapImportsToGraph(
             // into the wrong bucket.
             switch (res.kind) {
                 case 'external':
+                    // node_modules package or Node builtin — expected, not a bug; no graph edge.
+                    externalOrUnresolved++;
+                    break;
                 case 'dynamic-non-literal':
-                    // node_modules package, Node builtin, or a non-literal dynamic
-                    // import specifier — expected, not a bug; no graph edge.
+                    // Non-literal dynamic import or CJS require specifier — untrackable, not a bug.
+                    // CJS non-literal goes into cjsRequires (already pushed above); do not add to unresolvedImports.
                     externalOrUnresolved++;
                     break;
                 case 'broken-alias':
                 case 'broken-relative':
                     // Graph-relevant target we failed to find — typo'd alias,
                     // broken `paths`, moved file. Real regression signal.
+                    // Routing mirror: static→unresolvedImports, dynamic→dynamicImports,
+                    // cjs-require→cjsRequires (already pushed above unconditionally).
+                    // Do NOT also push cjs-require into unresolvedImports — it would
+                    // double-count every broken CJS site in consumer code iterating
+                    // both arrays.
                     unresolvedInternal++;
-                    if (site.kind === 'static') unresolvedImports.push(site);
+                    if (site.kind === 'static') {
+                        unresolvedImports.push(site);
+                    }
                     break;
                 default: {
                     // Exhaustiveness guard: if a new TsImportResolution variant is
@@ -150,7 +165,28 @@ export function mapImportsToGraph(
                     file: site.sourceFile,
                     line: site.location.line,
                     ...(site.kind === 'dynamic' ? { meta: { dynamic: true } } : {}),
+                    ...(site.kind === 'cjs-require' ? { meta: { cjsRequire: true } } : {}),
                 });
+            } else if (site.kind === 'dynamic') {
+                // Static walk runs first; when a dynamic import targets the same file,
+                // the dedup short-circuit above would silently drop `dynamic: true`.
+                // Merge it onto the existing edge's meta instead.
+                const existing = fileEdges.get(fileKey)!;
+                const meta = (existing.meta ?? {}) as Record<string, unknown>;
+                if (!meta.dynamic) {
+                    meta.dynamic = true;
+                    existing.meta = meta;
+                }
+            } else if (site.kind === 'cjs-require') {
+                // Static walk runs first; when a cjs-require targets the same file,
+                // the dedup short-circuit above would silently drop `cjsRequire: true`.
+                // Merge it onto the existing edge's meta instead.
+                const existing = fileEdges.get(fileKey)!;
+                const meta = (existing.meta ?? {}) as Record<string, unknown>;
+                if (!meta.cjsRequire) {
+                    meta.cjsRequire = true;
+                    existing.meta = meta;
+                }
             }
         }
 
@@ -192,11 +228,11 @@ export function mapImportsToGraph(
         diagnostics: {
             unresolvedImports,
             dynamicImports,
-            cjsRequires: [],
+            cjsRequires,
             counts: {
                 totalStatic,
                 totalDynamic,
-                totalCjsRequire: 0,
+                totalCjsRequire,
                 resolvedToOwner,
                 externalOrUnresolved,
                 unresolvedInternal,

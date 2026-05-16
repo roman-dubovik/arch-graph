@@ -280,7 +280,7 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         fileLevel: cfg.imports?.fileLevel === true,
     });
     process.stdout.write(
-        `  nodes: ${importsMapped.nodes.length}, edges: ${importsMapped.edges.length}, unresolvedInternal: ${importsMapped.diagnostics.counts.unresolvedInternal}, externalOrUnresolved: ${importsMapped.diagnostics.counts.externalOrUnresolved}, dynamic: ${importsMapped.diagnostics.counts.totalDynamic}\n`,
+        `  nodes: ${importsMapped.nodes.length}, edges: ${importsMapped.edges.length}, unresolvedInternal: ${importsMapped.diagnostics.counts.unresolvedInternal}, externalOrUnresolved: ${importsMapped.diagnostics.counts.externalOrUnresolved}, dynamic: ${importsMapped.diagnostics.counts.totalDynamic}, cjsRequire: ${importsMapped.diagnostics.counts.totalCjsRequire}\n`,
     );
 
     // ---- Compose ----
