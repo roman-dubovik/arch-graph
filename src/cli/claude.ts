@@ -10,6 +10,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { appendBlock, replaceMarkedSection, stripMarkedSection } from './marker-block.js';
+import { registerProject } from './project-registry.js';
 
 export const MARK_START = '<!-- arch-graph:start -->';
 export const MARK_END = '<!-- arch-graph:end -->';
@@ -83,6 +84,7 @@ export async function claudeInstall(args: ClaudeArgs): Promise<void> {
         : appendBlock(body, block);
 
     await writeFile(args.target, next, 'utf8');
+    await registerProject(dirname(args.target));
     process.stdout.write(`✓ wrote arch-graph section to ${args.target}\n`);
 
     if (args.installSkill) {

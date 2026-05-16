@@ -9,11 +9,12 @@
 import { existsSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { createInterface } from 'node:readline/promises';
-import { relative, resolve } from 'node:path';
+import { dirname, relative, resolve } from 'node:path';
 import { stdin as input, stdout as output } from 'node:process';
 
 import { claudeInstall } from './claude.js';
 import * as hooksModule from './hooks.js';
+import { registerProject } from './project-registry.js';
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
@@ -285,6 +286,7 @@ export async function runInitWizard(target: string): Promise<void> {
     // ── Non-interactive fallback ──────────────────────────────────────────────
     if (!process.stdin.isTTY) {
         await writeFile(targetPath, INIT_TEMPLATE, 'utf8');
+        await registerProject(dirname(targetPath));
         process.stdout.write(`wrote ${targetPath}\n`);
         return;
     }
@@ -368,6 +370,7 @@ export async function runInitWizard(target: string): Promise<void> {
 
     const configContent = buildConfigTemplate(answers);
     await writeFile(targetPath, configContent, 'utf8');
+    await registerProject(dirname(targetPath));
     output.write(`✓ wrote ${targetPath}\n`);
 
     // ── Claude integration ────────────────────────────────────────────────────
