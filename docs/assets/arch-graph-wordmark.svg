@@ -1,0 +1,13 @@
+<svg width="360" height="96" viewBox="0 0 360 96" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="arch-graph logo">
+  <rect width="360" height="96" rx="16" fill="#0A0A0F"/>
+  <g transform="translate(28 24)" stroke="#7DD3FC" stroke-width="3" stroke-linecap="square" stroke-linejoin="miter">
+    <path d="M12 40L24 8L36 40"/>
+    <path d="M16.5 27H31.5"/>
+    <circle cx="24" cy="8" r="3.4" fill="#0A0A0F"/>
+    <circle cx="12" cy="40" r="3.4" fill="#0A0A0F"/>
+    <circle cx="36" cy="40" r="3.4" fill="#0A0A0F"/>
+    <circle cx="16.5" cy="27" r="2.8" fill="#0A0A0F"/>
+    <circle cx="31.5" cy="27" r="2.8" fill="#0A0A0F"/>
+  </g>
+  <text x="84" y="57" fill="#F8FAFC" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="31" font-weight="700" letter-spacing="-1">arch-graph</text>
+</svg>

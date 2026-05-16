@@ -474,8 +474,7 @@ code {
 .core-mono  { fill: var(--accent-2); font-size: 13px; }
 .core-mark .core-mark-leg,
 .core-mark .core-mark-bar { stroke: var(--accent); filter: drop-shadow(0 0 6px var(--accent-glow)); }
-.core-mark .core-mark-node.major { fill: var(--accent); stroke: none; }
-.core-mark .core-mark-node.minor { fill: var(--bg-elev); stroke: var(--accent); stroke-width: 1.4; }
+.core-mark .core-mark-node { fill: var(--bg-elev); stroke: var(--accent); stroke-width: 1.6; }
 @keyframes coreMarkBreathe {
   0%, 100% { opacity: 0.85; }
   50%      { opacity: 1; }

@@ -1,0 +1,26 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="1200" height="630" fill="#0A0A0F"/>
+<path d="M0 110H1200M0 315H1200M0 520H1200M240 0V630M600 0V630M960 0V630" stroke="#1E293B" stroke-width="1" stroke-dasharray="8 12" opacity="0.55"/>
+<g transform="translate(96 102) scale(5.2)" stroke="#7DD3FC" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter">
+  <path d="M8 26L16 6L24 26"/>
+  <path d="M11 18H21"/>
+  <circle cx="16" cy="6" r="2.2" fill="#0A0A0F"/>
+  <circle cx="8" cy="26" r="2.2" fill="#0A0A0F"/>
+  <circle cx="24" cy="26" r="2.2" fill="#0A0A0F"/>
+  <circle cx="11" cy="18" r="1.9" fill="#0A0A0F"/>
+  <circle cx="21" cy="18" r="1.9" fill="#0A0A0F"/>
+</g>
+<text x="340" y="218" fill="#F8FAFC" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="76" font-weight="800" letter-spacing="-3">arch-graph</text>
+<rect x="342" y="258" width="90" height="4" fill="#8B9EFF"/>
+<text x="340" y="344" fill="#CBD5E1" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="34">Source code in, typed graph out —</text>
+<text x="340" y="394" fill="#CBD5E1" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="34">deterministic, sub-second.</text>
+<g stroke="#8B9EFF" stroke-width="3" stroke-linecap="square" stroke-linejoin="miter" opacity="0.95">
+  <rect x="870" y="310" width="70" height="70"/>
+  <path d="M802 230L905 310M905 380L1015 470M905 310L1018 235M820 470L905 380"/>
+  <circle cx="802" cy="230" r="18" fill="#0A0A0F"/>
+  <circle cx="1018" cy="235" r="18" fill="#0A0A0F"/>
+  <circle cx="1015" cy="470" r="18" fill="#0A0A0F"/>
+  <circle cx="820" cy="470" r="18" fill="#0A0A0F"/>
+</g>
+<text x="884" y="355" fill="#7DD3FC" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="30">&lt;/&gt;</text>
+</svg>

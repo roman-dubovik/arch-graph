@@ -1,0 +1,13 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="arch-graph icon two-tone">
+  <title>arch-graph</title>
+  <g stroke-width="2" stroke-linecap="square" stroke-linejoin="miter">
+    <path d="M8 26L16 6" stroke="#7DD3FC"/>
+    <path d="M16 6L24 26" stroke="#8B9EFF"/>
+    <path d="M11 18H21" stroke="#7DD3FC"/>
+    <circle cx="16" cy="6" r="2.2" fill="#0A0A0F" stroke="#7DD3FC"/>
+    <circle cx="8" cy="26" r="2.2" fill="#0A0A0F" stroke="#7DD3FC"/>
+    <circle cx="24" cy="26" r="2.2" fill="#0A0A0F" stroke="#8B9EFF"/>
+    <circle cx="11" cy="18" r="1.9" fill="#0A0A0F" stroke="#7DD3FC"/>
+    <circle cx="21" cy="18" r="1.9" fill="#0A0A0F" stroke="#8B9EFF"/>
+  </g>
+</svg>

@@ -1,13 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <!-- arch-graph mark: stylised "A" assembled from graph primitives -->
-  <g fill="none" stroke="#7DD3FC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M16 5 L5 27" />
-    <path d="M16 5 L27 27" />
-    <path d="M9 19 L23 19" />
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="arch-graph icon">
+  <title>arch-graph</title>
+  <g stroke="#7DD3FC" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter">
+    <path d="M8 26L16 6L24 26"/>
+    <path d="M11 18H21"/>
+    <circle cx="16" cy="6" r="2.2" fill="#0A0A0F"/>
+    <circle cx="8" cy="26" r="2.2" fill="#0A0A0F"/>
+    <circle cx="24" cy="26" r="2.2" fill="#0A0A0F"/>
+    <circle cx="11" cy="18" r="1.9" fill="#0A0A0F"/>
+    <circle cx="21" cy="18" r="1.9" fill="#0A0A0F"/>
   </g>
-  <circle cx="16" cy="5" r="2.5" fill="#7DD3FC" />
-  <circle cx="5" cy="27" r="2.5" fill="#7DD3FC" />
-  <circle cx="27" cy="27" r="2.5" fill="#7DD3FC" />
-  <circle cx="9" cy="19" r="1.7" fill="#0A0A0F" stroke="#7DD3FC" stroke-width="1.4" />
-  <circle cx="23" cy="19" r="1.7" fill="#0A0A0F" stroke="#7DD3FC" stroke-width="1.4" />
 </svg>
