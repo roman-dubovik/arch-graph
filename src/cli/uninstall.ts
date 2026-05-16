@@ -356,41 +356,73 @@ function hasAnyGlobal(g: GlobalInventory): boolean {
 
 // ─── actions ─────────────────────────────────────────────────────────────────
 
-export async function removeProjectArtefacts(inv: ProjectInventory): Promise<void> {
+/**
+ * Returns `true` if every artefact in the inventory was removed without error,
+ * `false` if any single fs operation failed (the error is logged to stderr and
+ * subsequent artefacts still attempted). The wizard uses the boolean to set
+ * `hadError` — mirrors the contract of `removeMcpRegistrations` /
+ * `removeGlobalInstall` so all three scopes route through the same
+ * structured exit path instead of escaping as unhandled rejections.
+ */
+export async function removeProjectArtefacts(inv: ProjectInventory): Promise<boolean> {
+    let ok = true;
+
     if (inv.claudeMdWithBlock) {
-        const body = await readFile(inv.claudeMdWithBlock, 'utf8');
-        const stripped = stripMarkedSection(body, CLAUDE_MARK_START, CLAUDE_MARK_END);
-        await writeFile(inv.claudeMdWithBlock, stripped, 'utf8');
-        output.write(`✓ removed arch-graph section from ${inv.claudeMdWithBlock}\n`);
+        try {
+            const body = await readFile(inv.claudeMdWithBlock, 'utf8');
+            const stripped = stripMarkedSection(body, CLAUDE_MARK_START, CLAUDE_MARK_END);
+            await writeFile(inv.claudeMdWithBlock, stripped, 'utf8');
+            output.write(`✓ removed arch-graph section from ${inv.claudeMdWithBlock}\n`);
+        } catch (err) {
+            process.stderr.write(`⚠ arch-graph: failed to clean ${inv.claudeMdWithBlock}: ${(err as Error).message}\n`);
+            ok = false;
+        }
     }
 
     if (inv.hookWithBlock) {
         const { path } = inv.hookWithBlock;
-        const body = await readFile(path, 'utf8');
-        const stripped = stripMarkedSection(body, HOOK_MARK_START, HOOK_MARK_END);
-        const meaningful = stripped
-            .split('\n')
-            .map((l) => l.trim())
-            .filter((l) => l.length > 0 && !l.startsWith('#'))
-            .join('');
-        if (meaningful.length === 0) {
-            await unlink(path);
-            output.write(`✓ removed empty hook ${path}\n`);
-        } else {
-            await writeFile(path, stripped, 'utf8');
-            output.write(`✓ removed arch-graph block from ${path}\n`);
+        try {
+            const body = await readFile(path, 'utf8');
+            const stripped = stripMarkedSection(body, HOOK_MARK_START, HOOK_MARK_END);
+            const meaningful = stripped
+                .split('\n')
+                .map((l) => l.trim())
+                .filter((l) => l.length > 0 && !l.startsWith('#'))
+                .join('');
+            if (meaningful.length === 0) {
+                await unlink(path);
+                output.write(`✓ removed empty hook ${path}\n`);
+            } else {
+                await writeFile(path, stripped, 'utf8');
+                output.write(`✓ removed arch-graph block from ${path}\n`);
+            }
+        } catch (err) {
+            process.stderr.write(`⚠ arch-graph: failed to clean hook ${path}: ${(err as Error).message}\n`);
+            ok = false;
         }
     }
 
     if (inv.config) {
-        await rm(inv.config, { force: true });
-        output.write(`✓ removed ${inv.config}\n`);
+        try {
+            await rm(inv.config, { force: true });
+            output.write(`✓ removed ${inv.config}\n`);
+        } catch (err) {
+            process.stderr.write(`⚠ arch-graph: failed to remove ${inv.config}: ${(err as Error).message}\n`);
+            ok = false;
+        }
     }
 
     if (inv.outDir) {
-        await rm(inv.outDir.path, { recursive: true, force: true });
-        output.write(`✓ removed ${inv.outDir.path}\n`);
+        try {
+            await rm(inv.outDir.path, { recursive: true, force: true });
+            output.write(`✓ removed ${inv.outDir.path}\n`);
+        } catch (err) {
+            process.stderr.write(`⚠ arch-graph: failed to remove ${inv.outDir.path}: ${(err as Error).message}\n`);
+            ok = false;
+        }
     }
+
+    return ok;
 }
 
 /**
@@ -647,6 +679,8 @@ export async function runUninstallWizard(args: UninstallArgs): Promise<void> {
         process.exit(2);
     }
 
+    let hadError = false;
+
     // ── Execute in safe order: project → mcp → global ────────────────────────
     if (scopes.has('project')) {
         if (projectsWithArtefacts.length === 0) {
@@ -654,13 +688,15 @@ export async function runUninstallWizard(args: UninstallArgs): Promise<void> {
         } else {
             for (const { path, inv: pinv } of projectsWithArtefacts) {
                 output.write(`\n→ ${path}\n`);
-                await removeProjectArtefacts(pinv);
+                const ok = await removeProjectArtefacts(pinv);
+                if (!ok) hadError = true;
+                // Always try to unregister — if some artefacts failed they're
+                // logged separately. Leaving a stale registry entry is worse
+                // than the partial-removal already reported.
                 await unregisterProject(path);
             }
         }
     }
-
-    let hadError = false;
 
     if (scopes.has('mcp') && inv.mcp.projectsWithEntry.length > 0) {
         const ok = await removeMcpRegistrations(inv.mcp);
