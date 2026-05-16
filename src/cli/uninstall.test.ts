@@ -534,13 +534,13 @@ describe('removeMcpRegistrations', () => {
         }
     });
 
-    it('corrupt JSON → no-op, no throw', async () => {
+    it('corrupt JSON → returns false (caller will set hadError), file unchanged', async () => {
         const dir = await mkdtemp(join(tmpdir(), 'ag-test-'));
         try {
             const cfg = join(dir, '.claude.json');
             await writeFile(cfg, 'not json{{{');
-            await removeMcpRegistrations({ configPath: cfg, projectsWithEntry: ['/a'] });
-            // File content unchanged.
+            const ok = await removeMcpRegistrations({ configPath: cfg, projectsWithEntry: ['/a'] });
+            expect(ok).toBe(false);
             const after = await readFile(cfg, 'utf8');
             expect(after).toBe('not json{{{');
         } finally {
@@ -548,9 +548,21 @@ describe('removeMcpRegistrations', () => {
         }
     });
 
-    it('no configPath → no-op', async () => {
-        // No throw, no fs ops.
-        await removeMcpRegistrations({ configPath: null, projectsWithEntry: [] });
+    it('clean removal → returns true', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 'ag-test-'));
+        try {
+            const cfg = join(dir, '.claude.json');
+            await writeFile(cfg, JSON.stringify({ projects: { '/a': { mcpServers: { 'arch-graph': {} } } } }));
+            const ok = await removeMcpRegistrations({ configPath: cfg, projectsWithEntry: ['/a'] });
+            expect(ok).toBe(true);
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+        }
+    });
+
+    it('no configPath → returns true (nothing to do)', async () => {
+        const ok = await removeMcpRegistrations({ configPath: null, projectsWithEntry: [] });
+        expect(ok).toBe(true);
     });
 });
 
