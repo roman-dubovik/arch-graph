@@ -117,6 +117,31 @@ export default defineConfig({
                     functions: 85,
                     branches: 70,
                 },
+                // Task 1 — Semantic foundation (standard gate: 95/95/95/90)
+                'src/semantic/types.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                'src/semantic/embedder.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                'src/semantic/snippet.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                'src/semantic/io.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
             },
         },
     },
