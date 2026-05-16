@@ -237,6 +237,15 @@ npx tsc --noEmit                                  # typecheck
 
 `configs/example.config.ts` is a starter template — copy it to `configs/<your-id>.config.ts`, point `root` at your NestJS monorepo, and pass it via `--config`.
 
+### Integration test
+
+Runs a full install→init→build→stats→queries→integrations flow on a synthetic NestJS fixture in a sandboxed `$TMPDIR`. No external dependencies beyond `node` and `jq`.
+
+```
+npm run test:integration             # uses the current clone
+npm run test:integration:remote      # clones from github fresh
+```
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

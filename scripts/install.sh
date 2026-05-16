@@ -48,7 +48,8 @@ resolve_source() {
     # use that path as the clone source (covers "bash scripts/install.sh"
     # from a `git clone` the user just made).
     SELF_DIR=$(cd -P "$(dirname "$0")/.." 2>/dev/null && pwd || true)
-    if [ -n "$SELF_DIR" ] && [ -d "$SELF_DIR/.git" ] && [ -f "$SELF_DIR/package.json" ]; then
+    # Accept both a regular .git directory and a worktree .git file pointer.
+    if [ -n "$SELF_DIR" ] && [ -e "$SELF_DIR/.git" ] && [ -f "$SELF_DIR/package.json" ]; then
         # Make sure it's actually arch-graph, not some other repo
         if grep -q '"name": *"arch-graph"' "$SELF_DIR/package.json" 2>/dev/null; then
             echo "$SELF_DIR"
