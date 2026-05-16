@@ -29,9 +29,13 @@ import { resolveUrl } from './url-resolver.js';
  * Out of scope (documented in OPEN-QUESTIONS Block B):
  *   - Wrapper services (`this.platformApiClient.fetchUser(id)`) — no auto-discovery.
  *   - `axios.create({ baseURL })` cross-statement tracking — client variable bindings
- *     are not traced. Inline `axios.create({...}).get(url)` chains ARE detected and
- *     emitted as unresolved (so they balance the GT regex); the URL itself can't be
- *     attributed to a service without resolving `baseURL`.
+ *     are not traced. Inline `axios.create({...}).get(url)` chains ARE detected (via
+ *     a structural AST check: receiver must be `CallExpression` on callee `axios.create`)
+ *     and emitted as unresolved so they balance the GT regex. Deferred because: across
+ *     all 5 reference projects, `axios.create` is called without `baseURL` (only
+ *     `timeout`/`headers`), so taint-tracking would yield zero useful URLs. A full
+ *     implementation requires `Map<varName, ResolvedUrlBase>` with scope-boundary
+ *     clearing (~150 LOC) for no gain on the current corpus.
  *   - GraphQL / tRPC / gRPC — separate domain entirely.
  */
 
@@ -125,14 +129,21 @@ function collectFromFile(sf: SourceFile, idx: ConstantIndex, out: HttpCallSite[]
 
         // -- `axios.create({...}).<method>(url, ...)` chain ----------------------------
         // The receiver is itself a CallExpression. Unwrap one level and check whether the
-        // callee is `axios.create` (or `*.create` where * names an axios import). Emit
-        // unresolved — we can't statically know what `baseURL` was bound, so the URL arg
-        // alone is meaningless without the base. The GT regex sees this pattern too
-        // (AXIOS_CREATE_RE), so recall stays balanced.
+        // callee is exactly `axios.create` (property-access on the `axios` identifier).
+        // We do NOT accept `foo.create().<method>()` — that's an over-match that would
+        // catch any factory pattern. The GT regex (AXIOS_CREATE_RE) matches only the
+        // literal `axios.create(...)` prefix, so this check must stay aligned.
+        // Cross-statement tracking (`const client = axios.create(...); client.get(...)`)
+        // is deliberately deferred — see the out-of-scope comment at top of file.
         if (target.getKind() === SyntaxKind.CallExpression) {
             const innerCall = target as CallExpression;
-            const innerCalleeText = innerCall.getExpression().getText();
-            if (innerCalleeText === 'axios.create' || innerCalleeText.endsWith('.create')) {
+            const innerCallee = innerCall.getExpression();
+            const isAxiosCreate =
+                innerCallee.getKind() === SyntaxKind.PropertyAccessExpression &&
+                (innerCallee as PropertyAccessExpression).getName() === 'create' &&
+                (innerCallee as PropertyAccessExpression).getExpression().getKind() === SyntaxKind.Identifier &&
+                (innerCallee as PropertyAccessExpression).getExpression().getText() === 'axios';
+            if (isAxiosCreate) {
                 out.push({
                     role: 'call',
                     url: {

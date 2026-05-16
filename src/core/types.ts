@@ -611,18 +611,6 @@ export interface HttpDiagnostics {
     unresolved: HttpCallSite[];
     /** Sites outside apps/ and libs/. */
     unowned: HttpCallSite[];
-    /**
-     * Sites that produced an `http-external` graph edge to `external:<hostname>`.
-     * Note: the *validator's* `summary.external` counts a wider set ("not classified
-     * internal"), which includes env-refs that don't match any internal-service entry
-     * and therefore never produce an edge. The two semantics differ by design — see
-     * `HttpValidationReport.summary` for the metric-view definition.
-     *
-     * Renamed from `external` to `externalCalls` to avoid collision with the scalar
-     * count `summary.external` in `HttpValidationReport` — the array view and the
-     * count view are now textually distinguishable.
-     */
-    externalCalls: HttpCallSite[];
     counts: {
         totalSites: number;
         literal: number;
@@ -723,6 +711,22 @@ export interface HttpValidationReport {
         internal: number;
         external: number;
         unresolvedClassification: number;
+    };
+    /**
+     * Informational data that is neither a recall miss nor an error — successfully
+     * classified call sites that fall outside the internal-service graph.
+     *
+     * Separated from `HttpDiagnostics` (which only contains failures: `unresolved`
+     * and `unowned`) to reflect the semantic asymmetry: `externalCalls` entries are
+     * correctly extracted and correctly classified; they are NOT diagnostic failures.
+     *
+     * `externalCalls` uses the validator's classification view (same pass as
+     * `summary.external`), which counts *both* external-literal sites (that produce a
+     * graph edge) and env-refs unmatched to any internal service (diagnostic-only, no
+     * graph edge). For the narrower graph-edge-only count, see `HttpDiagnostics.counts.external`.
+     */
+    informational: {
+        externalCalls: HttpCallSite[];
     };
     sites: HttpCallSite[];
     groundTruth: HttpGroundTruthEntry[];
