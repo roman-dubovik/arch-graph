@@ -22,6 +22,7 @@ import { assembleGraph, buildNatsDiagnostics, mapNatsToGraph } from '../mapper/n
 import { mapTypeOrmToGraph } from '../mapper/typeorm-to-graph.js';
 import { mapEndpointsToGraph } from '../mapper/endpoint-to-graph.js';
 import { mapConfigToGraph } from '../mapper/config-to-graph.js';
+import { mapEntityFieldsToGraph } from '../mapper/entity-fields-to-graph.js';
 import { enumerateBullMqGroundTruth, buildBullMqReport } from '../validation/bullmq-validator.js';
 import { enumerateDiGroundTruth, buildDiReport } from '../validation/di-validator.js';
 import { enumerateHandlers } from '../validation/handlers.js';
@@ -300,7 +301,9 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
     );
 
     process.stdout.write(`validating endpoints against ground truth...\n`);
-    const endpointValidation = validateEndpoints(cfg.root, endpoints.endpoints.length);
+    const endpointValidation = await stage(`[${cfg.id}] endpoint.GT`, () =>
+        validateEndpoints(cfg, endpoints.endpoints.length),
+    );
     process.stdout.write(
         `  groundTruth: ${endpointValidation.groundTruthCount}, recall: ${endpointValidation.recall !== null ? pct(endpointValidation.recall) : 'N/A'}\n`,
     );
@@ -320,7 +323,9 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
     );
 
     process.stdout.write(`validating config against ground truth...\n`);
-    const configValidation = validateConfig(cfg.root, config.fields.length);
+    const configValidation = await stage(`[${cfg.id}] config.GT`, () =>
+        validateConfig(cfg, config.fields.length),
+    );
     process.stdout.write(
         `  groundTruth: ${configValidation.groundTruthCount}, recall: ${configValidation.recall !== null ? pct(configValidation.recall) : 'N/A'}\n`,
     );
@@ -342,10 +347,16 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
     process.stdout.write(`extracting db entity fields...\n`);
     t0 = Date.now();
     const dbEntityFields = await stage(`[${cfg.id}] dbEntityFields.extract`, () =>
-        extractEntityFields(Array.from(typeorm.entities.entries())),
+        extractEntityFields(Array.from(typeorm.entities.entries()), project),
     );
     process.stdout.write(
         `  ${dbEntityFields.fields.length} entity fields in ${Date.now() - t0}ms\n`,
+    );
+
+    process.stdout.write(`mapping db entity fields to graph...\n`);
+    const entityFieldsMapped = mapEntityFieldsToGraph(dbEntityFields.fields);
+    process.stdout.write(
+        `  nodes: ${entityFieldsMapped.nodes.length}, edges: ${entityFieldsMapped.edges.length}\n`,
     );
 
     // ---- Compose ----
@@ -358,6 +369,7 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         importsMapped,
         endpointsMapped,
         configMapped,
+        entityFieldsMapped,
     ]);
 
     // ---- Cycle detection ----

@@ -157,6 +157,57 @@ export default defineConfig({
                     functions: 95,
                     branches: 90,
                 },
+                // Var 2 — Endpoint extractor + mapper + validator
+                'src/extractors/endpoint/extractor.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                'src/mapper/endpoint-to-graph.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                'src/validation/endpoint-validator.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                // Var 2 — Config extractor + mapper + validator
+                'src/extractors/config/extractor.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                'src/mapper/config-to-graph.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                'src/validation/config-validator.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                // Var 2 — db-entity-field extractor + mapper
+                'src/extractors/typeorm/fields.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                'src/mapper/entity-fields-to-graph.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
             },
         },
     },
