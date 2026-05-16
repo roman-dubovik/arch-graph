@@ -19,8 +19,21 @@
 # this repo against five private NestJS monorepos that are not part of the
 # public release.
 #
-# Categories (count): nats-pubsub (4), bullmq (2), typeorm (2), di (2),
-# http (1), ts-imports / libs (2), multi-hop (2).
+# Total: 30 questions, 6 per project (A, B, C, D, E).
+#
+# Categories (count): nats (4), bullmq (2), typeorm (2), di (4), http (1),
+# lib / ts-imports (1), multi-hop (2), cross-domain (5), refactor-impact (5),
+# negative (3), diagnostics (1).
+#
+# Some categories below (notably `diagnostics`) target information that lives
+# in `diagnostics.json`, not `graph.json`. The current bench scorer only
+# serializes `graph.json` and runs substring-presence checks on it — so
+# `diagnostics`-category questions are **informational** for now: they
+# document a class of architectural query arch-graph is designed to answer,
+# but the automated recall score for them will reflect whatever fragments of
+# the diagnostic context leak into graph.json (often zero). They are kept in
+# the YAML so the taxonomy is complete and so a future scorer that ingests
+# `diagnostics.json` can pick them up automatically.
 
 # ─── NATS pub/sub paths ────────────────────────────────────────────────────
 - id: q01
@@ -225,3 +238,248 @@
     - api-main
     - libs/nest-shared
     - outbox_events
+
+# ─── Extended question set (q16–q30) ──────────────────────────────────────
+# Questions below are grouped by id, not category, to keep diffs minimal.
+# Each question's `category` field is the source of truth for taxonomy:
+#
+#   - cross-domain    join across two edge kinds (e.g. queue + table)
+#   - refactor-impact "if I rename / drop X, what breaks?"
+#   - negative        boolean "is there ANY producer/subscriber/user?"
+#   - diagnostics     answer lives in diagnostics.json (informational —
+#                     see header note above on scorer coverage)
+#   - di              transitive di-import closure
+#
+# See bench/report.md → "Question taxonomy" for the prose explanation.
+
+- id: q16
+  project: D
+  category: refactor-impact
+  difficulty: medium
+  question: >-
+    If I rename the 'scraper' service, which BullMQ queues, HTTP endpoints,
+    and Nest modules in this project carry an edge that references it and
+    therefore have to be updated?
+  ground_truth_ids:
+    - service:scraper
+  ground_truth_labels:
+    - scraper
+    - scraper-jobs
+    - http-external
+
+- id: q17
+  project: B
+  category: cross-domain
+  difficulty: hard
+  question: >-
+    Which service replies to the NATS subject 'cron.register' AND reads from
+    the 'posts' TypeORM table?
+  ground_truth_ids:
+    - service:cron-service
+  ground_truth_labels:
+    - cron-service
+    - cron.register
+    - posts
+
+- id: q18
+  project: E
+  category: cross-domain
+  difficulty: hard
+  question: >-
+    Which service publishes on a NATS subject under 'notifications.*' AND
+    accesses the 'promocodes' TypeORM table?
+  ground_truth_ids:
+    - service:api-main
+  ground_truth_labels:
+    - api-main
+    - promocodes
+    - notifications
+
+- id: q19
+  project: C
+  category: cross-domain
+  difficulty: hard
+  question: >-
+    Which component is on the producer side of the 'outbox_events' table AND
+    is imported as a NestJS module under the 'NotificationModule' dependency
+    tree?
+  ground_truth_ids:
+    - service:api-main
+    - lib:libs/nest-shared
+  ground_truth_labels:
+    - api-main
+    - libs/nest-shared
+    - outbox_events
+    - NotificationModule
+
+- id: q20
+  project: D
+  category: cross-domain
+  difficulty: hard
+  question: >-
+    Which service both consumes from the 'scraper-jobs' BullMQ queue AND
+    makes outbound HTTP calls classified as 'http-external'?
+  ground_truth_ids:
+    - service:scraper
+  ground_truth_labels:
+    - scraper
+    - scraper-jobs
+    - http-external
+
+- id: q21
+  project: D
+  category: negative
+  difficulty: easy
+  question: >-
+    Is there any other service in this project besides 'scraper' that
+    produces jobs on the 'scraper-jobs' BullMQ queue?
+  ground_truth_ids:
+    - service:scraper
+  ground_truth_labels:
+    - scraper
+    - scraper-jobs
+
+- id: q22
+  project: B
+  category: refactor-impact
+  difficulty: medium
+  question: >-
+    If the global 'ConfigModule' is removed from the dependency graph,
+    which Nest modules in this project would fail to bootstrap?
+  ground_truth_ids:
+    - module:AiModule
+    - module:ConfigDiagnosticsModule
+    - module:CronModule
+  ground_truth_labels:
+    - ConfigModule
+    - AiModule
+    - ConfigDiagnosticsModule
+    - CronModule
+
+- id: q23
+  project: C
+  category: refactor-impact
+  difficulty: hard
+  question: >-
+    If I drop the 'outbox_events' TypeORM table, which services and shared
+    libraries need to be re-wired?
+  ground_truth_ids:
+    - service:api-main
+    - lib:libs/nest-shared
+  ground_truth_labels:
+    - api-main
+    - libs/nest-shared
+    - outbox_events
+
+- id: q24
+  project: D
+  category: refactor-impact
+  difficulty: medium
+  question: >-
+    If the 'scraper-jobs' BullMQ queue is renamed, which services need to be
+    updated on both producer and consumer sides?
+  ground_truth_ids:
+    - service:scraper
+  ground_truth_labels:
+    - scraper
+    - scraper-jobs
+
+- id: q25
+  project: E
+  category: refactor-impact
+  difficulty: hard
+  question: >-
+    If 'NatsClientModule' is renamed, which Nest modules import it and
+    therefore need updating?
+  ground_truth_ids:
+    - module:ApiModule
+    - module:CronModule
+    - module:MailModule
+  ground_truth_labels:
+    - NatsClientModule
+    - ApiModule
+    - CronModule
+    - MailModule
+
+- id: q26
+  project: E
+  category: cross-domain
+  difficulty: hard
+  question: >-
+    Which Nest module imports 'NatsClientModule' AND belongs to a service
+    that accesses the 'promocodes' TypeORM table?
+  ground_truth_ids:
+    - module:ApiModule
+    - service:api-main
+  ground_truth_labels:
+    - ApiModule
+    - api-main
+    - NatsClientModule
+    - promocodes
+
+- id: q27
+  project: B
+  category: negative
+  difficulty: medium
+  question: >-
+    Is there any handler (subscribe or reply) for the NATS subject
+    'cron.register' in this project? If yes, which service owns it?
+  ground_truth_ids:
+    - service:cron-service
+  ground_truth_labels:
+    - cron-service
+    - cron.register
+
+- id: q28
+  project: E
+  category: negative
+  difficulty: medium
+  question: >-
+    Does any service besides 'api-main' write to the 'promocodes' TypeORM
+    table?
+  ground_truth_ids:
+    - service:data-integration
+  ground_truth_labels:
+    - data-integration
+    - promocodes
+
+# ─── Diagnostics surfacing (diagnostics.json) ─────────────────────────────
+# Questions whose answer lives in diagnostics.json (dynamic subjects,
+# unresolved queue names, opaque HTTP URLs). The current bench scorer does
+# not ingest diagnostics.json, so the automated recall for these questions
+# is informational only — see the header comment above.
+
+- id: q29
+  project: D
+  category: diagnostics
+  difficulty: medium
+  question: >-
+    Which HTTP call-sites in the 'scraper' service have URLs arch-graph
+    could not resolve to a static target (template strings, env-refs,
+    dynamic concatenation) and were emitted as diagnostics?
+  ground_truth_ids: []
+  ground_truth_labels:
+    - scraper
+    - unresolved
+
+# ─── Module DI traversal (multi-hop import closure) ───────────────────────
+# Indirect import: "which services *eventually* import AuthModule?".
+# Different from q09/q10 (direct imports) — these require following the
+# di-import edge transitively.
+
+- id: q30
+  project: C
+  category: di
+  difficulty: hard
+  question: >-
+    Which Nest modules transitively (directly or via another imported
+    module) end up importing 'NatsModule'? Walk the di-import edge.
+  ground_truth_ids:
+    - module:AiModule
+    - module:CronModule
+    - module:NotificationModule
+  ground_truth_labels:
+    - NatsModule
+    - AiModule
+    - CronModule
+    - NotificationModule
