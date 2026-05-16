@@ -1,9 +1,11 @@
 import type {
     DiControllerRef,
     DiDiagnostics,
+    DiFilterChainRef,
     DiModuleRef,
     DiModuleSite,
     DiProviderRef,
+    EdgeKind,
     GraphEdge,
     GraphNode,
 } from '../core/types.js';
@@ -39,6 +41,7 @@ export function mapDiToGraph(
     modules: DiModuleSite[],
     moduleIndex: DiModuleIndex,
     ownership: OwnershipRegistry,
+    filterChain: DiFilterChainRef[] = [],
 ): MapDiResult {
     const moduleNodes = new Map<string, GraphNode>();
     const providerNodes = new Map<string, GraphNode>();
@@ -123,13 +126,56 @@ export function mapDiToGraph(
         }
     }
 
+    // Filter-chain edges: @UseGuards / @UseInterceptors / @UsePipes
+    const unresolvedFilterRefs: DiFilterChainRef[] = [];
+    let guardsCount = 0;
+    let interceptorsCount = 0;
+    let pipesCount = 0;
+
+    for (const ref of filterChain) {
+        if (ref.kind === 'unresolved') {
+            unresolvedFilterRefs.push(ref);
+            continue;
+        }
+
+        const fromId = ensureNamedProviderNode(providerNodes, ref.enclosingClass);
+        const toId = ensureNamedProviderNode(providerNodes, ref.name);
+
+        const edgeKind = filterDecoratorToEdgeKind(ref.decorator);
+        const attachedToStr =
+            ref.attachedTo.kind === 'class'
+                ? 'class'
+                : `method:${ref.attachedTo.methodName}`;
+        const meta: Record<string, unknown> = {
+            decorator: ref.decorator,
+            attachedTo: attachedToStr,
+            ...(ref.kind === 'instance' ? { instantiated: true } : {}),
+        };
+
+        const key = `${edgeKind}:${fromId}->${toId}`;
+        if (!edges.has(key)) {
+            edges.set(key, {
+                id: key,
+                from: fromId,
+                to: toId,
+                kind: edgeKind,
+                file: ref.location.file,
+                line: ref.location.line,
+                meta,
+            });
+            if (ref.decorator === 'UseGuards') guardsCount++;
+            else if (ref.decorator === 'UseInterceptors') interceptorsCount++;
+            else pipesCount++;
+        }
+    }
+
     return {
         nodes: [...moduleNodes.values(), ...providerNodes.values()],
         edges: [...edges.values()],
         diagnostics: {
             unresolvedRefs,
             unowned,
-            unresolvedFilterRefs: [],
+            unresolvedFilterRefs,
             counts: {
                 modules: modules.length,
                 imports: importsCount,
@@ -138,10 +184,10 @@ export function mapDiToGraph(
                 controllers: controllersCount,
                 unresolvedRefs: unresolvedRefs.length,
                 unowned: unowned.length,
-                guards: 0,
-                interceptors: 0,
-                pipes: 0,
-                unresolvedFilterRefs: 0,
+                guards: guardsCount,
+                interceptors: interceptorsCount,
+                pipes: pipesCount,
+                unresolvedFilterRefs: unresolvedFilterRefs.length,
             },
         },
     };
@@ -251,4 +297,22 @@ function refMeta(ref: DiModuleRef | DiProviderRef | DiControllerRef): Record<str
         return { refKind: 'token-ref' };
     }
     return {};
+}
+
+/**
+ * Ensure a provider node exists by raw class name. Used for filter-chain source
+ * and target nodes which may not have been registered via a @Module decorator.
+ */
+function ensureNamedProviderNode(nodes: Map<string, GraphNode>, name: string): string {
+    const id = `provider:${name}`;
+    if (!nodes.has(id)) {
+        nodes.set(id, { id, kind: 'provider', label: name, meta: { providerKind: 'class' } });
+    }
+    return id;
+}
+
+function filterDecoratorToEdgeKind(decorator: DiFilterChainRef['decorator']): EdgeKind {
+    if (decorator === 'UseGuards') return 'di-guard';
+    if (decorator === 'UseInterceptors') return 'di-interceptor';
+    return 'di-pipe';
 }
