@@ -132,12 +132,13 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         typeorm.entities.warnings,
         typeorm.relations,
         typeorm.entities,
+        typeorm.baseClassCycles,
     );
     {
         const c = typeormMapped.diagnostics.counts;
-        const reasons = `unparseable: ${c.unresolvedReasons.unparseable}, notIndexed: ${c.unresolvedReasons.notIndexed}`;
+        const reasons = `unparseable: ${c.unresolvedReasons.unparseable}, notIndexed: ${c.unresolvedReasons.notIndexed}, ownerNotIndexed: ${c.unresolvedReasons.ownerNotIndexed}`;
         process.stdout.write(
-            `  nodes: ${typeormMapped.nodes.length}, edges: ${typeormMapped.edges.length}, unresolved: ${typeormMapped.diagnostics.unresolvedEntities.length}, unowned: ${typeormMapped.diagnostics.unowned.length}, entityWarnings: ${typeormMapped.diagnostics.entityDecoratorWarnings.length}, relationsEmitted: ${c.relationsEmitted}, relationsResolved: ${c.relationsResolved}, oneToManySkipped: ${c.oneToManySkipped}, unresolvedRelations: ${c.unresolvedRelations} (${reasons})\n`,
+            `  nodes: ${typeormMapped.nodes.length}, edges: ${typeormMapped.edges.length}, unresolved: ${typeormMapped.diagnostics.unresolvedEntities.length}, unowned: ${typeormMapped.diagnostics.unowned.length}, entityWarnings: ${typeormMapped.diagnostics.entityDecoratorWarnings.length}, relationsEmitted: ${c.relationsEmitted}, relationsResolved: ${c.relationsResolved}, oneToManySkipped: ${c.oneToManySkipped}, unresolvedRelations: ${c.unresolvedRelations} (${reasons}), baseClassCycles: ${c.baseClassCycles}\n`,
         );
     }
 

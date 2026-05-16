@@ -232,7 +232,7 @@ describe('mapTypeOrmToGraph — db-relation edges', () => {
             `,
         });
         const entityIndex = buildEntityIndex(project);
-        const relations = extractRelations(project, entityIndex);
+        const { relations } = extractRelations(project, entityIndex);
 
         const result = mapTypeOrmToGraph([], makeOwnership(), [], relations, entityIndex);
 
@@ -263,7 +263,7 @@ describe('mapTypeOrmToGraph — db-relation edges', () => {
             `,
         });
         const entityIndex = buildEntityIndex(project);
-        const relations = extractRelations(project, entityIndex);
+        const { relations } = extractRelations(project, entityIndex);
         const result = mapTypeOrmToGraph([], makeOwnership(), [], relations, entityIndex);
 
         // No edge: @OneToMany is skipped under Policy A
@@ -290,7 +290,7 @@ describe('mapTypeOrmToGraph — db-relation edges', () => {
             `,
         });
         const entityIndex = buildEntityIndex(project);
-        const relations = extractRelations(project, entityIndex);
+        const { relations } = extractRelations(project, entityIndex);
         const result = mapTypeOrmToGraph([], makeOwnership(), [], relations, entityIndex);
 
         const relEdge = result.edges.find((e) => e.kind === 'db-relation');
@@ -315,7 +315,7 @@ describe('mapTypeOrmToGraph — db-relation edges', () => {
             `,
         });
         const entityIndex = buildEntityIndex(project);
-        const relations = extractRelations(project, entityIndex);
+        const { relations } = extractRelations(project, entityIndex);
         const result = mapTypeOrmToGraph([], makeOwnership(), [], relations, entityIndex);
 
         const relEdge = result.edges.find((e) => e.kind === 'db-relation');
@@ -340,7 +340,7 @@ describe('mapTypeOrmToGraph — db-relation edges', () => {
             `,
         });
         const entityIndex = buildEntityIndex(project);
-        const relations = extractRelations(project, entityIndex);
+        const { relations } = extractRelations(project, entityIndex);
         const result = mapTypeOrmToGraph([], makeOwnership(), [], relations, entityIndex);
 
         expect(result.diagnostics.counts.relationsEmitted).toBe(1);
@@ -368,7 +368,7 @@ describe('mapTypeOrmToGraph — db-relation edges', () => {
             `,
         });
         const entityIndex = buildEntityIndex(project);
-        const relations = extractRelations(project, entityIndex);
+        const { relations } = extractRelations(project, entityIndex);
         const result = mapTypeOrmToGraph([], makeOwnership(), [], relations, entityIndex);
 
         // ManyToOne emits 1 edge; OneToMany skipped under Policy A
@@ -392,7 +392,7 @@ describe('mapTypeOrmToGraph — db-relation edges', () => {
             `,
         });
         const entityIndex = buildEntityIndex(project);
-        const relations = extractRelations(project, entityIndex);
+        const { relations } = extractRelations(project, entityIndex);
 
         const result = mapTypeOrmToGraph([], makeOwnership(), [], relations, entityIndex);
 
@@ -424,7 +424,7 @@ describe('mapTypeOrmToGraph — db-relation edges', () => {
             `,
         });
         const entityIndex = buildEntityIndex(project);
-        const relations = extractRelations(project, entityIndex);
+        const { relations } = extractRelations(project, entityIndex);
         const result = mapTypeOrmToGraph([], makeOwnership(), [], relations, entityIndex);
 
         const relEdges = result.edges.filter((e) => e.kind === 'db-relation');
@@ -451,7 +451,7 @@ describe('mapTypeOrmToGraph — db-relation edges', () => {
             `,
         });
         const entityIndex = buildEntityIndex(project);
-        const relations = extractRelations(project, entityIndex);
+        const { relations } = extractRelations(project, entityIndex);
         const result = mapTypeOrmToGraph([], makeOwnership(), [], relations, entityIndex);
 
         const tableIds = result.nodes.filter((n) => n.kind === 'db-table').map((n) => n.id);
@@ -476,7 +476,7 @@ describe('mapTypeOrmToGraph — db-relation edges', () => {
             `,
         });
         const entityIndex = buildEntityIndex(project);
-        const relations = extractRelations(project, entityIndex);
+        const { relations } = extractRelations(project, entityIndex);
 
         const userEntity = entityIndex.get('User')!;
         const injectionSite = makeInjectionSite('User', userEntity);
@@ -503,7 +503,7 @@ describe('mapTypeOrmToGraph — db-relation edges', () => {
             `,
         });
         const entityIndex = buildEntityIndex(project);
-        const relations = extractRelations(project, entityIndex);
+        const { relations } = extractRelations(project, entityIndex);
         const result = mapTypeOrmToGraph([], makeOwnership(), [], relations, entityIndex);
 
         const relEdge = result.edges.find((e) => e.kind === 'db-relation');
@@ -535,6 +535,13 @@ describe('mapTypeOrmToGraph — db-relation edges', () => {
         expect(result.diagnostics.counts.oneToManySkipped).toBe(0);
         expect(result.diagnostics.counts.unresolvedReasons.unparseable).toBe(0);
         expect(result.diagnostics.counts.unresolvedReasons.notIndexed).toBe(0);
+        expect(result.diagnostics.counts.unresolvedReasons.ownerNotIndexed).toBe(0);
+        expect(result.diagnostics.counts.baseClassCycles).toBe(0);
+    });
+
+    it('passes through non-zero baseClassCycles from the extractor into diagnostics', () => {
+        const result = mapTypeOrmToGraph([], makeOwnership(), [], [], undefined, 3);
+        expect(result.diagnostics.counts.baseClassCycles).toBe(3);
     });
 });
 
@@ -563,9 +570,9 @@ describe('mapTypeOrmToGraph — unresolvedReasons breakdown', () => {
         expect(result.diagnostics.counts.unresolvedRelations).toBe(3);
         expect(result.diagnostics.counts.unresolvedReasons.unparseable).toBe(2);
         expect(result.diagnostics.counts.unresolvedReasons.notIndexed).toBe(1);
-        // invariant: unparseable + notIndexed === unresolvedRelations
-        const { unparseable, notIndexed } = result.diagnostics.counts.unresolvedReasons;
-        expect(unparseable + notIndexed).toBe(result.diagnostics.counts.unresolvedRelations);
+        // invariant: unparseable + notIndexed + ownerNotIndexed === unresolvedRelations
+        const { unparseable, notIndexed, ownerNotIndexed } = result.diagnostics.counts.unresolvedReasons;
+        expect(unparseable + notIndexed + ownerNotIndexed).toBe(result.diagnostics.counts.unresolvedRelations);
     });
 
     it('oneToManySkipped tracks Policy A skips; unresolved OneToMany NOT in unresolvedReasons', () => {
@@ -599,5 +606,46 @@ describe('mapTypeOrmToGraph — unresolvedReasons breakdown', () => {
         expect(result.diagnostics.counts.unresolvedRelations).toBe(0); // no ManyToOne/ManyToMany/OneToOne unresolved
         expect(result.diagnostics.counts.unresolvedReasons.unparseable).toBe(0);
         expect(result.diagnostics.counts.unresolvedReasons.notIndexed).toBe(0);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Regression: ownerNotIndexed counter (HIGH fix — 4th round)
+// ---------------------------------------------------------------------------
+
+describe('mapTypeOrmToGraph — ownerNotIndexed counter', () => {
+    it('increments ownerNotIndexed when resolvedTarget is set but ownerClass is absent from entityIndex', () => {
+        const userEntity = makeEntity('User', 'users');
+        const orderEntity = makeEntity('Order', 'orders');
+
+        // entityIndex only knows about User, NOT Order.
+        // The relation has resolvedTarget (User) but ownerClass Order is not indexed.
+        const entityIndex = {
+            get: (name: string) => (name === 'User' ? userEntity : undefined),
+            entries: () => [userEntity],
+            size: () => 1,
+            warnings: [],
+        } as unknown as import('../extractors/typeorm/entity-index.js').EntityIndex;
+
+        const relations: TypeOrmRelation[] = [
+            // resolvedTarget is non-null; ownerClass 'Order' is NOT in entityIndex.
+            makeResolvedRelation('ManyToOne', 'Order', 'User', userEntity, 'user'),
+        ];
+
+        const result = mapTypeOrmToGraph([], makeOwnership(), [], relations, entityIndex);
+
+        // Defensive branch fires: pushed to unresolvedRelations, ownerNotIndexed incremented.
+        expect(result.diagnostics.unresolvedRelations).toHaveLength(1);
+        expect(result.diagnostics.counts.unresolvedRelations).toBe(1);
+        expect(result.diagnostics.counts.unresolvedReasons.ownerNotIndexed).toBe(1);
+        expect(result.diagnostics.counts.unresolvedReasons.unparseable).toBe(0);
+        expect(result.diagnostics.counts.unresolvedReasons.notIndexed).toBe(0);
+
+        // Invariant holds: unparseable + notIndexed + ownerNotIndexed === unresolvedRelations
+        const { unparseable, notIndexed, ownerNotIndexed } = result.diagnostics.counts.unresolvedReasons;
+        expect(unparseable + notIndexed + ownerNotIndexed).toBe(result.diagnostics.counts.unresolvedRelations);
+
+        // No db-relation edge emitted.
+        expect(result.edges.filter((e) => e.kind === 'db-relation')).toHaveLength(0);
     });
 });
