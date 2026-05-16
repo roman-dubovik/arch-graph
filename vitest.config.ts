@@ -41,6 +41,8 @@ export default defineConfig({
                     // src/extractors/di/filter-chain/**
                     // src/extractors/typeorm/relations/**
                     // src/extractors/imports/cjs/**
+                    'src/extractors/di/filter-chain.ts',
+                    'src/mapper/di-to-graph.ts',
                 ],
             },
         },
