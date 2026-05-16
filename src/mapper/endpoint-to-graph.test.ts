@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { mapEndpointsToGraph } from './endpoint-to-graph.js';
 import { OwnershipRegistry } from '../core/service-registry.js';
-import type { EndpointSite } from '../extractors/endpoint/extractor.js';
+import type { EndpointSite, HttpMethod } from '../extractors/endpoint/extractor.js';
 
 function makeRegistry(serviceId = 'my-service', rootDir = '/app'): OwnershipRegistry {
     return new OwnershipRegistry('/root', [{ id: serviceId, rootDir, tsconfigPath: null, entryFile: null }], []);
 }
 
 function site(
-    method: string,
+    method: HttpMethod,
     pattern: string,
     controllerClass = 'AController',
     methodName = 'handler',

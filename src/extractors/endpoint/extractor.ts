@@ -10,9 +10,12 @@ import { ObjectLiteralExpression, Project, SyntaxKind } from 'ts-morph';
 import type { SourceLoc } from '../../core/types.js';
 import { isExcludedSourceFile } from '../shared.js';
 
+/** Canonical HTTP method names produced by the endpoint extractor. */
+export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'ALL' | 'OPTIONS' | 'HEAD' | 'SSE';
+
 export interface EndpointSite {
-    /** HTTP method (GET, POST, etc.). */
-    method: string;
+    /** HTTP method. */
+    method: HttpMethod;
     /** Canonical endpoint pattern (e.g. `/users/:id`). */
     pattern: string;
     /** Controller class name containing the method. */
@@ -33,7 +36,7 @@ export interface EndpointExtractResult {
  * HTTP method decorators from NestJS mapped to canonical method names.
  * @All maps to 'ALL', @Sse to 'SSE'.
  */
-const HTTP_METHOD_DECORATORS: Record<string, string> = {
+const HTTP_METHOD_DECORATORS: Record<string, HttpMethod> = {
     Get: 'GET',
     Post: 'POST',
     Put: 'PUT',

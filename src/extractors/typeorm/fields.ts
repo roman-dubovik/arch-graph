@@ -22,13 +22,22 @@ import type { TypeOrmEntity } from '../../core/types.js';
 import { tableNameOf } from '../../core/types.js';
 import { isExcludedSourceFile } from '../shared.js';
 
+/** Column decorator names recognised by the field extractor. */
+export type ColumnDecorator =
+    | 'Column'
+    | 'PrimaryColumn'
+    | 'PrimaryGeneratedColumn'
+    | 'CreateDateColumn'
+    | 'UpdateDateColumn'
+    | 'DeleteDateColumn';
+
 export interface EntityFieldSite {
     /** Parent entity class name. */
     entityClass: string;
     /** Parent table name. */
     tableName: string;
     /** Decorator used (for meta). */
-    decorator: string;
+    decorator: ColumnDecorator;
     /** Field property name. */
     fieldName: string;
     /** SQL column type (string). */
@@ -45,7 +54,7 @@ export interface DbEntityFieldExtractResult {
     diagnostics: Array<{ file: string; line: number; message: string }>;
 }
 
-const FIELD_DECORATORS = new Set([
+const FIELD_DECORATORS = new Set<string>([
     'Column',
     'PrimaryColumn',
     'PrimaryGeneratedColumn',
@@ -53,6 +62,10 @@ const FIELD_DECORATORS = new Set([
     'UpdateDateColumn',
     'DeleteDateColumn',
 ]);
+
+function isColumnDecorator(name: string): name is ColumnDecorator {
+    return FIELD_DECORATORS.has(name);
+}
 
 /**
  * Extract type string from decorator arguments.
@@ -65,7 +78,7 @@ const FIELD_DECORATORS = new Set([
  *   @CreateDateColumn / @UpdateDateColumn / @DeleteDateColumn → 'timestamp'
  */
 function resolveFieldType(
-    decoratorName: string,
+    decoratorName: ColumnDecorator,
     args: ReturnType<import('ts-morph').Decorator['getArguments']>,
     tsMorphPropType: string,
 ): string {
@@ -194,7 +207,7 @@ export function extractEntityFields(
             for (const prop of cls.getProperties()) {
                 for (const dec of prop.getDecorators()) {
                     const decName = dec.getName();
-                    if (!FIELD_DECORATORS.has(decName)) continue;
+                    if (!isColumnDecorator(decName)) continue;
 
                     const propName = prop.getName();
                     const tsType = getTsTypeText(prop);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { mapEntityFieldsToGraph } from './entity-fields-to-graph.js';
-import type { EntityFieldSite } from '../extractors/typeorm/fields.js';
+import type { ColumnDecorator, EntityFieldSite } from '../extractors/typeorm/fields.js';
 
 function field(
     entityClass = 'UserEntity',
@@ -8,7 +8,7 @@ function field(
     fieldName = 'email',
     fieldType = 'varchar',
     nullable = false,
-    decorator = 'Column',
+    decorator: ColumnDecorator = 'Column',
 ): EntityFieldSite {
     return { entityClass, tableName, fieldName, fieldType, nullable, decorator, file: '/app/user.entity.ts', line: 10 };
 }
