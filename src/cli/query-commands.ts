@@ -6,8 +6,8 @@
  * and writes structured JSON or a pretty table to stdout.
  *
  * Exit codes:
- *   0  — query ran successfully (may have found: true *or* found: false)
- *   4  — node/subject/queue/table/service/module not found in graph
+ *   0  — query found the input node and returned results (found: true)
+ *   4  — node not found in graph (found: false envelope still written to stdout)
  *   1  — bad args / fatal I/O error
  */
 
@@ -76,7 +76,11 @@ export function parseQueryArgs(argv: string[]): QueryArgs {
 
     for (let i = 0; i < rest.length; i++) {
         const a = rest[i]!;
-        if ((a === '--out' || a === '-o') && rest[i + 1]) {
+        if (a === '--out' || a === '-o') {
+            if (rest[i + 1] === undefined) {
+                process.stderr.write(`error: ${a} requires a value\n`);
+                process.exit(1);
+            }
             out = rest[++i]!;
         } else if (a.startsWith('--out=')) {
             out = a.slice('--out='.length);
@@ -135,9 +139,18 @@ function emit(data: QueryEnvelope | object): void {
     process.stdout.write(JSON.stringify(data, null, 2) + '\n');
 }
 
-function notFound(query: string, input: string, hint: string): never {
+function notFound(
+    query: string,
+    input: string | string[],
+    hint: string,
+    format: 'json' | 'table' = 'json',
+): never {
     const envelope: QueryEnvelope = { query, input, found: false, hint };
-    emit(envelope);
+    if (format === 'table') {
+        process.stdout.write(`(not found) ${hint}\n`);
+    } else {
+        emit(envelope);
+    }
     process.exit(4);
 }
 
@@ -386,18 +399,12 @@ async function runPath(args: QueryArgs): Promise<void> {
     const result: PathResult = findPath(graph, fromId, toId);
 
     if (!result.found) {
-        const envelope = {
-            query: 'path',
-            input: [fromId, toId],
-            found: false,
-            hint: `no path from '${fromId}' to '${toId}' in graph (either node missing or no directed path)`,
-        };
-        if (args.format === 'json') {
-            emit(envelope);
-        } else {
-            process.stdout.write(`(no path from '${fromId}' to '${toId}')\n`);
-        }
-        process.exit(4);
+        notFound(
+            'path',
+            [fromId, toId],
+            `no path from '${fromId}' to '${toId}' in graph (either node missing or no directed path)`,
+            args.format,
+        );
     }
 
     if (args.format === 'table') {
