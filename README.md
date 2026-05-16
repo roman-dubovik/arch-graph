@@ -6,25 +6,21 @@ Sister project: **[graphify](https://github.com/safishamsi/graphify)** is a gene
 
 ## Install
 
-One-line install (clones to `~/.arch-graph`, symlinks `~/.local/bin/arch-graph`):
+From a local clone:
 
 ```sh
-# Once the repo is on a public host:
-curl -sSL https://… /install.sh | sh    # TODO: update once published
-
-# Today, from a local clone:
-git clone <your-clone-url> /tmp/arch-graph
-bash /tmp/arch-graph/scripts/install.sh
+git clone <repo> ~/.arch-graph
+bash ~/.arch-graph/scripts/install.sh
 ```
 
-The installer also honors `ARCH_GRAPH_GIT` (clone source) and `ARCH_GRAPH_HOME` / `ARCH_GRAPH_BIN_DIR` if you want different locations.
+The installer symlinks `arch-graph` into `~/.local/bin/` (or `ARCH_GRAPH_BIN_DIR` if set). Honors `ARCH_GRAPH_GIT` and `ARCH_GRAPH_HOME` for alternate locations.
 
 **Manual fallback:**
 
 ```sh
 git clone <repo> ~/.arch-graph
 cd ~/.arch-graph
-npm install              # or: pnpm install --frozen-lockfile
+npm install
 mkdir -p ~/.local/bin
 ln -s ~/.arch-graph/bin/arch-graph ~/.local/bin/arch-graph
 # make sure ~/.local/bin is on PATH
@@ -42,17 +38,54 @@ arch-graph --help
 
 ```sh
 cd path/to/your/nestjs-monorepo
-arch-graph init          # writes arch-graph.config.ts
-$EDITOR arch-graph.config.ts   # set id / root / appsGlob / libsGlob
-arch-graph build         # writes arch-graph-out/
+arch-graph init
 ```
 
-Outputs land in `arch-graph-out/`:
+`arch-graph init` is an interactive wizard. It asks a series of questions with sensible defaults, writes `arch-graph.config.ts`, and optionally chains: Claude Code integration install, git hook install, and a first build — all in one command.
 
-- `graph.json` — nodes (services, NATS subjects, BullMQ queues, TypeORM entities, NestJS modules, HTTP endpoints, libs) + edges (`nats-publish`/`nats-subscribe`/`nats-request`/`nats-reply`, `queue-produce`/`queue-consume`, `db-read`/`db-write`/`db-access`, `di-import`/`di-provides`/`di-exports`/`di-controller`, `http-call`/`http-external`, `ts-import`, `lib-usage`).
-- `diagnostics.json` — every unresolved / dynamic call-site, with source location.
-- `validation.json` — per-domain recall, resolveRate, and ground-truth counts. Build fails (exit code 3) if any enabled domain drops below its gate.
-- `graph.mermaid` — full flowchart. Add `--mermaid-slice=per-service` or `--mermaid-slice=domain:nats` for focused views.
+Sample session:
+
+```
+arch-graph init — interactive setup wizard
+
+? Project id (used as service:<id> prefix) [my-project]: platform
+? Repo root [.]:
+? Apps glob (where services live) [apps/*]:
+? Libs glob [libs/**]:
+
+? Which domains to extract?
+  1. [x] NATS          pub/sub + request/reply
+  2. [x] TypeORM       @InjectRepository → @Entity
+  3. [x] BullMQ        @InjectQueue / @Processor
+  4. [x] NestJS DI     @Module imports/providers/exports
+  5. [x] HTTP          HttpService / axios / fetch
+  6. [x] TS imports    file→file / service→lib
+
+  Disable any? Enter numbers separated by comma (blank = all enabled):
+
+? Custom NATS wrapper API? (you wrap @nestjs/microservices in your own class) [y/N]: n
+
+? Install Claude Code integration (./CLAUDE.md + skill)? [Y/n]:
+
+? Install git hook?
+  1. pre-commit   (graph committed with code) — recommended
+  2. post-commit  (graph rebuilt after commit, not in commit)
+  3. none
+  Choice [1]:
+
+? Strict mode? (fail build if recall drops below domain floor — useful for CI) [y/N]:
+
+? Run first build now? [Y/n]:
+
+✓ wrote arch-graph.config.ts
+✓ wrote CLAUDE.md
+✓ pre-commit hook installed
+... running first build ...
+✓ build complete: 847 nodes, 3241 edges
+✓ wrote arch-graph-out/
+```
+
+Non-interactive (CI) fallback: when stdin is not a TTY, `arch-graph init` writes a template config without asking any questions.
 
 ## What you get
 
@@ -67,44 +100,113 @@ Outputs land in `arch-graph-out/`:
 
 Each domain emits structured diagnostics for everything it couldn't pin down — dynamic subjects, unresolved queue names, opaque HTTP URLs, missing entity decorators. That list is the honest gap report.
 
+## Build output
+
+`arch-graph build` writes four files to `arch-graph-out/`:
+
+- `graph.json` — nodes + typed edges
+- `diagnostics.json` — every unresolved / dynamic call-site with source location
+- `validation.json` — per-domain recall, resolveRate, and ground-truth counts
+- `graph.mermaid` — full flowchart (add `--mermaid-slice=per-service` or `--mermaid-slice=domain:nats` for focused views)
+
+After each build, the per-domain table is printed to stdout:
+
+```
+Domain       Recall  Resolve   Floor   Status
+──────────────────────────────────────────────────────────────────────
+nats         100.0%      n/a  ≥95.0%   ✓ ok
+typeorm      100.0%   100.0%  ≥95.0%   ✓ ok
+bullmq       100.0%   100.0%  ≥95.0%   ✓ ok
+di           100.0%    98.7%  ≥95.0%   ✓ ok
+http         100.0%      n/a  ≥95.0%   ✓ ok
+imports      100.0%      n/a  ≥80.0%   ✓ ok
+```
+
+If a domain falls below its recall floor the status shows `⚠` with tips. By default `arch-graph build` is **advisory** — it always exits 0 so it never breaks builds unexpectedly. Use `--strict` for CI hard-fail:
+
+```sh
+arch-graph build               # advisory: always exit 0, prints table
+arch-graph build --strict      # CI: exit 3 if any domain drops below floor
+arch-graph build --quiet       # suppress table (used by the pre-commit hook)
+```
+
 ## CLAUDE.md integration
 
-Make arch-graph always-on in Claude Code sessions on this repo:
+Make arch-graph always-on in Claude Code sessions:
 
 ```sh
 arch-graph claude install --skill
-# --skill also writes ~/.claude/skills/arch-graph/SKILL.md
 ```
 
-This writes a delimited section into `./CLAUDE.md` telling the agent to consult `arch-graph-out/graph.json` before answering codebase questions, to prefer the MCP server if available, and to re-run `arch-graph build` after touching `.ts` files. Re-running `install` is idempotent — it replaces the previous block in place.
+This writes a delimited section into `./CLAUDE.md` telling Claude to query the graph before answering architecture questions, and installs `~/.claude/skills/arch-graph/SKILL.md` so the `/arch-graph` skill becomes available globally. Re-running is idempotent — it replaces the previous block in place.
 
 ```sh
 arch-graph claude uninstall   # remove the section
+arch-graph install-skill      # install the skill file separately, any time
 ```
 
-The skill file installs to `~/.claude/skills/arch-graph/SKILL.md` and is triggered by `/arch-graph` or any architecture question on a NestJS codebase. Install it separately at any time:
+## Git hook
+
+The pre-commit hook (default) rebuilds the graph before each commit that touches `.ts` files and **auto-stages** the output artifacts (`graph.json`, `diagnostics.json`, `validation.json`, `graph.mermaid`) so the graph is always coherent with the code in history.
 
 ```sh
-arch-graph install-skill
+arch-graph hook install                        # pre-commit (default, recommended)
+arch-graph hook install --mode=post-commit     # post-commit: rebuilds after commit
+arch-graph hook status                         # check installed mode
+arch-graph hook uninstall                      # remove
 ```
 
-## Git post-commit hook
+**Why pre-commit is usually better:** the graph is committed alongside the code that generated it, so every checkout in history is self-consistent. Post-commit rebuilds the graph after the commit has landed — the graph in the commit is one build behind until the hook fires.
 
-Auto-rebuild after every commit that touches a `.ts` file:
+The hook is a marker-delimited block. If you already have a hook from another tool, arch-graph appends to it without disturbing existing content. Switching modes strips the old block and writes the new one.
+
+Build errors (config parse, I/O) block the commit. Recall-floor regressions are advisory by default — add `arch-graph build --strict` to the hook body manually if you want CI-style gating pre-commit.
+
+## Query subcommands
+
+Ten CLI commands let you interrogate the graph directly — faster than MCP and more structured than raw `jq`:
+
+| Subcommand | Input | What it returns |
+|---|---|---|
+| `who-publishes <subject>` | NATS subject | services that publish on it |
+| `who-subscribes <subject>` | NATS subject | services that subscribe |
+| `queue-producers <queue>` | BullMQ queue name | services that enqueue jobs |
+| `queue-consumers <queue>` | BullMQ queue name | services that process jobs |
+| `table-users <table>` | TypeORM table name | services with repository access |
+| `deps-of <service-id>` | service id | outgoing dependencies by kind |
+| `dependents-of <service-id>` | service id | services that depend on this one |
+| `module-imports <module>` | NestJS module class | what the module imports |
+| `path <from> <to>` | two node ids | shortest directed path |
+| `stats` | — | node + edge counts per kind |
+
+Options: `--out <dir>` (default `./arch-graph-out`), `--json` (default), `--table`.
+Exit codes: `0` = found, `4` = not found, `1` = bad args / I/O error.
+
+Sample:
 
 ```sh
-arch-graph hook install     # installs .git/hooks/post-commit
-arch-graph hook status      # check
-arch-graph hook uninstall   # remove
+arch-graph who-publishes user.created --table
 ```
 
-The hook is a small marker-delimited block — if you already have a `post-commit` hook from another tool, arch-graph appends to it without disturbing the existing content. The check is `git diff-tree --no-commit-id --name-only -r HEAD | grep -E '\.ts$'`, which works on the initial commit too. Re-installing replaces the block in place; uninstalling removes only the marked block.
+```
+role       owner         counterpart    kind          file                     line
+---------  ------------  -------------  ------------  -----------------------  ----
+publisher  platform-api  user.created   nats-publish  apps/api/user.service.ts  42
+```
+
+The Claude Code skill calls these subcommands automatically when answering architecture questions — it's cheaper than an MCP round-trip and requires no running server.
 
 ## MCP server
 
-If the MCP server is installed (`arch-graph mcp` — see the MCP block in `OPEN-QUESTIONS.md`), prefer it over reading `graph.json` directly. It exposes typed tools (`subject_publishers`, `subject_subscribers`, `queue_producers`, `queue_consumers`, `service_dependencies`, `service_dependents`, `module_imports`, `table_users`, `path`, `explain`, `query`, `stats`) so agents can ask targeted questions instead of dumping the whole graph. For unresolved / dynamic call-sites the extractor couldn't pin down, read `arch-graph-out/diagnostics.json` (there is no MCP tool for it — diagnostics are static facts, not graph queries).
+Optional — for editors with an MCP client configured:
 
-Without MCP, `graph.json` is a single file you can read directly. See the `## arch-graph` section of `CLAUDE.md` after `arch-graph claude install` for `jq` recipes.
+```sh
+arch-graph mcp   # starts the stdio MCP server backed by arch-graph-out/graph.json
+```
+
+Exposes 12 tools: `subject_publishers`, `subject_subscribers`, `queue_producers`, `queue_consumers`, `service_dependencies`, `service_dependents`, `module_imports`, `table_users`, `path`, `explain`, `query`, `stats`. For unresolved / dynamic call-sites, read `arch-graph-out/diagnostics.json` directly — there is no MCP tool for it.
+
+The CLI query subcommands are preferred over MCP when both are available (no stdio overhead, no server lifecycle).
 
 ## Limitations & honesty
 
@@ -121,7 +223,7 @@ To extend coverage, add an extractor under `src/extractors/<domain>/` and wire i
 
 ## Benchmark
 
-Quantitative comparison with graphify across 5 reference monorepos (build cost, LLM token efficiency per architectural question, precision/recall on a ground-truth Q&A set) lives in `bench/report.md` — run `bash bench/run.sh` to rebuild it.
+Quantitative comparison with graphify across 5 reference monorepos lives in `bench/report.md` — run `bash bench/run.sh` to rebuild it. Key finding: arch-graph uses **7.6× fewer LLM context tokens** than graphify per architectural question (688k vs 5.2M tokens across 15 questions), because it returns typed structured results instead of raw graph dumps.
 
 ## Development
 
