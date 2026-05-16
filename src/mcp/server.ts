@@ -358,6 +358,10 @@ export async function startMcpServer(opts: { out: string }): Promise<void> {
                     return jsonResult({ via: action.tool, result: graphStats(graph) });
                 case 'unknown':
                     return jsonResult({ via: 'unknown', hint: action.hint });
+                // Exhaustiveness guard: if a new RoutedAction['tool'] variant is added without
+                // a case here, the `const _: never = action` will fail compile. Not dead code —
+                // reachable only when the union grows. The runtime fallback returns 'unknown'
+                // for forward-compat with older clients.
                 default: {
                     const _: never = action;
                     return jsonResult({ via: 'unknown', hint: 'unrouted action' });
