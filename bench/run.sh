@@ -57,14 +57,11 @@ for proj in "${PROJECTS[@]}"; do
 
     echo "[bench] arch-graph build ${proj} → ${out}"
     t0=$(python3 -c 'import time; print(time.time())')
-    # The build may exit 3 on regression-gate failures; treat as warning so the
-    # user notices, but capture the time anyway for diagnostics. Stderr is
-    # tee'd to a temp file so we can surface it on failure — silent stderr was
-    # masking real build errors that looked identical to gate-3 from the
-    # outside.
+    # --strict: CI hard-fail mode — exit 3 if any enabled domain falls below
+    # its recall floor. Stderr is tee'd to a temp file so failures are visible.
     err_log="$(mktemp -t archbuild-${proj}-XXXX.err)"
-    if ! npx tsx src/cli/index.ts build --config "$cfg" --out "$out" >/dev/null 2>"$err_log" ; then
-        echo "[bench] WARNING: arch-graph build ${proj} exited non-zero (often regression gate)"
+    if ! npx tsx src/cli/index.ts build --strict --config "$cfg" --out "$out" >/dev/null 2>"$err_log" ; then
+        echo "[bench] ERROR: arch-graph build ${proj} failed (--strict gate or fatal error)"
         echo "[bench] ---- stderr (${err_log}) ----"
         tail -n 40 "$err_log" >&2 || true
         echo "[bench] ---- end stderr ----"
