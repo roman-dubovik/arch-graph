@@ -49,13 +49,8 @@ open bench/report.md   # macOS only; on Linux: xdg-open
 `graphify` is a Claude Code skill, **not** a one-shot CLI — building a graph
 requires dispatching general-purpose subagents from a Claude session
 (see `~/.claude/skills/graphify/SKILL.md`). For that reason `run.sh` cannot
-invoke it. To produce a graphify graph for a project:
-
-```
-# In a Claude Code session:
-/graphify <project_root>
-# e.g. /graphify /Users/you/Documents/Projects/platform
-```
+invoke it. To produce a graphify graph for a project, run graphify as a
+Claude Code skill against the project root.
 
 The graph lands at `<project_root>/graphify-out/graph.json`. The bench
 adapter (`adapters/graphify.ts`) picks it up automatically from either
@@ -90,23 +85,23 @@ Two consequences:
   appear to "win" on this metric. We rule this out by also reporting context
   size in tokens: a tool that achieves recall by bloat is visible in the
   tokens column.
-- A tool's IDs don't matter — `service:platform-api` (arch-graph) and
-  `apps_platform_api` (graphify) both pass the label check for the label
-  `platform-api`. This is why questions store `ground_truth_labels`
+- A tool's IDs don't matter — `service:my-api` (arch-graph) and
+  `apps_my_api` (graphify) both pass the label check for the label
+  `my-api`. This is why questions store `ground_truth_labels`
   separately from `ground_truth_ids`.
 
 ## Adding a new question
 
 ```yaml
 - id: q16
-  project: platform
+  project: my-project           # must match an `id` in configs/<id>.config.ts
   category: nats
   difficulty: easy
   question: "Which service publishes 'foo.bar'?"
   ground_truth_ids:
-    - service:platform-api
+    - service:my-api
   ground_truth_labels:
-    - platform-api
+    - my-api
     - foo.bar
 ```
 
@@ -115,7 +110,7 @@ Verify ground truth by inspecting the arch-graph graph:
 ```bash
 python3 -c "
 import json
-g = json.load(open('/tmp/sg-platform/graph.json'))
+g = json.load(open('/tmp/sg-my-project/graph.json'))
 print([(e['from'], e['kind'], e['to']) for e in g['edges']
        if e['kind'] in ('nats-publish','nats-request')
        and e['to'] == 'nats:foo.bar'])

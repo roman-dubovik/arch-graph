@@ -47,7 +47,7 @@ arch-graph who-publishes user.created --json
   "results": [
     {
       "role": "publisher",
-      "owner": "platform-api",
+      "owner": "my-api",
       "counterpart": "user.created",
       "kind": "nats-publish",
       "file": "apps/api/user.service.ts",
@@ -73,7 +73,7 @@ jq --arg s 'nats:user.created' '
 ' arch-graph-out/graph.json
 
 # What does a service depend on?
-jq --arg s 'service:platform-api' '.edges[] | select(.from==$s) | {kind, to, file, line}' arch-graph-out/graph.json
+jq --arg s 'service:my-api' '.edges[] | select(.from==$s) | {kind, to, file, line}' arch-graph-out/graph.json
 
 # Who imports / provides a module?
 jq --arg m 'module:AuthModule' '.edges[] | select(.to==$m and (.kind | startswith("di-"))) | {kind, from, file, line}' arch-graph-out/graph.json

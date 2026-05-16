@@ -11,112 +11,120 @@
 #                            context, because graphify uses a different ID
 #                            scheme — see report.md `Heuristic`).
 #
+# Project ids (`A`, `B`, `C`, `D`, `E`) are placeholders. To run this bench
+# locally, replace each `project:` value with the `id` from your own
+# `configs/<id>.config.ts`, and adjust the subjects / queues / tables / module
+# names below to match your codebase. The questions and ground-truth labels
+# shipped here are anonymized samples — the real ones measured the report in
+# this repo against five private NestJS monorepos that are not part of the
+# public release.
+#
 # Categories (count): nats-pubsub (4), bullmq (2), typeorm (2), di (2),
 # http (1), ts-imports / libs (2), multi-hop (2).
 
 # ─── NATS pub/sub paths ────────────────────────────────────────────────────
 - id: q01
-  project: platform
+  project: A
   category: nats
   difficulty: easy
-  question: "Which components publish on the NATS subject 'platform.events.message.received'?"
+  question: "Which components publish on the NATS subject 'events.message.received'?"
   ground_truth_ids:
-    - lib:libs/platform/messaging
+    - lib:libs/shared/messaging
   ground_truth_labels:
-    - libs/platform/messaging
-    - platform.events.message.received
+    - libs/shared/messaging
+    - events.message.received
 
 - id: q02
-  project: platform
+  project: A
   category: nats
   difficulty: medium
-  question: "Which services or libraries subscribe to 'platform.events.message.received'?"
+  question: "Which services or libraries subscribe to 'events.message.received'?"
   ground_truth_ids:
-    - service:platform-api
-    - lib:libs/platform/messaging
+    - service:api-main
+    - lib:libs/shared/messaging
   ground_truth_labels:
-    - platform-api
-    - libs/platform/messaging
-    - platform.events.message.received
+    - api-main
+    - libs/shared/messaging
+    - events.message.received
 
 - id: q03
-  project: insyra
+  project: B
   category: nats
   difficulty: easy
-  question: "Which service replies to the NATS subject 'cron.register.nats'?"
+  question: "Which service replies to the NATS subject 'cron.register'?"
   ground_truth_ids:
-    - service:be-cron-service
+    - service:cron-service
   ground_truth_labels:
-    - be-cron-service
-    - cron.register.nats
+    - cron-service
+    - cron.register
 
 - id: q04
-  project: screenia
+  project: C
   category: nats
   difficulty: easy
-  question: "Which service handles requests on 'cron.register.nats'?"
+  question: "Which service handles requests on 'cron.register'?"
   ground_truth_ids:
-    - service:be-cron-service
+    - service:cron-service
   ground_truth_labels:
-    - be-cron-service
-    - cron.register.nats
+    - cron-service
+    - cron.register
 
 # ─── BullMQ producer/consumer ─────────────────────────────────────────────
 - id: q05
-  project: platform
+  project: A
   category: bullmq
   difficulty: easy
-  question: "Which service produces jobs on the 'billing-cleanup-orphans' BullMQ queue?"
+  question: "Which service produces jobs on the 'billing-cleanup' BullMQ queue?"
   ground_truth_ids:
-    - service:ident
+    - service:billing
   ground_truth_labels:
-    - ident
-    - billing-cleanup-orphans
+    - billing
+    - billing-cleanup
 
 - id: q06
-  project: unpacks
+  project: D
   category: bullmq
   difficulty: easy
-  question: "Which service consumes from the 'instagram-scraping' BullMQ queue?"
+  question: "Which service consumes from the 'scraper-jobs' BullMQ queue?"
   ground_truth_ids:
-    - service:be-instagram-scraper
+    - service:scraper
   ground_truth_labels:
-    - be-instagram-scraper
-    - instagram-scraping
+    - scraper
+    - scraper-jobs
 
 # ─── TypeORM entity / table usage ─────────────────────────────────────────
 - id: q07
-  project: insyra
+  project: B
   category: typeorm
   difficulty: medium
-  question: "Which services access the 'blog_posts' TypeORM table?"
+  question: "Which services access the 'posts' TypeORM table?"
   ground_truth_ids:
-    - service:be-ai
-    - service:be-cron-service
+    - service:ai-service
+    - service:cron-service
   ground_truth_labels:
-    - be-ai
-    - be-cron-service
-    - blog_posts
+    - ai-service
+    - cron-service
+    - posts
 
 - id: q08
-  project: beribuy2
+  project: E
   category: typeorm
   difficulty: medium
   question: "Which services use the 'promocodes' TypeORM table?"
   ground_truth_ids:
-    - service:be-api-beribuy
-    - service:be-data-integration
+    - service:api-main
+    - service:data-integration
   ground_truth_labels:
-    - be-api-beribuy
-    - be-data-integration
+    - api-main
+    - data-integration
     - promocodes
 
 # ─── DI module/provider lookups ───────────────────────────────────────────
 - id: q09
-  project: beribuy2
+  project: E
   category: di
   difficulty: easy
-  question: "Which NestJS modules import 'NatsClientModule' in beribuy2?"
+  question: "Which NestJS modules import 'NatsClientModule'?"
   ground_truth_ids:
     - module:ApiModule
     - module:CronModule
@@ -128,10 +136,10 @@
     - MailModule
 
 - id: q10
-  project: screenia
+  project: C
   category: di
   difficulty: easy
-  question: "Which Nest modules import 'RedisModule' in screenia?"
+  question: "Which Nest modules import 'RedisModule'?"
   ground_truth_ids:
     - module:AiModule
     - module:CronModule
@@ -145,40 +153,40 @@
 
 # ─── HTTP inter-service ───────────────────────────────────────────────────
 - id: q11
-  project: platform
+  project: A
   category: http
   difficulty: medium
-  question: "Which platform components make HTTP calls to the 'deployer' service?"
+  question: "Which components make HTTP calls to the 'deployer' service?"
   ground_truth_ids:
-    - service:platform-cron
-    - lib:libs/platform/saas-admin
+    - service:cron-service
+    - lib:libs/shared/admin
   ground_truth_labels:
-    - platform-cron
-    - libs/platform/saas-admin
+    - cron-service
+    - libs/shared/admin
     - deployer
 
 # ─── ts-imports / lib-usage ───────────────────────────────────────────────
 - id: q12
-  project: platform
+  project: A
   category: lib
   difficulty: medium
-  question: "Which libraries use 'libs/platform/core'?"
+  question: "Which libraries use 'libs/shared/core'?"
   # We treat a handful of well-known users as the GT subset (recall need not be 100%).
   ground_truth_ids:
-    - lib:libs/platform/agents
-    - lib:libs/platform/ai
-    - lib:libs/platform/app-sdk
+    - lib:libs/shared/agents
+    - lib:libs/shared/ai
+    - lib:libs/shared/app-sdk
   ground_truth_labels:
-    - libs/platform/agents
-    - libs/platform/ai
-    - libs/platform/app-sdk
-    - libs/platform/core
+    - libs/shared/agents
+    - libs/shared/ai
+    - libs/shared/app-sdk
+    - libs/shared/core
 
 - id: q13
-  project: insyra
+  project: B
   category: di
   difficulty: medium
-  question: "Which Nest modules import the global 'ConfigModule' in insyra?"
+  question: "Which Nest modules import the global 'ConfigModule'?"
   ground_truth_ids:
     - module:AiModule
     - module:ConfigDiagnosticsModule
@@ -191,29 +199,29 @@
 
 # ─── Multi-hop ────────────────────────────────────────────────────────────
 - id: q14
-  project: platform
+  project: A
   category: multi-hop
   difficulty: hard
   question: >-
-    Which service both produces and consumes jobs on the 'ident-crm-sync' BullMQ queue
+    Which service both produces and consumes jobs on the 'crm-sync' BullMQ queue
     (a self-loop)?
   ground_truth_ids:
-    - service:ident
+    - service:billing
   ground_truth_labels:
-    - ident
-    - ident-crm-sync
+    - billing
+    - crm-sync
 
 - id: q15
-  project: screenia
+  project: C
   category: multi-hop
   difficulty: hard
   question: >-
     Which component writes to the 'outbox_events' table — this is the outbox
     pattern producer side?
   ground_truth_ids:
-    - service:be-api-main
+    - service:api-main
     - lib:libs/nest-shared
   ground_truth_labels:
-    - be-api-main
+    - api-main
     - libs/nest-shared
     - outbox_events
