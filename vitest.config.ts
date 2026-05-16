@@ -73,10 +73,7 @@ export default defineConfig({
                 'src/extractors/typeorm/relations.ts': {
                     lines: 95,
                     statements: 95,
-                    // One internal helper is not exercised when relations.test
-                    // runs in isolation under v8 coverage (different module-load
-                    // path than the build-pipeline tests). 4/5 functions = 80%.
-                    functions: 80,
+                    functions: 95,
                     branches: 90,
                 },
                 'src/mapper/typeorm-to-graph.ts': {

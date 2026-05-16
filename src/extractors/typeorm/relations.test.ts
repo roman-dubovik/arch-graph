@@ -720,10 +720,11 @@ describe('getAllProperties — cycle guard', () => {
             getBaseClass: function () { return this; },
         } as unknown as ClassDeclaration;
 
-        // Must terminate (no stack overflow) and return an empty array.
+        // Must terminate (no stack overflow) and return empty props.
         const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
         const result = getAllProperties(stub);
-        expect(result).toEqual([]);
+        expect(result.props).toEqual([]);
+        expect(result.cycles).toBe(1);
         // A diagnostic message must have been written to stderr.
         expect(stderrSpy).toHaveBeenCalledWith(
             expect.stringContaining('[typeorm/relations] BUG: circular base class chain'),
@@ -731,13 +732,10 @@ describe('getAllProperties — cycle guard', () => {
         stderrSpy.mockRestore();
     });
 
-    it('increments baseClassCycles in extractRelations result when the cycle guard fires', () => {
-        // Use a real in-memory project but inject a synthetic self-referential class
-        // by spying on getBaseClass at the right moment. Because ts-morph parses the
-        // source and returns real ClassDeclaration objects, we can't easily inject the
-        // cycle directly into the AST — instead we verify the callback path via a unit
-        // spy on getAllProperties itself, by passing an explicit onCycle callback.
-        let cycleCount = 0;
+    it('returns cycles=1 when a cyclic base-class chain is detected', () => {
+        // Use a synthetic self-referential stub because TypeScript's type system
+        // forbids cyclic class extension in real source. The cycle guard fires
+        // on the second recursive call when `seen.has(cls)` returns true.
         const stub = {
             getName: () => 'CyclicClass',
             getProperties: () => [],
@@ -745,11 +743,11 @@ describe('getAllProperties — cycle guard', () => {
         } as unknown as ClassDeclaration;
 
         const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-        getAllProperties(stub, new Set(), () => { cycleCount++; });
+        const result = getAllProperties(stub);
         stderrSpy.mockRestore();
 
-        // The onCycle callback must have been invoked exactly once.
-        expect(cycleCount).toBe(1);
+        expect(result.cycles).toBe(1);
+        expect(result.props).toEqual([]);
     });
 });
 
