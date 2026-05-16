@@ -33,6 +33,8 @@ arch-graph path <from> <to>            # shortest directed path
 arch-graph stats                       # node + edge counts per kind
 ```
 
+**Fuzzy fallback**: If a question is imprecise ("how does X work?", "find code about Y") and no structured subcommand fits, use `arch-graph semantic search "<query>"` (or MCP tool `semantic_search`). Requires running `arch-graph semantic build` first to build the semantic index.
+
 Options: `--out <dir>` (default `./arch-graph-out`), `--json` (default), `--table`.
 Exit codes: `0` = found, `4` = not found.
 
