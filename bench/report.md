@@ -5,16 +5,36 @@ _Updated: 2026-05-16 — see "Fresh head-to-head (auto-generated questions)" bel
 
 ## Headline (fresh run — 2026-05-16)
 
-Re-run via `arch-graph compare` on Project A + Project C with auto-generated 10
-questions per project (20 questions total). Each question is auto-derived from
-real nodes in arch-graph's own output, so it's bilaterally fair: same compression,
-same `cl100k_base` encoder, same questions for both tools.
+Head-to-head on all 4 working reference monorepos (Project A platform,
+B insyra, C screenia, D beribuy2). 10 auto-generated questions per project,
+40 questions total. Each question is auto-derived from real nodes in
+arch-graph's own output → bilaterally fair: same compression, same
+`cl100k_base` encoder, same questions for both tools.
 
 | | arch-graph | graphify | ratio |
 |---|---|---|---|
-| Avg tokens per question | **41,626** | **510,577** | **12.3× fewer** |
-| Mean recall (substring) | **100%** | **10%** | **~10× higher** |
-| Σ tokens · 20 questions | 832,510 | 10,211,540 | — |
+| Avg tokens per question | **38,654** | **570,605** | **14.8× fewer** |
+| Mean recall (substring) | **100%** | **25%** | **~4× higher** |
+| Σ tokens · 40 questions | 1,546,140 | 22,824,220 | — |
+
+### Per-project breakdown
+
+| Project | Size | Arch tokens | Arch recall | Graphify tokens | Graphify recall | Tokens × | Recall × |
+|---|---|---|---|---|---|---|---|
+| A | large | 59,835 | 100% | 718,155 | 16% | 12.0× | 6.3× |
+| B† | large | 62,793 | 100% | 724,785 | 22% | 11.5× | 4.5× |
+| C | medium | 23,416 | 100% | 302,999 | 4% | 12.9× | 23.3× |
+| D† | small | 8,570 | 100% | 536,483 | 57% | 62.6× | 1.8× |
+
+**Methodology caveat (†):** Projects B and D had graphify rebuilt fresh via the
+Claude Code skill, which ran in **AST-only mode** (LLM semantic pass was
+unavailable in the skill context — no `Task` tool dispatch + no `MOONSHOT_API_KEY`
+/ `ANTHROPIC_API_KEY` set). This produces a larger, less-curated graph than a
+full graphify run would. It inflates graphify's token count on those two
+projects and may overstate arch-graph's token advantage there. Recall, however,
+is measured on whatever ended up in the graph — that's still an honest
+comparison. Projects A and C used pre-existing graphify-out (build mode unknown,
+likely full).
 
 The original 15-question hand-curated bench is preserved below for reference.
 
