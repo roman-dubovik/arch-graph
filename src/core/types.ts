@@ -919,8 +919,9 @@ export type TsImportResolution = TsDynamicResolution;
  *  - `resolution` — discriminated union describing the resolution outcome.
  *                   The `kind` field determines which resolution variants are
  *                   structurally possible:
- *                     `static`  → `TsStaticResolution`  (no `dynamic-non-literal`)
- *                     `dynamic` → `TsDynamicResolution`  (all five variants)
+ *                     `static`       → `TsStaticResolution`  (no `dynamic-non-literal`)
+ *                     `dynamic`      → `TsDynamicResolution`  (all five variants including `dynamic-non-literal`)
+ *                     `cjs-require`  → `TsDynamicResolution`  (same as `dynamic`; non-literal `require(varName)` produces `dynamic-non-literal`)
  *                   This invariant is enforced structurally by the DU below;
  *                   the compiler rejects `{ kind: 'static', resolution: { kind: 'dynamic-non-literal' } }`.
  *  - `typeOnly`   — `import type { X } from ...`. Still produces graph edges:

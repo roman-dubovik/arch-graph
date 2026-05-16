@@ -213,25 +213,62 @@ describe('CJS require extraction — basic', () => {
         expect(cjsSites[0]!.resolution.kind).toBe('external');
     });
 
-    it('skips require with zero arguments', async () => {
-        // `require()` with no args is invalid but syntactically parses
+    it('require() with zero arguments emits a cjs-require site with dynamic-non-literal', async () => {
+        // `require()` with no args is invalid but syntactically parses.
+        // Previously silently dropped; now emits a structured site so it routes
+        // to diagnostics.cjsRequires rather than disappearing.
         const project = inMemoryProject({
             '/src/a.ts': `const x = require();`,
         });
         const cfg = minimalCfg('/src');
         const { sites } = await extractImports(cfg, project);
         const cjsSites = sites.filter((s) => s.kind === 'cjs-require');
-        expect(cjsSites).toHaveLength(0);
+        expect(cjsSites).toHaveLength(1);
+        expect(cjsSites[0]!.resolution.kind).toBe('dynamic-non-literal');
+        expect(cjsSites[0]!.specifier).toBe('<zero-args>');
     });
 
-    it('skips require with multiple arguments', async () => {
+    it('require() with multiple arguments emits a cjs-require site with dynamic-non-literal', async () => {
+        // Node VM extension form `require(id, opts)` — cannot resolve.
+        // Previously silently dropped; now emits a structured site so it routes
+        // to diagnostics.cjsRequires rather than disappearing.
         const project = inMemoryProject({
             '/src/a.ts': `const x = require('./foo', 'extra');`,
         });
         const cfg = minimalCfg('/src');
         const { sites } = await extractImports(cfg, project);
         const cjsSites = sites.filter((s) => s.kind === 'cjs-require');
-        expect(cjsSites).toHaveLength(0);
+        expect(cjsSites).toHaveLength(1);
+        expect(cjsSites[0]!.resolution.kind).toBe('dynamic-non-literal');
+        expect(cjsSites[0]!.specifier).toBe('<multi-args>');
+    });
+
+    it('normalizes whitespace in non-literal specifier text (strips embedded newlines)', async () => {
+        // Multi-line require expressions embed raw newlines into specifier text,
+        // which corrupts log lines and JSON output. They must be collapsed to spaces.
+        const project = inMemoryProject({
+            '/src/a.ts': 'const x = require(\n  getModuleName()\n);',
+        });
+        const cfg = minimalCfg('/src');
+        const { sites } = await extractImports(cfg, project);
+        const cjsSites = sites.filter((s) => s.kind === 'cjs-require');
+        expect(cjsSites).toHaveLength(1);
+        expect(cjsSites[0]!.specifier).not.toMatch(/\n/);
+        expect(cjsSites[0]!.resolution.kind).toBe('dynamic-non-literal');
+    });
+
+    it('captures require with space before paren — require (x)', async () => {
+        // `require ('lodash')` is legal JS (unusual but valid). The fast-path
+        // substring check `text.includes('require')` must allow this through;
+        // the per-node getText() === 'require' guard confirms it.
+        const project = inMemoryProject({
+            '/src/a.ts': `const x = require ('lodash');`,
+        });
+        const cfg = minimalCfg('/src');
+        const { sites } = await extractImports(cfg, project);
+        const cjsSites = sites.filter((s) => s.kind === 'cjs-require');
+        expect(cjsSites).toHaveLength(1);
+        expect(cjsSites[0]!.specifier).toBe('lodash');
     });
 
     it('does not produce cjs-require sites for import declarations', async () => {

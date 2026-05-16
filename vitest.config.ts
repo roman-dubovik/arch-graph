@@ -29,14 +29,6 @@ export default defineConfig({
                 'docs/**',
                 'vitest.config.ts',
             ],
-            // Instrument only the files covered by threshold enforcement so that
-            // the .worktrees/** pattern in `exclude` (needed for the parent repo)
-            // does not silently drop coverage for files added inside a worktree.
-            // Agents append to BOTH arrays when they add new coverage-gated files.
-            include: [
-                'src/extractors/imports/extractor.ts',
-                'src/mapper/imports-to-graph.ts',
-            ],
             // 95% line coverage on files matched by `include`. Agents add
             // their new files here; the threshold is enforced per-file so
             // a low-coverage existing file can't pull a new one under.

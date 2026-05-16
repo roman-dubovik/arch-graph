@@ -263,25 +263,27 @@ describe('mapImportsToGraph — cjs-require non-resolved', () => {
         expect(result.diagnostics.unresolvedImports).toHaveLength(0);
     });
 
-    it('broken-relative cjs-require goes to cjsRequires AND unresolvedImports', () => {
+    it('broken-relative cjs-require goes to cjsRequires ONLY (not unresolvedImports)', () => {
         const ownership = makeOwnership([{ id: 'svc-a', rootDir: '/root/apps/svc-a' }], []);
         const sites: TsImportSite[] = [
             cjsSite({ sourceFile: '/root/apps/svc-a/src/main.ts', specifier: './missing', kind: 'broken-relative' }),
         ];
         const result = mapImportsToGraph(sites, ownership, { fileLevel: false });
         expect(result.diagnostics.cjsRequires).toHaveLength(1);
-        expect(result.diagnostics.unresolvedImports).toHaveLength(1);
+        // cjs-require sites must NOT appear in unresolvedImports — double-counting guard
+        expect(result.diagnostics.unresolvedImports).toHaveLength(0);
         expect(result.diagnostics.counts.unresolvedInternal).toBe(1);
     });
 
-    it('broken-alias cjs-require goes to cjsRequires AND unresolvedImports', () => {
+    it('broken-alias cjs-require goes to cjsRequires ONLY (not unresolvedImports)', () => {
         const ownership = makeOwnership([{ id: 'svc-a', rootDir: '/root/apps/svc-a' }], []);
         const sites: TsImportSite[] = [
             cjsSite({ sourceFile: '/root/apps/svc-a/src/main.ts', specifier: '@scope/missing', kind: 'broken-alias' }),
         ];
         const result = mapImportsToGraph(sites, ownership, { fileLevel: false });
         expect(result.diagnostics.cjsRequires).toHaveLength(1);
-        expect(result.diagnostics.unresolvedImports).toHaveLength(1);
+        // cjs-require sites must NOT appear in unresolvedImports — double-counting guard
+        expect(result.diagnostics.unresolvedImports).toHaveLength(0);
         expect(result.diagnostics.counts.unresolvedInternal).toBe(1);
     });
 });
@@ -475,6 +477,27 @@ describe('mapImportsToGraph — dynamic sites', () => {
 // ---------------------------------------------------------------------------
 
 describe('mapImportsToGraph — file-level edges dedup', () => {
+    it('import + require to same file: edge carries cjsRequire: true', () => {
+        // Static walk runs first, so the static edge wins the has(fileKey) check.
+        // When a cjs-require targets the same (sourceFile, resolvedFile) pair,
+        // the existing edge must have cjsRequire: true merged in.
+        const ownership = makeOwnership(
+            [{ id: 'svc-a', rootDir: '/root/apps/svc-a' }],
+            [{ id: 'libs/shared', rootDir: '/root/libs/shared' }],
+        );
+        const resFile = '/root/libs/shared/index.ts';
+        const sites: TsImportSite[] = [
+            staticSite({ sourceFile: '/root/apps/svc-a/src/main.ts', specifier: 'x', resolvedFile: resFile }),
+            cjsSite({ sourceFile: '/root/apps/svc-a/src/main.ts', specifier: 'x', resolvedFile: resFile }),
+        ];
+        const result = mapImportsToGraph(sites, ownership, { fileLevel: true });
+        const fileEdges = result.edges.filter((e) => e.kind === 'ts-import');
+        // Must be deduplicated to one edge
+        expect(fileEdges).toHaveLength(1);
+        // The edge must carry cjsRequire: true even though static import was processed first
+        expect((fileEdges[0]!.meta as Record<string, unknown>).cjsRequire).toBe(true);
+    });
+
     it('same file→file pair deduped into one ts-import edge', () => {
         const ownership = makeOwnership(
             [{ id: 'svc-a', rootDir: '/root/apps/svc-a' }],
