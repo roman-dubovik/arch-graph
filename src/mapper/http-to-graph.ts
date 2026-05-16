@@ -41,7 +41,6 @@ export function mapHttpToGraph(
     const edges = new Map<string, GraphEdge>();
     const unresolved: HttpCallSite[] = [];
     const unowned: HttpCallSite[] = [];
-    const externalCalls: HttpCallSite[] = [];
 
     let literalCount = 0;
     let envRefCount = 0;
@@ -106,7 +105,6 @@ export function mapHttpToGraph(
 
         // external
         externalCount += 1;
-        externalCalls.push(s);
         const ownerId = ensureOwner(ownerNodes, owner);
         const externalId = ensureExternal(targetNodes, target.hostname);
         const key = `http-external:${ownerId}->${externalId}`;
@@ -133,7 +131,6 @@ export function mapHttpToGraph(
         diagnostics: {
             unresolved,
             unowned,
-            externalCalls,
             counts: {
                 totalSites: sites.length,
                 literal: literalCount,

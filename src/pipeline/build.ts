@@ -203,7 +203,7 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
     process.stdout.write(`mapping HTTP to graph...\n`);
     const httpMapped = mapHttpToGraph(httpSites, ownership, cfg.http);
     process.stdout.write(
-        `  nodes: ${httpMapped.nodes.length}, edges: ${httpMapped.edges.length}, unresolved: ${httpMapped.diagnostics.unresolved.length}, unowned: ${httpMapped.diagnostics.unowned.length}, external: ${httpMapped.diagnostics.externalCalls.length}\n`,
+        `  nodes: ${httpMapped.nodes.length}, edges: ${httpMapped.edges.length}, unresolved: ${httpMapped.diagnostics.unresolved.length}, unowned: ${httpMapped.diagnostics.unowned.length}, externalEdges: ${httpMapped.diagnostics.counts.external}\n`,
     );
 
     // ---- TS-imports domain ----
