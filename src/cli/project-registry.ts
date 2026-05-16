@@ -31,6 +31,14 @@ interface Registry {
     /** Literal — older/newer versions are not parsed here; loader returns empty. */
     version: 1;
     projects: RegistryEntry[];
+    /**
+     * Internal flag (NOT serialised): set when `loadRegistry` returns a
+     * synthetic empty registry because the on-disk file has an unsupported
+     * version. `saveRegistry` checks this and skips the write so a v2 file
+     * doesn't get silently overwritten with v1 empty data on the next
+     * register/unregister call.
+     */
+    frozen?: true;
 }
 
 // One-shot per-message stderr warner. Prevents 5 sequential `arch-graph init`
@@ -109,9 +117,11 @@ async function loadRegistry(): Promise<Registry> {
     if (typeof obj.version === 'number' && obj.version !== REGISTRY_VERSION) {
         warnOnce(
             `⚠ arch-graph: registry version ${obj.version} is not supported by this CLI (expects ${REGISTRY_VERSION}).\n` +
-            `  Sweep will be empty; existing file at ${path} preserved.\n`,
+            `  Sweep will be empty; existing file at ${path} preserved (no write-back).\n`,
         );
-        return { version: REGISTRY_VERSION, projects: [] };
+        // frozen → saveRegistry will refuse to overwrite. Without this, the next
+        // `registerProject` call would silently destroy the v2+ file.
+        return { version: REGISTRY_VERSION, projects: [], frozen: true };
     }
 
     if (!Array.isArray(obj.projects)) {
@@ -132,9 +142,15 @@ async function loadRegistry(): Promise<Registry> {
 }
 
 async function saveRegistry(reg: Registry): Promise<void> {
+    // Honour the frozen sentinel from loadRegistry — see Registry.frozen.
+    if (reg.frozen) return;
     const path = registryPath();
     await mkdir(dirname(path), { recursive: true });
-    await writeFile(path, JSON.stringify(reg, null, 2) + '\n', 'utf8');
+    // Strip the internal frozen flag from the serialised form (it's not part
+    // of the on-disk schema). In practice frozen registries already return
+    // above, so this is defensive.
+    const onDisk = { version: reg.version, projects: reg.projects };
+    await writeFile(path, JSON.stringify(onDisk, null, 2) + '\n', 'utf8');
 }
 
 /**

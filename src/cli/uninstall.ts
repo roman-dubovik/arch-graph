@@ -423,34 +423,60 @@ export async function removeMcpRegistrations(inv: McpInventory): Promise<void> {
 }
 
 /**
- * Verify that `installDir` looks like an arch-graph clone before allowing any
- * destructive operation against it. Reads `<installDir>/package.json` and
- * checks `name === "arch-graph"`. Returns false on any I/O / parse error —
- * i.e. fail-closed for unrecognized layouts.
+ * Why this is `string | true` for installDir validation:
+ * - 'missing-package-json' — no file at <installDir>/package.json
+ * - 'parse-error'          — package.json exists but isn't valid JSON
+ * - 'wrong-name'           — JSON parses, but name !== 'arch-graph'
+ * - true                   — passes the check
  *
- * Without this guard, a misconfigured `ARCH_GRAPH_HOME=/Users/me` would let
- * `removeGlobalInstall` issue `rm -rf /Users/me`.
+ * Distinct strings let `removeGlobalInstall` emit a targeted error that
+ * tells the user EXACTLY why we refused, rather than a one-size-fits-all
+ * "no arch-graph package.json found" message.
  */
-function isArchGraphInstall(installDir: string): boolean {
+type InstallCheck = 'missing-package-json' | 'parse-error' | 'wrong-name' | true;
+
+function checkArchGraphInstall(installDir: string): InstallCheck {
+    const pkgPath = resolve(installDir, 'package.json');
+    if (!existsSync(pkgPath)) return 'missing-package-json';
+    let pkg: unknown;
     try {
-        const pkg = JSON.parse(readFileSync(resolve(installDir, 'package.json'), 'utf8'));
-        return pkg && typeof pkg === 'object' && pkg.name === 'arch-graph';
+        pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
     } catch {
-        return false;
+        return 'parse-error';
     }
+    if (pkg && typeof pkg === 'object' && (pkg as Record<string, unknown>).name === 'arch-graph') {
+        return true;
+    }
+    return 'wrong-name';
 }
 
-export function removeGlobalInstall(installDir: string): { exitCode: number; stdout: string; stderr: string } {
+/**
+ * Result of attempting the global uninstall step. Distinct shapes for
+ * "we refused at the sentinel" vs "the script/rm actually ran" so the
+ * caller doesn't print a redundant "exited with code 1" warning on top
+ * of our already-explanatory refusal message.
+ */
+export type RemoveGlobalResult =
+    | { kind: 'refused'; reason: InstallCheck; stderr: string }
+    | { kind: 'done'; exitCode: number; stdout: string; stderr: string };
+
+export function removeGlobalInstall(installDir: string): RemoveGlobalResult {
     // Refuse to touch anything that doesn't look like an arch-graph install.
     // The most common foot-gun: an old/leaked `ARCH_GRAPH_HOME` pointing at a
     // user's $HOME, or at a directory that contained an arch-graph install
     // years ago and now holds unrelated work.
-    if (!isArchGraphInstall(installDir)) {
+    const check = checkArchGraphInstall(installDir);
+    if (check !== true) {
+        const detail = check === 'missing-package-json'
+            ? `no package.json found at ${installDir}/package.json`
+            : check === 'parse-error'
+                ? `${installDir}/package.json is not valid JSON`
+                : `${installDir}/package.json has name ≠ "arch-graph"`;
         return {
-            exitCode: 1,
-            stdout: '',
+            kind: 'refused',
+            reason: check,
             stderr:
-                `⚠ arch-graph: refusing to remove ${installDir} — no arch-graph package.json found there.\n` +
+                `⚠ arch-graph: refusing to remove ${installDir} — ${detail}.\n` +
                 `  Set ARCH_GRAPH_HOME correctly, or delete the install dir manually.\n`,
         };
     }
@@ -459,23 +485,15 @@ export function removeGlobalInstall(installDir: string): { exitCode: number; std
     if (!existsSync(script)) {
         // Older install without uninstall.sh — fall back to direct rm. This
         // shouldn't happen for fresh installs but keeps the wizard usable on
-        // legacy layouts. Still gated by isArchGraphInstall above.
+        // legacy layouts. Still gated by the sentinel check above.
         const linkAndSkill: string[] = [];
         const skill = resolve(homedir(), '.claude', 'skills', 'arch-graph');
         if (existsSync(skill)) linkAndSkill.push(skill);
         const r = spawnSync('rm', ['-rf', installDir, ...linkAndSkill], { encoding: 'utf8' });
-        return {
-            exitCode: r.status ?? 1,
-            stdout: r.stdout,
-            stderr: r.stderr,
-        };
+        return { kind: 'done', exitCode: r.status ?? 1, stdout: r.stdout, stderr: r.stderr };
     }
     const r = spawnSync('bash', [script, '--yes'], { encoding: 'utf8' });
-    return {
-        exitCode: r.status ?? 1,
-        stdout: r.stdout,
-        stderr: r.stderr,
-    };
+    return { kind: 'done', exitCode: r.status ?? 1, stdout: r.stdout, stderr: r.stderr };
 }
 
 // ─── default install dir resolution ──────────────────────────────────────────
@@ -630,15 +648,30 @@ export async function runUninstallWizard(args: UninstallArgs): Promise<void> {
         output.write('(no MCP registrations to remove)\n');
     }
 
+    let hadError = false;
+
     if (scopes.has('global') && hasAnyGlobal(inv.global)) {
         const result = removeGlobalInstall(installDir);
-        if (result.stdout) output.write(result.stdout);
-        if (result.stderr) process.stderr.write(result.stderr);
-        if (result.exitCode !== 0) {
-            process.stderr.write(`⚠ global uninstall exited with code ${result.exitCode}\n`);
+        if (result.kind === 'refused') {
+            // Sentinel refused — emit only the structured refusal message,
+            // not a generic "exited with code 1" on top.
+            process.stderr.write(result.stderr);
+            hadError = true;
+        } else {
+            if (result.stdout) output.write(result.stdout);
+            if (result.stderr) process.stderr.write(result.stderr);
+            if (result.exitCode !== 0) {
+                process.stderr.write(`⚠ global uninstall exited with code ${result.exitCode}\n`);
+                hadError = true;
+            }
         }
     } else if (scopes.has('global')) {
         output.write('(no global install to remove)\n');
+    }
+
+    if (hadError) {
+        output.write('\n⚠ done with errors — see messages above. Some scopes were not removed.\n');
+        process.exit(1);
     }
 
     output.write('\n✓ done.\n');
