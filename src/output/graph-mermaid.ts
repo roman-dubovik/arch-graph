@@ -346,7 +346,11 @@ export function renderMermaid(
         lines.push(`    class ${ids.sort().join(',')} ${cls};`);
     }
 
-    // Cycle-aware grouping — only when cycles were detected and passed in.
+    // Cycle-aware styling — only when cycles were detected and passed in.
+    // We emit cross-subgraph `style` directives rather than a `subgraph CYCLES`
+    // block because Mermaid does not allow a node to belong to two subgraphs;
+    // re-declaring a node inside `subgraph CYCLES` silently moves it out of its
+    // domain subgraph (FILES, SERVICES, etc.) and breaks the layout.
     if (cycles && cycles.cycles.length > 0) {
         // Collect all unique node ids that participate in any cycle.
         const cycleNodeIds = new Set<string>();
@@ -356,23 +360,14 @@ export function renderMermaid(
             }
         }
 
-        // Only emit the subgraph for cycle nodes that actually exist in this render.
+        // Only emit style directives for cycle nodes that actually exist in this render.
         const nodeIdSet = new Set(nodes.map((n) => n.id));
         const relevantCycleIds = [...cycleNodeIds].filter((id) => nodeIdSet.has(id)).sort();
 
-        if (relevantCycleIds.length > 0) {
-            lines.push(`    subgraph CYCLES [Cycles detected]`);
-            for (const id of relevantCycleIds) {
-                const sanitized = idMap.get(id) ?? sanitizeId(id);
-                lines.push(`        ${sanitized}`);
-            }
-            lines.push('    end');
-
-            // Emit a red style override for each cycle node.
-            for (const id of relevantCycleIds) {
-                const sanitized = idMap.get(id) ?? sanitizeId(id);
-                lines.push(`    style ${sanitized} fill:#fdd,stroke:#c00`);
-            }
+        // Emit a red style override for each cycle node (works cross-subgraph).
+        for (const id of relevantCycleIds) {
+            const sanitized = idMap.get(id) ?? sanitizeId(id);
+            lines.push(`    style ${sanitized} fill:#fdd,stroke:#c00`);
         }
     }
 

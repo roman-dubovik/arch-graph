@@ -39,7 +39,7 @@ describe('detectCycles — empty graph', () => {
         const graph = makeGraph([], []);
         const result = detectCycles(graph);
         expect(result.cycles).toHaveLength(0);
-        expect(result.counts.total).toBe(0);
+        expect(result.cycles.length).toBe(0);
         expect(result.counts.tsImport).toBe(0);
         expect(result.counts.libUsage).toBe(0);
         expect(result.counts.diImport).toBe(0);
@@ -69,7 +69,7 @@ describe('detectCycles — DAG (no cycles)', () => {
         );
         const result = detectCycles(graph);
         expect(result.cycles).toHaveLength(0);
-        expect(result.counts.total).toBe(0);
+        expect(result.cycles.length).toBe(0);
     });
 
     it('returns 0 cycles for a fan-out DAG', () => {
@@ -96,7 +96,7 @@ describe('detectCycles — self-loop', () => {
         expect(result.cycles[0]!.nodes).toEqual(['file:a']);
         expect(result.cycles[0]!.kind).toBe('ts-import');
         expect(result.counts.tsImport).toBe(1);
-        expect(result.counts.total).toBe(1);
+        expect(result.cycles.length).toBe(1);
     });
 });
 
@@ -179,7 +179,7 @@ describe('detectCycles — two disjoint cycles in different edge kinds', () => {
         expect(result.counts.tsImport).toBe(1);
         expect(result.counts.diImport).toBe(1);
         expect(result.counts.libUsage).toBe(0);
-        expect(result.counts.total).toBe(2);
+        expect(result.cycles.length).toBe(2);
 
         const tsImportCycle = result.cycles.find((c) => c.kind === 'ts-import');
         const diImportCycle = result.cycles.find((c) => c.kind === 'di-import');
@@ -299,7 +299,7 @@ describe('detectCycles — canonical normalisation', () => {
 
 describe('detectCycles — blocked node B-map (Johnson algorithm internal paths)', () => {
     it('exercises B-map unblocking via chain: blocked ancestor reachable from two paths', () => {
-        // Graph that exercises lines 140-141 (B-map unblocking cascade):
+        // Graph that exercises the B-map unblocking cascade:
         //   file:a → file:b
         //   file:b → file:c  (file:c tries to reach file:b which is blocked → B[file:b]={file:c})
         //   file:b → file:d  (file:d → file:a closes the 3-cycle a→b→d→a)
@@ -309,7 +309,7 @@ describe('detectCycles — blocked node B-map (Johnson algorithm internal paths)
         // When s=file:a, circuit(file:b) explores file:c first.
         // circuit(file:c) finds file:b blocked → adds file:c to B[file:b].
         // Then circuit(file:b) explores file:d which finds the cycle file:a→file:b→file:d→file:a.
-        // unblock(file:b) runs with B[file:b]={file:c} → lines 140-141 are hit.
+        // unblock(file:b) runs with B[file:b]={file:c} → unblock cascade fires.
         const graph = makeGraph(
             [
                 makeNode('file:a'),
@@ -326,11 +326,35 @@ describe('detectCycles — blocked node B-map (Johnson algorithm internal paths)
             ],
         );
         const result = detectCycles(graph);
-        // Should detect: file:a→file:b→file:d→file:a (3-cycle) AND file:b↔file:c (2-cycle)
-        expect(result.counts.total).toBeGreaterThanOrEqual(2);
+        // Must detect exactly: file:a→file:b→file:d→file:a (3-cycle) AND file:b↔file:c (2-cycle)
+        expect(result.cycles.length).toBe(2);
         const cycleKeys = result.cycles.map((c) => [...c.nodes].sort().join(','));
         expect(cycleKeys).toContain('file:a,file:b,file:d');
         expect(cycleKeys).toContain('file:b,file:c');
+    });
+
+    it('B-map regression: neighbor[0] finds cycle, neighbor[1] blocked — both B-entries registered', () => {
+        // Regression for the per-edge B-entry fix (Johnson's 1975 §2).
+        //
+        // Graph: a→b, b→a (2-cycle a↔b), b→c, c→b (2-cycle b↔c)
+        // When s=a, circuit(b) has two neighbors: a (=stack[0] → cycle found, found=true)
+        // and c (blocked at that moment). The B-map fix ensures B[c].add(b) is registered
+        // per-edge even though found was already true from the a-edge.
+        // Total expected: exactly 2 cycles (a↔b and b↔c).
+        const graph = makeGraph(
+            [makeNode('file:a'), makeNode('file:b'), makeNode('file:c')],
+            [
+                makeEdge('file:a', 'file:b'), // a→b
+                makeEdge('file:b', 'file:a'), // b→a (closes a↔b cycle)
+                makeEdge('file:b', 'file:c'), // b→c
+                makeEdge('file:c', 'file:b'), // c→b (closes b↔c cycle)
+            ],
+        );
+        const result = detectCycles(graph);
+        expect(result.cycles.length).toBe(2);
+        const keys = result.cycles.map((c) => [...c.nodes].sort().join(','));
+        expect(keys).toContain('file:a,file:b');
+        expect(keys).toContain('file:b,file:c');
     });
 
     it('finds all cycles in a graph with multiple interconnected components', () => {
@@ -351,6 +375,81 @@ describe('detectCycles — blocked node B-map (Johnson algorithm internal paths)
             ],
         );
         const result = detectCycles(graph);
-        expect(result.counts.total).toBeGreaterThanOrEqual(3);
+        expect(result.cycles.length).toBe(3);
+    });
+});
+
+describe('detectCycles — self-loop edgeLocations', () => {
+    it('self-loop [A] has edgeLocations with from=to=A and the correct SourceLoc', () => {
+        const graph = makeGraph(
+            [makeNode('file:a')],
+            [makeEdge('file:a', 'file:a', 'ts-import', { file: '/project/a.ts', line: 42 })],
+        );
+        const result = detectCycles(graph);
+        expect(result.cycles).toHaveLength(1);
+        const cycle = result.cycles[0]!;
+        // Self-loop: nodes = ['file:a'], edgeLocations has 1 entry with from=to=A
+        expect(cycle.nodes).toEqual(['file:a']);
+        expect(cycle.edgeLocations).toHaveLength(1);
+        const loc = cycle.edgeLocations[0]!;
+        expect(loc.from).toBe('file:a');
+        expect(loc.to).toBe('file:a');
+        expect(loc.location).toEqual({ file: '/project/a.ts', line: 42, column: 0 });
+    });
+});
+
+describe('detectCycles — 5-node cycle', () => {
+    it('detects A→B→C→D→E→A with correct length and canonical rotation', () => {
+        // Cycle: file:b→file:c→file:d→file:e→file:a→file:b
+        // Canonical (smallest node first): [file:a, file:b, file:c, file:d, file:e]
+        const graph = makeGraph(
+            [
+                makeNode('file:a'), makeNode('file:b'), makeNode('file:c'),
+                makeNode('file:d'), makeNode('file:e'),
+            ],
+            [
+                makeEdge('file:a', 'file:b', 'ts-import', { file: '/a.ts', line: 1 }),
+                makeEdge('file:b', 'file:c', 'ts-import', { file: '/b.ts', line: 2 }),
+                makeEdge('file:c', 'file:d', 'ts-import', { file: '/c.ts', line: 3 }),
+                makeEdge('file:d', 'file:e', 'ts-import', { file: '/d.ts', line: 4 }),
+                makeEdge('file:e', 'file:a', 'ts-import', { file: '/e.ts', line: 5 }),
+            ],
+        );
+        const result = detectCycles(graph);
+        expect(result.cycles).toHaveLength(1);
+        const cycle = result.cycles[0]!;
+        expect(cycle.nodes.length).toBe(5);
+        expect(cycle.edgeLocations.length).toBe(5);
+        // Canonical rotation: file:a is the smallest → must be nodes[0]
+        expect(cycle.nodes[0]).toBe('file:a');
+        expect(cycle.nodes).toEqual(['file:a', 'file:b', 'file:c', 'file:d', 'file:e']);
+        // All edge locations populated
+        for (const el of cycle.edgeLocations) {
+            expect(el.location).toBeDefined();
+        }
+    });
+
+    it('5-node cycle: canonical rotation when smallest node is not first-explored', () => {
+        // Build the cycle in an order where b is explored first (b→c→d→e→a→b).
+        // Smallest node is file:a, which must end up as nodes[0] after canonicalise.
+        const graph = makeGraph(
+            [
+                makeNode('file:b'), makeNode('file:c'), makeNode('file:d'),
+                makeNode('file:e'), makeNode('file:a'),
+            ],
+            [
+                makeEdge('file:b', 'file:c'),
+                makeEdge('file:c', 'file:d'),
+                makeEdge('file:d', 'file:e'),
+                makeEdge('file:e', 'file:a'),
+                makeEdge('file:a', 'file:b'),
+            ],
+        );
+        const result = detectCycles(graph);
+        expect(result.cycles).toHaveLength(1);
+        const cycle = result.cycles[0]!;
+        expect(cycle.nodes.length).toBe(5);
+        // Regardless of exploration order, file:a (smallest) must be first.
+        expect(cycle.nodes[0]).toBe('file:a');
     });
 });

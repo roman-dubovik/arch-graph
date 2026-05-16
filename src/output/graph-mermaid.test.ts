@@ -29,7 +29,7 @@ function makeGraph(nodes: GraphNode[], edges: GraphEdge[]): ArchGraph {
 }
 
 function noCycles(): CyclesDiagnostics {
-    return { cycles: [], counts: { tsImport: 0, libUsage: 0, diImport: 0, total: 0 } };
+    return { cycles: [], counts: { tsImport: 0, libUsage: 0, diImport: 0 } };
 }
 
 // ============================================================================
@@ -177,7 +177,10 @@ describe('renderMermaid — baseline', () => {
 // ============================================================================
 
 describe('renderMermaid — cycle-aware grouping', () => {
-    it('emits subgraph CYCLES block when cycles are detected', () => {
+    it('does NOT emit subgraph CYCLES block when cycles are detected (style-only approach)', () => {
+        // subgraph CYCLES was dropped: Mermaid disallows a node in two subgraphs,
+        // re-declaration would silently move it out of its domain subgraph.
+        // Cycle nodes are highlighted via cross-subgraph `style` directives instead.
         const nodes = [makeNode('svc:a', 'service'), makeNode('svc:b', 'service')];
         const cycles: CyclesDiagnostics = {
             cycles: [
@@ -190,12 +193,14 @@ describe('renderMermaid — cycle-aware grouping', () => {
                     ],
                 },
             ],
-            counts: { tsImport: 0, libUsage: 1, diImport: 0, total: 1 },
+            counts: { tsImport: 0, libUsage: 1, diImport: 0 },
         };
 
         const { body } = renderMermaid(nodes, [], 200, cycles);
-        expect(body).toContain('subgraph CYCLES');
-        expect(body).toContain('Cycles detected');
+        expect(body).not.toContain('subgraph CYCLES');
+        expect(body).not.toContain('Cycles detected');
+        // But style directives ARE emitted
+        expect(body).toContain('fill:#fdd,stroke:#c00');
     });
 
     it('emits style with red fill for each cycle node', () => {
@@ -208,7 +213,7 @@ describe('renderMermaid — cycle-aware grouping', () => {
                     edgeLocations: [],
                 },
             ],
-            counts: { tsImport: 0, libUsage: 1, diImport: 0, total: 1 },
+            counts: { tsImport: 0, libUsage: 1, diImport: 0 },
         };
 
         const { body } = renderMermaid(nodes, [], 200, cycles);
@@ -232,7 +237,7 @@ describe('renderMermaid — cycle-aware grouping', () => {
                     edgeLocations: [],
                 },
             ],
-            counts: { tsImport: 0, libUsage: 1, diImport: 0, total: 1 },
+            counts: { tsImport: 0, libUsage: 1, diImport: 0 },
         };
 
         const { body } = renderMermaid(nodes, [], 200, cycles);
@@ -253,17 +258,17 @@ describe('renderMermaid — cycle-aware grouping', () => {
                     edgeLocations: [],
                 },
             ],
-            counts: { tsImport: 0, libUsage: 1, diImport: 0, total: 1 },
+            counts: { tsImport: 0, libUsage: 1, diImport: 0 },
         };
 
         const { body } = renderMermaid(nodes, [], 200, cycles);
-        expect(body).toContain('subgraph CYCLES');
+        expect(body).not.toContain('subgraph CYCLES');
         const styleLines = body.split('\n').filter((l) => l.includes('fill:#fdd'));
         // Only svc:a gets styled (svc:b not in this slice)
         expect(styleLines).toHaveLength(1);
     });
 
-    it('no CYCLES subgraph when all cycle nodes absent from slice', () => {
+    it('no style directives when all cycle nodes absent from slice', () => {
         // Neither cycle node is in the render
         const nodes = [makeNode('svc:c', 'service')];
         const cycles: CyclesDiagnostics = {
@@ -274,11 +279,12 @@ describe('renderMermaid — cycle-aware grouping', () => {
                     edgeLocations: [],
                 },
             ],
-            counts: { tsImport: 0, libUsage: 1, diImport: 0, total: 1 },
+            counts: { tsImport: 0, libUsage: 1, diImport: 0 },
         };
 
         const { body } = renderMermaid(nodes, [], 200, cycles);
         expect(body).not.toContain('subgraph CYCLES');
+        expect(body).not.toContain('fill:#fdd');
     });
 
     it('handles multiple cycles with shared nodes correctly', () => {
@@ -292,26 +298,27 @@ describe('renderMermaid — cycle-aware grouping', () => {
                 { kind: 'lib-usage', nodes: ['svc:a', 'svc:b'], edgeLocations: [] },
                 { kind: 'lib-usage', nodes: ['svc:a', 'svc:c'], edgeLocations: [] },
             ],
-            counts: { tsImport: 0, libUsage: 2, diImport: 0, total: 2 },
+            counts: { tsImport: 0, libUsage: 2, diImport: 0 },
         };
 
         const { body } = renderMermaid(nodes, [], 200, cycles);
-        expect(body).toContain('subgraph CYCLES');
-        // All three nodes should appear in the CYCLES subgraph
+        expect(body).not.toContain('subgraph CYCLES');
+        // All three nodes should get red style overrides
         const styleLines = body.split('\n').filter((l) => l.includes('fill:#fdd'));
         expect(styleLines).toHaveLength(3);
     });
 
-    it('omits CYCLES block for empty graph (empty-graph guard takes precedence)', () => {
+    it('omits style directives for empty graph (empty-graph guard takes precedence)', () => {
         // No nodes at all — renderMermaid returns early with placeholder
         const cycles: CyclesDiagnostics = {
             cycles: [{ kind: 'ts-import', nodes: ['file:a'], edgeLocations: [] }],
-            counts: { tsImport: 1, libUsage: 0, diImport: 0, total: 1 },
+            counts: { tsImport: 1, libUsage: 0, diImport: 0 },
         };
         const { body } = renderMermaid([], [], 200, cycles);
-        // empty-graph placeholder is emitted, no CYCLES block
+        // empty-graph placeholder is emitted, no CYCLES block, no style
         expect(body).toContain('no nodes in this slice');
         expect(body).not.toContain('subgraph CYCLES');
+        expect(body).not.toContain('fill:#fdd');
     });
 });
 
@@ -392,19 +399,21 @@ describe('writeGraphMermaid — full slice (default)', () => {
         });
     });
 
-    it('passes cycles to renderMermaid and includes CYCLES subgraph', async () => {
+    it('passes cycles to renderMermaid and emits red style for cycle nodes', async () => {
         const nodes = [makeNode('svc:a', 'service'), makeNode('svc:b', 'service')];
         const graph = makeGraph(nodes, [makeEdge('svc:a', 'svc:b', 'lib-usage')]);
         const cycles: CyclesDiagnostics = {
             cycles: [{ kind: 'lib-usage', nodes: ['svc:a', 'svc:b'], edgeLocations: [] }],
-            counts: { tsImport: 0, libUsage: 1, diImport: 0, total: 1 },
+            counts: { tsImport: 0, libUsage: 1, diImport: 0 },
         };
 
         await withTempDir(async (dir) => {
             const outPath = join(dir, 'graph.mermaid');
             await writeGraphMermaid(graph, outPath, { cycles });
             const content = await readFile(outPath, 'utf8');
-            expect(content).toContain('subgraph CYCLES');
+            // No subgraph CYCLES — cycle nodes are highlighted via style directives
+            expect(content).not.toContain('subgraph CYCLES');
+            expect(content).toContain('fill:#fdd,stroke:#c00');
         });
     });
 });
@@ -479,6 +488,109 @@ describe('writeGraphMermaid — per-service slice', () => {
                 slice: { kind: 'per-service' },
             });
             expect(written).toHaveLength(0);
+        });
+    });
+
+    it('per-service slice: each service file gets style for cycle nodes it contains', async () => {
+        // svc:a and svc:b have a lib-usage cycle between them.
+        // svc:c has an http-call to svc:a.
+        // Each per-service file should get `style` for any cycle node present in its slice.
+        const nodes = [
+            makeNode('svc:a', 'service'),
+            makeNode('svc:b', 'service'),
+            makeNode('svc:c', 'service'),
+        ];
+        const edges = [
+            makeEdge('svc:a', 'svc:b', 'lib-usage'),
+            makeEdge('svc:b', 'svc:a', 'lib-usage'),
+            makeEdge('svc:c', 'svc:a', 'http-call'),
+        ];
+        const graph = makeGraph(nodes, edges);
+        const cycles: CyclesDiagnostics = {
+            cycles: [{ kind: 'lib-usage', nodes: ['svc:a', 'svc:b'], edgeLocations: [] }],
+            counts: { tsImport: 0, libUsage: 1, diImport: 0 },
+        };
+
+        await withTempDir(async (dir) => {
+            const sliceDir = join(dir, 'slices');
+            const written = await writeGraphMermaid(graph, sliceDir, {
+                slice: { kind: 'per-service' },
+                cycles,
+            });
+            // All 3 services have at least one touching edge → 3 files
+            expect(written).toHaveLength(3);
+
+            for (const f of written) {
+                const content = await readFile(f, 'utf8');
+                // svc:c's file contains svc:a (which is a cycle node) → style should be present
+                // svc:a's file contains both svc:a and svc:b (both cycle nodes)
+                // svc:b's file contains both svc:a and svc:b (both cycle nodes)
+                // At minimum: any file containing svc:a or svc:b should have a style directive
+                if (content.includes('svc_a') || content.includes('svc_b')) {
+                    expect(content).toContain('fill:#fdd,stroke:#c00');
+                }
+                expect(content).not.toContain('subgraph CYCLES');
+            }
+        });
+    });
+});
+
+describe('writeGraphMermaid — domain slice with cycles', () => {
+    it('domain slice: emits style for cycle nodes present in the domain slice', async () => {
+        // lib-usage domain slice includes both svc:a and svc:b which are cycle nodes
+        const nodes = [
+            makeNode('svc:a', 'service'),
+            makeNode('svc:b', 'service'),
+            makeNode('svc:c', 'service'),
+        ];
+        const edges = [
+            makeEdge('svc:a', 'svc:b', 'lib-usage'),
+            makeEdge('svc:b', 'svc:a', 'lib-usage'),
+            makeEdge('svc:a', 'svc:c', 'http-call'), // http edge — not in lib domain slice
+        ];
+        const graph = makeGraph(nodes, edges);
+        const cycles: CyclesDiagnostics = {
+            cycles: [{ kind: 'lib-usage', nodes: ['svc:a', 'svc:b'], edgeLocations: [] }],
+            counts: { tsImport: 0, libUsage: 1, diImport: 0 },
+        };
+
+        await withTempDir(async (dir) => {
+            const outPath = join(dir, 'lib.mermaid');
+            await writeGraphMermaid(graph, outPath, {
+                slice: { kind: 'domain', domain: 'lib' },
+                cycles,
+            });
+            const content = await readFile(outPath, 'utf8');
+            // Both svc:a and svc:b are in the lib-usage domain slice and in the cycle
+            expect(content).toContain('fill:#fdd,stroke:#c00');
+            expect(content).not.toContain('subgraph CYCLES');
+            // svc:c is not in lib-usage slice → should NOT have red style
+            expect(content).not.toMatch(/svc_c.*fill:#fdd/);
+        });
+    });
+
+    it('domain slice: no cycle styles when cycle nodes fall outside the domain', async () => {
+        // ts-import domain has a cycle but the lib-usage domain does not
+        const nodes = [makeNode('svc:a', 'service'), makeNode('svc:b', 'service')];
+        const edges = [
+            makeEdge('svc:a', 'svc:b', 'lib-usage'),
+        ];
+        const graph = makeGraph(nodes, edges);
+        const cycles: CyclesDiagnostics = {
+            // ts-import cycle between svc:x and svc:y — nodes not in this graph
+            cycles: [{ kind: 'ts-import', nodes: ['svc:x', 'svc:y'], edgeLocations: [] }],
+            counts: { tsImport: 1, libUsage: 0, diImport: 0 },
+        };
+
+        await withTempDir(async (dir) => {
+            const outPath = join(dir, 'lib.mermaid');
+            await writeGraphMermaid(graph, outPath, {
+                slice: { kind: 'domain', domain: 'lib' },
+                cycles,
+            });
+            const content = await readFile(outPath, 'utf8');
+            // svc:x and svc:y not in this graph → no style directives
+            expect(content).not.toContain('fill:#fdd');
         });
     });
 });

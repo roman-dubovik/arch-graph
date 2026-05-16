@@ -3,7 +3,7 @@ import { Project } from 'ts-morph';
 
 import type { ArchGraphConfig } from '../core/config.js';
 import { discoverOwnership } from '../core/service-registry.js';
-import type { ArchGraph, BuildValidation, DiagnosticsReport } from '../core/types.js';
+import type { ArchGraph, BuildValidation, CyclesDiagnostics, DiagnosticsReport } from '../core/types.js';
 import { extractBullMq } from '../extractors/bullmq/extractor.js';
 import { extractDi } from '../extractors/di/extractor.js';
 import { extractHttp } from '../extractors/http/extractor.js';
@@ -245,11 +245,17 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
 
     // ---- Cycle detection ----
     process.stdout.write(`detecting cycles...\n`);
-    const cyclesDiagnostics = detectCycles(graph);
+    let cyclesDiagnostics: CyclesDiagnostics;
+    try {
+        cyclesDiagnostics = detectCycles(graph);
+    } catch (err) {
+        process.stderr.write(`[build] cycle detection failed: ${err}\n`);
+        cyclesDiagnostics = { cycles: [], counts: { tsImport: 0, libUsage: 0, diImport: 0 } };
+    }
     {
         const c = cyclesDiagnostics.counts;
         process.stdout.write(
-            `  cycles: total: ${c.total} (ts-import: ${c.tsImport}, lib-usage: ${c.libUsage}, di-import: ${c.diImport})\n`,
+            `  cycles: total: ${cyclesDiagnostics.cycles.length} (ts-import: ${c.tsImport}, lib-usage: ${c.libUsage}, di-import: ${c.diImport})\n`,
         );
     }
 

@@ -254,7 +254,8 @@ export interface DiagnosticsReport {
  */
 export interface ImportCycle {
     kind: 'ts-import' | 'lib-usage' | 'di-import';
-    nodes: string[];
+    /** At least one node required; a single-element array represents a self-loop. */
+    nodes: [string, ...string[]];
     /** Locations of the back-edge for each step (file:line where `import` lives). */
     edgeLocations: Array<{ from: string; to: string; location?: SourceLoc }>;
 }
@@ -265,7 +266,6 @@ export interface CyclesDiagnostics {
         tsImport: number;
         libUsage: number;
         diImport: number;
-        total: number;
     };
 }
 
