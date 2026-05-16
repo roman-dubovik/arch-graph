@@ -1,9 +1,0 @@
-{
-    "id": "screenia",
-    "root": "/Users/romandubovik/Documents/Projects/screenia",
-    "appsGlob": "apps/*",
-    "libsGlob": "libs/**",
-    "wrapperPublishApis": [],
-    "wrapperSubscribeApis": [],
-    "excludeGlobs": []
-}

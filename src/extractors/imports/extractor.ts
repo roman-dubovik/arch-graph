@@ -333,9 +333,9 @@ function buildAliasResolver(root: string): AliasResolverBundle {
     // and the iteration here would otherwise repeat for every call.
     //
     // We track exact keys and prefix keys separately. For prefix keys
-    // (`@platform/*`), we drop the `*` AND keep the trailing slash. Without
-    // the slash, `@platform-other/foo` would falsely match `@platform/*`
-    // via naive `startsWith('@platform')`. Trailing `/` is the only honest
+    // (`@scope/*`), we drop the `*` AND keep the trailing slash. Without
+    // the slash, `@scope-other/foo` would falsely match `@scope/*`
+    // via naive `startsWith('@scope')`. Trailing `/` is the only honest
     // boundary marker in TypeScript path aliases.
     const aliasPrefixesWithSlash: string[] = [];
     for (const key of paths.keys()) {
@@ -348,7 +348,7 @@ function buildAliasResolver(root: string): AliasResolverBundle {
 
     const resolveFn: AliasResolver = (specifier: string): string | null => {
         // Exact-key match (no `/*`) — most aliases are leaf-only barrels:
-        //   "@platform/messaging": ["libs/platform/messaging/src/index.ts"]
+        //   "@scope/messaging": ["libs/messaging/src/index.ts"]
         const exact = paths.get(specifier);
         if (exact) {
             for (const p of exact) {
@@ -357,7 +357,7 @@ function buildAliasResolver(root: string): AliasResolverBundle {
                 if (probed) return probed;
             }
         }
-        // Prefix match (`@platform/messaging/*` → `libs/platform/messaging/src/*`).
+        // Prefix match (`@scope/messaging/*` → `libs/messaging/src/*`).
         // We iterate from longest to shortest key so `@a/b/*` wins over `@a/*`.
         for (const [key, targets] of paths) {
             if (!key.endsWith('/*')) continue;
@@ -379,7 +379,7 @@ function buildAliasResolver(root: string): AliasResolverBundle {
         // Exact match (alias `"@scope/pkg"` without `/*`).
         if (paths.has(specifier)) return true;
         // Prefix match — `specifier` starts with `<prefix>/`. The trailing `/`
-        // is critical: without it `@platform/` would falsely match `@platform-other`,
+        // is critical: without it `@scope/` would falsely match `@scope-other`,
         // and `@a/` would falsely match `@ab/c`.
         for (const prefix of aliasPrefixesWithSlash) {
             if (specifier.startsWith(prefix)) return true;

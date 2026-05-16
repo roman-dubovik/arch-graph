@@ -48,7 +48,7 @@ Sample session:
 ```
 arch-graph init — interactive setup wizard
 
-? Project id (used as service:<id> prefix) [my-project]: platform
+? Project id (used as service:<id> prefix) [my-project]: my-project
 ? Repo root [.]:
 ? Apps glob (where services live) [apps/*]:
 ? Libs glob [libs/**]:
@@ -89,7 +89,7 @@ Non-interactive (CI) fallback: when stdin is not a TTY, `arch-graph init` writes
 
 ## What you get
 
-| Domain | Coverage | Gate | Measured on 5 monorepos |
+| Domain | Coverage | Gate | Measured on 5 NestJS monorepos in the benchmark suite |
 |---|---|---|---|
 | **NATS** | publish + subscribe via decorators and configurable wrapper APIs; literal + pattern + dynamic subject resolution | recall ≥ 95% (handlers + senders independent) | 100% recall, 5/5 |
 | **TypeORM** | `@InjectRepository(Entity)` → `@Entity` resolution across services / libs | recall ≥ 95% + resolveRate ≥ 95% | 100% / 100%, 5/5 |
@@ -191,7 +191,7 @@ arch-graph who-publishes user.created --table
 ```
 role       owner         counterpart    kind          file                     line
 ---------  ------------  -------------  ------------  -----------------------  ----
-publisher  platform-api  user.created   nats-publish  apps/api/user.service.ts  42
+publisher  my-api        user.created   nats-publish  apps/api/user.service.ts  42
 ```
 
 The Claude Code skill calls these subcommands automatically when answering architecture questions — it's cheaper than an MCP round-trip and requires no running server.
@@ -210,7 +210,7 @@ The CLI query subcommands are preferred over MCP when both are available (no std
 
 ## Limitations & honesty
 
-This is a **static** extractor. It does not see runtime configuration, container env values, or dynamically constructed identifiers. The following are deferred or intentionally out of scope (see `05-deferred-patterns.md` and `OPEN-QUESTIONS.md`):
+This is a **static** extractor. It does not see runtime configuration, container env values, or dynamically constructed identifiers. The following are deferred or intentionally out of scope:
 
 - **D1** — Dynamic NATS subjects (`subject.${userId}`) are recorded as `unresolved` in `diagnostics.json`, not invented as edges.
 - **D2** — gRPC / Kafka / SQS — not yet covered; only NATS + BullMQ + HTTP are wired.
@@ -223,14 +223,18 @@ To extend coverage, add an extractor under `src/extractors/<domain>/` and wire i
 
 ## Benchmark
 
-Quantitative comparison with graphify across 5 reference monorepos lives in `bench/report.md` — run `bash bench/run.sh` to rebuild it. Key finding: arch-graph uses **7.6× fewer LLM context tokens** than graphify per architectural question (688k vs 5.2M tokens across 15 questions), because it returns typed structured results instead of raw graph dumps.
+Quantitative comparison with graphify across 5 NestJS monorepos lives in `bench/report.md`. Key finding: arch-graph uses **7.6× fewer LLM context tokens** than graphify per architectural question (688k vs 5.2M tokens across 15 questions), because it returns typed structured results instead of raw graph dumps. The five reference projects are anonymized as `Project A`–`E` in the report. To reproduce on your own monorepos, drop one `configs/<id>.config.ts` per project and run `bash bench/run.sh` — see `bench/README.md`.
 
 ## Development
 
 ```sh
 npm install
-npm run dev -- build --config <project>.config.ts   # tsx-driven, no build step
-npx tsc --noEmit                                    # typecheck
+npm run dev -- build --config example.config.ts   # tsx-driven, no build step
+npx tsc --noEmit                                  # typecheck
 ```
 
-Sample configs under `configs/` are the 5 monorepos the validation gates are measured against. The `poc/` directory is the original POC and is not part of the published surface.
+`configs/example.config.ts` is a starter template — copy it to `configs/<your-id>.config.ts`, point `root` at your NestJS monorepo, and pass it via `--config`.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

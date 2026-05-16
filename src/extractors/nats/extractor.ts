@@ -434,7 +434,7 @@ function matchApi(target: Node, methodName: string, apis: WrapperApi[]): Wrapper
     }
 
     // Text fallback: identifier name often embeds class name verbatim
-    // (`this.platformConnectionService.publish(...)`). No looser `\bclient\b` rule —
+    // (`this.myNatsService.publish(...)`). No looser `\bclient\b` rule —
     // it mis-typed httpClient/redisClient calls as NATS publishes.
     const text = target.getText().toLowerCase();
     return candidates.find((api) => text.includes(api.class.toLowerCase())) ?? null;

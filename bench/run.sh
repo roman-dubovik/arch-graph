@@ -39,7 +39,25 @@ if [ ! -d "node_modules/@dqbd/tiktoken" ] || [ ! -d "node_modules/js-yaml" ]; th
 fi
 
 # ── Step 2: rebuild each project (or skip if cached + --skip-arch) ────────
-PROJECTS=(platform insyra beribuy2 unpacks screenia)
+#
+# The project list is derived from `configs/*.config.ts`. The included
+# `configs/example.config.ts` is the public template — to benchmark your
+# own monorepos, drop additional `configs/<id>.config.ts` files in place
+# and add matching questions to `bench/questions.yaml` (using `<id>` as
+# the `project:` value).
+PROJECTS=()
+for cfg in configs/*.config.ts; do
+    [ -e "$cfg" ] || continue
+    base="$(basename "$cfg" .config.ts)"
+    [ "$base" = "example" ] && continue
+    PROJECTS+=("$base")
+done
+
+if [ "${#PROJECTS[@]}" -eq 0 ]; then
+    echo "[bench] no project configs found under configs/ (only example.config.ts ships by default)."
+    echo "[bench] add configs/<id>.config.ts files and question entries to bench/questions.yaml, then re-run."
+    exit 0
+fi
 
 # Build-times accumulator (JSON; we rebuild it from scratch each run unless --skip-arch)
 BUILD_TIMES_JSON='{}'
@@ -98,7 +116,7 @@ print(m.group(1) if m else '')
         echo "[bench]   ${proj}: $cand2"
     else
         echo "[bench]   ${proj}: NOT FOUND (graphify leg will be skipped)"
-        echo "[bench]     to produce: run \`/graphify ${root}\` in a Claude Code session"
+        echo "[bench]     to produce: run graphify as a Claude Code skill against ${root}"
     fi
 done
 

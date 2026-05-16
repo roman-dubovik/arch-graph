@@ -3,6 +3,13 @@
     "version": "0.1.0",
     "private": true,
     "type": "module",
+    "description": "Static architecture graph for NestJS monorepos — NATS, BullMQ, TypeORM, DI, HTTP, TS imports.",
+    "author": "Roman Dubovik",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/roman-dubovik/arch-graph"
+    },
     "bin": {
         "arch-graph": "./bin/arch-graph"
     },

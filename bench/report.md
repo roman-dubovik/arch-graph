@@ -4,8 +4,9 @@ _Generated: 2026-05-15T20:47:24.567Z_
 
 ## What this measures
 
-For each of 5 NestJS monorepos (`platform`, `insyra`, `beribuy2`, `unpacks`,
-`screenia`), we built **two** knowledge graphs:
+For each of 5 NestJS monorepos (anonymized as `Project A` (large),
+`Project B` (large), `Project C` (medium), `Project D` (small),
+`Project E` (small)), we built **two** knowledge graphs:
 
 - **arch-graph** — a NestJS-specific static graph (typed nodes + edges:
   NATS subjects, BullMQ queues, TypeORM tables, DI modules/providers, HTTP
@@ -50,31 +51,31 @@ truth each tool delivers per token of LLM context.
 
 | project | arch nodes/edges | arch size | arch build | arch avg tokens | arch recall | graphify nodes/edges | graphify size | graphify avg tokens | graphify recall |
 |---|---|---|---|---|---|---|---|---|---|
-| platform | 894n / 1532e | 892.8 KB | — | 65763 | 100% | 11440n / 10588e | 9.07 MB | 718155 | 42% |
-| insyra | 898n / 1222e | 770.9 KB | — | 63101 | 100% | unavailable | — | — | — |
-| screenia | 358n / 552e | 332.9 KB | — | 23679 | 100% | 5163n / 4664e | 4.42 MB | 302999 | 33% |
-| unpacks | 245n / 352e | 219.3 KB | — | 16391 | 100% | unavailable | — | — | — |
-| beribuy2 | 144n / 189e | 117.8 KB | — | 8570 | 100% | unavailable | — | — | — |
+| Project A (large) | 894n / 1532e | 892.8 KB | — | 65763 | 100% | 11440n / 10588e | 9.07 MB | 718155 | 42% |
+| Project B (large) | 898n / 1222e | 770.9 KB | — | 63101 | 100% | unavailable | — | — | — |
+| Project C (medium) | 358n / 552e | 332.9 KB | — | 23679 | 100% | 5163n / 4664e | 4.42 MB | 302999 | 33% |
+| Project D (small) | 245n / 352e | 219.3 KB | — | 16391 | 100% | unavailable | — | — | — |
+| Project E (small) | 144n / 189e | 117.8 KB | — | 8570 | 100% | unavailable | — | — | — |
 
 ## Per-question breakdown
 
 | qid | project | category | arch tokens | arch P | arch R | graphify tokens | graphify P | graphify R |
 |---|---|---|---|---|---|---|---|---|
-| q01 | platform | nats | 65763 | 100% | 100% | 718155 | 0% | 0% |
-| q02 | platform | nats | 65763 | 100% | 100% | 718155 | 100% | 33% |
-| q03 | insyra | nats | 63101 | 100% | 100% | — | — | — |
-| q04 | screenia | nats | 23679 | 100% | 100% | 302999 | 0% | 0% |
-| q05 | platform | bullmq | 65763 | 100% | 100% | 718155 | 100% | 100% |
-| q06 | unpacks | bullmq | 16391 | 100% | 100% | — | — | — |
-| q07 | insyra | typeorm | 63101 | 100% | 100% | — | — | — |
-| q08 | beribuy2 | typeorm | 8570 | 100% | 100% | — | — | — |
-| q09 | beribuy2 | di | 8570 | 100% | 100% | — | — | — |
-| q10 | screenia | di | 23679 | 100% | 100% | 302999 | 100% | 100% |
-| q11 | platform | http | 65763 | 100% | 100% | 718155 | 100% | 67% |
-| q12 | platform | lib | 65763 | 100% | 100% | 718155 | 0% | 0% |
-| q13 | insyra | di | 63101 | 100% | 100% | — | — | — |
-| q14 | platform | multi-hop | 65763 | 100% | 100% | 718155 | 100% | 50% |
-| q15 | screenia | multi-hop | 23679 | 100% | 100% | 302999 | 0% | 0% |
+| q01 | A | nats | 65763 | 100% | 100% | 718155 | 0% | 0% |
+| q02 | A | nats | 65763 | 100% | 100% | 718155 | 100% | 33% |
+| q03 | B | nats | 63101 | 100% | 100% | — | — | — |
+| q04 | C | nats | 23679 | 100% | 100% | 302999 | 0% | 0% |
+| q05 | A | bullmq | 65763 | 100% | 100% | 718155 | 100% | 100% |
+| q06 | D | bullmq | 16391 | 100% | 100% | — | — | — |
+| q07 | B | typeorm | 63101 | 100% | 100% | — | — | — |
+| q08 | E | typeorm | 8570 | 100% | 100% | — | — | — |
+| q09 | E | di | 8570 | 100% | 100% | — | — | — |
+| q10 | C | di | 23679 | 100% | 100% | 302999 | 100% | 100% |
+| q11 | A | http | 65763 | 100% | 100% | 718155 | 100% | 67% |
+| q12 | A | lib | 65763 | 100% | 100% | 718155 | 0% | 0% |
+| q13 | B | di | 63101 | 100% | 100% | — | — | — |
+| q14 | A | multi-hop | 65763 | 100% | 100% | 718155 | 100% | 50% |
+| q15 | C | multi-hop | 23679 | 100% | 100% | 302999 | 0% | 0% |
 
 ## Aggregate
 
@@ -130,8 +131,7 @@ does **not** cover, e.g.:
 
 Numbers above (`arch build` column) come from `bench/.build-times.json`,
 populated by `bench/run.sh`. We don't time graphify here because it must be
-launched as a Claude skill (`/graphify <path>`), not from a script — see
-`bench/README.md`.
+launched as a Claude skill, not from a script — see `bench/README.md`.
 
 ## Honesty disclaimer
 
@@ -149,13 +149,20 @@ kinds of questions** ("who publishes X?", "who consumes Y?", "what imports Z?")
 when fixing bugs, doing rollouts, or scoping changes. The bench shows what a
 domain-specific tool buys you over a generic one for that workload.
 
+## Reproducing on your own monorepos
+
+The numbers above were measured against five private NestJS monorepos that
+are not shipped with this repo. To run the benchmark on your own projects,
+create one `configs/<id>.config.ts` per project (see `configs/example.config.ts`
+as a starting template), add matching questions to `bench/questions.yaml`,
+then run `bash bench/run.sh`.
+
 ## Skipped legs
 
-- **insyra** — no `graphify-out/graph.json` found at `insyra/graphify-out/` or `bench/cache/insyra/graphify-out/`
-- **unpacks** — no `graphify-out/graph.json` found at `unpacks/graphify-out/` or `bench/cache/unpacks/graphify-out/`
-- **beribuy2** — no `graphify-out/graph.json` found at `beribuy2/graphify-out/` or `bench/cache/beribuy2/graphify-out/`
+- **Project B (large)** — no `graphify-out/graph.json` available
+- **Project D (small)** — no `graphify-out/graph.json` available
+- **Project E (small)** — no `graphify-out/graph.json` available
 
-To populate the graphify leg for a project, run `/graphify <project_root>` in
-a Claude Code session (graphify is a skill, not a one-shot CLI). The output
-should land at `<project_root>/graphify-out/graph.json`. Re-run
-`bash bench/run.sh` afterwards.
+To populate the graphify leg for a project, run graphify as a Claude Code
+skill against the project root. The output should land at
+`<project_root>/graphify-out/graph.json`. Re-run `bash bench/run.sh` afterwards.
