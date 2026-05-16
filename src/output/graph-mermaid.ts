@@ -561,7 +561,7 @@ export function parseSliceMode(raw: string): MermaidSliceMode {
         const key = raw.slice('domain:'.length);
         if (!isDomainKey(key)) {
             throw new Error(
-                `unknown mermaid-slice domain '${key}'; valid: nats, bullmq, typeorm, http, di, ts-import, lib`,
+                `unknown mermaid-slice domain '${key}'; valid: nats, bullmq, typeorm, http, di, ts-import, lib, endpoint, config, scoped`,
             );
         }
         return { kind: 'domain', domain: key };
@@ -579,7 +579,10 @@ function isDomainKey(s: string): s is DomainKey {
         s === 'http' ||
         s === 'di' ||
         s === 'ts-import' ||
-        s === 'lib'
+        s === 'lib' ||
+        s === 'endpoint' ||
+        s === 'config' ||
+        s === 'scoped'
     );
 }
 
