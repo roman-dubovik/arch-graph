@@ -24,6 +24,7 @@ import { buildImportsReport, enumerateImportsGroundTruth } from '../validation/i
 import { enumerateSenders } from '../validation/senders.js';
 import { enumerateTypeOrmGroundTruth, buildTypeOrmReport } from '../validation/typeorm-validator.js';
 import { buildReport as buildNatsReport } from '../validation/validator.js';
+import { detectCycles } from '../detectors/cycles.js';
 
 export interface BuildResult {
     graph: ArchGraph;
@@ -241,6 +242,17 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         httpMapped,
         importsMapped,
     ]);
+
+    // ---- Cycle detection ----
+    process.stdout.write(`detecting cycles...\n`);
+    const cyclesDiagnostics = detectCycles(graph);
+    {
+        const c = cyclesDiagnostics.counts;
+        process.stdout.write(
+            `  cycles: total: ${c.total} (ts-import: ${c.tsImport}, lib-usage: ${c.libUsage}, di-import: ${c.diImport})\n`,
+        );
+    }
+
     const diagnostics: DiagnosticsReport = {
         projectId: cfg.id,
         timestamp: new Date().toISOString(),
@@ -250,7 +262,7 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         di: diMapped.diagnostics,
         http: httpMapped.diagnostics,
         imports: importsMapped.diagnostics,
-        cycles: { cycles: [], counts: { tsImport: 0, libUsage: 0, diImport: 0, total: 0 } },
+        cycles: cyclesDiagnostics,
     };
     const validation: BuildValidation = {
         projectId: cfg.id,
