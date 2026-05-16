@@ -31,7 +31,7 @@ import { resolveUrl } from './url-resolver.js';
  *   - `axios.create({ baseURL })` cross-statement tracking — client variable bindings
  *     are not traced. Inline `axios.create({...}).get(url)` chains ARE detected (via
  *     a structural AST check: receiver must be `CallExpression` on callee `axios.create`)
- *     and emitted as unresolved so they balance the GT regex. Deferred because: across
+ *     and emitted as unresolved so they balance the GT walker. Deferred because: across
  *     all 5 reference projects, `axios.create` is called without `baseURL` (only
  *     `timeout`/`headers`), so taint-tracking would yield zero useful URLs. A full
  *     implementation requires `Map<varName, ResolvedUrlBase>` with scope-boundary
@@ -121,7 +121,7 @@ function collectFromFile(sf: SourceFile, idx: ConstantIndex, out: HttpCallSite[]
         // `axios` receiver is matched directly. Client variables from `axios.create({...})`
         // are NOT traced cross-statement (would need taint analysis), but the inline chain
         // `axios.create({...}).get(url)` is detected here and emitted as unresolved so the
-        // call still appears in diagnostics (and balances the GT regex, see http-validator).
+        // call still appears in diagnostics (and balances the GT walker, see http-validator).
         if (targetText === 'axios') {
             pushIfArg(call, 0, method, 'axios', idx, out);
             return;
@@ -131,8 +131,9 @@ function collectFromFile(sf: SourceFile, idx: ConstantIndex, out: HttpCallSite[]
         // The receiver is itself a CallExpression. Unwrap one level and check whether the
         // callee is exactly `axios.create` (property-access on the `axios` identifier).
         // We do NOT accept `foo.create().<method>()` — that's an over-match that would
-        // catch any factory pattern. The GT regex (AXIOS_CREATE_RE) matches only the
-        // literal `axios.create(...)` prefix, so this check must stay aligned.
+        // catch any factory pattern. The GT balanced-paren walker (matchAxiosCreateChains)
+        // matches only the literal `axios.create(...)` prefix, so this check must stay
+        // aligned.
         // Cross-statement tracking (`const client = axios.create(...); client.get(...)`)
         // is deliberately deferred — see the out-of-scope comment at top of file.
         if (target.getKind() === SyntaxKind.CallExpression) {
