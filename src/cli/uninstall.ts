@@ -40,14 +40,19 @@ import {
     postCommitHookPath,
 } from './hooks.js';
 import { stripMarkedSection } from './marker-block.js';
+import { listProjects, unregisterProject } from './project-registry.js';
 
 // ─── argument parsing ────────────────────────────────────────────────────────
 
 export interface UninstallArgs {
     /** explicit scope selection from flags. Empty → interactive (TTY) or dry-run (non-TTY). */
     scopes: Set<UninstallScope>;
-    /** path to the project to clean — defaults to cwd. */
-    project: string;
+    /**
+     * Single-project override. When non-null, the wizard treats this path as
+     * the ONLY project to consider — registry is ignored. Default (null) means
+     * "scan the project registry (+ cwd if not yet registered)".
+     */
+    repoOverride: string | null;
     /** skip the global confirmation prompt (still respects scope selection). */
     yes: boolean;
 }
@@ -56,7 +61,7 @@ export type UninstallScope = 'project' | 'mcp' | 'global';
 
 export function parseUninstallArgs(argv: string[]): UninstallArgs {
     const scopes = new Set<UninstallScope>();
-    let project = '.';
+    let repoOverride: string | null = null;
     let yes = false;
 
     for (let i = 0; i < argv.length; i++) {
@@ -71,13 +76,13 @@ export function parseUninstallArgs(argv: string[]): UninstallArgs {
         } else if (a === '--yes' || a === '-y') {
             yes = true;
         } else if (a === '--repo' && argv[i + 1]) {
-            project = argv[++i]!;
+            repoOverride = argv[++i]!;
         } else if (a.startsWith('--repo=')) {
-            project = a.slice('--repo='.length);
+            repoOverride = a.slice('--repo='.length);
         }
     }
 
-    return { scopes, project: resolve(project), yes };
+    return { scopes, repoOverride: repoOverride ? resolve(repoOverride) : null, yes };
 }
 
 // ─── inventory types ─────────────────────────────────────────────────────────
@@ -106,10 +111,61 @@ export interface McpInventory {
     projectsWithEntry: string[];
 }
 
+export interface ProjectEntry {
+    path: string;
+    inv: ProjectInventory;
+}
+
 export interface Inventory {
-    project: ProjectInventory;
+    /**
+     * One entry per project considered. In single-project mode (--repo X)
+     * this is always exactly one item. In registry mode, it's every known
+     * project (from `listProjects()`) plus cwd if not already registered.
+     * Projects with no artefacts are still listed (so the user sees them
+     * being skipped); the registry self-prunes them later.
+     */
+    projects: ProjectEntry[];
     global: GlobalInventory;
     mcp: McpInventory;
+}
+
+/**
+ * Build the full inventory across all in-scope projects. In repoOverride mode,
+ * just the one project. Otherwise: every registry entry plus cwd if cwd has
+ * artefacts and isn't already in the registry.
+ */
+export async function buildInventory(
+    repoOverride: string | null,
+    cwd: string,
+    installDir: string,
+    binDir: string,
+): Promise<Inventory> {
+    const projects: ProjectEntry[] = [];
+
+    if (repoOverride) {
+        const inv = await inventoryProject(repoOverride);
+        projects.push({ path: repoOverride, inv });
+    } else {
+        const known = await listProjects();
+        const cwdAbs = resolve(cwd);
+        const paths = [...known];
+        if (!paths.includes(cwdAbs)) {
+            // Include cwd opportunistically — covers the case where the user
+            // ran arch-graph init in a project that pre-dates the registry,
+            // or just touched files manually.
+            const cwdInv = await inventoryProject(cwdAbs);
+            if (hasAnyProject(cwdInv)) {
+                paths.push(cwdAbs);
+            }
+        }
+        for (const p of paths) {
+            const inv = await inventoryProject(p);
+            projects.push({ path: p, inv });
+        }
+    }
+
+    const [global, mcp] = await Promise.all([inventoryGlobal(installDir, binDir), inventoryMcp()]);
+    return { projects, global, mcp };
 }
 
 // ─── inventory ────────────────────────────────────────────────────────────────
@@ -218,18 +274,27 @@ export async function inventoryMcp(): Promise<McpInventory> {
 export function renderInventory(inv: Inventory): string {
     const lines: string[] = [];
 
-    lines.push('Project artefacts in ' + (inv.project.config ? dirname(inv.project.config) : '(cwd)') + ':');
-    if (!hasAnyProject(inv.project)) {
-        lines.push('  – none found');
+    if (inv.projects.length === 0) {
+        lines.push('Project artefacts: (no projects registered, cwd is clean)');
+    } else if (inv.projects.length === 1) {
+        // Single-project rendering — same shape as before for back-compat.
+        const { path, inv: p } = inv.projects[0]!;
+        lines.push(`Project artefacts in ${path}:`);
+        if (!hasAnyProject(p)) {
+            lines.push('  – none found');
+        } else {
+            renderProjectArtefacts(lines, p);
+        }
     } else {
-        if (inv.project.config)
-            lines.push(`  ✓ ${inv.project.config}`);
-        if (inv.project.outDir)
-            lines.push(`  ✓ ${inv.project.outDir.path}  (${humanSize(inv.project.outDir.sizeBytes)})`);
-        if (inv.project.claudeMdWithBlock)
-            lines.push(`  ✓ ${inv.project.claudeMdWithBlock}  (arch-graph section)`);
-        if (inv.project.hookWithBlock)
-            lines.push(`  ✓ ${inv.project.hookWithBlock.path}  (${inv.project.hookWithBlock.mode} block)`);
+        lines.push(`Project artefacts (${inv.projects.length} known projects):`);
+        for (const { path, inv: p } of inv.projects) {
+            if (!hasAnyProject(p)) {
+                lines.push(`  ${path}  – (clean)`);
+                continue;
+            }
+            lines.push(`  ${path}:`);
+            renderProjectArtefacts(lines, p, '    ');
+        }
     }
 
     lines.push('');
@@ -258,6 +323,13 @@ export function renderInventory(inv: Inventory): string {
     }
 
     return lines.join('\n');
+}
+
+function renderProjectArtefacts(out: string[], p: ProjectInventory, prefix = '  '): void {
+    if (p.config) out.push(`${prefix}✓ ${p.config}`);
+    if (p.outDir) out.push(`${prefix}✓ ${p.outDir.path}  (${humanSize(p.outDir.sizeBytes)})`);
+    if (p.claudeMdWithBlock) out.push(`${prefix}✓ ${p.claudeMdWithBlock}  (arch-graph section)`);
+    if (p.hookWithBlock) out.push(`${prefix}✓ ${p.hookWithBlock.path}  (${p.hookWithBlock.mode} block)`);
 }
 
 function hasAnyProject(p: ProjectInventory): boolean {
@@ -431,13 +503,11 @@ export async function runUninstallWizard(args: UninstallArgs): Promise<void> {
     const installDir = process.env.ARCH_GRAPH_HOME || defaultInstallDir();
     const binDir = defaultBinDir();
 
-    const inv: Inventory = {
-        project: await inventoryProject(args.project),
-        global: await inventoryGlobal(installDir, binDir),
-        mcp: await inventoryMcp(),
-    };
+    const inv = await buildInventory(args.repoOverride, process.cwd(), installDir, binDir);
 
     output.write(renderInventory(inv) + '\n\n');
+
+    const projectsWithArtefacts = inv.projects.filter((p) => hasAnyProject(p.inv));
 
     // ── Determine which scopes to run ────────────────────────────────────────
     let scopes: Set<UninstallScope>;
@@ -448,7 +518,7 @@ export async function runUninstallWizard(args: UninstallArgs): Promise<void> {
     } else if (args.yes) {
         // --yes without explicit scopes ⇒ everything that's present
         scopes = new Set();
-        if (hasAnyProject(inv.project)) scopes.add('project');
+        if (projectsWithArtefacts.length > 0) scopes.add('project');
         if (inv.mcp.projectsWithEntry.length > 0) scopes.add('mcp');
         if (hasAnyGlobal(inv.global)) scopes.add('global');
     } else if (!process.stdin.isTTY) {
@@ -475,10 +545,16 @@ export async function runUninstallWizard(args: UninstallArgs): Promise<void> {
     if (interactive) output.write('\nProceeding...\n');
 
     // ── Execute in safe order: project → mcp → global ────────────────────────
-    if (scopes.has('project') && hasAnyProject(inv.project)) {
-        await removeProjectArtefacts(inv.project);
-    } else if (scopes.has('project')) {
-        output.write('(no project artefacts to remove)\n');
+    if (scopes.has('project')) {
+        if (projectsWithArtefacts.length === 0) {
+            output.write('(no project artefacts to remove)\n');
+        } else {
+            for (const { path, inv: pinv } of projectsWithArtefacts) {
+                output.write(`\n→ ${path}\n`);
+                await removeProjectArtefacts(pinv);
+                await unregisterProject(path);
+            }
+        }
     }
 
     if (scopes.has('mcp') && inv.mcp.projectsWithEntry.length > 0) {
@@ -504,10 +580,14 @@ export async function runUninstallWizard(args: UninstallArgs): Promise<void> {
 async function askForScopes(inv: Inventory): Promise<Set<UninstallScope>> {
     const rl = createInterface({ input, output, terminal: true });
     const scopes = new Set<UninstallScope>();
+    const projectsWithArtefacts = inv.projects.filter((p) => hasAnyProject(p.inv));
 
     try {
-        if (hasAnyProject(inv.project)) {
-            if (await askYesNo(rl, '? Remove project artefacts?', true)) scopes.add('project');
+        if (projectsWithArtefacts.length > 0) {
+            const label = projectsWithArtefacts.length === 1
+                ? '? Remove project artefacts?'
+                : `? Remove project artefacts from all ${projectsWithArtefacts.length} projects above?`;
+            if (await askYesNo(rl, label, true)) scopes.add('project');
         }
         if (inv.mcp.projectsWithEntry.length > 0) {
             if (await askYesNo(rl, '? Remove MCP registrations?', true)) scopes.add('mcp');
@@ -515,7 +595,7 @@ async function askForScopes(inv: Inventory): Promise<Set<UninstallScope>> {
         if (hasAnyGlobal(inv.global)) {
             output.write('\n⚠  Global removal deletes the CLI itself. After this,\n');
             output.write('   `arch-graph` will be gone from PATH. Per-project files in\n');
-            output.write('   OTHER repos must be cleaned manually.\n\n');
+            output.write('   any unlisted repos must be cleaned manually.\n\n');
             if (await askYesNo(rl, '? Remove global install?', false)) scopes.add('global');
         }
     } finally {

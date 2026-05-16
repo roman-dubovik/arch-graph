@@ -23,7 +23,9 @@ import {
     defaultBinDir,
     defaultInstallDir,
     runUninstallWizard,
+    buildInventory,
 } from './uninstall.js';
+import { registerProject } from './project-registry.js';
 import { MARK_START as CLAUDE_MARK_START, MARK_END as CLAUDE_MARK_END } from './claude.js';
 import { MARK_START as HOOK_MARK_START, MARK_END as HOOK_MARK_END } from './hooks.js';
 
@@ -34,7 +36,7 @@ describe('parseUninstallArgs', () => {
         const a = parseUninstallArgs([]);
         expect(a.scopes.size).toBe(0);
         expect(a.yes).toBe(false);
-        expect(a.project).toBe(resolve('.'));
+        expect(a.repoOverride).toBeNull();
     });
 
     it('--project / --mcp / --global → individual scopes', () => {
@@ -53,8 +55,8 @@ describe('parseUninstallArgs', () => {
     });
 
     it('--repo <path> and --repo=<path> both work', () => {
-        expect(parseUninstallArgs(['--repo', '/tmp/x']).project).toBe('/tmp/x');
-        expect(parseUninstallArgs(['--repo=/tmp/y']).project).toBe('/tmp/y');
+        expect(parseUninstallArgs(['--repo', '/tmp/x']).repoOverride).toBe('/tmp/x');
+        expect(parseUninstallArgs(['--repo=/tmp/y']).repoOverride).toBe('/tmp/y');
     });
 
     it('unknown flags are ignored (forward-compat)', () => {
@@ -154,11 +156,29 @@ describe('inventoryProject', () => {
 // ─── inventoryGlobal ─────────────────────────────────────────────────────────
 
 describe('inventoryGlobal', () => {
+    // inventoryGlobal reads $HOME for the skill dir path (~/.claude/skills/arch-graph).
+    // Override $HOME to a tmpdir so these tests don't leak through whatever the
+    // real $HOME state happens to be.
+    const withFakeHome = async <T>(fn: () => Promise<T>): Promise<T> => {
+        const fake = await mkdtemp(join(tmpdir(), 'ag-home-'));
+        const prev = process.env.HOME;
+        process.env.HOME = fake;
+        try {
+            return await fn();
+        } finally {
+            if (prev === undefined) delete process.env.HOME;
+            else process.env.HOME = prev;
+            await rm(fake, { recursive: true, force: true });
+        }
+    };
+
     it('empty world → all nulls', async () => {
-        const inv = await inventoryGlobal('/nonexistent/install', '/nonexistent/bin');
-        expect(inv.installDir).toBeNull();
-        expect(inv.symlinkPath).toBeNull();
-        expect(inv.skillDir).toBeNull();
+        await withFakeHome(async () => {
+            const inv = await inventoryGlobal('/nonexistent/install', '/nonexistent/bin');
+            expect(inv.installDir).toBeNull();
+            expect(inv.symlinkPath).toBeNull();
+            expect(inv.skillDir).toBeNull();
+        });
     });
 
     it('detects install dir and symlink that points into it', async () => {
@@ -292,20 +312,48 @@ describe('inventoryMcp', () => {
 // ─── renderInventory ─────────────────────────────────────────────────────────
 
 describe('renderInventory', () => {
-    it('all-empty → "none found" sections', () => {
+    const emptyProject = () => ({ config: null, outDir: null, claudeMdWithBlock: null, hookWithBlock: null });
+    const emptyGlobal = () => ({ installDir: null, symlinkPath: null, symlinkIsOurs: false, symlinkTarget: null as string | null, skillDir: null });
+    const emptyMcp = () => ({ configPath: null, projectsWithEntry: [] as string[] });
+
+    it('all-empty → "no projects registered" + "none found" sections', () => {
         const out = renderInventory({
-            project: { config: null, outDir: null, claudeMdWithBlock: null, hookWithBlock: null },
-            global: { installDir: null, symlinkPath: null, symlinkIsOurs: false, symlinkTarget: null, skillDir: null },
-            mcp: { configPath: null, projectsWithEntry: [] },
+            projects: [],
+            global: emptyGlobal(),
+            mcp: emptyMcp(),
         });
-        expect(out).toMatch(/Project artefacts.*– none found/s);
+        expect(out).toMatch(/no projects registered/);
         expect(out).toMatch(/MCP registrations.*– none found/s);
         expect(out).toMatch(/Global install.*– none found/s);
     });
 
+    it('single project with no artefacts → "none found"', () => {
+        const out = renderInventory({
+            projects: [{ path: '/p', inv: emptyProject() }],
+            global: emptyGlobal(),
+            mcp: emptyMcp(),
+        });
+        expect(out).toMatch(/Project artefacts in \/p:\s*\n\s+– none found/);
+    });
+
+    it('multi-project rendering lists every entry, marks clean ones', () => {
+        const out = renderInventory({
+            projects: [
+                { path: '/dirty', inv: { ...emptyProject(), config: '/dirty/arch-graph.config.ts' } },
+                { path: '/clean', inv: emptyProject() },
+            ],
+            global: emptyGlobal(),
+            mcp: emptyMcp(),
+        });
+        expect(out).toMatch(/2 known projects/);
+        expect(out).toContain('/dirty');
+        expect(out).toContain('/clean  – (clean)');
+        expect(out).toContain('/dirty/arch-graph.config.ts');
+    });
+
     it('flags external symlink target with warning', () => {
         const out = renderInventory({
-            project: { config: null, outDir: null, claudeMdWithBlock: null, hookWithBlock: null },
+            projects: [],
             global: {
                 installDir: { path: '/some/install', sizeBytes: 1024 * 1024 },
                 symlinkPath: '/usr/local/bin/arch-graph',
@@ -313,47 +361,24 @@ describe('renderInventory', () => {
                 symlinkTarget: '/elsewhere/arch-graph',
                 skillDir: null,
             },
-            mcp: { configPath: null, projectsWithEntry: [] },
+            mcp: emptyMcp(),
         });
         expect(out).toContain('⚠ external target, will be left alone');
     });
 
     it('humanSize covers B / KB / MB / GB', () => {
-        const big = renderInventory({
-            project: {
-                config: null,
-                outDir: { path: '/x', sizeBytes: 5 * 1024 * 1024 * 1024 },
-                claudeMdWithBlock: null,
-                hookWithBlock: null,
-            },
-            global: { installDir: null, symlinkPath: null, symlinkIsOurs: false, symlinkTarget: null, skillDir: null },
-            mcp: { configPath: null, projectsWithEntry: [] },
-        });
-        expect(big).toMatch(/5\.0 GB/);
-
-        const small = renderInventory({
-            project: {
-                config: null,
-                outDir: { path: '/x', sizeBytes: 500 },
-                claudeMdWithBlock: null,
-                hookWithBlock: null,
-            },
-            global: { installDir: null, symlinkPath: null, symlinkIsOurs: false, symlinkTarget: null, skillDir: null },
-            mcp: { configPath: null, projectsWithEntry: [] },
-        });
-        expect(small).toMatch(/500 B/);
-
-        const kb = renderInventory({
-            project: {
-                config: null,
-                outDir: { path: '/x', sizeBytes: 2048 },
-                claudeMdWithBlock: null,
-                hookWithBlock: null,
-            },
-            global: { installDir: null, symlinkPath: null, symlinkIsOurs: false, symlinkTarget: null, skillDir: null },
-            mcp: { configPath: null, projectsWithEntry: [] },
-        });
-        expect(kb).toMatch(/2\.0 KB/);
+        const sized = (n: number) =>
+            renderInventory({
+                projects: [{
+                    path: '/x',
+                    inv: { ...emptyProject(), outDir: { path: '/x/out', sizeBytes: n } },
+                }],
+                global: emptyGlobal(),
+                mcp: emptyMcp(),
+            });
+        expect(sized(5 * 1024 * 1024 * 1024)).toMatch(/5\.0 GB/);
+        expect(sized(500)).toMatch(/500 B/);
+        expect(sized(2048)).toMatch(/2\.0 KB/);
     });
 });
 
@@ -565,6 +590,83 @@ describe('removeGlobalInstall', () => {
     });
 });
 
+// ─── buildInventory (multi-project) ──────────────────────────────────────────
+
+describe('buildInventory', () => {
+    const withRegistry = async <T>(fn: () => Promise<T>): Promise<T> => {
+        const regDir = await mkdtemp(join(tmpdir(), 'ag-reg-'));
+        const prev = process.env.ARCH_GRAPH_REGISTRY;
+        process.env.ARCH_GRAPH_REGISTRY = join(regDir, 'registry.json');
+        try {
+            return await fn();
+        } finally {
+            if (prev === undefined) delete process.env.ARCH_GRAPH_REGISTRY;
+            else process.env.ARCH_GRAPH_REGISTRY = prev;
+            await rm(regDir, { recursive: true, force: true });
+        }
+    };
+
+    it('repoOverride mode → single entry, registry ignored', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 'ag-test-'));
+        const other = await mkdtemp(join(tmpdir(), 'ag-other-'));
+        try {
+            await withRegistry(async () => {
+                await registerProject(other);
+                const inv = await buildInventory(dir, '/nowhere', '/none', '/none');
+                expect(inv.projects.length).toBe(1);
+                expect(inv.projects[0]!.path).toBe(dir);
+            });
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+            await rm(other, { recursive: true, force: true });
+        }
+    });
+
+    it('no override + empty registry + clean cwd → projects=[]', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 'ag-test-'));
+        try {
+            await withRegistry(async () => {
+                const inv = await buildInventory(null, dir, '/none', '/none');
+                expect(inv.projects).toEqual([]);
+            });
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+        }
+    });
+
+    it('no override + registry has projects → returns them', async () => {
+        const a = await mkdtemp(join(tmpdir(), 'ag-a-'));
+        const b = await mkdtemp(join(tmpdir(), 'ag-b-'));
+        try {
+            await withRegistry(async () => {
+                await registerProject(a);
+                await registerProject(b);
+                const inv = await buildInventory(null, '/cwd-not-listed', '/none', '/none');
+                const paths = inv.projects.map((p) => p.path).sort();
+                expect(paths).toEqual([resolve(a), resolve(b)].sort());
+            });
+        } finally {
+            await rm(a, { recursive: true, force: true });
+            await rm(b, { recursive: true, force: true });
+        }
+    });
+
+    it('no override + cwd has artefacts but not in registry → cwd included opportunistically', async () => {
+        const cwd = await mkdtemp(join(tmpdir(), 'ag-cwd-'));
+        try {
+            await writeFile(join(cwd, 'arch-graph.config.ts'), 'export default {};');
+            await withRegistry(async () => {
+                const inv = await buildInventory(null, cwd, '/none', '/none');
+                expect(inv.projects.length).toBe(1);
+                expect(inv.projects[0]!.path).toBe(resolve(cwd));
+                expect(inv.projects[0]!.inv.config).toBeTruthy();
+            });
+        } finally {
+            await rm(cwd, { recursive: true, force: true });
+        }
+    });
+});
+
 // ─── runUninstallWizard (non-TTY paths) ──────────────────────────────────────
 
 describe('runUninstallWizard', () => {
@@ -619,7 +721,7 @@ describe('runUninstallWizard', () => {
             const out = await captureStdout(async () => {
                 await withNonTty(async () => {
                     await withEnv({ HOME: home, ARCH_GRAPH_HOME: dir, ARCH_GRAPH_BIN_DIR: join(dir, 'bin') }, async () => {
-                        await runUninstallWizard({ scopes: new Set(), project: dir, yes: false });
+                        await runUninstallWizard({ scopes: new Set(), repoOverride: dir, yes: false });
                     });
                 });
             });
@@ -640,7 +742,7 @@ describe('runUninstallWizard', () => {
                 await withEnv({ HOME: home, ARCH_GRAPH_HOME: dir, ARCH_GRAPH_BIN_DIR: join(dir, 'bin') }, async () => {
                     await runUninstallWizard({
                         scopes: new Set(['project']),
-                        project: dir,
+                        repoOverride: dir,
                         yes: false,
                     });
                 });
@@ -665,7 +767,7 @@ describe('runUninstallWizard', () => {
                 await withEnv({ HOME: home, ARCH_GRAPH_HOME: dir, ARCH_GRAPH_BIN_DIR: join(dir, 'bin') }, async () => {
                     await runUninstallWizard({
                         scopes: new Set(['project']),
-                        project: dir,
+                        repoOverride: dir,
                         yes: false,
                     });
                 });
@@ -687,7 +789,7 @@ describe('runUninstallWizard', () => {
                 await withEnv({ HOME: home, ARCH_GRAPH_HOME: dir, ARCH_GRAPH_BIN_DIR: join(dir, 'bin') }, async () => {
                     await runUninstallWizard({
                         scopes: new Set(['mcp']),
-                        project: dir,
+                        repoOverride: dir,
                         yes: false,
                     });
                 });
@@ -708,7 +810,7 @@ describe('runUninstallWizard', () => {
                 await withEnv({ HOME: home, ARCH_GRAPH_HOME: fakeInstall, ARCH_GRAPH_BIN_DIR: join(dir, 'bin') }, async () => {
                     await runUninstallWizard({
                         scopes: new Set(['global']),
-                        project: dir,
+                        repoOverride: dir,
                         yes: false,
                     });
                 });
@@ -745,7 +847,7 @@ describe('runUninstallWizard', () => {
                 await withEnv({ HOME: home, ARCH_GRAPH_HOME: fakeInstall, ARCH_GRAPH_BIN_DIR: join(dir, 'bin') }, async () => {
                     await runUninstallWizard({
                         scopes: new Set(),
-                        project: dir,
+                        repoOverride: dir,
                         yes: true,
                     });
                 });
@@ -778,7 +880,7 @@ describe('runUninstallWizard', () => {
             await captureStdout(async () => {
                 await withNonTty(async () => {
                     await withEnv({ HOME: home, ARCH_GRAPH_HOME: dir, ARCH_GRAPH_BIN_DIR: join(dir, 'bin') }, async () => {
-                        await runUninstallWizard({ scopes: new Set(), project: dir, yes: false });
+                        await runUninstallWizard({ scopes: new Set(), repoOverride: dir, yes: false });
                     });
                 });
             });

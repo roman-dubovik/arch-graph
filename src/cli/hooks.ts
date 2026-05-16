@@ -13,6 +13,7 @@ import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
 import { appendBlock, replaceMarkedSection, stripMarkedSection } from './marker-block.js';
+import { registerProject } from './project-registry.js';
 
 export const MARK_START = '# >>> arch-graph >>>';
 export const MARK_END = '# <<< arch-graph <<<';
@@ -179,6 +180,7 @@ async function writeHookBlock(filePath: string, hookName: string, body: string):
 
 export async function hookInstall(args: HookArgs): Promise<void> {
     await ensureGitRepo(args.repo);
+    await registerProject(args.repo);
 
     if (args.mode === 'pre-commit') {
         const target = preCommitHookPath(args.repo);

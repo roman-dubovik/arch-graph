@@ -102,10 +102,14 @@ Usage:
 
   arch-graph uninstall  [--project|--mcp|--global|--all] [--yes] [--repo <path>]
                         Interactive teardown wizard: removes project artefacts
-                        (config / out / CLAUDE.md section / git hook), MCP entries
-                        in ~/.claude.json, and the global install via
-                        scripts/uninstall.sh. Without flags on a TTY: walks you
-                        through each scope. Without flags off a TTY: dry-run.
+                        across ALL known projects (config / out / CLAUDE.md
+                        section / git hook), MCP entries in ~/.claude.json, and
+                        the global install. Project list comes from the
+                        registry at $XDG_STATE_HOME/arch-graph/registry.json,
+                        populated by init / claude install / hook install.
+                        --repo X confines the wizard to a single project.
+                        Without flags on a TTY: walks you through each scope.
+                        Without flags off a TTY: dry-run.
 
   arch-graph compare    [--out <dir>] [--graphify <path>] [--questions <n>] [--report <path>] [--quiet] [--share]
                         Side-by-side context-cost comparison: arch-graph vs an

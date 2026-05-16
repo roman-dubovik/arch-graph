@@ -42,11 +42,19 @@ The interactive teardown wizard walks you through every scope (project / MCP / g
 arch-graph uninstall          # interactive TTY wizard — recommended
 ```
 
+**How does it know which projects to clean?** A small registry at `$XDG_STATE_HOME/arch-graph/registry.json` (default `~/.local/state/arch-graph/registry.json`) is updated by `arch-graph init`, `arch-graph claude install`, and `arch-graph hook install` — every entry-point that touches a project. The wizard reads the registry, shows per-project inventory, and lets you clean every known project in one shot. Entries auto-prune when their directory disappears.
+
+Single-project mode (skips the registry, only touches `--repo`):
+
+```sh
+arch-graph uninstall --repo /path/to/some-project --project --yes
+```
+
 Non-interactive scope flags (for CI or scripts):
 
 ```sh
-arch-graph uninstall --project   # inside the project: config / out / CLAUDE.md / hook
-arch-graph uninstall --mcp       # MCP entry in ~/.claude.json
+arch-graph uninstall --project   # all known projects: config / out / CLAUDE.md / hook
+arch-graph uninstall --mcp       # MCP entries in ~/.claude.json
 arch-graph uninstall --global    # ~/.arch-graph + symlink + global skill
 arch-graph uninstall --all       # everything above
 arch-graph uninstall --yes       # auto-pick scopes that have anything to remove
