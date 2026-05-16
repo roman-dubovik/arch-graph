@@ -135,27 +135,29 @@ describe('mapFeToGraph — hook nodes', () => {
 // ---------------------------------------------------------------------------
 describe('mapFeToGraph — routes and pages', () => {
     it('emits fe-route and fe-page nodes', () => {
+        const PAGE_FILE = '/app/pages/users.tsx';
         const extract: FeExtractResult = {
             ...emptyExtract(),
-            routes: [{ pattern: '/users', pageFile: '/app/pages/users.tsx' }],
-            pages: [{ name: 'UsersPage', file: '/app/pages/users.tsx', location: { file: '/app/pages/users.tsx', line: 1, column: 0 }, route: '/users', router: 'pages' }],
+            routes: [{ pattern: '/users', pageFile: PAGE_FILE }],
+            pages: [{ name: 'UsersPage', file: PAGE_FILE, location: { file: PAGE_FILE, line: 1, column: 0 }, route: '/users', router: 'pages' }],
         };
         const { nodes } = mapFeToGraph(extract, makeOwnership());
         expect(nodes.some((n) => n.kind === 'fe-route' && n.id === 'fe-route:/users')).toBe(true);
-        expect(nodes.some((n) => n.kind === 'fe-page' && n.id === 'fe-page:UsersPage')).toBe(true);
+        expect(nodes.some((n) => n.kind === 'fe-page' && n.id === `fe-page:${PAGE_FILE}#UsersPage`)).toBe(true);
     });
 
     it('emits fe-routes-to edge from route to page', () => {
+        const PAGE_FILE = '/app/pages/about.tsx';
         const extract: FeExtractResult = {
             ...emptyExtract(),
-            routes: [{ pattern: '/about', pageFile: '/app/pages/about.tsx' }],
-            pages: [{ name: 'AboutPage', file: '/app/pages/about.tsx', location: { file: '/app/pages/about.tsx', line: 1, column: 0 }, route: '/about', router: 'pages' }],
+            routes: [{ pattern: '/about', pageFile: PAGE_FILE }],
+            pages: [{ name: 'AboutPage', file: PAGE_FILE, location: { file: PAGE_FILE, line: 1, column: 0 }, route: '/about', router: 'pages' }],
         };
         const { edges } = mapFeToGraph(extract, makeOwnership());
         const e = edges.find((e) => e.kind === 'fe-routes-to');
         expect(e).toBeDefined();
         expect(e!.from).toBe('fe-route:/about');
-        expect(e!.to).toBe('fe-page:AboutPage');
+        expect(e!.to).toBe(`fe-page:${PAGE_FILE}#AboutPage`);
     });
 });
 
@@ -252,7 +254,7 @@ describe('mapFeToGraph — fe-imports edges', () => {
         const { edges } = mapFeToGraph(extract, makeOwnership());
         const e = edges.find((e) => e.kind === 'fe-imports');
         expect(e).toBeDefined();
-        expect(e!.from).toBe('fe-page:HomePage');
+        expect(e!.from).toBe(`fe-page:${PAGE_FILE}#HomePage`);
         expect(e!.to).toBe(`fe-component:${BTN_FILE}#Button`);
     });
 
@@ -295,15 +297,20 @@ describe('mapFeToGraph — node deduplication', () => {
         expect(nodes.filter((n) => n.id === 'fe-route:/about')).toHaveLength(1);
     });
 
-    it('deduplicates page nodes with same name', () => {
-        const page = { name: 'AboutPage', file: '/app/pages/about.tsx', location: { file: '/app/pages/about.tsx', line: 1, column: 0 }, route: '/about', router: 'pages' as const };
+    it('does not deduplicate page nodes with same name but different files', () => {
+        const FILE1 = '/app/pages/about.tsx';
+        const FILE2 = '/app/pages/about2.tsx';
+        const page = { name: 'AboutPage', file: FILE1, location: { file: FILE1, line: 1, column: 0 }, route: '/about', router: 'pages' as const };
         const extract: FeExtractResult = {
             ...emptyExtract(),
-            routes: [{ pattern: '/about', pageFile: '/app/pages/about.tsx' }],
-            pages: [page, { ...page, file: '/app/pages/about2.tsx' }],
+            routes: [{ pattern: '/about', pageFile: FILE1 }],
+            pages: [page, { ...page, file: FILE2 }],
         };
         const { nodes } = mapFeToGraph(extract, makeOwnership());
-        expect(nodes.filter((n) => n.id === 'fe-page:AboutPage')).toHaveLength(1);
+        // File-qualified IDs: two distinct nodes for same name in different files
+        expect(nodes.filter((n) => n.kind === 'fe-page')).toHaveLength(2);
+        expect(nodes.some((n) => n.id === `fe-page:${FILE1}#AboutPage`)).toBe(true);
+        expect(nodes.some((n) => n.id === `fe-page:${FILE2}#AboutPage`)).toBe(true);
     });
 });
 
@@ -326,7 +333,7 @@ describe('mapFeToGraph — page colocated with component', () => {
         const { nodes, edges } = mapFeToGraph(extract, makeOwnership());
         // Both fe-component and fe-page nodes should exist
         expect(nodes.some((n) => n.kind === 'fe-component' && n.id === `fe-component:${FILE}#Hero`)).toBe(true);
-        expect(nodes.some((n) => n.kind === 'fe-page' && n.id === 'fe-page:HomePage')).toBe(true);
+        expect(nodes.some((n) => n.kind === 'fe-page' && n.id === `fe-page:${FILE}#HomePage`)).toBe(true);
         expect(edges.some((e) => e.kind === 'fe-routes-to')).toBe(true);
     });
 });
@@ -523,5 +530,57 @@ describe('mapFeToGraph — extractor unresolved imports in diagnostics', () => {
         };
         const { diagnostics } = mapFeToGraph(extract, makeOwnership());
         expect(diagnostics.unresolved.some((u) => u.kind === 'fe-imports' && u.ref === '../missing')).toBe(true);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// diagnostics.counts field (P1 type-design follow-up)
+// ---------------------------------------------------------------------------
+describe('mapFeToGraph — diagnostics.counts', () => {
+    it('counts zero unresolved and unowned for empty input', () => {
+        const { diagnostics } = mapFeToGraph(emptyExtract(), makeOwnership());
+        expect(diagnostics.counts.unresolvedImports).toBe(0);
+        expect(diagnostics.counts.unresolvedRenders).toBe(0);
+        expect(diagnostics.counts.unowned).toBe(0);
+    });
+
+    it('counts unresolved imports from extractor', () => {
+        const extract: FeExtractResult = {
+            ...emptyExtract(),
+            unresolvedImports: [
+                { file: '/app/A.tsx', specifier: '../missing1', error: 'not found' },
+                { file: '/app/B.tsx', specifier: '../missing2', error: 'not found' },
+            ],
+        };
+        const { diagnostics } = mapFeToGraph(extract, makeOwnership());
+        expect(diagnostics.counts.unresolvedImports).toBe(2);
+    });
+
+    it('counts unresolved renders', () => {
+        const FILE = '/app/Page.tsx';
+        const extract: FeExtractResult = {
+            ...emptyExtract(),
+            components: [
+                { name: 'Page', kind: 'arrow', file: FILE, location: { file: FILE, line: 1, column: 0 }, exported: true, defaultExport: false },
+            ],
+            renders: [
+                { fromFile: FILE, fromName: 'Page', toName: 'Unknown', location: { file: FILE, line: 2, column: 0 } },
+            ],
+        };
+        const { diagnostics } = mapFeToGraph(extract, makeOwnership());
+        expect(diagnostics.counts.unresolvedRenders).toBe(1);
+    });
+
+    it('counts unowned items', () => {
+        const ownership = makeOwnership([{ id: 'web', rootDir: '/apps/web' }]);
+        const FILE = '/tmp/Orphan.tsx';
+        const extract: FeExtractResult = {
+            ...emptyExtract(),
+            components: [
+                { name: 'Orphan', kind: 'arrow', file: FILE, location: { file: FILE, line: 1, column: 0 }, exported: false, defaultExport: false },
+            ],
+        };
+        const { diagnostics } = mapFeToGraph(extract, ownership);
+        expect(diagnostics.counts.unowned).toBe(1);
     });
 });

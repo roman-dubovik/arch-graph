@@ -288,6 +288,27 @@ describe('extractReactPatterns — renders', () => {
         const { renders } = extractReactPatterns(sf);
         expect(renders).toHaveLength(0);
     });
+
+    it('correctly attributes fromName in a multi-component file', () => {
+        // Two components in the same file: ComponentA renders Widget, ComponentB renders Modal.
+        // Verifies that renders[i].fromName distinguishes the two components.
+        const project = setup({
+            '/app/Multi.tsx': `
+                import { Widget } from './Widget';
+                import { Modal } from './Modal';
+                export const ComponentA = () => <div><Widget/></div>;
+                export const ComponentB = () => <div><Modal/></div>;
+            `,
+        });
+        const sf = project.getSourceFileOrThrow('/app/Multi.tsx');
+        const { renders } = extractReactPatterns(sf);
+        const renderFromA = renders.find((r) => r.toName === 'Widget');
+        const renderFromB = renders.find((r) => r.toName === 'Modal');
+        expect(renderFromA).toBeDefined();
+        expect(renderFromA!.fromName).toBe('ComponentA');
+        expect(renderFromB).toBeDefined();
+        expect(renderFromB!.fromName).toBe('ComponentB');
+    });
 });
 
 // ---------------------------------------------------------------------------
@@ -597,5 +618,24 @@ describe('extractReactPatterns — location info', () => {
         const { hooks } = extractReactPatterns(sf);
         expect(hooks[0]!.location.file).toBe('/app/useData.ts');
         expect(hooks[0]!.location.line).toBeGreaterThanOrEqual(1);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// KNOWN DIVERGENCE — bare use* function (no inner hook call)
+// See JSDoc on bodyCallsHook() in react-patterns.ts and HOOK_RE in fe-validator.ts.
+// ---------------------------------------------------------------------------
+describe('extractReactPatterns — KNOWN DIVERGENCE: bare use* without inner hook call', () => {
+    it('does NOT count a bare useXxx function that calls no other hook (extractor is stricter than GT regex)', () => {
+        // The fe-validator HOOK_RE would count `usePureFn` as a hook because its name
+        // matches /use[A-Z]*/. The extractor requires bodyCallsHook() and skips it.
+        // This is intentional — known divergence, documented in JSDoc.
+        const project = setup({
+            '/app/utils.tsx': `export function usePureFn() { return 42; }`,
+        });
+        const sf = project.getSourceFileOrThrow('/app/utils.tsx');
+        const { hooks } = extractReactPatterns(sf);
+        // KNOWN DIVERGENCE: GT regex counts this, extractor does NOT
+        expect(hooks.every((h) => h.name !== 'usePureFn')).toBe(true);
     });
 });

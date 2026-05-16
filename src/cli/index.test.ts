@@ -178,10 +178,11 @@ describe('computeStrictFails — FE strict mode gating', () => {
         expect(fails).toHaveLength(0);
     });
 
-    it('returns no fails when all GT = 0 (zero-GT escape hatch)', () => {
+    it('fails with zero-GT guard when all GT counts are 0 and fe is enabled', () => {
+        // P1: fe zero-GT guard — fails loudly so operators know to set domains.fe=false
         const v = makeValidation({ feGtComponents: 0, feGtRoutes: 0, feGtHooks: 0 });
         const fails = computeStrictFails(v, ENABLED_FE_ONLY);
-        expect(fails).toHaveLength(0);
+        expect(fails.some((f) => f.includes('fe') && f.includes('zero ground-truth'))).toBe(true);
     });
 
     it('fails with descriptive message when component recall < 0.9', () => {

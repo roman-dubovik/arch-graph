@@ -6,10 +6,13 @@
  * enumerateFeGroundTruth against the fe-sample fixture directory.
  */
 
-import { resolve } from 'node:path';
+import { readdir, readFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
+import { Project, ts } from 'ts-morph';
 import { buildFeReport, enumerateFeGroundTruth } from './fe-validator.js';
+import { extractFe } from '../extractors/fe/extractor.js';
 import type { FeExtractResult } from '../extractors/fe/types.js';
 import type { FeGroundTruthEntry } from './fe-validator.js';
 
@@ -21,7 +24,7 @@ const FIXTURE_DIR = resolve(__dirname, '../__fixtures__/fe-sample');
 // ---------------------------------------------------------------------------
 
 function emptyExtract(): FeExtractResult {
-    return { components: [], hooks: [], routes: [], pages: [], renders: [], imports: [] };
+    return { components: [], hooks: [], routes: [], pages: [], renders: [], imports: [], unresolvedImports: [] };
 }
 
 // ---------------------------------------------------------------------------
@@ -260,6 +263,77 @@ describe('enumerateFeGroundTruth — fe-sample fixtures', () => {
         const gt = await enumerateFeGroundTruth(cfg);
         // Should not throw; any hooks in typeUtils.tsx would be picked up
         expect(Array.isArray(gt)).toBe(true);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// End-to-end integration: extractFe → buildFeReport against fe-sample fixture
+// (P1 test gap #2: no e2e test linking extractor output to validator report)
+//
+// Uses in-memory Project seeded from real fixture contents to avoid the
+// /.worktrees/ path exclusion in isExcludedSourceFile while testing real data.
+// ---------------------------------------------------------------------------
+
+/** Recursively collect all .ts/.tsx files under a directory. */
+async function collectFiles(dir: string): Promise<string[]> {
+    const entries = await readdir(dir, { withFileTypes: true });
+    const results: string[] = [];
+    for (const entry of entries) {
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) results.push(...await collectFiles(full));
+        else if (entry.name.endsWith('.tsx') || entry.name.endsWith('.ts')) results.push(full);
+    }
+    return results;
+}
+
+/**
+ * Build an in-memory ts-morph Project seeded with real fe-sample fixture contents.
+ * Virtual paths strip the worktrees prefix, returning { project, virtualRoot }
+ * where virtualRoot is the synthetic root used for cfg.root.
+ */
+async function buildFeSampleInMemoryProject(): Promise<{ project: Project; virtualRoot: string }> {
+    const files = await collectFiles(FIXTURE_DIR);
+    const virtualRoot = '/fe-sample-root';
+    const project = new Project({
+        useInMemoryFileSystem: true,
+        compilerOptions: { target: 99, module: 99, moduleResolution: 100, strict: false, noEmit: true, jsx: ts.JsxEmit.React },
+    });
+    for (const file of files) {
+        const rel = file.slice(FIXTURE_DIR.length);
+        project.createSourceFile(`${virtualRoot}${rel}`, await readFile(file, 'utf8'));
+    }
+    return { project, virtualRoot };
+}
+
+describe('extractFe → buildFeReport integration against fe-sample', () => {
+    it('achieves ≥ 0.9 component recall against fe-sample', async () => {
+        const { project, virtualRoot } = await buildFeSampleInMemoryProject();
+        const fixtureCfg = { id: 'fe-sample', root: virtualRoot, appsGlob: '**' };
+        const extracted = await extractFe(fixtureCfg, project);
+        const gt = await enumerateFeGroundTruth({ id: 'fe-sample', root: FIXTURE_DIR, appsGlob: '**' });
+        // Remap GT file paths to virtual paths for comparison
+        const virtualGt = gt.map((g) => ({ ...g, file: virtualRoot + g.file.slice(FIXTURE_DIR.length) }));
+        const report = buildFeReport(extracted, virtualGt);
+        expect(report.summary.recallComponents).toBeGreaterThanOrEqual(0.9);
+    });
+
+    it('achieves ≥ 0.9 route recall against fe-sample', async () => {
+        const { project, virtualRoot } = await buildFeSampleInMemoryProject();
+        const fixtureCfg = { id: 'fe-sample', root: virtualRoot, appsGlob: '**' };
+        const extracted = await extractFe(fixtureCfg, project);
+        const gt = await enumerateFeGroundTruth({ id: 'fe-sample', root: FIXTURE_DIR, appsGlob: '**' });
+        const report = buildFeReport(extracted, gt); // routes match by pattern, not file
+        expect(report.summary.recallRoutes).toBeGreaterThanOrEqual(0.9);
+    });
+
+    it('achieves ≥ 0.9 hook recall against fe-sample', async () => {
+        const { project, virtualRoot } = await buildFeSampleInMemoryProject();
+        const fixtureCfg = { id: 'fe-sample', root: virtualRoot, appsGlob: '**' };
+        const extracted = await extractFe(fixtureCfg, project);
+        const gt = await enumerateFeGroundTruth({ id: 'fe-sample', root: FIXTURE_DIR, appsGlob: '**' });
+        const virtualGt = gt.map((g) => ({ ...g, file: virtualRoot + g.file.slice(FIXTURE_DIR.length) }));
+        const report = buildFeReport(extracted, virtualGt);
+        expect(report.summary.recallHooks).toBeGreaterThanOrEqual(0.9);
     });
 });
 

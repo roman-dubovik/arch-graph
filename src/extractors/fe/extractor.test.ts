@@ -6,10 +6,66 @@
  * tsx/jsx file filtering, and the fe-sample fixture set.
  */
 
+import { readdir, readFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { Project, ts } from 'ts-morph';
 import { inMemoryProject } from '../../__fixtures__/in-memory-project.js';
 import { extractFe } from './extractor.js';
 import type { ArchGraphConfig } from '../../core/config.js';
+
+const __dirname = fileURLToPath(new URL('.', import.meta.url));
+const FE_SAMPLE_DIR = resolve(__dirname, '../../__fixtures__/fe-sample');
+
+/**
+ * Recursively collect all .ts/.tsx files under a directory.
+ */
+async function collectFiles(dir: string): Promise<string[]> {
+    const entries = await readdir(dir, { withFileTypes: true });
+    const results: string[] = [];
+    for (const entry of entries) {
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) {
+            results.push(...await collectFiles(full));
+        } else if (entry.name.endsWith('.tsx') || entry.name.endsWith('.ts')) {
+            results.push(full);
+        }
+    }
+    return results;
+}
+
+/**
+ * Build an in-memory ts-morph Project seeded with real fixture file contents.
+ * We use in-memory to avoid the /.worktrees/ exclusion in isExcludedSourceFile,
+ * while still testing the real file contents from the fe-sample fixture directory.
+ * Virtual paths strip the worktrees prefix so the extractor accepts the files.
+ */
+async function buildFeSampleInMemoryProject(): Promise<{ project: Project; virtualRoot: string }> {
+    const files = await collectFiles(FE_SAMPLE_DIR);
+    const virtualRoot = '/fe-sample-root';
+    const fileMap: Record<string, string> = {};
+    for (const file of files) {
+        const rel = file.slice(FE_SAMPLE_DIR.length); // e.g. /app/page.tsx
+        const virtualPath = `${virtualRoot}${rel}`;
+        fileMap[virtualPath] = await readFile(file, 'utf8');
+    }
+    const project = new Project({
+        useInMemoryFileSystem: true,
+        compilerOptions: {
+            target: 99,
+            module: 99,
+            moduleResolution: 100,
+            strict: false,
+            noEmit: true,
+            jsx: ts.JsxEmit.React,
+        },
+    });
+    for (const [path, src] of Object.entries(fileMap)) {
+        project.createSourceFile(path, src);
+    }
+    return { project, virtualRoot };
+}
 
 function minimalCfg(root = '/root'): ArchGraphConfig {
     return { id: 'test', root, appsGlob: 'apps/*' };
@@ -343,5 +399,36 @@ describe('extractFe — @-aliased imports', () => {
         });
         const result = await extractFe(minimalCfg('/root'), project);
         expect(result.imports.some((i) => i.specifier === '@/components/Button')).toBe(true);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// P0-NEW integration test: in-memory Project seeded from fe-sample fixture files
+// with .tsx and .ts globs — tests that tsx files ARE processed by the extractor.
+//
+// We use in-memory (not real FS) to avoid the /.worktrees/ path exclusion in
+// isExcludedSourceFile. Virtual paths mirror the fixture structure without the
+// worktree prefix, so the extractor sees them as normal application files.
+// ---------------------------------------------------------------------------
+describe('extractFe — in-memory Project seeded from fe-sample (P0-NEW tsx glob fix)', () => {
+    it('finds >0 components in fe-sample fixture (tsx files are processed)', async () => {
+        const { project, virtualRoot } = await buildFeSampleInMemoryProject();
+        const cfg: ArchGraphConfig = { id: 'fe-sample', root: virtualRoot, appsGlob: '**' };
+        const result = await extractFe(cfg, project);
+        expect(result.components.length).toBeGreaterThan(0);
+    });
+
+    it('finds >0 routes in fe-sample fixture', async () => {
+        const { project, virtualRoot } = await buildFeSampleInMemoryProject();
+        const cfg: ArchGraphConfig = { id: 'fe-sample', root: virtualRoot, appsGlob: '**' };
+        const result = await extractFe(cfg, project);
+        expect(result.routes.length).toBeGreaterThan(0);
+    });
+
+    it('finds >0 hooks in fe-sample fixture', async () => {
+        const { project, virtualRoot } = await buildFeSampleInMemoryProject();
+        const cfg: ArchGraphConfig = { id: 'fe-sample', root: virtualRoot, appsGlob: '**' };
+        const result = await extractFe(cfg, project);
+        expect(result.hooks.length).toBeGreaterThan(0);
     });
 });
