@@ -264,9 +264,12 @@ function decodeProviderRef(node: Node): DiProviderRef {
         return { kind: 'class', name: node.getText().trim() };
     }
     if (kind === SyntaxKind.StringLiteral || kind === SyntaxKind.NoSubstitutionTemplateLiteral) {
-        // `exports: ['MY_TOKEN']` — string provider token. Strip quotes.
+        // `exports: ['MY_TOKEN']` — bare string re-export of a token declared elsewhere in the same
+        // module via `{ provide: 'MY_TOKEN', useX: ... }`. We don't know the providerKind at this
+        // point (the declaration is a sibling in the same array); emit `token-ref` so downstream
+        // consumers can distinguish "this is a known-name pointer" from a concrete provider definition.
         const text = node.getText().replace(/^['"`]|['"`]$/g, '');
-        return { kind: 'token', name: text, providerKind: 'unknown' };
+        return { kind: 'token-ref', name: text };
     }
     if (kind === SyntaxKind.ObjectLiteralExpression) {
         return decodeProviderObject(node as ObjectLiteralExpression);
@@ -288,7 +291,7 @@ function decodeProviderRef(node: Node): DiProviderRef {
  *   useExisting → name = useExisting identifier, providerKind = 'existing'
  *   useValue    → name = provide-token text, providerKind = 'value'
  *   useFactory  → name = provide-token text, providerKind = 'factory'
- *   (none)      → providerKind = 'unknown'
+ *   (none)      → unresolved (reason: 'provide-without-use-key')
  *
  * `provideToken` is preserved when it differs from `name` so downstream tooling
  * can show "TOKEN → Foo" relationships.
@@ -336,7 +339,10 @@ function decodeProviderObject(obj: ObjectLiteralExpression): DiProviderRef {
         return { kind: 'token', name: provideToken, providerKind: 'value' };
     }
     if (provideToken) {
-        return { kind: 'token', name: provideToken, providerKind: 'unknown' };
+        // `{ provide: TOKEN }` with no useX — not a valid NestJS provider (the runtime rejects it
+        // at module-init time). Surface as unresolved so it appears in diagnostics rather than
+        // producing a phantom node with no semantic meaning.
+        return { kind: 'unresolved', raw: snippet(obj), reason: 'provide-without-use-key' };
     }
     return { kind: 'unresolved', raw: snippet(obj), reason: 'object-no-provide-no-useX' };
 }

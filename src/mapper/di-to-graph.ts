@@ -180,10 +180,32 @@ function ensureProviderNode(
         if (ref.kind === 'token') {
             meta.providerKind = ref.providerKind;
             if (ref.provideToken) meta.provideToken = ref.provideToken;
+        } else if (ref.kind === 'token-ref') {
+            // `token-ref` carries no providerKind — the concrete kind is set by the companion
+            // `{ provide, useX }` entry, which may live in this module's providers array OR
+            // in an imported module. Leave `meta.providerKind` unset so the enrichment branch
+            // below (or a later pass over an imported module) can fill it in. Orphan token-refs
+            // (no companion anywhere) intentionally remain with empty meta — documented in
+            // `DiProviderRef.token-ref` JSDoc.
         } else {
             meta.providerKind = 'class';
         }
         nodes.set(id, { id, kind: 'provider', label: ref.name, meta });
+    } else if (ref.kind === 'token') {
+        // Defensive enrichment for a node created earlier from a `token-ref` in the same module.
+        // In practice `fillSiteFromMetadata` processes `providers` before `exports`, so by the
+        // time a `token-ref` export is seen the companion provider already exists. This branch
+        // is exercised only when a `token-ref` appears in `providers` array order before its
+        // concrete companion (rare). First-concrete-ref wins — if `providerKind` is already set,
+        // leave it alone.
+        const node = nodes.get(id)!;
+        if (node.meta && node.meta.providerKind === undefined) {
+            node.meta = {
+                ...node.meta,
+                providerKind: ref.providerKind,
+                ...(ref.provideToken ? { provideToken: ref.provideToken } : {}),
+            };
+        }
     }
     return id;
 }
@@ -218,6 +240,10 @@ function refMeta(ref: DiModuleRef | DiProviderRef | DiControllerRef): Record<str
             providerKind: ref.providerKind,
             ...(ref.provideToken ? { provideToken: ref.provideToken } : {}),
         };
+    }
+    if (ref.kind === 'token-ref') {
+        // No providerKind on the edge — the concrete kind is on the companion di-provides edge.
+        return { refKind: 'token-ref' };
     }
     return {};
 }
