@@ -68,12 +68,19 @@ export interface SearchOutput {
     graphHashMatches: boolean;
     /**
      * Structured error code when the sidecar is unavailable or incompatible.
-     * - `'semantic-index-missing'`: manifest or embeddings not found.
+     * - `'semantic-index-missing'`: manifest or embeddings not found (ENOENT).
      * - `'semantic-index-corrupt'`: files exist but content is invalid (bad JSON,
-     *    dimension mismatch, incompatible schemaVersion/model/dim).
+     *    dimension mismatch, incompatible schemaVersion/model/dim, parse error).
+     *
+     * **Invariant**: `error` and `hint` always travel together — if `error` is
+     * set, `hint` MUST be set, and vice versa.  Every error-producing code path
+     * in `semanticSearch` populates both fields.  Tests assert this constraint.
      */
     error?: 'semantic-index-missing' | 'semantic-index-corrupt';
-    /** Set together with `error`. */
+    /**
+     * Human-readable hint for the user when `error` is set.
+     * Always present when `error` is present (see invariant above).
+     */
     hint?: string;
     /**
      * Present when the query embedding failed. Callers can surface this to
@@ -119,7 +126,7 @@ export interface SemanticSearchOpts {
     /** Number of results to return.  Defaults to {@link DEFAULT_TOP_K}.  Capped at {@link MAX_TOP_K}. */
     topK?: number;
     /** Optional NodeKind whitelist.  Filter applied after scoring, before top-K. */
-    kinds?: string[];
+    kinds?: NodeKind[];
 }
 
 // ---------------------------------------------------------------------------
@@ -175,7 +182,23 @@ export async function semanticSearch(opts: SemanticSearchOpts): Promise<SearchRe
     let manifest: SemanticManifest;
     try {
         manifest = await readManifest(manifestPath);
-    } catch {
+    } catch (manifestErr) {
+        const isEnoent = (manifestErr as NodeJS.ErrnoException).code === 'ENOENT';
+        if (!isEnoent) {
+            const msg = manifestErr instanceof Error ? manifestErr.message : String(manifestErr);
+            process.stderr.write(`[arch-graph semantic] manifest read error: ${msg}\n`);
+            const output: SearchOutput = {
+                query,
+                results: [],
+                model: SEMANTIC_MODEL,
+                dim: SEMANTIC_DIM,
+                indexBuiltAt: '',
+                graphHashMatches: false,
+                error: 'semantic-index-corrupt',
+                hint: `manifest invalid or incompatible — ${msg}. run: arch-graph semantic build`,
+            };
+            return { output, exitCode: 1 };
+        }
         const output: SearchOutput = {
             query,
             results: [],
@@ -202,11 +225,12 @@ export async function semanticSearch(opts: SemanticSearchOpts): Promise<SearchRe
                 `[arch-graph semantic] WARNING: graph.json has changed since the index was built ` +
                 `(hash mismatch). Results may be stale. Run 'arch-graph semantic build' to refresh.\n`;
         }
-    } catch {
+    } catch (graphReadErr) {
         // graph.json unreadable — treat as mismatch (conservative)
+        const graphReadMsg = graphReadErr instanceof Error ? graphReadErr.message : String(graphReadErr);
         graphHashMatches = false;
         stderrWarning =
-            `[arch-graph semantic] WARNING: could not read graph.json to verify index freshness.\n`;
+            `[arch-graph semantic] WARNING: could not read graph.json to verify index freshness: ${graphReadMsg}\n`;
     }
 
     // --- Embed the query -----------------------------------------------------
@@ -264,7 +288,7 @@ export async function semanticSearch(opts: SemanticSearchOpts): Promise<SearchRe
     // --- Apply kinds filter (after scoring, before top-K) -------------------
     const filtered =
         kinds && kinds.length > 0
-            ? scored.filter((s) => kinds.includes(s.result.kind as string))
+            ? scored.filter((s) => kinds.includes(s.result.kind))
             : scored;
 
     // --- Sort descending, take top-K ----------------------------------------

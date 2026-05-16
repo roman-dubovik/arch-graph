@@ -462,6 +462,8 @@ describe('buildSemanticIndex — skipped nodes cap', () => {
         });
 
         expect(diagnostics.skippedNodes.length).toBeLessThanOrEqual(50);
+        // TG1: skippedNodesTruncated must be true when cap is exceeded
+        expect(diagnostics.skippedNodesTruncated).toBe(true);
     });
 
     it('caps skippedNodes at 50 entries from transformer batch failures', async () => {
@@ -486,7 +488,59 @@ describe('buildSemanticIndex — skipped nodes cap', () => {
         });
 
         expect(diagnostics.skippedNodes.length).toBeLessThanOrEqual(50);
+        // TG1: skippedNodesTruncated must be true when cap is exceeded
+        expect(diagnostics.skippedNodesTruncated).toBe(true);
         expect(diagnostics.counts.transformerErrors).toBe(60);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// TG2 — node failing BOTH snippet (file-not-found) AND embed (transformer-error)
+// ---------------------------------------------------------------------------
+
+describe('buildSemanticIndex — dual failure (TG2)', () => {
+    it('records node exactly once in skippedNodes with first reason (file-not-found)', async () => {
+        /**
+         * Node has a path that does not exist in the in-memory project → snippet
+         * phase records 'file-not-found'. Then the embedder throws → transformer
+         * phase tries to record 'transformer-error', but recordSkip skips it
+         * (node already recorded). Result:
+         *   - skippedNodes has the node exactly ONCE with reason 'file-not-found'
+         *   - counts.fileReadErrors === 1
+         *   - counts.transformerErrors === 1   (counter is independent of the map)
+         */
+        const graph = makeGraph({
+            nodes: [
+                {
+                    id: 'service:failing',
+                    kind: 'service' as const,
+                    label: 'failing',
+                    path: '/no/such/file.ts',
+                },
+            ],
+        });
+        await writeGraphJson(graph);
+
+        const throwEmbedder = vi.fn(async (_texts: string[]) => {
+            throw new Error('transformer exploded');
+        });
+
+        const { diagnostics } = await buildSemanticIndex({
+            graph,
+            project: inMemoryProject({}),
+            embedder: throwEmbedder,
+            outDir: testDir,
+        });
+
+        // (a) Node appears exactly once in skippedNodes
+        const skipped = diagnostics.skippedNodes.filter((s) => s.nodeId === 'service:failing');
+        expect(skipped).toHaveLength(1);
+        // (b) First reason is file-not-found (snippet phase runs first)
+        expect(skipped[0]!.reason.kind).toBe('file-not-found');
+        // (c) fileReadErrors counter incremented
+        expect(diagnostics.counts.fileReadErrors).toBe(1);
+        // (d) transformerErrors counter incremented (independent of map dedup)
+        expect(diagnostics.counts.transformerErrors).toBe(1);
     });
 });
 
@@ -626,6 +680,9 @@ describe('buildSemanticIndex — complete diagnostics shape (PT-P1-4)', () => {
         const kinds = diagnostics.skippedNodes.map((s) => s.reason.kind);
         expect(kinds).toContain('label-not-located');
         expect(kinds).toContain('file-not-found');
+
+        // TG3: indexed + skipped must equal total node count
+        expect(diagnostics.counts.indexed + diagnostics.counts.skipped).toBe(graph.nodes.length);
     });
 });
 
@@ -680,5 +737,26 @@ describe('buildSemanticIndex + semanticSearch — round-trip (PT-P1-3)', () => {
         expect(output.model).toBe(SEMANTIC_MODEL);
         expect(output.dim).toBe(SEMANTIC_DIM);
         expect(output.graphHashMatches).toBe(true);
+    });
+
+    it('TG3: indexed + skipped equals total graph node count', async () => {
+        const graph = makeGraph({
+            nodes: [
+                { id: 'service:alpha', kind: 'service', label: 'alpha' },
+                { id: 'service:beta', kind: 'service', label: 'beta', path: '/no/such/file.ts' },
+                { id: 'nats-subject:gamma', kind: 'nats-subject', label: 'gamma' },
+            ],
+        });
+        await writeGraphJson(graph);
+
+        const { diagnostics } = await buildSemanticIndex({
+            graph,
+            project: inMemoryProject({}),
+            embedder: fakeEmbedder,
+            outDir: testDir,
+        });
+
+        // Invariant: every node is either indexed or skipped, never lost
+        expect(diagnostics.counts.indexed + diagnostics.counts.skipped).toBe(graph.nodes.length);
     });
 });

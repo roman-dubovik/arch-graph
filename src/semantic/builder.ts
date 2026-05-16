@@ -116,7 +116,21 @@ export async function buildSemanticIndex(opts: BuildSemanticOpts): Promise<Build
                 case 'label-not-located':
                     labelErrors++;
                     break;
-                // 'transformer-error' is produced in the embed phase, not here.
+                case 'transformer-error':
+                    // 'transformer-error' is produced in the embed phase (batch catch below),
+                    // not in the snippet phase.  Including this case makes the switch
+                    // exhaustive — TypeScript will error here if a new SkipReason variant
+                    // is added without updating this switch.  This branch is intentionally
+                    // unreachable from extractSnippet, so it does not increment any counter.
+                    break;
+                /* v8 ignore next 5 -- unreachable: all SkipReason variants are covered above;
+                   this default exists as a compile-time exhaustiveness guard so that adding
+                   a new SkipReason variant without updating this switch is a TS error. */
+                default: {
+                    const _exhaustive: never = reason;
+                    void _exhaustive;
+                    break;
+                }
             }
             recordSkip(node, reason);
             // A failed snippet means embed just label + kind (still useful)

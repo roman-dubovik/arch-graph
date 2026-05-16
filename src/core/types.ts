@@ -65,6 +65,27 @@ export type NodeKind =
     | 'file'
     | 'external';
 
+/**
+ * Exhaustiveness-gate pattern for NodeKind.
+ * Using `Record<NodeKind, null>` forces a compile error when a new NodeKind
+ * variant is added but not listed here. Callers use `NODE_KIND_VALUES` for
+ * runtime validation (e.g. CLI --kinds flag, MCP input schema).
+ */
+const NODE_KIND_CHECK: Record<NodeKind, null> = {
+    'service': null,
+    'lib': null,
+    'nats-subject': null,
+    'db-table': null,
+    'queue': null,
+    'module': null,
+    'provider': null,
+    'file': null,
+    'external': null,
+};
+
+/** All valid NodeKind values — used for runtime validation and zod enum schemas. */
+export const NODE_KIND_VALUES = Object.keys(NODE_KIND_CHECK) as [NodeKind, ...NodeKind[]];
+
 export type EdgeKind =
     | EdgeKindNats
     | 'http-call'

@@ -21,7 +21,8 @@ import { loadConfig } from '../core/config.js';
 import { buildSemanticIndex } from '../semantic/builder.js';
 import { embed, embedOne } from '../semantic/embedder.js';
 import { readFile as readFileGraph } from 'node:fs/promises';
-import type { ArchGraph } from '../core/types.js';
+import type { ArchGraph, NodeKind } from '../core/types.js';
+import { NODE_KIND_VALUES } from '../core/types.js';
 import { semanticSearch } from '../semantic/search.js';
 import type { SearchResult } from '../semantic/search.js';
 
@@ -40,8 +41,8 @@ export interface SemanticArgs {
     k?: number;
     /** search: output format (default: json) */
     format: 'json' | 'table';
-    /** search: node kinds whitelist */
-    kinds?: string[];
+    /** search: node kinds whitelist (validated against NODE_KIND_VALUES) */
+    kinds?: NodeKind[];
 }
 
 /**
@@ -57,7 +58,45 @@ export function parseSemanticArgs(argv: string[]): SemanticArgs {
     let query: string | undefined;
     let k: number | undefined;
     let format: 'json' | 'table' = 'json';
-    let kinds: string[] | undefined;
+    let kinds: NodeKind[] | undefined;
+
+    /**
+     * Validate a raw --k value string.  Returns the parsed integer on success.
+     * Writes to stderr and exits on NaN or non-positive values.
+     */
+    function parseK(raw: string): number {
+        const parsed = parseInt(raw, 10);
+        if (isNaN(parsed)) {
+            process.stderr.write(
+                `arch-graph semantic search: invalid --k value '${raw}': must be a positive integer.\n`,
+            );
+            process.exit(1);
+        }
+        if (parsed <= 0) {
+            process.stderr.write(
+                `arch-graph semantic search: invalid --k value '${raw}': must be greater than 0.\n`,
+            );
+            process.exit(1);
+        }
+        return parsed;
+    }
+
+    /**
+     * Validate and parse a comma-separated --kinds value.
+     * Rejects any value not in NODE_KIND_VALUES and exits with an error.
+     */
+    function parseKinds(raw: string): NodeKind[] {
+        const tokens = raw.split(',').map((s) => s.trim()).filter(Boolean);
+        const invalid = tokens.filter((t) => !(NODE_KIND_VALUES as readonly string[]).includes(t));
+        if (invalid.length > 0) {
+            process.stderr.write(
+                `arch-graph semantic search: unknown --kinds value(s): ${invalid.join(', ')}.\n` +
+                `  Valid kinds: ${NODE_KIND_VALUES.join(', ')}\n`,
+            );
+            process.exit(1);
+        }
+        return tokens as NodeKind[];
+    }
 
     // For 'search', the first non-flag argument after the subcommand is the query.
     // We collect it separately.
@@ -78,17 +117,17 @@ export function parseSemanticArgs(argv: string[]): SemanticArgs {
         } else if (a.startsWith('--repo=')) {
             repo = a.slice('--repo='.length);
         } else if ((a === '--k' || a === '-k') && rest[i + 1]) {
-            k = parseInt(rest[++i]!, 10);
+            k = parseK(rest[++i]!);
         } else if (a.startsWith('--k=')) {
-            k = parseInt(a.slice('--k='.length), 10);
+            k = parseK(a.slice('--k='.length));
         } else if (a === '--json') {
             format = 'json';
         } else if (a === '--table') {
             format = 'table';
         } else if (a === '--kinds' && rest[i + 1]) {
-            kinds = rest[++i]!.split(',').map((s) => s.trim()).filter(Boolean);
+            kinds = parseKinds(rest[++i]!);
         } else if (a.startsWith('--kinds=')) {
-            kinds = a.slice('--kinds='.length).split(',').map((s) => s.trim()).filter(Boolean);
+            kinds = parseKinds(a.slice('--kinds='.length));
         } else if (!a.startsWith('-')) {
             positionals.push(a);
         }
@@ -288,6 +327,10 @@ export async function runSemanticSearch(args: SemanticArgs): Promise<void> {
         if (output.error) {
             process.stderr.write(
                 `arch-graph semantic search: ${output.hint ?? output.error}\n`,
+            );
+        } else if (output.embedError) {
+            process.stderr.write(
+                `arch-graph semantic search: embedding failed — ${output.embedError}\n`,
             );
         } else if (output.results.length === 0) {
             process.stdout.write('No results found.\n');

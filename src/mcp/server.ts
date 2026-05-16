@@ -16,7 +16,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 
-import type { ArchGraph, EdgeKind } from '../core/types.js';
+import type { ArchGraph, EdgeKind, NodeKind } from '../core/types.js';
+import { NODE_KIND_VALUES } from '../core/types.js';
 import {
     explain,
     findPath,
@@ -34,7 +35,6 @@ import { semanticSearch, MAX_TOP_K } from '../semantic/search.js';
 import { embedOne } from '../semantic/embedder.js';
 import { readEmbeddingsJsonl } from '../semantic/io.js';
 import { SEMANTIC_DIM, SEMANTIC_MODEL } from '../semantic/types.js';
-import type { NodeKind } from '../core/types.js';
 
 const SERVER_NAME = 'arch-graph';
 const SERVER_VERSION = '0.1.0';
@@ -70,19 +70,8 @@ const EDGE_KIND_VALUES = Object.keys(EDGE_KIND_CHECK) as [EdgeKind, ...EdgeKind[
 
 const edgeKindSchema = z.enum(EDGE_KIND_VALUES);
 
-// Same exhaustiveness-gate pattern for NodeKind values.
-const NODE_KIND_CHECK: Record<NodeKind, null> = {
-    'service': null,
-    'lib': null,
-    'nats-subject': null,
-    'db-table': null,
-    'queue': null,
-    'module': null,
-    'provider': null,
-    'file': null,
-    'external': null,
-};
-const NODE_KIND_VALUES = Object.keys(NODE_KIND_CHECK) as [NodeKind, ...NodeKind[]];
+// NODE_KIND_VALUES is imported from src/core/types.ts — the authoritative home
+// for NodeKind exhaustiveness. Centralised so CLI + MCP always share the same set.
 const nodeKindSchema = z.enum(NODE_KIND_VALUES);
 
 /**
@@ -465,7 +454,7 @@ export interface SemanticSearchHandlerOpts {
 export interface SemanticSearchHandlerInput {
     query: string;
     topK?: number;
-    kinds?: string[];
+    kinds?: NodeKind[];
     includeVectors?: boolean;
 }
 

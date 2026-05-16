@@ -594,3 +594,174 @@ describe('semanticSearch — output shape', () => {
         expect(r.snippet).toBeUndefined();
     });
 });
+
+// ---------------------------------------------------------------------------
+// F1 — manifest non-ENOENT failure → semantic-index-corrupt
+// ---------------------------------------------------------------------------
+
+describe('semanticSearch — manifest corrupt (F1)', () => {
+    it('returns semantic-index-corrupt (not missing) when readManifest throws a non-ENOENT error', async () => {
+        await writeGraphJson('{}');
+        // Write a manifest.json with incompatible schemaVersion — readManifest will throw
+        // a regular Error (not ENOENT).
+        const badManifest = JSON.stringify({
+            schemaVersion: 999,
+            model: SEMANTIC_MODEL,
+            dim: SEMANTIC_DIM,
+            builtAt: '',
+            graphHash: 'a'.repeat(64),
+            nodeCount: 0,
+        });
+        await writeFile(join(testDir, 'semantic', 'manifest.json'), badManifest, 'utf8');
+
+        const { output, exitCode } = await semanticSearch({
+            query: 'q',
+            outDir: testDir,
+            embedder: fakeEmbedder(unitVec(0)),
+        });
+
+        expect(exitCode).toBe(1);
+        expect(output.error).toBe('semantic-index-corrupt');
+        expect(output.hint).toContain('manifest invalid or incompatible');
+        expect(output.hint).toContain('arch-graph semantic build');
+        // error and hint must travel together (F7 invariant)
+        expect(output.hint).toBeDefined();
+    });
+
+    it('returns semantic-index-missing when manifest is ENOENT', async () => {
+        // No manifest written — ENOENT path
+        const { output, exitCode } = await semanticSearch({
+            query: 'q',
+            outDir: testDir,
+            embedder: fakeEmbedder(unitVec(0)),
+        });
+
+        expect(exitCode).toBe(1);
+        expect(output.error).toBe('semantic-index-missing');
+        expect(output.hint).toBeDefined();
+    });
+
+    it('returns semantic-index-corrupt via spy when readManifest throws non-ENOENT', async () => {
+        await writeGraphJson('{}');
+        await writeSidecar([makeRecord('svc1', 'service', unitVec(0))], makeManifest());
+
+        // Spy on readManifest to simulate a permission error (EACCES-like, no .code)
+        const manifestSpy = vi.spyOn(ioModule, 'readManifest').mockRejectedValue(
+            new Error('permission denied'),
+        );
+
+        const { output, exitCode } = await semanticSearch({
+            query: 'q',
+            outDir: testDir,
+            embedder: fakeEmbedder(unitVec(0)),
+        });
+
+        expect(exitCode).toBe(1);
+        expect(output.error).toBe('semantic-index-corrupt');
+        expect(output.hint).toContain('permission denied');
+        manifestSpy.mockRestore();
+    });
+
+    it('returns semantic-index-corrupt when readManifest throws a non-Error value (branch coverage)', async () => {
+        await writeGraphJson('{}');
+        await writeSidecar([makeRecord('svc1', 'service', unitVec(0))], makeManifest());
+
+        // Throw a non-Error (exercises the `String(manifestErr)` branch at line 188)
+        const manifestSpy = vi.spyOn(ioModule, 'readManifest').mockRejectedValue('plain string throw');
+
+        const { output, exitCode } = await semanticSearch({
+            query: 'q',
+            outDir: testDir,
+            embedder: fakeEmbedder(unitVec(0)),
+        });
+
+        expect(exitCode).toBe(1);
+        expect(output.error).toBe('semantic-index-corrupt');
+        expect(output.hint).toContain('plain string throw');
+        manifestSpy.mockRestore();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// F2 — hash-drift catch includes error message in stderrWarning
+// ---------------------------------------------------------------------------
+
+describe('semanticSearch — hash drift catch message (F2)', () => {
+    it('includes the error message in stderrWarning when graph.json read fails', async () => {
+        const manifest = makeManifest({ graphHash: 'a'.repeat(64), nodeCount: 1 });
+        await writeSidecar([makeRecord('svc1', 'service', unitVec(0))], manifest);
+        // Deliberately do NOT write graph.json — readFile throws ENOENT
+
+        const { output, stderrWarning } = await semanticSearch({
+            query: 'q',
+            outDir: testDir,
+            embedder: fakeEmbedder(unitVec(0)),
+        });
+
+        expect(output.graphHashMatches).toBe(false);
+        expect(stderrWarning).toBeDefined();
+        // F2: error message must be included in the warning string
+        expect(stderrWarning).toMatch(/ENOENT|no such file|not found/i);
+        expect(stderrWarning).toContain('could not read graph.json');
+    });
+
+});
+
+// ---------------------------------------------------------------------------
+// F7 — error/hint invariant: whenever error is set, hint is also set
+// ---------------------------------------------------------------------------
+
+describe('semanticSearch — error/hint invariant (F7)', () => {
+    it('satisfies the invariant: error set ⟺ hint set, on all error paths', async () => {
+        // Path 1: missing manifest (ENOENT)
+        const res1 = await semanticSearch({
+            query: 'q',
+            outDir: testDir,
+            embedder: fakeEmbedder(unitVec(0)),
+        });
+        if (res1.output.error !== undefined) {
+            expect(res1.output.hint).toBeDefined();
+        }
+        if (res1.output.hint !== undefined) {
+            expect(res1.output.error).toBeDefined();
+        }
+
+        // Path 2: corrupt manifest (bad schemaVersion)
+        const badManifest = JSON.stringify({
+            schemaVersion: 999, model: SEMANTIC_MODEL, dim: SEMANTIC_DIM,
+            builtAt: '', graphHash: 'b'.repeat(64), nodeCount: 0,
+        });
+        await writeFile(join(testDir, 'semantic', 'manifest.json'), badManifest, 'utf8');
+        const res2 = await semanticSearch({
+            query: 'q',
+            outDir: testDir,
+            embedder: fakeEmbedder(unitVec(0)),
+        });
+        if (res2.output.error !== undefined) {
+            expect(res2.output.hint).toBeDefined();
+        }
+        if (res2.output.hint !== undefined) {
+            expect(res2.output.error).toBeDefined();
+        }
+
+        // Clean up manifest so next test can write a corrupt JSONL
+        await rm(join(testDir, 'semantic', 'manifest.json'));
+
+        // Path 3: corrupt JSONL
+        const graphHash = await writeGraphJson('{}');
+        const goodManifest = makeManifest({ graphHash, nodeCount: 1 });
+        await writeManifest(goodManifest, join(testDir, 'semantic', 'manifest.json'));
+        await writeFile(join(testDir, 'semantic', 'embeddings.jsonl'), 'INVALID_JSON\n', 'utf8');
+        const res3 = await semanticSearch({
+            query: 'q',
+            outDir: testDir,
+            embedder: fakeEmbedder(unitVec(0)),
+        });
+        if (res3.output.error !== undefined) {
+            expect(res3.output.hint).toBeDefined();
+        }
+        if (res3.output.hint !== undefined) {
+            expect(res3.output.error).toBeDefined();
+        }
+    });
+});
