@@ -380,8 +380,8 @@
                 <th scope="row">B</th>
                 <td>large</td>
                 <td class="mono">897 / 1,212</td>
-                <td class="mono">—</td>
-                <td class="mono dim">—</td>
+                <td class="mono">62,793</td>
+                <td><span class="pill ok">100%</span></td>
                 <td class="mono dim">unavailable</td>
                 <td class="mono dim">—</td>
                 <td class="mono dim">—</td>
@@ -396,12 +396,22 @@
                 <td class="mono">302,999</td>
                 <td><span class="pill warn">4%</span></td>
               </tr>
+              <tr>
+                <th scope="row">D</th>
+                <td>small</td>
+                <td class="mono">144 / 189</td>
+                <td class="mono">8,570</td>
+                <td><span class="pill ok">100%</span></td>
+                <td class="mono dim">unavailable</td>
+                <td class="mono dim">—</td>
+                <td class="mono dim">—</td>
+              </tr>
             </tbody>
           </table>
         </div>
 
         <p class="prose dim small">
-          Recall uses a substring-presence heuristic: for each question, we check whether every ground-truth label appears in the tool's compressed context. It's a permissive necessary-condition — "did the tool's output even contain the answer". Project B's graphify graph wasn't available (graphify ships as a Claude skill, not a CLI). Full methodology: <a class="link" href="https://github.com/roman-dubovik/arch-graph/blob/main/bench/report.md" rel="noopener" target="_blank">bench/report.md →</a>
+          Recall uses a substring-presence heuristic: for each question, we check whether every ground-truth label appears in the tool's compressed context. It's a permissive necessary-condition — "did the tool's output even contain the answer". Projects B and D had no graphify graph available locally (graphify ships as a Claude skill, not a CLI, and its output wasn't pre-generated on those repos); arch-only stats shown. The headline ratios above are computed on A + C (the projects where both tools have output). Full methodology: <a class="link" href="https://github.com/roman-dubovik/arch-graph/blob/main/bench/report.md" rel="noopener" target="_blank">bench/report.md →</a>
         </p>
 
         <p class="prose">
