@@ -339,19 +339,19 @@
         <div class="bench-cards reveal">
           <div class="bench-card highlight">
             <p class="bench-card-label">Avg tokens per question</p>
-            <p class="bench-card-row"><span class="bench-card-tool">arch-graph</span><span class="bench-card-num">38,654</span></p>
-            <p class="bench-card-row dim"><span class="bench-card-tool">graphify</span><span class="bench-card-num">570,605</span></p>
-            <p class="bench-card-foot">14.8× fewer tokens. Same 40 questions, same compression.</p>
+            <p class="bench-card-row"><span class="bench-card-tool">arch-graph</span><span class="bench-card-num">39,779</span></p>
+            <p class="bench-card-row dim"><span class="bench-card-tool">graphify</span><span class="bench-card-num">569,924</span></p>
+            <p class="bench-card-foot">14.3× fewer tokens. Same 40 questions, same compression.</p>
           </div>
           <div class="bench-card">
             <p class="bench-card-label">Mean recall (substring-presence)</p>
             <p class="bench-card-row"><span class="bench-card-tool">arch-graph</span><span class="bench-card-num">100%</span></p>
-            <p class="bench-card-row dim"><span class="bench-card-tool">graphify</span><span class="bench-card-num">25%</span></p>
-            <p class="bench-card-foot">~4× higher recall on architecture queries. Necessary-condition, not an LLM eval.</p>
+            <p class="bench-card-row dim"><span class="bench-card-tool">graphify</span><span class="bench-card-num">39%</span></p>
+            <p class="bench-card-foot">~2.5× higher recall on architecture queries. Necessary-condition, not an LLM eval.</p>
           </div>
           <div class="bench-card">
             <p class="bench-card-label">Total tokens · 40 questions</p>
-            <p class="bench-card-row"><span class="bench-card-tool">arch-graph</span><span class="bench-card-num">1.55M</span></p>
+            <p class="bench-card-row"><span class="bench-card-tool">arch-graph</span><span class="bench-card-num">1.59M</span></p>
             <p class="bench-card-row dim"><span class="bench-card-tool">graphify</span><span class="bench-card-num">22.8M</span></p>
             <p class="bench-card-foot">Same compression aggressiveness, same <code>cl100k_base</code> encoder, same questions.</p>
           </div>
@@ -382,42 +382,42 @@
               <tr>
                 <th scope="row">A</th>
                 <td>large</td>
-                <td class="mono">805 / 1,430</td>
-                <td class="mono">59,835</td>
+                <td class="mono">805 / 1,517</td>
+                <td class="mono">62,460</td>
                 <td><span class="pill ok">100%</span></td>
-                <td class="mono">11,440 / 10,588</td>
-                <td class="mono">718,155</td>
-                <td><span class="pill warn">16%</span></td>
+                <td class="mono">11,414 / —</td>
+                <td class="mono">715,430</td>
+                <td><span class="pill warn">50%</span></td>
               </tr>
               <tr>
                 <th scope="row">B</th>
                 <td>large</td>
-                <td class="mono">897 / 1,212</td>
-                <td class="mono">62,793</td>
+                <td class="mono">897 / 1,220</td>
+                <td class="mono">63,059</td>
                 <td><span class="pill ok">100%</span></td>
-                <td class="mono">10,874 / 10,748<sup>†</sup></td>
+                <td class="mono">10,874 / —<sup>†</sup></td>
                 <td class="mono">724,785</td>
-                <td><span class="pill warn">22%</span></td>
+                <td><span class="pill warn">37%</span></td>
               </tr>
               <tr>
                 <th scope="row">C</th>
                 <td>medium</td>
-                <td class="mono">357 / 543</td>
-                <td class="mono">23,416</td>
+                <td class="mono">358 / 547</td>
+                <td class="mono">23,552</td>
                 <td><span class="pill ok">100%</span></td>
-                <td class="mono">5,163 / 4,664</td>
+                <td class="mono">5,163 / —</td>
                 <td class="mono">302,999</td>
-                <td><span class="pill warn">4%</span></td>
+                <td><span class="pill warn">9%</span></td>
               </tr>
               <tr>
                 <th scope="row">D</th>
                 <td>small</td>
-                <td class="mono">144 / 189</td>
-                <td class="mono">8,570</td>
+                <td class="mono">144 / 239</td>
+                <td class="mono">10,046</td>
                 <td><span class="pill ok">100%</span></td>
-                <td class="mono">6,128 / 11,622<sup>†</sup></td>
+                <td class="mono">6,128 / —<sup>†</sup></td>
                 <td class="mono">536,483</td>
-                <td><span class="pill warn">57%</span></td>
+                <td><span class="pill warn">61%</span></td>
               </tr>
             </tbody>
           </table>
@@ -487,6 +487,14 @@
                   <td><span class="cell no">✗</span></td>
                 </tr>
                 <tr>
+                  <th scope="row">TypeORM <code>@ManyToOne/@OneToMany</code> → <code>db-relation</code></th>
+                  <td><span class="cell ok">✓</span></td>
+                  <td><span class="cell no">✗</span></td>
+                  <td><span class="cell no">✗</span></td>
+                  <td><span class="cell no">✗</span></td>
+                  <td><span class="cell no">✗</span></td>
+                </tr>
+                <tr>
                   <th scope="row">HTTP inter-service calls</th>
                   <td><span class="cell ok">✓</span></td>
                   <td><span class="cell partial">◐</span></td>
@@ -503,12 +511,28 @@
                   <td><span class="cell no">✗</span></td>
                 </tr>
                 <tr>
-                  <th scope="row">TS imports</th>
+                  <th scope="row"><code>@UseGuards</code> / <code>@UseInterceptors</code> / <code>@UsePipes</code></th>
+                  <td><span class="cell ok">✓</span></td>
+                  <td><span class="cell no">✗</span></td>
+                  <td><span class="cell ok">✓ runtime</span></td>
+                  <td><span class="cell no">✗</span></td>
+                  <td><span class="cell no">✗</span></td>
+                </tr>
+                <tr>
+                  <th scope="row">TS imports (static + dynamic + CJS <code>require</code>)</th>
                   <td><span class="cell ok">✓</span></td>
                   <td><span class="cell partial">◐</span></td>
                   <td><span class="cell no">✗</span></td>
                   <td><span class="cell no">✗</span></td>
                   <td><span class="cell ok">✓ best</span></td>
+                </tr>
+                <tr>
+                  <th scope="row">Import cycle detection (<code>diagnostics.cycles</code>)</th>
+                  <td><span class="cell ok">✓</span></td>
+                  <td><span class="cell no">✗</span></td>
+                  <td><span class="cell no">✗</span></td>
+                  <td><span class="cell no">✗</span></td>
+                  <td><span class="cell ok">✓</span></td>
                 </tr>
                 <tr>
                   <th scope="row"><code>file:line</code> on every edge</th>

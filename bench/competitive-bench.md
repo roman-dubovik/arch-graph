@@ -6,12 +6,12 @@ We re-ran the same 10 auto-generated questions per project on 4 reference
 NestJS monorepos (Projects A, B, C, D) for each tool, scored using the
 same substring-presence heuristic.
 
-**TL;DR — 40 questions, 4 projects:**
+**TL;DR — 40 questions, 4 projects (re-run 2026-05-16 post-Tier-1-2-3):**
 
 | Tool | Mode | Avg tokens | Mean recall |
 |---|---|---:|---:|
-| arch-graph | static | 38,654 | **100%** |
-| graphify | LLM-driven | 570,605 | 25% |
+| arch-graph | static | 39,779 | **100%** |
+| graphify | LLM-driven | 569,924 | 39% |
 | @nestjs/devtools-integration | runtime | 65,395 | 9.2% |
 | nestjs-spelunker | runtime | 13,535 | 10.6% |
 | @riaskov/nst-graph-visualizer | runtime (despite "static" docs) | ~125 (partial) | 1.3% |

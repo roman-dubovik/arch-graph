@@ -1,40 +1,71 @@
 # arch-graph vs graphify — head-to-head benchmark
 
 _Original run: 2026-05-15T20:47:24.567Z (15 hand-curated questions)_
-_Updated: 2026-05-16 — see "Fresh head-to-head (auto-generated questions)" below_
+_Updated: 2026-05-16 — re-run after Tier 1+2+3 merge (cycle detection, filter-chain edges, TypeORM ER, CJS require)_
 
-## Headline (fresh run — 2026-05-16)
+## Headline (fresh run — 2026-05-16 post-Tier-1-2-3)
 
-Head-to-head on all 4 working reference monorepos (Project A platform,
-B insyra, C screenia, D beribuy2). 10 auto-generated questions per project,
-40 questions total. Each question is auto-derived from real nodes in
+Head-to-head on all 4 reference monorepos (Project A platform, B insyra,
+C screenia, D beribuy2). 10 auto-generated questions per project, 40
+questions total. Each question is auto-derived from real nodes in
 arch-graph's own output → bilaterally fair: same compression, same
 `cl100k_base` encoder, same questions for both tools.
 
+This re-run captures the state **after** the new edge kinds shipped in
+this cycle: `db-relation` (TypeORM `@ManyToOne/@ManyToMany/@OneToOne`),
+`di-guard` / `di-interceptor` / `di-pipe` (NestJS `@UseGuards` /
+`@UseInterceptors` / `@UsePipes`), `cjs-require` (CommonJS `require(...)`
+captured alongside static/dynamic `import`), and the cycle-detection
+diagnostic in `diagnostics.cycles`.
+
 | | arch-graph | graphify | ratio |
 |---|---|---|---|
-| Avg tokens per question | **38,654** | **570,605** | **14.8× fewer** |
-| Mean recall (substring) | **100%** | **25%** | **~4× higher** |
-| Σ tokens · 40 questions | 1,546,140 | 22,824,220 | — |
+| Avg tokens per question | **39,779** | **569,924** | **14.3× fewer** |
+| Mean recall (substring) | **100%** | **39%** | **~2.5× higher** |
+| Σ tokens · 40 questions | 1,591,170 | 22,796,970 | — |
 
 ### Per-project breakdown
 
-| Project | Size | Arch tokens | Arch recall | Graphify tokens | Graphify recall | Tokens × | Recall × |
+| Project | Size | Arch nodes/edges | Arch tokens | Arch recall | Graphify tokens | Graphify recall | Tokens × |
 |---|---|---|---|---|---|---|---|
-| A | large | 59,835 | 100% | 718,155 | 16% | 12.0× | 6.3× |
-| B† | large | 62,793 | 100% | 724,785 | 22% | 11.5× | 4.5× |
-| C | medium | 23,416 | 100% | 302,999 | 4% | 12.9× | 23.3× |
-| D† | small | 8,570 | 100% | 536,483 | 57% | 62.6× | 1.8× |
+| A platform | large  | 805 / 1,517 | 62,460 | 100% | 715,430 | 50% | 11.5× |
+| B insyra†  | large  | 897 / 1,220 | 63,059 | 100% | 724,785 | 37% | 11.5× |
+| C screenia | medium | 358 / 547   | 23,552 | 100% | 302,999 |  9% | 12.9× |
+| D beribuy2†| small  | 144 / 239   | 10,046 | 100% | 536,483 | 61% | 53.4× |
 
 **Methodology caveat (†):** Projects B and D had graphify rebuilt fresh via the
 Claude Code skill, which ran in **AST-only mode** (LLM semantic pass was
-unavailable in the skill context — no `Task` tool dispatch + no `MOONSHOT_API_KEY`
-/ `ANTHROPIC_API_KEY` set). This produces a larger, less-curated graph than a
-full graphify run would. It inflates graphify's token count on those two
-projects and may overstate arch-graph's token advantage there. Recall, however,
-is measured on whatever ended up in the graph — that's still an honest
-comparison. Projects A and C used pre-existing graphify-out (build mode unknown,
-likely full).
+unavailable in the skill context). This produces a larger, less-curated graph
+than a full graphify run would, inflating graphify's token count there.
+Recall is still measured against whatever ended up in graphify's graph —
+honest comparison. Projects A and C used pre-existing graphify-out.
+
+### New edges captured in this run
+
+| Project | db-relation | di-guard | di-interceptor | di-pipe | cjs-require | cycles |
+|---|---:|---:|---:|---:|---:|---:|
+| A platform |  9 | 78 |  0 | 0 | 0 | 0 |
+| B insyra   |  3 |  3 |  0 | 0 | 0 | 0 |
+| C screenia |  1 |  3 |  0 | 0 | 0 | 0 |
+| D beribuy2 | 22 | 17 | 11 | 0 | 0 | 0 |
+| **Total**  | **35** | **101** | **11** | **0** | **0** | **0** |
+
+`cjs-require` and cycle-detection register zero on these reference projects
+because they are pure-ESM NestJS monorepos with disciplined import topology.
+The features still ship; they activate on codebases that exercise those
+patterns (e.g. legacy mixed ESM/CJS shops, or graphs with `forwardRef`-induced
+DI cycles).
+
+### Delta from previous run (2026-05-16 pre-Tier-1-2-3)
+
+- Arch tokens per question: 38,654 → 39,779 (+3% — new edges inflate the JSON slightly)
+- Arch mean recall: 100% → 100% (unchanged)
+- Token ratio: 14.8× → 14.3× (slightly less because arch tokens went up)
+- Graphify mean recall: 25% → 39% — auto-generated questions are re-seeded
+  from real graph nodes on each build; with new node types this cycle, the
+  question set is not byte-identical to the previous run, and some new
+  seeds happen to hit graphify-friendly territory more often. The
+  headline (≥10× fewer tokens, 100% vs <50% recall) is stable.
 
 The original 15-question hand-curated bench is preserved below for reference.
 

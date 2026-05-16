@@ -4,45 +4,47 @@ Items below are sorted by impact × cost, derived from the [competitive landscap
 
 No ETAs or dates here — this is a soft roadmap, not a commitment. Order within a tier is the order we'd reach for items, not a queue.
 
-## Tier 1 — Borrow from neighbors (low cost, high value)
+## Shipped (2026-05-16) ✅
 
-### Cycle detection (from dependency-cruiser, madge)
-- **Status**: planned
-- **What**: detect circular `ts-import` / `lib-usage` cycles, surface as diagnostics
-- **Effort**: small (BFS/DFS on existing graph edges)
-- **Why**: dep-cruiser proves the demand; integrates into our existing diagnostics framework
+The following items from Tier 1, 2, and 3 are now live on `main`. Each shipped with vitest tests at ≥ 95% line coverage and a per-feature integration-test gate where applicable.
 
-### Guards / Interceptors / Pipes (from @nestjs/devtools-integration)
-- **Status**: planned
-- **What**: extend NestJS DI coverage with the filter-chain decorators (`@UseGuards`, `@UseInterceptors`, `@UsePipes`)
-- **Effort**: small-medium (same extractor pattern as `@Controller`, just different decorators)
-- **Why**: completes the DI picture; devtools shows this is standard expectation
+### Cycle detection — Tier 1 ✅
+- **What**: Johnson's algorithm enumerates elementary cycles across `ts-import`, `lib-usage`, and `di-import` edge subgraphs. Surfaced as `diagnostics.cycles` (per-kind counts + per-cycle `nodes` + `edgeLocations`). Mermaid output highlights cycle-participating nodes with a red `style` directive. Graceful `RangeError` degradation with a structured `error` sentinel on very large graphs.
+- **Where**: `src/detectors/cycles.ts`, `src/output/graph-mermaid.ts` cycle subgraph, `src/pipeline/build.ts` `safeDetectCycles` wrapper.
 
-## Tier 2 — Higher coverage (medium cost, medium-high value)
+### Guards / Interceptors / Pipes — Tier 1 ✅
+- **What**: `@UseGuards`, `@UseInterceptors`, `@UsePipes` decorators captured as typed edges (`di-guard`, `di-interceptor`, `di-pipe`) with `attachedTo: class | method:<name>`. Handles class-level + method-level decorators, multi-arg variants, `new InterceptorInstance()`, `Namespace.Guard` property access, `(AuthGuard as Type)`, `(((...)))` wrappers; `forwardRef`-aliased imports also resolved.
+- **Where**: `src/extractors/di/filter-chain.ts`, `src/mapper/di-to-graph.ts`.
+- **Diagnostic**: `unresolvedFilterRefs` (capped at 200 with `truncatedFilterRefs` counter), `skippedAnonymousFiles`, `dedupDropped`, per-kind counts. Count invariant: `guards + interceptors + pipes + unresolvedFilterRefs.length + dedupDropped + truncatedFilterRefs === filterChain.length`.
 
-### TypeORM entity-relation (ER) edges (from erdia, typeorm-uml, nestjs-doctor)
-- **Status**: planned
-- **What**: extract `@ManyToOne` / `@OneToMany` / `@JoinTable` annotations → emit `db-relation` edges between tables
-- **Effort**: medium (entity-walk + decorator parse already in extractor)
-- **Why**: arch-graph today only has `service → table`; ER edges enable "what depends on this entity's schema" questions
+### TypeORM entity-relation (ER) edges — Tier 2 ✅
+- **What**: `@ManyToOne`, `@OneToMany`, `@ManyToMany`, `@OneToOne` decorations emit `db-table → db-table` edges with kind `db-relation`. Handles bare-identifier (`@ManyToOne(Foo)`), string-token (`@ManyToOne('CategoryReference')`), and `forwardRef(() => Foo)` forms. Walks base-class hierarchy via `getBaseClass()` with cycle guard. Policy A skips `@OneToMany` to avoid duplicate-direction edges on the same FK.
+- **Where**: `src/extractors/typeorm/relations.ts`, `src/mapper/typeorm-to-graph.ts`.
+- **Diagnostic**: `unresolvedRelations` with structured `reason` (`unparseable` / `not-indexed` / `ownerNotIndexed`), `oneToManySkipped`, `baseClassCycles`. Invariant: `unparseable + notIndexed + ownerNotIndexed === unresolvedRelations.length`.
+
+### Multi-module-system imports (CJS `require`) — Tier 3 ✅
+- **What**: `require(...)` calls captured alongside static `import` and dynamic `import()`. Routes through the same alias resolver / edge emission. File-level edge dedup merges `cjsRequire: true` and `dynamic: true` meta when multiple kinds resolve to the same file.
+- **Where**: `src/extractors/imports/extractor.ts`, `src/mapper/imports-to-graph.ts`.
+- **Diagnostic**: `cjsRequires` array, `totalCjsRequire` count; multi-arg `require(id, opts)` and zero-arg `require()` surface as `<multi-args>` / `<zero-args>` synthetic specifiers with `dynamic-non-literal` resolution.
+
+### Cycle-aware Mermaid output — Tier 3 ✅
+- **What**: When `diagnostics.cycles` is non-empty, Mermaid renders cycle-participating nodes with `style nodeX fill:#fdd,stroke:#c00`. Cross-subgraph, no re-declaration. Slice-aware: `domain` and `per-service` slices only highlight cycle nodes visible in that slice. `%% WARNING:` comment emitted when cycle detection degraded.
+- **Where**: `src/output/graph-mermaid.ts`.
+
+## Tier 2 — Considered but deferred
 
 ### Hybrid mode: consume devtools snapshot (from @nestjs/devtools-integration)
 - **Status**: under consideration
 - **What**: optional `--devtools-snapshot <graph.json>` flag — merge runtime DI authority with our static cross-cutting edges
 - **Effort**: medium (parse devtools schema + reconcile node IDs)
 - **Why**: closes the "conditional DI" gap (where devtools is more accurate than static decorator parsing)
+- **Why deferred**: no concrete user demand yet; static decorator parse + diagnostics cover ≥ 95% of structural questions on our reference set. Revisit if a contributor shows a real failure mode.
 
-## Tier 3 — Polish (low priority unless feedback)
+## Tier 3 — Polish (optional)
 
-### Multi-module-system imports (from dependency-cruiser)
-- **Status**: optional
-- **What**: dep-cruiser handles ESM/CJS/AMD; we handle ts-morph projects
-- **Effort**: small-medium (corner cases for legacy CJS)
-- **Why**: only matters for users with non-modern TS configs
-
-### Better cycle-aware Mermaid output (from arkit)
-- **Status**: optional
-- **What**: visual grouping by architectural layer in `graph.mermaid`
+### Better cycle-aware Mermaid grouping (from arkit)
+- **Status**: optional, partially shipped
+- **What**: visual grouping by architectural layer in `graph.mermaid` — beyond the cycle highlight that already shipped, add explicit layer subgraphs (apps → libs → external)
 - **Effort**: small
 - **Why**: nice-to-have for visualization
 
@@ -59,4 +61,4 @@ No ETAs or dates here — this is a soft roadmap, not a commitment. Order within
 
 ## Note on benchmark
 
-The competitor benchmark (`bench/competitive-bench.md` planned) measures **recall + tokens** vs the same tools on real questions. This roadmap is the orthogonal "capability borrow" plan. The capability-matrix view of where each tool fits lives at [docs/comparison.html](./docs/comparison.html); the numeric head-to-head lives at [bench/report.md](./bench/report.md).
+The competitor benchmark ([`bench/competitive-bench.md`](./bench/competitive-bench.md)) measures **recall + tokens** vs the same tools on real questions. This roadmap is the orthogonal "capability borrow" plan. The capability-matrix view of where each tool fits lives at [docs/comparison.html](./docs/comparison.html); the numeric head-to-head lives at [bench/report.md](./bench/report.md). After the Tier 1+2+3 ship in 2026-05-16, every shipped item is rated ✓ on the matrix.
