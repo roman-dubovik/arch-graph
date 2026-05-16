@@ -1,37 +1,225 @@
-import type { ArchGraphConfig } from '../core/config.js';
-
 /**
- * FE validator: enumerates ground truth and builds regression report.
+ * FE validator: regex-based ground-truth enumeration + recall report.
  *
- * Implemented in A2: validates extracted FE components and routes against
- * ground truth (grepped from codebase or config markers).
+ * Ground-truth signals:
+ *   - Components: files ending in .tsx/.jsx that contain recognisable React
+ *     component patterns (arrow/function/class with JSX, memo/forwardRef wrappers).
+ *   - Hooks: functions named use[A-Z]* in .tsx/.jsx/.ts files.
+ *   - Routes: Next.js page files (pages/ subtree or app/ subtree page.tsx).
  *
- * For A1, returns empty results as placeholder to satisfy pipeline integration.
+ * Recall floor: ≥ 90% per category (enforced by the caller / CLI gate).
  */
-export async function enumerateFeGroundTruth(cfg: ArchGraphConfig): Promise<any[]> {
-    // TODO (A2): Read ground truth markers from config (if any) or grep for React patterns
-    return [];
+
+import fg from 'fast-glob';
+import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+
+import type { ArchGraphConfig } from '../core/config.js';
+import type { FeExtractResult } from '../extractors/fe/types.js';
+import { deriveRoute } from '../extractors/fe/router-patterns.js';
+
+// ---------------------------------------------------------------------------
+// Ground-truth entry shapes
+// ---------------------------------------------------------------------------
+
+export interface FeGroundTruthEntry {
+    role: 'component' | 'hook' | 'route';
+    file: string;
+    /** Name/pattern that was matched (e.g. component name or URL pattern). */
+    matchedText: string;
 }
 
-/**
- * Builds validation report for FE extraction.
- *
- * Implemented in A2: compares extracted components/routes against ground truth
- * and computes recall, precision metrics.
- */
-export function buildFeReport(extracted: any, groundTruth: any[]): {
+export interface FeValidationReport {
     summary: {
         recallComponents: number;
         recallRoutes: number;
         recallHooks: number;
+        totalComponents: number;
+        totalRoutes: number;
+        totalHooks: number;
+        groundTruthComponents: number;
+        groundTruthRoutes: number;
+        groundTruthHooks: number;
     };
-} {
-    // TODO (A2): Compute recall metrics
+    groundTruth: FeGroundTruthEntry[];
+    missedComponents: FeGroundTruthEntry[];
+    missedRoutes: FeGroundTruthEntry[];
+    missedHooks: FeGroundTruthEntry[];
+}
+
+// ---------------------------------------------------------------------------
+// Regex patterns for ground-truth detection
+// ---------------------------------------------------------------------------
+
+/**
+ * Matches any of:
+ *   export const X = () =>     (arrow component — must start with uppercase after const)
+ *   export function X(         (function component — uppercase)
+ *   export default function X( (default function component)
+ *   export class X extends     (class component)
+ *   React.memo(                (memo wrapper)
+ *   React.forwardRef(          (forwardRef wrapper)
+ *   export const X = React.memo
+ *   export const X = React.forwardRef
+ */
+const COMPONENT_RE =
+    /(?:export\s+(?:default\s+)?(?:function|class)\s+[A-Z]\w*|const\s+[A-Z]\w+\s*=\s*(?:\(|React\.(?:memo|forwardRef)))/g;
+
+/**
+ * Matches hook function definitions: function useXxx or const useXxx =
+ * Also catches arrow hooks: const useXxx = (...) =>
+ */
+const HOOK_RE =
+    /(?:function|const)\s+(use[A-Z]\w*)\s*[=(]/g;
+
+/** Matches JSX — at least one <Tag or /> occurrence in the file. */
+const JSX_RE = /<[A-Z][A-Za-z]*[\s/>]|\/>/;
+
+// ---------------------------------------------------------------------------
+// Public functions
+// ---------------------------------------------------------------------------
+
+/**
+ * Enumerate ground-truth FE entries by scanning .tsx/.jsx (+ .ts for hooks)
+ * files across the configured source tree.
+ */
+export async function enumerateFeGroundTruth(cfg: ArchGraphConfig): Promise<FeGroundTruthEntry[]> {
+    const root = resolve(cfg.root);
+    const out: FeGroundTruthEntry[] = [];
+
+    const files = await fg(
+        [
+            `${cfg.appsGlob}/**/*.tsx`,
+            `${cfg.appsGlob}/**/*.jsx`,
+            `${cfg.appsGlob}/**/*.ts`,
+            ...(cfg.libsGlob
+                ? [
+                      `${cfg.libsGlob}/**/*.tsx`,
+                      `${cfg.libsGlob}/**/*.jsx`,
+                      `${cfg.libsGlob}/**/*.ts`,
+                  ]
+                : []),
+        ],
+        {
+            cwd: root,
+            absolute: true,
+            ignore: [
+                '**/node_modules/**',
+                '**/dist/**',
+                '**/*.spec.ts',
+                '**/*.spec.tsx',
+                '**/*.test.ts',
+                '**/*.test.tsx',
+                '**/*.d.ts',
+            ],
+        },
+    );
+
+    for (const file of files) {
+        let content: string;
+        try {
+            content = await readFile(file, 'utf8');
+        } catch (err) /* v8 ignore next 4 */ {
+            const e = err as NodeJS.ErrnoException;
+            if (e.code === 'ENOENT') continue;
+            throw new Error(`fe GT read failed for ${file}: ${e.code ?? e.message}`, { cause: err });
+        }
+
+        const isFE = file.endsWith('.tsx') || file.endsWith('.jsx');
+
+        // ---- Component GT (FE files only) ----
+        if (isFE && JSX_RE.test(content)) {
+            for (const m of content.matchAll(COMPONENT_RE)) {
+                out.push({ role: 'component', file, matchedText: m[0].trim().slice(0, 80) });
+            }
+        }
+
+        // ---- Hook GT (any file) ----
+        for (const m of content.matchAll(HOOK_RE)) {
+            const hookName = m[1]!;
+            out.push({ role: 'hook', file, matchedText: hookName });
+        }
+
+        // ---- Route GT (page files) ----
+        const routeResult = deriveRoute(file, root);
+        if (routeResult) {
+            out.push({ role: 'route', file, matchedText: routeResult.route });
+        }
+    }
+
+    return out;
+}
+
+/**
+ * Compute recall metrics comparing extracted FE output against ground truth.
+ * Recall = extracted ∩ ground-truth / ground-truth total (per category).
+ */
+export function buildFeReport(
+    extracted: FeExtractResult,
+    groundTruth: FeGroundTruthEntry[],
+): FeValidationReport {
+    const gtComponents = groundTruth.filter((g) => g.role === 'component');
+    const gtHooks = groundTruth.filter((g) => g.role === 'hook');
+    const gtRoutes = groundTruth.filter((g) => g.role === 'route');
+
+    // Build lookup sets from extracted results
+    const extractedComponentNames = new Set(extracted.components.map((c) => c.name));
+    const extractedHookNames = new Set(extracted.hooks.map((h) => h.name));
+    const extractedRoutePatterns = new Set(extracted.routes.map((r) => r.pattern));
+
+    // Recall: ground-truth entries that have a match in extracted
+    const missedComponents: FeGroundTruthEntry[] = [];
+    for (const gt of gtComponents) {
+        // Match by file + component name presence (extract component name from matched text)
+        const nameMatch = gt.matchedText.match(/(?:function|class|const)\s+([A-Z]\w*)/);
+        const name = nameMatch?.[1] ?? '';
+        if (!extractedComponentNames.has(name)) {
+            missedComponents.push(gt);
+        }
+    }
+
+    const missedHooks: FeGroundTruthEntry[] = [];
+    for (const gt of gtHooks) {
+        if (!extractedHookNames.has(gt.matchedText)) {
+            missedHooks.push(gt);
+        }
+    }
+
+    const missedRoutes: FeGroundTruthEntry[] = [];
+    for (const gt of gtRoutes) {
+        if (!extractedRoutePatterns.has(gt.matchedText)) {
+            missedRoutes.push(gt);
+        }
+    }
+
+    const recallComponents =
+        gtComponents.length > 0
+            ? (gtComponents.length - missedComponents.length) / gtComponents.length
+            : 1;
+    const recallHooks =
+        gtHooks.length > 0
+            ? (gtHooks.length - missedHooks.length) / gtHooks.length
+            : 1;
+    const recallRoutes =
+        gtRoutes.length > 0
+            ? (gtRoutes.length - missedRoutes.length) / gtRoutes.length
+            : 1;
+
     return {
         summary: {
-            recallComponents: 0,
-            recallRoutes: 0,
-            recallHooks: 0,
+            recallComponents,
+            recallRoutes,
+            recallHooks,
+            totalComponents: extracted.components.length,
+            totalRoutes: extracted.routes.length,
+            totalHooks: extracted.hooks.length,
+            groundTruthComponents: gtComponents.length,
+            groundTruthRoutes: gtRoutes.length,
+            groundTruthHooks: gtHooks.length,
         },
+        groundTruth,
+        missedComponents,
+        missedRoutes,
+        missedHooks,
     };
 }
