@@ -422,6 +422,11 @@
         <p class="prose dim small">
           Recall uses a substring-presence heuristic: for each question, we check whether every ground-truth label appears in the tool's compressed context. It's a permissive necessary-condition — "did the tool's output even contain the answer". Three of the five projects had no available graphify graph (graphify ships as a Claude skill, not a CLI); they're shown as <span class="dim">unavailable</span>. Full methodology: <a class="link" href="https://github.com/roman-dubovik/arch-graph/blob/main/bench/report.md" rel="noopener" target="_blank">bench/report.md →</a>
         </p>
+
+        <p class="prose">
+          <strong>Skeptical of our numbers?</strong> Reproduce the same comparison on your own repo:
+          <code>arch-graph compare --graphify path/to/graphify-out</code>. Auto-generates 10 questions from your real graph, writes <code>arch-graph-out/compare-report.md</code>. Without <code>--graphify</code> you still get a graph-size-only summary.
+        </p>
       </div>
     </section>
 
