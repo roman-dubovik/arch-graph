@@ -89,6 +89,43 @@ truth each tool delivers per token of LLM context.
 - arch-graph: 100%
 - graphify:   39%
 
+## Question taxonomy
+
+The numbers above are measured on the original 15 questions in
+`bench/questions.yaml`. The yaml has since been extended to **30 questions**
+covering a wider spread of query shapes. The taxonomy below describes what
+each shape exercises, so the bench's coverage matches the real-world workload
+arch-graph is designed for.
+
+- **single-edge** — `nats`, `bullmq`, `typeorm`, `http`, `lib`. One typed edge
+  kind, one answer set. Easiest end of the spectrum; this is what the original
+  15-question run was almost entirely composed of.
+- **multi-hop** — answer requires traversing two or more edges of the same
+  kind (e.g. a queue producer that is also the consumer — a self-loop; or the
+  module-import closure that ends at `NatsModule`).
+- **cross-domain** — answer requires joining two edge kinds (e.g. "service
+  that consumes queue X AND writes to table Y"). Exercises whether the
+  compressed context retains enough structure for an LLM to perform the join.
+- **refactor-impact** — "if I rename/remove X, what breaks?". Closure on
+  `ts-import` + `lib-usage` + `di-import` edges. This is the typical
+  change-scoping workflow.
+- **negative** — "is there ANY producer / subscriber / user?". The point is
+  that arch-graph returns the same enumerable set as a positive question, and
+  the consuming LLM can derive yes/no from emptiness. Ground-truth labels are
+  still positive matches.
+- **diagnostics** — answer lives in `diagnostics.json` (dynamic NATS subjects,
+  unresolved queue names, opaque HTTP URLs), not in `graph.json`. These are
+  **informational** in the current bench because the scorer only ingests
+  `graph.json`. They document a class of honest "I don't know" queries
+  arch-graph is built to surface — and they will become measurable once the
+  scorer is extended to read diagnostics output too.
+
+Recall / token numbers in the tables above predate the extension and still
+reflect the original 15-question run. Re-running the bench against the full
+30-question set requires the private reference monorepos and is left to the
+benchmarker; the public repo cannot reproduce those numbers from this commit
+alone.
+
 ## When arch-graph wins
 
 The benchmark questions are deliberately **architecture-focused**:

@@ -2,7 +2,7 @@
 
 **Static architecture graph for NestJS monorepos.** Extracts NATS pub/sub, BullMQ queues, TypeORM `@InjectRepository` → `@Entity` links, NestJS module DI, HTTP inter-service calls, and TypeScript imports into a single typed graph at `arch-graph-out/graph.json`. Designed so an LLM agent can answer "who publishes on this subject?" or "what depends on this table?" without grepping or guessing.
 
-Sister project: **[graphify](https://github.com/safishamsi/graphify)** is a generic semantic-graph tool (papers, docs, code, mixed media). arch-graph is the opposite end of the trade-off — it knows nothing about general semantics, but it knows NestJS / NATS / BullMQ / TypeORM directly, so the edges it produces are deterministic and (per validation gates) ≥ 95% recall on the patterns it covers. Use graphify for "what is this codebase about", arch-graph for "what calls what".
+Sister project: **[graphify](https://github.com/safishamsi/graphify)** is a generic semantic-graph tool (papers, docs, code, mixed media). arch-graph is the opposite end of the trade-off — it knows nothing about general semantics, but it knows NestJS / NATS / BullMQ / TypeORM directly. The edges it produces are deterministic, and the per-build recall gate enforces ≥ 95% recall (≥ 80% for TS imports) against ground truth derived from your own code; any regression below those floors fails `arch-graph build --strict`. Use graphify for "what is this codebase about", arch-graph for "what calls what".
 
 ## Install
 
@@ -89,7 +89,7 @@ Non-interactive (CI) fallback: when stdin is not a TTY, `arch-graph init` writes
 
 ## What you get
 
-| Domain | Coverage | Gate | Measured on 5 NestJS monorepos in the benchmark suite |
+| Domain | Coverage (what the extractor recognises) | Per-build recall gate | Measured on our 5 reference NestJS monorepos |
 |---|---|---|---|
 | **NATS** | publish + subscribe via decorators and configurable wrapper APIs; literal + pattern + dynamic subject resolution | recall ≥ 95% (handlers + senders independent) | 100% recall, 5/5 |
 | **TypeORM** | `@InjectRepository(Entity)` → `@Entity` resolution across services / libs | recall ≥ 95% + resolveRate ≥ 95% | 100% / 100%, 5/5 |
@@ -97,6 +97,8 @@ Non-interactive (CI) fallback: when stdin is not a TTY, `arch-graph init` writes
 | **NestJS DI** | `@Module({ imports, providers, exports, controllers })` with full reference resolution | recall ≥ 95% per field + resolveRate ≥ 95% | 100% / 98.7–100%, 5/5 |
 | **HTTP** | `HttpService` / `axios` / `fetch` call sites with URL classification (literal / env-ref / pattern / unresolved → internal service vs external host) | recall ≥ 95% | 100%, 5/5 |
 | **TS imports** | static + dynamic `import` sites resolved through `tsconfig.paths`; aggregated service → lib `lib-usage` edges (and optional file-level `ts-import` edges) | recall ≥ 80% (alias resolution is best-effort) | 100%, 5/5 |
+
+"Coverage" is whether an extractor exists for the domain (boolean per row). The recall gate runs on every build against ground truth derived from *your* code — that's what tells you arch-graph is matching reality on the monorepo in front of it. The last column is what we measured against our private reference suite; your numbers depend on how closely your code follows NestJS conventions and what wrapper APIs are declared in `arch-graph.config.ts`.
 
 Each domain emits structured diagnostics for everything it couldn't pin down — dynamic subjects, unresolved queue names, opaque HTTP URLs, missing entity decorators. That list is the honest gap report.
 
@@ -223,7 +225,7 @@ To extend coverage, add an extractor under `src/extractors/<domain>/` and wire i
 
 ## Benchmark
 
-Quantitative comparison with graphify across 5 NestJS monorepos lives in `bench/report.md`. Key finding: arch-graph uses **7.6× fewer LLM context tokens** than graphify per architectural question (688k vs 5.2M tokens across 15 questions), because it returns typed structured results instead of raw graph dumps. The five reference projects are anonymized as `Project A`–`E` in the report. To reproduce on your own monorepos, drop one `configs/<id>.config.ts` per project and run `bash bench/run.sh` — see `bench/README.md`.
+Quantitative comparison with graphify across 5 NestJS monorepos lives in `bench/report.md`. Key finding: arch-graph used **7.6× fewer LLM context tokens** than graphify on the run there (688k vs 5.2M tokens across the same 15 questions, same compression aggressiveness, same `cl100k_base` encoder), because it returns typed structured results instead of raw graph dumps. Mean recall under the substring-presence necessary-condition heuristic was 100% (arch-graph) vs 39% (graphify) on that suite — a permissive "did the context even contain the answer" check, not an end-to-end LLM eval. The five reference projects are anonymized as `Project A`–`E`. The yaml in `bench/questions.yaml` has since been extended to 30 questions; re-running needs the private reference monorepos and is not reflected in the numbers above. To reproduce on your own monorepos, drop one `configs/<id>.config.ts` per project and run `bash bench/run.sh` — see `bench/README.md`.
 
 ## Development
 
