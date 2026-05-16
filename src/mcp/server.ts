@@ -30,6 +30,10 @@ import {
     serviceDependents,
     tableUsers,
 } from './graph-queries.js';
+import { semanticSearch } from '../semantic/search.js';
+import { embedOne } from '../semantic/embedder.js';
+import { readEmbeddingsJsonl } from '../semantic/io.js';
+import { SEMANTIC_DIM, SEMANTIC_MODEL } from '../semantic/types.js';
 
 const SERVER_NAME = 'arch-graph';
 const SERVER_VERSION = '0.1.0';
@@ -326,6 +330,68 @@ export async function startMcpServer(opts: { out: string }): Promise<void> {
             inputSchema: { nodeId: z.string().describe('Full node id including prefix.') },
         },
         async ({ nodeId }) => jsonResult(explain(await loadGraphFn(), nodeId)),
+    );
+
+    server.registerTool(
+        'semantic_search',
+        {
+            description:
+                'Semantic kNN search over the sidecar index. Query is embedded and compared to indexed node embeddings using cosine similarity.',
+            inputSchema: {
+                query: z.string().min(1).describe('Query text to search for.'),
+                topK: z
+                    .number()
+                    .int()
+                    .min(1)
+                    .max(50)
+                    .optional()
+                    .default(10)
+                    .describe('Number of results to return (1-50, default 10).'),
+                kinds: z
+                    .array(z.string())
+                    .optional()
+                    .describe('Optional filter: only return nodes of these kinds.'),
+                includeVectors: z
+                    .boolean()
+                    .optional()
+                    .default(false)
+                    .describe('If true, include the embedding vector for each result.'),
+            },
+        },
+        async ({ query, topK = 10, kinds, includeVectors = false }) => {
+            // Call semanticSearch with the configured out directory.
+            // Reuse embedOne for query embedding (same as CLI).
+            const searchRes = await semanticSearch({
+                query,
+                outDir: opts.out,
+                embedder: embedOne,
+                topK,
+                kinds,
+            });
+
+            const output = searchRes.output;
+
+            // If includeVectors is requested, augment results by re-reading the JSONL
+            // to get vectors for the returned nodeIds.
+            if (includeVectors && output.results.length > 0 && !output.error) {
+                const embeddingsPath = `${opts.out}/semantic/embeddings.jsonl`;
+                const resultNodeIds = new Set(output.results.map((r) => r.nodeId));
+
+                try {
+                    for await (const record of readEmbeddingsJsonl(embeddingsPath)) {
+                        const result = output.results.find((r) => r.nodeId === record.nodeId);
+                        if (result && resultNodeIds.has(record.nodeId)) {
+                            result.vector = record.vector;
+                        }
+                    }
+                } catch {
+                    // If reading fails, silently skip vector attachment.
+                    // The output still has all other fields.
+                }
+            }
+
+            return jsonResult(output);
+        },
     );
 
     server.registerTool(
