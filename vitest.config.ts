@@ -195,7 +195,7 @@ export default defineConfig({
                     functions: 95,
                     branches: 90,
                 },
-                // Var 2 — db-entity-field extractor + mapper
+                // Var 2 — db-entity-field extractor + mapper + validator
                 'src/extractors/typeorm/fields.ts': {
                     lines: 95,
                     statements: 95,
@@ -203,6 +203,12 @@ export default defineConfig({
                     branches: 90,
                 },
                 'src/mapper/entity-fields-to-graph.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                'src/validation/db-entity-fields-validator.ts': {
                     lines: 95,
                     statements: 95,
                     functions: 95,
