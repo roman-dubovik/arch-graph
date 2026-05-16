@@ -1,6 +1,22 @@
 # arch-graph vs graphify — head-to-head benchmark
 
-_Generated: 2026-05-15T20:47:24.567Z_
+_Original run: 2026-05-15T20:47:24.567Z (15 hand-curated questions)_
+_Updated: 2026-05-16 — see "Fresh head-to-head (auto-generated questions)" below_
+
+## Headline (fresh run — 2026-05-16)
+
+Re-run via `arch-graph compare` on Project A + Project C with auto-generated 10
+questions per project (20 questions total). Each question is auto-derived from
+real nodes in arch-graph's own output, so it's bilaterally fair: same compression,
+same `cl100k_base` encoder, same questions for both tools.
+
+| | arch-graph | graphify | ratio |
+|---|---|---|---|
+| Avg tokens per question | **41,626** | **510,577** | **12.3× fewer** |
+| Mean recall (substring) | **100%** | **10%** | **~10× higher** |
+| Σ tokens · 20 questions | 832,510 | 10,211,540 | — |
+
+The original 15-question hand-curated bench is preserved below for reference.
 
 ## What this measures
 
