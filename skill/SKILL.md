@@ -78,7 +78,7 @@ arch-graph who-subscribes user.created --json
 
 **"What does a service depend on? What depends on it?"**
 ```bash
-arch-graph deps-of platform-api --json
+arch-graph deps-of my-api --json
 arch-graph dependents-of auth-service --json
 ```
 
@@ -100,7 +100,7 @@ arch-graph module-imports AuthModule --json
 
 **"Shortest path between two nodes?"**
 ```bash
-arch-graph path service:platform-api service:notification-service --json
+arch-graph path service:my-api service:notification-service --json
 ```
 
 **"Graph overview / sanity check?"**
@@ -131,7 +131,7 @@ jq --arg s 'nats:user.created' '
 ' arch-graph-out/graph.json
 
 # What does service X depend on?
-jq --arg s 'service:platform-api' '.edges[] | select(.from==$s) | {kind, to, file, line}' arch-graph-out/graph.json
+jq --arg s 'service:my-api' '.edges[] | select(.from==$s) | {kind, to, file, line}' arch-graph-out/graph.json
 
 # Module DI — who imports this module?
 jq --arg m 'module:AuthModule' '.edges[] | select(.to==$m and (.kind | startswith("di-"))) | {kind, from, file, line}' arch-graph-out/graph.json

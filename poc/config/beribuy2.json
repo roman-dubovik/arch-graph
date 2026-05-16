@@ -1,9 +1,0 @@
-{
-    "id": "beribuy2",
-    "root": "/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0",
-    "appsGlob": "apps/*",
-    "libsGlob": "libs/**",
-    "wrapperPublishApis": [],
-    "wrapperSubscribeApis": [],
-    "excludeGlobs": ["/.worktrees/"]
-}

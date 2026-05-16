@@ -791,7 +791,7 @@ export type TsImportResolution = TsDynamicResolution;
 /**
  * One `import` declaration captured during the imports extractor walk.
  *
- *  - `specifier`  — raw module specifier text (e.g. `"@platform/messaging"`).
+ *  - `specifier`  — raw module specifier text (e.g. `"@scope/messaging"`).
  *  - `resolution` — discriminated union describing the resolution outcome.
  *                   The `kind` field determines which resolution variants are
  *                   structurally possible:
