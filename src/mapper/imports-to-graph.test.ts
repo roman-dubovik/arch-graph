@@ -498,6 +498,27 @@ describe('mapImportsToGraph — file-level edges dedup', () => {
         expect((fileEdges[0]!.meta as Record<string, unknown>).cjsRequire).toBe(true);
     });
 
+    it('import + import() to same file: edge carries dynamic: true', () => {
+        // Static walk runs first, so the static edge wins the has(fileKey) check.
+        // When a dynamic import targets the same (sourceFile, resolvedFile) pair,
+        // the existing edge must have dynamic: true merged in.
+        const ownership = makeOwnership(
+            [{ id: 'svc-a', rootDir: '/root/apps/svc-a' }],
+            [{ id: 'libs/shared', rootDir: '/root/libs/shared' }],
+        );
+        const resFile = '/root/libs/shared/index.ts';
+        const sites: TsImportSite[] = [
+            staticSite({ sourceFile: '/root/apps/svc-a/src/main.ts', specifier: 'x', resolvedFile: resFile }),
+            dynamicSite({ sourceFile: '/root/apps/svc-a/src/main.ts', specifier: 'x', resolvedFile: resFile }),
+        ];
+        const result = mapImportsToGraph(sites, ownership, { fileLevel: true });
+        const fileEdges = result.edges.filter((e) => e.kind === 'ts-import');
+        // Must be deduplicated to one edge
+        expect(fileEdges).toHaveLength(1);
+        // The edge must carry dynamic: true even though static import was processed first
+        expect((fileEdges[0]!.meta as Record<string, unknown>).dynamic).toBe(true);
+    });
+
     it('same file→file pair deduped into one ts-import edge', () => {
         const ownership = makeOwnership(
             [{ id: 'svc-a', rootDir: '/root/apps/svc-a' }],
