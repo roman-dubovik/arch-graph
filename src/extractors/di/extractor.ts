@@ -13,12 +13,14 @@ import {
 import type { ArchGraphConfig } from '../../core/config.js';
 import type {
     DiControllerRef,
+    DiFilterChainRef,
     DiModuleRef,
     DiModuleSite,
     DiProviderRef,
     SourceLoc,
 } from '../../core/types.js';
 import { isExcludedSourceFile } from '../shared.js';
+import { extractFilterChain } from './filter-chain.js';
 import { buildDiModuleIndex, DiModuleIndex } from './module-index.js';
 
 /**
@@ -47,6 +49,8 @@ import { buildDiModuleIndex, DiModuleIndex } from './module-index.js';
 export interface ExtractDiResult {
     modules: DiModuleSite[];
     moduleIndex: DiModuleIndex;
+    filterChain: DiFilterChainRef[];
+    skippedAnonymousFiles: string[];
 }
 
 export async function extractDi(_cfg: ArchGraphConfig, project: Project): Promise<ExtractDiResult> {
@@ -96,7 +100,9 @@ export async function extractDi(_cfg: ArchGraphConfig, project: Project): Promis
         }
     }
 
-    return { modules, moduleIndex };
+    const { refs: filterChain, skippedAnonymousFiles } = extractFilterChain(project);
+
+    return { modules, moduleIndex, filterChain, skippedAnonymousFiles };
 }
 
 function fillSiteFromMetadata(site: DiModuleSite, obj: ObjectLiteralExpression): void {
