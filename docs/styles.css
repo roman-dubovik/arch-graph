@@ -758,6 +758,118 @@ td.dim, .dim { color: var(--text-mute); }
   margin: 0 0 14px;
 }
 
+/* ─────────────────────────────────────── CONTRIBUTE BANNER ─────────── */
+/* Visually distinct from neighboring sections — same indigo palette, but
+ * a soft accent border + halo so the invitation reads as "featured", not
+ * an error/warning. Lives between Bench and Install in the flow. */
+.section-contribute { padding: 56px 0; }
+.contribute-card {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+  background:
+    radial-gradient(ellipse at top left, rgba(139, 158, 255, 0.10), transparent 60%),
+    linear-gradient(180deg, var(--bg-2), var(--bg-1));
+  border: 1px solid rgba(139, 158, 255, 0.32);
+  border-radius: var(--radius-lg);
+  padding: 28px 30px;
+  box-shadow: 0 0 36px var(--accent-glow), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+.contribute-icon {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: rgba(139, 158, 255, 0.12);
+  border: 1px solid rgba(139, 158, 255, 0.30);
+  color: var(--accent);
+}
+.contribute-body { flex: 1 1 auto; min-width: 0; }
+.contribute-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 8px;
+}
+.contribute-title {
+  font-size: clamp(22px, 2.6vw, 30px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0 0 12px;
+  color: var(--text);
+}
+.contribute-lead {
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--text-dim);
+  margin: 0 0 18px;
+}
+.contribute-lead code {
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--accent-2);
+}
+.contribute-lead strong { color: var(--text); font-weight: 600; }
+.contribute-ctas { display: flex; gap: 12px; flex-wrap: wrap; }
+@media (max-width: 640px) {
+  .contribute-card { flex-direction: column; gap: 14px; padding: 22px 20px; }
+}
+
+/* ───────────────────────────────── THREE WAYS TO QUERY ─────────────── */
+/* Equal-weight 3-up grid; reuses .cli-card. The .three-ways-sub eyebrow
+ * gives each card a parity-of-importance hint without changing visual weight. */
+.three-ways {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  margin-top: 32px;
+}
+.three-ways-sub {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 8px;
+}
+
+/* ─────────────────────────────────────── ADJACENT TOOLS ─────────────── */
+.section-adjacent .adjacent-list {
+  list-style: none;
+  padding: 0;
+  margin: 32px 0 0;
+  display: grid;
+  gap: 14px;
+}
+.section-adjacent .adjacent-list li {
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+}
+.section-adjacent .adjacent-list h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.section-adjacent .adjacent-list h3 a { color: var(--accent-2); text-decoration: none; }
+.section-adjacent .adjacent-list h3 a:hover { color: var(--accent); text-decoration: underline; }
+.section-adjacent .adjacent-list p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+
 /* ─────────────────────────────────────────────── LIMITS ─────────────── */
 .section-limits { background: linear-gradient(180deg, var(--bg), var(--bg-1) 80%, var(--bg)); }
 .limits-list {

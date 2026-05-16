@@ -100,10 +100,11 @@ Usage:
 
   arch-graph install-skill    (writes ~/.claude/skills/arch-graph/SKILL.md)
 
-  arch-graph compare    [--out <dir>] [--graphify <path>] [--questions <n>] [--report <path>] [--quiet]
+  arch-graph compare    [--out <dir>] [--graphify <path>] [--questions <n>] [--report <path>] [--quiet] [--share]
                         Side-by-side context-cost comparison: arch-graph vs an
                         optional graphify graph.json on this same repo.
-                        Without --graphify: prints a graph-size-only summary.
+                        Auto-detects ./graphify-out/ if --graphify omitted.
+                        --share: contribute anonymized counts to the public bench.
 
 Graph query subcommands (read arch-graph-out/graph.json):
   arch-graph who-publishes  <subject>      NATS publishers of subject (e.g. user.created)
