@@ -456,11 +456,14 @@ code {
 }
 .src-token { animation: tokenFlicker 6s ease-in-out infinite; transform-box: fill-box; }
 .src-token.st-1 { animation-delay: 0s;   }
-.src-token.st-2 { animation-delay: 0.6s; }
-.src-token.st-3 { animation-delay: 1.2s; }
-.src-token.st-4 { animation-delay: 1.8s; }
-.src-token.st-5 { animation-delay: 2.4s; }
-.src-token.st-6 { animation-delay: 3.0s; }
+.src-token.st-2 { animation-delay: 0.5s; }
+.src-token.st-3 { animation-delay: 1.0s; }
+.src-token.st-4 { animation-delay: 1.5s; }
+.src-token.st-5 { animation-delay: 2.0s; }
+.src-token.st-6 { animation-delay: 2.5s; }
+.src-token.st-7 { animation-delay: 3.0s; }
+.src-token.st-8 { animation-delay: 3.5s; }
+.src-token.st-9 { animation-delay: 4.0s; }
 
 /* Core */
 .core-card {
@@ -507,10 +510,12 @@ code {
 .g-node text { fill: var(--text); font-size: 12px; }
 .g-node { opacity: 0; animation: nodeGrow 8s ease-out infinite; transform-box: fill-box; transform-origin: left center; }
 .g-node.gn-1 { animation-delay: 2.4s; }
-.g-node.gn-2 { animation-delay: 3.0s; }
-.g-node.gn-3 { animation-delay: 3.6s; }
-.g-node.gn-4 { animation-delay: 4.2s; }
-.g-node.gn-5 { animation-delay: 4.8s; }
+.g-node.gn-2 { animation-delay: 2.9s; }
+.g-node.gn-3 { animation-delay: 3.4s; }
+.g-node.gn-4 { animation-delay: 3.9s; }
+.g-node.gn-5 { animation-delay: 4.4s; }
+.g-node.gn-6 { animation-delay: 4.9s; }
+.g-node.gn-7 { animation-delay: 5.4s; }
 
 .gn-kind.kind-service { fill: var(--accent-2);  }
 .gn-kind.kind-nats    { fill: #c084fc;          }

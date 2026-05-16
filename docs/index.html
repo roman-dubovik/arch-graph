@@ -9,8 +9,14 @@
 
   <meta property="og:type" content="website" />
   <meta property="og:title" content="arch-graph — Static architecture graph for NestJS monorepos" />
-  <meta property="og:description" content="Deterministic. No LLM at build time. 14.8× fewer LLM context tokens than graphify and 100% recall on architecture benchmarks (40 questions across 4 monorepos)." />
+  <meta property="og:description" content="Deterministic. No LLM at build time. 14.3× fewer LLM context tokens than graphify and 100% recall on architecture benchmarks (40 questions across 4 monorepos)." />
   <meta property="og:url" content="https://roman-dubovik.github.io/arch-graph/" />
+  <meta property="og:image" content="https://roman-dubovik.github.io/arch-graph/assets/arch-graph-social-card.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="arch-graph — Source code in, typed graph out — deterministic, sub-second" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="https://roman-dubovik.github.io/arch-graph/assets/arch-graph-social-card.png" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -189,52 +195,70 @@
             <text class="flow-col-label" x="600" y="40" text-anchor="middle">arch-graph</text>
             <text class="flow-col-label" x="1030" y="40" text-anchor="middle">Typed graph</text>
 
-            <!-- Left column: source tokens -->
+            <!-- Left column: source tokens (9 patterns — adds @UseGuards, @ManyToOne, require to the original 6) -->
             <g class="src-tokens">
-              <g class="src-token st-1" transform="translate(40 80)">
-                <rect width="260" height="44" rx="8"></rect>
-                <text x="16" y="27" class="mono">@Module(...)</text>
+              <g class="src-token st-1" transform="translate(40 56)">
+                <rect width="260" height="40" rx="8"></rect>
+                <text x="16" y="25" class="mono">@Module(...)</text>
               </g>
-              <g class="src-token st-2" transform="translate(40 140)">
-                <rect width="260" height="44" rx="8"></rect>
-                <text x="16" y="27" class="mono">@InjectQueue('emails')</text>
+              <g class="src-token st-2" transform="translate(40 102)">
+                <rect width="260" height="40" rx="8"></rect>
+                <text x="16" y="25" class="mono">@InjectQueue('emails')</text>
               </g>
-              <g class="src-token st-3" transform="translate(40 200)">
-                <rect width="260" height="44" rx="8"></rect>
-                <text x="16" y="27" class="mono">@MessagePattern('user.created')</text>
+              <g class="src-token st-3" transform="translate(40 148)">
+                <rect width="260" height="40" rx="8"></rect>
+                <text x="16" y="25" class="mono">@MessagePattern('user.created')</text>
               </g>
-              <g class="src-token st-4" transform="translate(40 260)">
-                <rect width="260" height="44" rx="8"></rect>
-                <text x="16" y="27" class="mono">@InjectRepository(User)</text>
+              <g class="src-token st-4" transform="translate(40 194)">
+                <rect width="260" height="40" rx="8"></rect>
+                <text x="16" y="25" class="mono">@InjectRepository(User)</text>
               </g>
-              <g class="src-token st-5" transform="translate(40 320)">
-                <rect width="260" height="44" rx="8"></rect>
-                <text x="16" y="27" class="mono">axios.get(...)</text>
+              <g class="src-token st-5" transform="translate(40 240)">
+                <rect width="260" height="40" rx="8"></rect>
+                <text x="16" y="25" class="mono">@ManyToOne(() =&gt; Order)</text>
               </g>
-              <g class="src-token st-6" transform="translate(40 380)">
-                <rect width="260" height="44" rx="8"></rect>
-                <text x="16" y="27" class="mono">import { Foo } from '...'</text>
+              <g class="src-token st-6" transform="translate(40 286)">
+                <rect width="260" height="40" rx="8"></rect>
+                <text x="16" y="25" class="mono">@UseGuards(AuthGuard)</text>
+              </g>
+              <g class="src-token st-7" transform="translate(40 332)">
+                <rect width="260" height="40" rx="8"></rect>
+                <text x="16" y="25" class="mono">axios.get(...)</text>
+              </g>
+              <g class="src-token st-8" transform="translate(40 378)">
+                <rect width="260" height="40" rx="8"></rect>
+                <text x="16" y="25" class="mono">import { Foo } from '...'</text>
+              </g>
+              <g class="src-token st-9" transform="translate(40 424)">
+                <rect width="260" height="40" rx="8"></rect>
+                <text x="16" y="25" class="mono">require('legacy-pkg')</text>
               </g>
             </g>
 
-            <!-- Lanes from source → core -->
+            <!-- Lanes from source → core (9 lanes, distributed around left edge of core card y∈[180,340]) -->
             <g class="flow-lanes-in" stroke="url(#flowLane)" stroke-width="2" fill="none">
-              <path d="M310 102 Q 430 102 480 220"></path>
-              <path d="M310 162 Q 430 162 490 230"></path>
-              <path d="M310 222 Q 430 222 500 250"></path>
-              <path d="M310 282 Q 430 282 500 280"></path>
-              <path d="M310 342 Q 430 342 490 290"></path>
-              <path d="M310 402 Q 430 402 480 300"></path>
+              <path d="M310 76 Q 430 76 490 180"></path>
+              <path d="M310 122 Q 430 122 490 200"></path>
+              <path d="M310 168 Q 430 168 490 220"></path>
+              <path d="M310 214 Q 430 214 490 240"></path>
+              <path d="M310 260 Q 430 260 490 260"></path>
+              <path d="M310 306 Q 430 306 490 280"></path>
+              <path d="M310 352 Q 430 352 490 300"></path>
+              <path d="M310 398 Q 430 398 490 320"></path>
+              <path d="M310 444 Q 430 444 490 340"></path>
             </g>
 
             <!-- Travelling pulses on the in-lanes -->
             <g class="flow-pulses-in" fill="rgba(139,158,255,0.95)">
-              <circle r="3" class="pulse pulse-in-1"><animateMotion dur="6s" repeatCount="indefinite" path="M310 102 Q 430 102 480 220"></animateMotion></circle>
-              <circle r="3" class="pulse pulse-in-2"><animateMotion dur="6s" begin="0.8s" repeatCount="indefinite" path="M310 162 Q 430 162 490 230"></animateMotion></circle>
-              <circle r="3" class="pulse pulse-in-3"><animateMotion dur="6s" begin="1.6s" repeatCount="indefinite" path="M310 222 Q 430 222 500 250"></animateMotion></circle>
-              <circle r="3" class="pulse pulse-in-4"><animateMotion dur="6s" begin="2.4s" repeatCount="indefinite" path="M310 282 Q 430 282 500 280"></animateMotion></circle>
-              <circle r="3" class="pulse pulse-in-5"><animateMotion dur="6s" begin="3.2s" repeatCount="indefinite" path="M310 342 Q 430 342 490 290"></animateMotion></circle>
-              <circle r="3" class="pulse pulse-in-6"><animateMotion dur="6s" begin="4s" repeatCount="indefinite" path="M310 402 Q 430 402 480 300"></animateMotion></circle>
+              <circle r="3" class="pulse pulse-in-1"><animateMotion dur="6s" repeatCount="indefinite" path="M310 76 Q 430 76 490 180"></animateMotion></circle>
+              <circle r="3" class="pulse pulse-in-2"><animateMotion dur="6s" begin="0.6s" repeatCount="indefinite" path="M310 122 Q 430 122 490 200"></animateMotion></circle>
+              <circle r="3" class="pulse pulse-in-3"><animateMotion dur="6s" begin="1.2s" repeatCount="indefinite" path="M310 168 Q 430 168 490 220"></animateMotion></circle>
+              <circle r="3" class="pulse pulse-in-4"><animateMotion dur="6s" begin="1.8s" repeatCount="indefinite" path="M310 214 Q 430 214 490 240"></animateMotion></circle>
+              <circle r="3" class="pulse pulse-in-5"><animateMotion dur="6s" begin="2.4s" repeatCount="indefinite" path="M310 260 Q 430 260 490 260"></animateMotion></circle>
+              <circle r="3" class="pulse pulse-in-6"><animateMotion dur="6s" begin="3s" repeatCount="indefinite" path="M310 306 Q 430 306 490 280"></animateMotion></circle>
+              <circle r="3" class="pulse pulse-in-7"><animateMotion dur="6s" begin="3.6s" repeatCount="indefinite" path="M310 352 Q 430 352 490 300"></animateMotion></circle>
+              <circle r="3" class="pulse pulse-in-8"><animateMotion dur="6s" begin="4.2s" repeatCount="indefinite" path="M310 398 Q 430 398 490 320"></animateMotion></circle>
+              <circle r="3" class="pulse pulse-in-9"><animateMotion dur="6s" begin="4.8s" repeatCount="indefinite" path="M310 444 Q 430 444 490 340"></animateMotion></circle>
             </g>
 
             <!-- Core extractor -->
@@ -262,68 +286,83 @@
               </g>
             </g>
 
-            <!-- Lanes from core → graph -->
+            <!-- Lanes from core → graph (7 lanes — added provider:AuthGuard for di-guard + db-relation chain) -->
             <g class="flow-lanes-out" stroke="url(#flowLaneOut)" stroke-width="2" fill="none">
-              <path d="M730 220 Q 820 180 900 130"></path>
-              <path d="M730 250 Q 820 220 920 210"></path>
-              <path d="M730 280 Q 820 280 920 290"></path>
-              <path d="M730 290 Q 820 320 910 370"></path>
-              <path d="M730 300 Q 820 360 900 440"></path>
+              <path d="M730 195 Q 820 150 900 70"></path>
+              <path d="M730 210 Q 820 180 905 140"></path>
+              <path d="M730 230 Q 820 210 920 210"></path>
+              <path d="M730 260 Q 820 270 920 280"></path>
+              <path d="M730 290 Q 820 320 910 350"></path>
+              <path d="M730 310 Q 820 360 905 420"></path>
+              <path d="M730 320 Q 820 400 900 490"></path>
             </g>
 
-            <!-- Right column: typed graph nodes -->
+            <!-- Right column: typed graph nodes (7 — added provider:AuthGuard + db-table:orders) -->
             <g class="graph-nodes">
-              <g class="g-node gn-1" transform="translate(900 110)">
-                <rect width="240" height="40" rx="8"></rect>
-                <circle cx="18" cy="20" r="6" class="gn-kind kind-service"></circle>
-                <text x="36" y="25" class="mono">service:order-api</text>
+              <g class="g-node gn-1" transform="translate(900 50)">
+                <rect width="240" height="36" rx="8"></rect>
+                <circle cx="18" cy="18" r="6" class="gn-kind kind-service"></circle>
+                <text x="36" y="23" class="mono">service:order-api</text>
               </g>
-              <g class="g-node gn-2" transform="translate(920 190)">
-                <rect width="240" height="40" rx="8"></rect>
-                <circle cx="18" cy="20" r="6" class="gn-kind kind-nats"></circle>
-                <text x="36" y="25" class="mono">nats-subject:user.created</text>
+              <g class="g-node gn-2" transform="translate(905 120)">
+                <rect width="240" height="36" rx="8"></rect>
+                <circle cx="18" cy="18" r="6" class="gn-kind kind-module"></circle>
+                <text x="36" y="23" class="mono">provider:AuthGuard</text>
               </g>
-              <g class="g-node gn-3" transform="translate(920 270)">
-                <rect width="240" height="40" rx="8"></rect>
-                <circle cx="18" cy="20" r="6" class="gn-kind kind-db"></circle>
-                <text x="36" y="25" class="mono">db-table:users</text>
+              <g class="g-node gn-3" transform="translate(920 190)">
+                <rect width="240" height="36" rx="8"></rect>
+                <circle cx="18" cy="18" r="6" class="gn-kind kind-nats"></circle>
+                <text x="36" y="23" class="mono">nats-subject:user.created</text>
               </g>
-              <g class="g-node gn-4" transform="translate(910 350)">
-                <rect width="240" height="40" rx="8"></rect>
-                <circle cx="18" cy="20" r="6" class="gn-kind kind-queue"></circle>
-                <text x="36" y="25" class="mono">queue:emails</text>
+              <g class="g-node gn-4" transform="translate(920 260)">
+                <rect width="240" height="36" rx="8"></rect>
+                <circle cx="18" cy="18" r="6" class="gn-kind kind-db"></circle>
+                <text x="36" y="23" class="mono">db-table:users</text>
               </g>
-              <g class="g-node gn-5" transform="translate(900 420)">
-                <rect width="240" height="40" rx="8"></rect>
-                <circle cx="18" cy="20" r="6" class="gn-kind kind-module"></circle>
-                <text x="36" y="25" class="mono">module:UsersModule</text>
+              <g class="g-node gn-5" transform="translate(910 330)">
+                <rect width="240" height="36" rx="8"></rect>
+                <circle cx="18" cy="18" r="6" class="gn-kind kind-db"></circle>
+                <text x="36" y="23" class="mono">db-table:orders</text>
+              </g>
+              <g class="g-node gn-6" transform="translate(905 400)">
+                <rect width="240" height="36" rx="8"></rect>
+                <circle cx="18" cy="18" r="6" class="gn-kind kind-queue"></circle>
+                <text x="36" y="23" class="mono">queue:emails</text>
+              </g>
+              <g class="g-node gn-7" transform="translate(900 470)">
+                <rect width="240" height="36" rx="8"></rect>
+                <circle cx="18" cy="18" r="6" class="gn-kind kind-module"></circle>
+                <text x="36" y="23" class="mono">module:UsersModule</text>
               </g>
             </g>
 
             <!-- Travelling pulses on out-lanes -->
             <g class="flow-pulses-out" fill="rgba(125,211,252,0.95)">
-              <circle r="3" class="pulse pulse-out-1"><animateMotion dur="6s" begin="2.4s" repeatCount="indefinite" path="M730 220 Q 820 180 900 130"></animateMotion></circle>
-              <circle r="3" class="pulse pulse-out-2"><animateMotion dur="6s" begin="3.2s" repeatCount="indefinite" path="M730 250 Q 820 220 920 210"></animateMotion></circle>
-              <circle r="3" class="pulse pulse-out-3"><animateMotion dur="6s" begin="4s" repeatCount="indefinite" path="M730 280 Q 820 280 920 290"></animateMotion></circle>
-              <circle r="3" class="pulse pulse-out-4"><animateMotion dur="6s" begin="4.8s" repeatCount="indefinite" path="M730 290 Q 820 320 910 370"></animateMotion></circle>
-              <circle r="3" class="pulse pulse-out-5"><animateMotion dur="6s" begin="5.6s" repeatCount="indefinite" path="M730 300 Q 820 360 900 440"></animateMotion></circle>
+              <circle r="3" class="pulse pulse-out-1"><animateMotion dur="6s" begin="2.4s" repeatCount="indefinite" path="M730 195 Q 820 150 900 70"></animateMotion></circle>
+              <circle r="3" class="pulse pulse-out-2"><animateMotion dur="6s" begin="3s" repeatCount="indefinite" path="M730 210 Q 820 180 905 140"></animateMotion></circle>
+              <circle r="3" class="pulse pulse-out-3"><animateMotion dur="6s" begin="3.6s" repeatCount="indefinite" path="M730 230 Q 820 210 920 210"></animateMotion></circle>
+              <circle r="3" class="pulse pulse-out-4"><animateMotion dur="6s" begin="4.2s" repeatCount="indefinite" path="M730 260 Q 820 270 920 280"></animateMotion></circle>
+              <circle r="3" class="pulse pulse-out-5"><animateMotion dur="6s" begin="4.8s" repeatCount="indefinite" path="M730 290 Q 820 320 910 350"></animateMotion></circle>
+              <circle r="3" class="pulse pulse-out-6"><animateMotion dur="6s" begin="5.4s" repeatCount="indefinite" path="M730 310 Q 820 360 905 420"></animateMotion></circle>
+              <circle r="3" class="pulse pulse-out-7"><animateMotion dur="6s" begin="5.6s" repeatCount="indefinite" path="M730 320 Q 820 400 900 490"></animateMotion></circle>
             </g>
 
-            <!-- Edge legends between graph nodes (typed edges) -->
+            <!-- Edge legends between graph nodes (typed edges between adjacent nodes) -->
             <g class="graph-edges" stroke="rgba(228,228,231,0.18)" stroke-width="1" fill="none">
-              <path d="M1020 150 Q 1080 180 1040 190" marker-end="url(#arrowHead)"></path>
-              <path d="M1020 230 Q 1080 250 1040 270" marker-end="url(#arrowHead)"></path>
-              <path d="M1020 310 Q 1080 330 1030 350" marker-end="url(#arrowHead)"></path>
-              <path d="M1020 390 Q 1080 410 1020 420" marker-end="url(#arrowHead)"></path>
+              <path d="M1020 90 Q 1080 110 1040 130" marker-end="url(#arrowHead)"></path>
+              <path d="M1020 160 Q 1080 180 1040 200" marker-end="url(#arrowHead)"></path>
+              <path d="M1020 240 Q 1080 270 1030 340" marker-end="url(#arrowHead)"></path>
+              <path d="M1020 350 Q 1080 380 1020 410" marker-end="url(#arrowHead)"></path>
+              <path d="M1020 420 Q 1080 450 1020 480" marker-end="url(#arrowHead)"></path>
             </g>
           </svg>
 
           <ul class="flow-legend" aria-label="Edge kinds emitted">
-            <li><span class="dot kind-service"></span> service</li>
-            <li><span class="dot kind-nats"></span> nats-publish · nats-subscribe</li>
-            <li><span class="dot kind-db"></span> db-access</li>
+            <li><span class="dot kind-service"></span> service · lib</li>
+            <li><span class="dot kind-nats"></span> nats-publish · nats-subscribe · nats-request · nats-reply</li>
+            <li><span class="dot kind-db"></span> db-access · db-read · db-write · <strong>db-relation</strong></li>
             <li><span class="dot kind-queue"></span> queue-produce · queue-consume</li>
-            <li><span class="dot kind-module"></span> di-import · di-provides</li>
+            <li><span class="dot kind-module"></span> di-import · di-provides · di-exports · di-controller · <strong>di-guard · di-interceptor · di-pipe</strong></li>
           </ul>
         </div>
       </div>
