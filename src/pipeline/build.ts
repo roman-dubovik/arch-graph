@@ -179,9 +179,9 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
     }
 
     process.stdout.write(`mapping DI to graph...\n`);
-    const diMapped = mapDiToGraph(di.modules, di.moduleIndex, ownership);
+    const diMapped = mapDiToGraph(di.modules, di.moduleIndex, ownership, di.filterChain, di.skippedAnonymousFiles);
     process.stdout.write(
-        `  nodes: ${diMapped.nodes.length}, edges: ${diMapped.edges.length}, unresolvedRefs: ${diMapped.diagnostics.unresolvedRefs.length}, unowned: ${diMapped.diagnostics.unowned.length}\n`,
+        `  nodes: ${diMapped.nodes.length}, edges: ${diMapped.edges.length}, unresolvedRefs: ${diMapped.diagnostics.unresolvedRefs.length}, unowned: ${diMapped.diagnostics.unowned.length}, guards: ${diMapped.diagnostics.counts.guards}, interceptors: ${diMapped.diagnostics.counts.interceptors}, pipes: ${diMapped.diagnostics.counts.pipes}, unresolvedFilterRefs: ${diMapped.diagnostics.counts.unresolvedFilterRefs}, skippedAnonymousFiles: ${diMapped.diagnostics.skippedAnonymousFiles.length}\n`,
     );
 
     // ---- HTTP domain ----

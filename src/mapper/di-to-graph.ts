@@ -42,6 +42,7 @@ export function mapDiToGraph(
     moduleIndex: DiModuleIndex,
     ownership: OwnershipRegistry,
     filterChain: DiFilterChainRef[] = [],
+    skippedAnonymousFiles: string[] = [],
 ): MapDiResult {
     const moduleNodes = new Map<string, GraphNode>();
     const providerNodes = new Map<string, GraphNode>();
@@ -223,7 +224,7 @@ export function mapDiToGraph(
             unowned,
             unresolvedFilterRefs,
             unresolvedFilterRefsTruncated,
-            skippedAnonymousFiles: [],
+            skippedAnonymousFiles,
             counts: {
                 modules: modules.length,
                 imports: importsCount,

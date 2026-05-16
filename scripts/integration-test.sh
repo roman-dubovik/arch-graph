@@ -52,7 +52,7 @@ trap 'on_exit $?' EXIT
 # ---------------------------------------------------------------------------
 
 PASS_COUNT=0
-TOTAL_STEPS=6
+TOTAL_STEPS=7
 
 step_start() {
     local num=$1 label=$2
@@ -153,9 +153,10 @@ mkdir -p "$FIXTURE/libs/shared"
 cat > "$FIXTURE/apps/api/src/app.module.ts" <<'EOF'
 import { Module } from '@nestjs/common';
 import { QueueModule } from './queue/queue.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
-    imports: [QueueModule],
+    imports: [QueueModule, UsersModule],
 })
 export class AppModule {}
 EOF
@@ -206,15 +207,21 @@ export class NotificationService {
 }
 EOF
 
-# users.controller.ts
+# users.controller.ts — decorated with @UseGuards / @UseInterceptors / @UsePipes
 cat > "$FIXTURE/apps/api/src/users/users.controller.ts" <<'EOF'
-import { Controller } from '@nestjs/common';
+import { Controller, UseGuards, UseInterceptors, UsePipes } from '@nestjs/common';
 import { MessagePattern } from '@nestjs/microservices';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './user.entity';
+import { AuthGuard } from './auth.guard';
+import { LoggingInterceptor } from './logging.interceptor';
+import { ValidationPipe } from './validation.pipe';
 
 @Controller()
+@UseGuards(AuthGuard)
+@UseInterceptors(LoggingInterceptor)
+@UsePipes(ValidationPipe)
 export class UsersController {
     constructor(
         @InjectRepository(User)
@@ -226,6 +233,46 @@ export class UsersController {
         // handle user created event
     }
 }
+EOF
+
+# auth.guard.ts
+cat > "$FIXTURE/apps/api/src/users/auth.guard.ts" <<'EOF'
+import { Injectable } from '@nestjs/common';
+
+@Injectable()
+export class AuthGuard {}
+EOF
+
+# logging.interceptor.ts
+cat > "$FIXTURE/apps/api/src/users/logging.interceptor.ts" <<'EOF'
+import { Injectable } from '@nestjs/common';
+
+@Injectable()
+export class LoggingInterceptor {}
+EOF
+
+# validation.pipe.ts
+cat > "$FIXTURE/apps/api/src/users/validation.pipe.ts" <<'EOF'
+import { Injectable } from '@nestjs/common';
+
+@Injectable()
+export class ValidationPipe {}
+EOF
+
+# users.module.ts — registers UsersController + filter-chain classes as providers
+mkdir -p "$FIXTURE/apps/api/src/users"
+cat > "$FIXTURE/apps/api/src/users/users.module.ts" <<'EOF'
+import { Module } from '@nestjs/common';
+import { UsersController } from './users.controller';
+import { AuthGuard } from './auth.guard';
+import { LoggingInterceptor } from './logging.interceptor';
+import { ValidationPipe } from './validation.pipe';
+
+@Module({
+    controllers: [UsersController],
+    providers: [AuthGuard, LoggingInterceptor, ValidationPipe],
+})
+export class UsersModule {}
 EOF
 
 # user.entity.ts
@@ -454,6 +501,33 @@ if [ -f "$FIXTURE/.git/hooks/pre-commit" ]; then
     grep -q "# >>> arch-graph >>>" "$FIXTURE/.git/hooks/pre-commit" \
         && fail "pre-commit still contains arch-graph marker after uninstall"
 fi
+
+step_ok
+
+# ---------------------------------------------------------------------------
+# Step 7: Filter-chain edges in graph.json
+# ---------------------------------------------------------------------------
+
+step_start 7 "filter-chain edges"
+
+cd "$FIXTURE"
+
+GRAPH="$FIXTURE/arch-graph-out/graph.json"
+
+# Assert at least one di-guard edge exists
+GUARD_COUNT=$(jq '[.edges[] | select(.kind == "di-guard")] | length' "$GRAPH")
+[ "$GUARD_COUNT" -ge 1 ] \
+    || fail "expected at least 1 di-guard edge in graph.json, got $GUARD_COUNT"
+
+# Assert at least one di-interceptor edge exists
+INTERCEPTOR_COUNT=$(jq '[.edges[] | select(.kind == "di-interceptor")] | length' "$GRAPH")
+[ "$INTERCEPTOR_COUNT" -ge 1 ] \
+    || fail "expected at least 1 di-interceptor edge in graph.json, got $INTERCEPTOR_COUNT"
+
+# Assert at least one di-pipe edge exists
+PIPE_COUNT=$(jq '[.edges[] | select(.kind == "di-pipe")] | length' "$GRAPH")
+[ "$PIPE_COUNT" -ge 1 ] \
+    || fail "expected at least 1 di-pipe edge in graph.json, got $PIPE_COUNT"
 
 step_ok
 
