@@ -800,6 +800,29 @@ describe('mapDiToGraph — new diagnostics fields', () => {
         // Count still reflects the capped length
         expect(diagnostics.counts.unresolvedFilterRefs).toBe(200);
     });
+
+    it('truncatedFilterRefs counter tracks overflow correctly at 205 refs', () => {
+        // Build 205 unresolved refs — 200 retained, 5 truncated.
+        const refs: DiFilterChainRef[] = Array.from({ length: 205 }, (_, i) =>
+            makeFilterRef({
+                kind: 'unresolved',
+                decorator: 'UseGuards',
+                enclosingClass: `Controller${i}`,
+            }),
+        );
+        const { diagnostics } = mapDiToGraph([], IDX, EMPTY_OWNERSHIP, refs);
+        // Retained cap
+        expect(diagnostics.unresolvedFilterRefs).toHaveLength(200);
+        expect(diagnostics.counts.unresolvedFilterRefs).toBe(200);
+        // Overflow counter
+        expect(diagnostics.counts.truncatedFilterRefs).toBe(5);
+        // Truncated flag
+        expect(diagnostics.unresolvedFilterRefsTruncated).toBe(true);
+        // Numeric invariant: guards(0) + interceptors(0) + pipes(0) + retained(200) + dedup(0) + truncated(5) === 205
+        const c = diagnostics.counts;
+        const total = c.guards + c.interceptors + c.pipes + c.unresolvedFilterRefs + c.dedupDropped + c.truncatedFilterRefs;
+        expect(total).toBe(205);
+    });
 });
 
 // ---------------------------------------------------------------------------
@@ -903,7 +926,7 @@ describe('mapDiToGraph — count invariant', () => {
         const { diagnostics } = mapDiToGraph([mod], IDX, EMPTY_OWNERSHIP, filterChain);
 
         const c = diagnostics.counts;
-        const lhs = c.guards + c.interceptors + c.pipes + c.unresolvedFilterRefs + c.dedupDropped;
+        const lhs = c.guards + c.interceptors + c.pipes + c.unresolvedFilterRefs + c.dedupDropped + c.truncatedFilterRefs;
         expect(lhs).toBe(filterChain.length);
         // Spot-check the individual counts
         expect(c.guards).toBe(1);

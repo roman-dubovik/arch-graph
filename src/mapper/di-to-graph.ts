@@ -141,6 +141,7 @@ export function mapDiToGraph(
     const UNRESOLVED_FILTER_CAP = 200;
     const unresolvedFilterRefs: DiFilterChainRef[] = [];
     let unresolvedFilterRefsTruncated = false;
+    let truncatedFilterRefs = 0;
     let guardsCount = 0;
     let interceptorsCount = 0;
     let pipesCount = 0;
@@ -149,6 +150,7 @@ export function mapDiToGraph(
     function pushUnresolvedFilter(ref: DiFilterChainRef): void {
         if (unresolvedFilterRefs.length >= UNRESOLVED_FILTER_CAP) {
             unresolvedFilterRefsTruncated = true;
+            truncatedFilterRefs++;
             return;
         }
         unresolvedFilterRefs.push(ref);
@@ -238,6 +240,7 @@ export function mapDiToGraph(
                 pipes: pipesCount,
                 unresolvedFilterRefs: unresolvedFilterRefs.length,
                 dedupDropped,
+                truncatedFilterRefs,
             },
         },
     };

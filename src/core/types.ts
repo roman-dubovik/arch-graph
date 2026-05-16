@@ -635,9 +635,13 @@ export interface DiDiagnostics {
         /**
          * Number of filter-chain refs that were dropped by the dedup key.
          * Allows consumers to verify:
-         *   guards + interceptors + pipes + unresolvedFilterRefs.length + dedupDropped === filterChain.length
+         *   guards + interceptors + pipes + unresolvedFilterRefs.length + dedupDropped + truncatedFilterRefs === filterChain.length
          */
         dedupDropped: number;
+        /**
+         * Filter-chain refs that exceeded the 200-cap in unresolvedFilterRefs and were not retained.
+         */
+        truncatedFilterRefs: number;
     };
 }
 
