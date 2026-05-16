@@ -1,20 +1,35 @@
 /**
- * Unit tests for the `semantic_search` MCP tool (server.ts).
+ * Tests for the `semantic_search` MCP tool.
  *
- * Tests the tool registration, input schema validation, and handler logic
- * including the includeVectors augmentation path and missing-index error path.
+ * Uses the exported `makeSemanticSearchHandler` factory to call the exact same
+ * handler logic that `startMcpServer` registers with the SDK — no transport
+ * wiring required, no duplication of search.ts logic.
+ *
+ * Covers:
+ *   PT-P0-1 / PT-P0-2 — real MCP handler path (via handler factory)
+ *
+ * Cases:
+ *   1. Happy path with fixture index (top-K results returned)
+ *   2. `query: ""` rejected by Zod min(1) — validated at schema layer
+ *   3. `topK: 51` rejected by Zod max(MAX_TOP_K)
+ *   4. `topK: 0` rejected by Zod min(1)
+ *   5. `topK` omitted → default 10 returned
+ *   6. `includeVectors: true` actually attaches vectors
+ *   7. Missing sidecar → structured error, no throw
+ *   8. Vector-augmentation read failure → `vectorsError` field (SF-P0-1)
  */
 import { createHash } from 'node:crypto';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 
 import type { SemanticManifest, SemanticRecord } from '../semantic/types.js';
-import { SEMANTIC_DIM, SEMANTIC_MODEL } from '../semantic/types.js';
+import { SEMANTIC_DIM, SEMANTIC_MODEL, SEMANTIC_SCHEMA_VERSION } from '../semantic/types.js';
+import { MAX_TOP_K } from '../semantic/search.js';
 import { writeEmbeddingsJsonl, writeManifest } from '../semantic/io.js';
-import { startMcpServer } from './server.js';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { makeSemanticSearchHandler, semanticSearchInputShape } from './server.js';
 
 // ---------------------------------------------------------------------------
 // Test setup
@@ -32,6 +47,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
     await rm(testDir, { recursive: true, force: true });
+    vi.restoreAllMocks();
 });
 
 // ---------------------------------------------------------------------------
@@ -41,6 +57,7 @@ afterEach(async () => {
 /** Build a minimal valid SemanticManifest. */
 function makeManifest(overrides: Partial<SemanticManifest> = {}): SemanticManifest {
     return {
+        schemaVersion: SEMANTIC_SCHEMA_VERSION,
         model: SEMANTIC_MODEL,
         dim: SEMANTIC_DIM,
         builtAt: '2026-05-16T12:00:00.000Z',
@@ -81,173 +98,225 @@ function unitVec(axis: number): number[] {
     return v;
 }
 
+/** Fake embedder: always returns unitVec(0). */
+const fakeEmbedder = async (_text: string): Promise<number[]> => unitVec(0);
+
+/** Write a full sidecar fixture with N unit-vector records. */
+async function writeSidecar(records: SemanticRecord[], graphHash: string): Promise<void> {
+    const manifest = makeManifest({ graphHash, nodeCount: records.length });
+    await mkdir(join(testDir, 'semantic'), { recursive: true });
+    await writeManifest(manifest, join(testDir, 'semantic', 'manifest.json'));
+    await writeEmbeddingsJsonl(records, join(testDir, 'semantic', 'embeddings.jsonl'));
+}
+
 // ---------------------------------------------------------------------------
-// Test: semantic_search tool happy path with fixture index
+// Zod schema for MCP input — built from the exported shape to avoid drift.
+// Any change to server.ts's schema is automatically reflected here (PT-P0-1).
 // ---------------------------------------------------------------------------
 
-describe('semantic_search MCP tool', () => {
-    it('registers the tool and returns results from a fixture index', async () => {
-        // Set up a minimal 3-record fixture.
+const semanticSearchInputSchema = z.object(semanticSearchInputShape);
+
+// ---------------------------------------------------------------------------
+// Case 1: Happy path
+// ---------------------------------------------------------------------------
+
+describe('semantic_search handler — happy path', () => {
+    it('returns results from a fixture index via the handler', async () => {
         const graphHash = await writeGraphJson('{"nodes":[]}');
-        const manifest = makeManifest({ graphHash, nodeCount: 3 });
-
-        // Three records with unit vectors along axes 0, 1, 2.
         const r1 = makeRecord('service:api', 'service', unitVec(0), { label: 'API Service' });
         const r2 = makeRecord('service:db', 'service', unitVec(1), { label: 'Database' });
         const r3 = makeRecord('nats-subject:orders', 'nats-subject', unitVec(2), {
             label: 'orders subject',
         });
+        await writeSidecar([r1, r2, r3], graphHash);
 
-        // Write the sidecar.
-        await mkdir(join(testDir, 'semantic'), { recursive: true });
-        await writeManifest(manifest, join(testDir, 'semantic', 'manifest.json'));
-        await writeEmbeddingsJsonl([r1, r2, r3], join(testDir, 'semantic', 'embeddings.jsonl'));
+        const handler = makeSemanticSearchHandler({ outDir: testDir, embedder: fakeEmbedder });
+        const result = await handler({ query: 'API service', topK: 3, includeVectors: false });
 
-        // Mock the server's tool handling to test the semantic_search tool.
-        // We need to extract and test the tool handler directly.
+        // Handler returns MCP-wrapped content
+        const output = JSON.parse(result.content[0]!.text);
+        expect(output.results).toBeDefined();
+        expect(Array.isArray(output.results)).toBe(true);
+        expect(output.model).toBe(SEMANTIC_MODEL);
+        expect(output.dim).toBe(SEMANTIC_DIM);
+        expect(typeof output.graphHashMatches).toBe('boolean');
+        expect(typeof output.indexBuiltAt).toBe('string');
+        expect(output.indexBuiltAt).toBe('2026-05-16T12:00:00.000Z');
+        // r1 is closest to query (unitVec(0) === query vector)
+        expect(output.results[0]!.nodeId).toBe('service:api');
+    });
+});
 
-        // For now, verify the schema and basic tool properties.
-        // Full end-to-end MCP testing requires wiring the transport, which is
-        // complex. Instead, we test the core semanticSearch function that
-        // the MCP tool wraps (already tested in search.test.ts) and verify
-        // the MCP layer's includeVectors logic below.
+// ---------------------------------------------------------------------------
+// Case 2: query: "" rejected by Zod
+// ---------------------------------------------------------------------------
 
-        // Snapshot: all three records should be readable from the sidecar.
-        expect(manifest.nodeCount).toBe(3);
-        expect(r1.vector).toHaveLength(SEMANTIC_DIM);
+describe('semantic_search handler — Zod validation: query', () => {
+    it('rejects empty query string via Zod schema', () => {
+        expect(() =>
+            semanticSearchInputSchema.parse({ query: '' }),
+        ).toThrow();
     });
 
-    it('augments results with vectors when includeVectors is true', async () => {
-        // This test verifies the MCP layer's vector augmentation logic
-        // without needing full MCP transport.
+    it('accepts non-empty query string', () => {
+        expect(() =>
+            semanticSearchInputSchema.parse({ query: 'hello' }),
+        ).not.toThrow();
+    });
+});
 
-        const graphHash = await writeGraphJson('{"nodes":[]}');
-        const manifest = makeManifest({ graphHash, nodeCount: 2 });
+// ---------------------------------------------------------------------------
+// Case 3 & 4: topK out-of-range rejected by Zod
+// ---------------------------------------------------------------------------
 
+describe('semantic_search handler — Zod validation: topK', () => {
+    it('rejects topK: 51 (above MAX_TOP_K)', () => {
+        expect(() =>
+            semanticSearchInputSchema.parse({ query: 'q', topK: MAX_TOP_K + 1 }),
+        ).toThrow();
+    });
+
+    it('rejects topK: 0 (below min 1)', () => {
+        expect(() =>
+            semanticSearchInputSchema.parse({ query: 'q', topK: 0 }),
+        ).toThrow();
+    });
+
+    it('accepts topK: 1', () => {
+        const parsed = semanticSearchInputSchema.parse({ query: 'q', topK: 1 });
+        expect(parsed.topK).toBe(1);
+    });
+
+    it('accepts topK: MAX_TOP_K', () => {
+        const parsed = semanticSearchInputSchema.parse({ query: 'q', topK: MAX_TOP_K });
+        expect(parsed.topK).toBe(MAX_TOP_K);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Case 5: topK omitted → default 10 returned
+// ---------------------------------------------------------------------------
+
+describe('semantic_search handler — topK default', () => {
+    it('returns at most 10 results when topK is omitted', async () => {
+        const graphHash = await writeGraphJson('{}');
+        const count = 15;
+        const records = Array.from({ length: count }, (_, i) =>
+            makeRecord(`svc:${i}`, 'service', unitVec(0)),
+        );
+        await writeSidecar(records, graphHash);
+
+        const handler = makeSemanticSearchHandler({ outDir: testDir, embedder: fakeEmbedder });
+        // Omit topK — handler defaults to 10
+        const result = await handler({ query: 'test' });
+
+        const output = JSON.parse(result.content[0]!.text);
+        expect(output.results.length).toBeLessThanOrEqual(10);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Case 6: includeVectors: true — actually attaches vectors
+// ---------------------------------------------------------------------------
+
+describe('semantic_search handler — includeVectors', () => {
+    it('attaches embedding vectors to results when includeVectors=true', async () => {
+        const graphHash = await writeGraphJson('{}');
         const v1 = unitVec(0);
         const v2 = unitVec(1);
-        const r1 = makeRecord('service:foo', 'service', v1);
-        const r2 = makeRecord('service:bar', 'service', v2);
+        const r1 = makeRecord('svc:a', 'service', v1);
+        const r2 = makeRecord('svc:b', 'service', v2);
+        await writeSidecar([r1, r2], graphHash);
 
-        await mkdir(join(testDir, 'semantic'), { recursive: true });
-        await writeManifest(manifest, join(testDir, 'semantic', 'manifest.json'));
-        await writeEmbeddingsJsonl([r1, r2], join(testDir, 'semantic', 'embeddings.jsonl'));
+        const handler = makeSemanticSearchHandler({ outDir: testDir, embedder: fakeEmbedder });
+        const result = await handler({ query: 'test', includeVectors: true });
 
-        // Simulate what the MCP handler does: read records and attach vectors.
-        const { readEmbeddingsJsonl } = await import('../semantic/io.js');
-        const embeddingsPath = join(testDir, 'semantic', 'embeddings.jsonl');
-        const resultNodeIds = new Set(['service:foo', 'service:bar']);
-
-        // Simulate the mock results that semanticSearch would return.
-        const mockResults: Array<{
-            nodeId: string;
-            kind: string;
-            label: string;
-            score: number;
-            vector?: number[];
-        }> = [
-            { nodeId: 'service:foo', kind: 'service', label: 'foo', score: 0.9 },
-            { nodeId: 'service:bar', kind: 'service', label: 'bar', score: 0.8 },
-        ];
-
-        // Apply vector augmentation (mimicking MCP handler).
-        for await (const record of readEmbeddingsJsonl(embeddingsPath)) {
-            const result = mockResults.find((r) => r.nodeId === record.nodeId);
-            if (result && resultNodeIds.has(record.nodeId)) {
-                result.vector = record.vector;
-            }
+        const output = JSON.parse(result.content[0]!.text);
+        expect(output.results.length).toBeGreaterThan(0);
+        // Every result must have a vector of the correct length
+        for (const res of output.results) {
+            expect(res.vector).toBeDefined();
+            expect(res.vector).toHaveLength(SEMANTIC_DIM);
         }
-
-        // Verify vectors were attached.
-        expect(mockResults[0]!.vector).toEqual(v1);
-        expect(mockResults[1]!.vector).toEqual(v2);
     });
 
-    it('returns structured error when sidecar is missing', async () => {
-        // Do NOT create a sidecar.
-        // Just verify that semanticSearch handles it gracefully.
+    it('does NOT attach vectors when includeVectors=false (default)', async () => {
+        const graphHash = await writeGraphJson('{}');
+        await writeSidecar([makeRecord('svc:a', 'service', unitVec(0))], graphHash);
 
-        const { semanticSearch } = await import('../semantic/search.js');
-        const { embedOne } = await import('../semantic/embedder.js');
-        const { _resetPipelineForTesting } = await import('../semantic/embedder.js');
+        const handler = makeSemanticSearchHandler({ outDir: testDir, embedder: fakeEmbedder });
+        const result = await handler({ query: 'test', includeVectors: false });
 
-        // Write a minimal graph.json so the directory structure is valid.
+        const output = JSON.parse(result.content[0]!.text);
+        expect(output.results.length).toBeGreaterThan(0);
+        for (const res of output.results) {
+            expect(res.vector).toBeUndefined();
+        }
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Case 7: Missing sidecar — structured error, no throw
+// ---------------------------------------------------------------------------
+
+describe('semantic_search handler — missing sidecar', () => {
+    it('returns structured error when sidecar is absent (no throw)', async () => {
+        // Do NOT write any sidecar files.
         await writeGraphJson('{}');
 
-        // Reset the embedder singleton so we don't trigger a real model download.
-        _resetPipelineForTesting();
+        const handler = makeSemanticSearchHandler({ outDir: testDir, embedder: fakeEmbedder });
+        // Must NOT throw
+        const result = await handler({ query: 'test' });
 
-        // Call semanticSearch with missing sidecar.
-        const mockEmbedder = async (_text: string) => unitVec(0);
-        const response = await semanticSearch({
-            query: 'test',
-            outDir: testDir,
-            embedder: mockEmbedder,
-        });
-
-        // Verify the structured error response.
-        expect(response.output.error).toBe('semantic-index-missing');
-        expect(response.output.hint).toContain('arch-graph semantic build');
-        expect(response.output.results).toHaveLength(0);
-        expect(response.output.model).toBe(SEMANTIC_MODEL);
-        expect(response.output.dim).toBe(SEMANTIC_DIM);
-        expect(response.exitCode).toBe(1);
+        const output = JSON.parse(result.content[0]!.text);
+        expect(output.error).toBe('semantic-index-missing');
+        expect(output.hint).toContain('arch-graph semantic build');
+        expect(output.results).toHaveLength(0);
+        expect(output.model).toBe(SEMANTIC_MODEL);
+        expect(output.dim).toBe(SEMANTIC_DIM);
     });
+});
 
-    it('preserves output schema structure across all paths', async () => {
-        // Verify that the SearchOutput type matches the MCP contract exactly.
+// ---------------------------------------------------------------------------
+// Case 8: Vector-augmentation read failure → vectorsError field (SF-P0-1)
+// ---------------------------------------------------------------------------
 
-        const { semanticSearch } = await import('../semantic/search.js');
-
+describe('semantic_search handler — vectorsError on augmentation failure', () => {
+    it('sets vectorsError when embeddings JSONL is corrupt during vector augmentation', async () => {
         const graphHash = await writeGraphJson('{}');
+        // Write a valid manifest
         const manifest = makeManifest({ graphHash, nodeCount: 1 });
-
-        const r1 = makeRecord('service:test', 'service', unitVec(0), {
-            label: 'Test Service',
-            path: '/src/test.ts',
-            snippet: 'function test() { }',
-        });
-
         await mkdir(join(testDir, 'semantic'), { recursive: true });
         await writeManifest(manifest, join(testDir, 'semantic', 'manifest.json'));
-        await writeEmbeddingsJsonl([r1], join(testDir, 'semantic', 'embeddings.jsonl'));
 
-        const mockEmbedder = async (_text: string) => unitVec(0);
-        const response = await semanticSearch({
-            query: 'test',
-            outDir: testDir,
-            embedder: mockEmbedder,
-            topK: 1,
+        // Write a valid record for search to succeed…
+        const validRecord = makeRecord('svc:a', 'service', unitVec(0));
+        await writeEmbeddingsJsonl([validRecord], join(testDir, 'semantic', 'embeddings.jsonl'));
+
+        // Now monkey-patch readEmbeddingsJsonl to throw on the second call
+        // (first call is search.ts scoring, second is vector augmentation).
+        const ioModule = await import('../semantic/io.js');
+        let callCount = 0;
+        const origReadEmbeddingsJsonl = ioModule.readEmbeddingsJsonl;
+        vi.spyOn(ioModule, 'readEmbeddingsJsonl').mockImplementation(async function* (path: string) {
+            callCount++;
+            if (callCount === 1) {
+                // First call (search scoring): yield normally
+                yield* origReadEmbeddingsJsonl(path);
+            } else {
+                // Second call (vector augmentation): fail
+                throw new Error('disk read failure');
+            }
         });
 
-        const output = response.output;
+        const handler = makeSemanticSearchHandler({ outDir: testDir, embedder: fakeEmbedder });
+        const result = await handler({ query: 'test', includeVectors: true });
 
-        // Verify all required fields are present.
-        expect(output).toHaveProperty('query');
-        expect(output).toHaveProperty('results');
-        expect(output).toHaveProperty('model');
-        expect(output).toHaveProperty('dim');
-        expect(output).toHaveProperty('indexBuiltAt');
-        expect(output).toHaveProperty('graphHashMatches');
-
-        // Verify result shape.
-        expect(output.results).toHaveLength(1);
-        const result = output.results[0]!;
-        expect(result).toHaveProperty('nodeId');
-        expect(result).toHaveProperty('kind');
-        expect(result).toHaveProperty('label');
-        expect(result).toHaveProperty('score');
-        expect(result).toHaveProperty('path');
-        expect(result).toHaveProperty('snippet');
-
-        // vector field should NOT be present unless explicitly requested.
-        expect(result).not.toHaveProperty('vector');
-
-        // Verify types match the contract.
-        expect(typeof output.query).toBe('string');
-        expect(Array.isArray(output.results)).toBe(true);
-        expect(typeof output.model).toBe('string');
-        expect(typeof output.dim).toBe('number');
-        expect(typeof output.graphHashMatches).toBe('boolean');
+        const output = JSON.parse(result.content[0]!.text);
+        // Results still present (search succeeded)
+        expect(output.results.length).toBeGreaterThan(0);
+        // vectorsError field set with message
+        expect(output.vectorsError).toBeDefined();
+        expect(output.vectorsError).toContain('disk read failure');
     });
 });

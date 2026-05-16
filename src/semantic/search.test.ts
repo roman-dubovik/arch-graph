@@ -17,12 +17,13 @@ import { createHash } from 'node:crypto';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SemanticManifest, SemanticRecord } from './types.js';
-import { SEMANTIC_DIM, SEMANTIC_MODEL } from './types.js';
+import { SEMANTIC_DIM, SEMANTIC_MODEL, SEMANTIC_SCHEMA_VERSION } from './types.js';
 import { cosineSimilarity, DEFAULT_TOP_K, MAX_TOP_K, semanticSearch } from './search.js';
 import { writeEmbeddingsJsonl, writeManifest } from './io.js';
+import * as ioModule from './io.js';
 
 // ---------------------------------------------------------------------------
 // Test directory lifecycle
@@ -41,6 +42,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
     await rm(testDir, { recursive: true, force: true });
+    vi.restoreAllMocks();
 });
 
 // ---------------------------------------------------------------------------
@@ -50,6 +52,7 @@ afterEach(async () => {
 /** Build a minimal valid SemanticManifest. */
 function makeManifest(overrides: Partial<SemanticManifest> = {}): SemanticManifest {
     return {
+        schemaVersion: SEMANTIC_SCHEMA_VERSION,
         model: SEMANTIC_MODEL,
         dim: SEMANTIC_DIM,
         builtAt: '2026-05-16T12:00:00.000Z',
@@ -354,7 +357,7 @@ describe('semanticSearch — missing sidecar', () => {
 // ---------------------------------------------------------------------------
 
 describe('semanticSearch — corrupt embeddings', () => {
-    it('returns exit 1 and semantic-index-missing error when embeddings.jsonl is unreadable', async () => {
+    it('returns exit 1 and semantic-index-corrupt error when embeddings.jsonl has bad JSON', async () => {
         const graphHash = await writeGraphJson('{}');
         const manifest = makeManifest({ graphHash, nodeCount: 1 });
         // Write manifest but write garbage (not valid JSONL) to embeddings.jsonl
@@ -368,7 +371,67 @@ describe('semanticSearch — corrupt embeddings', () => {
         });
 
         expect(exitCode).toBe(1);
-        expect(output.error).toBe('semantic-index-missing');
+        expect(output.error).toBe('semantic-index-corrupt');
+    });
+
+    it('returns semantic-index-corrupt when embeddings.jsonl has a wrong-dim vector', async () => {
+        const graphHash = await writeGraphJson('{}');
+        const manifest = makeManifest({ graphHash, nodeCount: 1 });
+        await writeManifest(manifest, join(testDir, 'semantic', 'manifest.json'));
+        // Write a record with a 3-dim vector instead of 384-dim
+        const shortVector = [1, 2, 3];
+        const badLine = JSON.stringify({ nodeId: 'svc:x', kind: 'service', label: 'x', snippet: '', vector: shortVector });
+        await writeFile(join(testDir, 'semantic', 'embeddings.jsonl'), badLine + '\n', 'utf8');
+
+        const { output, exitCode } = await semanticSearch({
+            query: 'q',
+            outDir: testDir,
+            embedder: fakeEmbedder(unitVec(0)),
+        });
+
+        expect(exitCode).toBe(1);
+        expect(output.error).toBe('semantic-index-corrupt');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Non-Error JSONL read failure (line 249 branch coverage)
+// ---------------------------------------------------------------------------
+
+describe('semanticSearch — non-Error JSONL read failure', () => {
+    it('returns semantic-index-corrupt when readEmbeddingsJsonl throws a non-Error', async () => {
+        const graphHash = await writeGraphJson('{}');
+        const manifest = makeManifest({ graphHash, nodeCount: 1 });
+        await writeSidecar([makeRecord('svc1', 'service', unitVec(0))], manifest);
+
+        // Mock readEmbeddingsJsonl to throw a plain string (non-Error)
+        vi.spyOn(ioModule, 'readEmbeddingsJsonl').mockImplementation(async function* () {
+            // eslint-disable-next-line @typescript-eslint/no-throw-literal
+            throw 'non-error string';
+        });
+
+        const { output, exitCode } = await semanticSearch({
+            query: 'q',
+            outDir: testDir,
+            embedder: fakeEmbedder(unitVec(0)),
+        });
+
+        expect(exitCode).toBe(1);
+        expect(output.error).toBe('semantic-index-corrupt');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Cosine math: dot() nullish-coalesce branch (line 135)
+// ---------------------------------------------------------------------------
+
+describe('cosineSimilarity — extra branch coverage', () => {
+    it('handles mismatched-length vectors gracefully via ?? 0', () => {
+        // a is shorter than b — the missing a[i] elements are treated as 0.
+        // cos([1], [1, 1]) = dot([1, 0], [1, 1]) / (norm([1, 0]) * norm([1, 1]))
+        //   = 1 / (1 * sqrt(2)) ≈ 0.707
+        const result = cosineSimilarity([1], [1, 1]);
+        expect(result).toBeCloseTo(1 / Math.sqrt(2), 5);
     });
 });
 
@@ -377,7 +440,7 @@ describe('semanticSearch — corrupt embeddings', () => {
 // ---------------------------------------------------------------------------
 
 describe('semanticSearch — embedder failure', () => {
-    it('returns exit 1 when the embedder throws', async () => {
+    it('returns exit 1 when the embedder throws an Error', async () => {
         const graphHash = await writeGraphJson('{}');
         const manifest = makeManifest({ graphHash, nodeCount: 1 });
         await writeSidecar([makeRecord('svc1', 'service', unitVec(0))], manifest);
@@ -394,6 +457,27 @@ describe('semanticSearch — embedder failure', () => {
 
         expect(exitCode).toBe(1);
         expect(output.results).toHaveLength(0);
+        expect(output.embedError).toBe('model unavailable');
+    });
+
+    it('returns exit 1 and embedError when embedder throws a non-Error value', async () => {
+        const graphHash = await writeGraphJson('{}');
+        const manifest = makeManifest({ graphHash, nodeCount: 1 });
+        await writeSidecar([makeRecord('svc1', 'service', unitVec(0))], manifest);
+
+        const throwingEmbedder = async (_text: string): Promise<number[]> => {
+            // eslint-disable-next-line @typescript-eslint/no-throw-literal
+            throw 'plain string error';
+        };
+
+        const { output, exitCode } = await semanticSearch({
+            query: 'q',
+            outDir: testDir,
+            embedder: throwingEmbedder,
+        });
+
+        expect(exitCode).toBe(1);
+        expect(output.embedError).toBe('plain string error');
     });
 });
 

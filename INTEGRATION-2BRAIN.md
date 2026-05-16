@@ -50,6 +50,13 @@ The `semantic_search` MCP tool exposes this schema (identical shape expected for
   dim: 384,
   indexBuiltAt: string,                    // ISO 8601 timestamp of sidecar build
   graphHashMatches: boolean,               // false → caller should re-run `arch-graph semantic build`
+
+  // Optional forward-compatible diagnostic fields (not part of base contract):
+  error?: 'semantic-index-missing' | 'semantic-index-corrupt', // set when sidecar unavailable
+  hint?: string,                           // human-readable recovery hint (set with error)
+  embedError?: string,                     // set when query embedding failed; results=[]; exit 1
+  vectorsError?: string,                   // set when includeVectors=true but re-read failed;
+                                           // results are still returned, only vector attachment failed
 }
 ```
 

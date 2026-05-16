@@ -581,6 +581,19 @@ else
     jq -e '.semantic.model | length > 0' "$DIAG" >/dev/null \
         || fail "diagnostics.json missing .semantic.model after semantic build"
 
+    # PT-P1-6: end-to-end contract check — search returns expected MCP shape.
+    SEARCH_JSON=$(arch-graph semantic search "service" --json 2>/dev/null) \
+        || fail "arch-graph semantic search failed (exit code non-zero)"
+
+    echo "$SEARCH_JSON" | jq -e '.dim == 384' >/dev/null \
+        || fail "semantic search: .dim != 384. Got: $SEARCH_JSON"
+
+    echo "$SEARCH_JSON" | jq -e '.model == "Xenova/paraphrase-multilingual-MiniLM-L12-v2"' >/dev/null \
+        || fail "semantic search: .model mismatch. Got: $SEARCH_JSON"
+
+    echo "$SEARCH_JSON" | jq -e '.graphHashMatches == true' >/dev/null \
+        || fail "semantic search: .graphHashMatches is not true (graph/index hash mismatch). Got: $SEARCH_JSON"
+
     echo -n " (${EMBED_LINES} lines)"
     step_ok
 fi

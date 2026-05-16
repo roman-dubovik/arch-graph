@@ -155,7 +155,9 @@ describe('extractSnippet — failures return values, never throw', () => {
         });
         const result = extractSnippet(project, node);
         expect(result.snippet).toBe('');
-        expect(result.reason).toMatch(/file-not-found/);
+        expect(result.reason).toBeDefined();
+        expect(result.reason!.kind).toBe('file-not-found');
+        expect((result.reason as { kind: 'file-not-found'; path: string }).path).toContain('missing.ts');
     });
 
     it('returns empty snippet with label-not-located reason when label is absent in file', () => {
@@ -170,7 +172,9 @@ describe('extractSnippet — failures return values, never throw', () => {
         });
         const result = extractSnippet(project, node);
         expect(result.snippet).toBe('');
-        expect(result.reason).toMatch(/label-not-located/);
+        expect(result.reason).toBeDefined();
+        expect(result.reason!.kind).toBe('label-not-located');
+        expect((result.reason as { kind: 'label-not-located'; label: string }).label).toBe('NotHere');
     });
 
     it('does not throw for any input combination', () => {
@@ -200,6 +204,8 @@ describe('extractSnippet — failures return values, never throw', () => {
         });
         const result = extractSnippet(project, node);
         expect(result.snippet).toBe('');
-        expect(result.reason).toMatch(/ts-morph-error.*synthetic-ts-morph-error/);
+        expect(result.reason).toBeDefined();
+        expect(result.reason!.kind).toBe('ts-morph-error');
+        expect((result.reason as { kind: 'ts-morph-error'; message: string }).message).toContain('synthetic-ts-morph-error');
     });
 });

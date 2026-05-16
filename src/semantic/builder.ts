@@ -21,14 +21,14 @@ import type { Project } from 'ts-morph';
 import type { ArchGraph, GraphNode } from '../core/types.js';
 import { fileSizeBytes, writeEmbeddingsJsonl, writeManifest } from './io.js';
 import { extractSnippet } from './snippet.js';
-import type { SemanticDiagnostics, SemanticManifest, SemanticRecord, SkippedNode } from './types.js';
-import { SEMANTIC_DIM, SEMANTIC_MODEL } from './types.js';
+import type { SemanticDiagnostics, SemanticManifest, SemanticRecord, SkipReason, SkippedNode } from './types.js';
+import { SEMANTIC_DIM, SEMANTIC_MODEL, SEMANTIC_SCHEMA_VERSION, SKIPPED_NODES_CAP } from './types.js';
 
 /** Default batch size for the embedder. Safe for typical RAM budgets. */
 export const EMBED_BATCH_SIZE = 32 as const;
 
-/** Maximum number of skipped nodes retained in diagnostics. */
-export const SKIPPED_NODES_CAP = 50 as const;
+// Re-export for backward compat (tests imported from builder.ts).
+export { SKIPPED_NODES_CAP };
 
 // ---------------------------------------------------------------------------
 // Types
@@ -82,20 +82,43 @@ export async function buildSemanticIndex(opts: BuildSemanticOpts): Promise<Build
     // --- Extract snippets + build embedding input texts ---------------------
     const snippetMap = new Map<string, string>();
     const textMap = new Map<string, string>();
-    const skippedNodes: SkippedNode[] = [];
+    // Use a Map keyed by nodeId so each node appears at most once.
+    const skippedNodeMap = new Map<string, SkippedNode>();
     let fileReadErrors = 0;
+    let labelErrors = 0;
+    let skippedNodesTruncated = false;
+
+    /** Push to skippedNodeMap if below cap; record truncation flag when cap is first hit. */
+    function recordSkip(node: GraphNode, reason: SkipReason): void {
+        if (skippedNodeMap.has(node.id)) return; // already recorded (snippet phase)
+        if (skippedNodeMap.size >= SKIPPED_NODES_CAP) {
+            if (!skippedNodesTruncated) {
+                skippedNodesTruncated = true;
+                process.stderr.write(
+                    `[arch-graph semantic] WARNING: skippedNodes cap (${SKIPPED_NODES_CAP}) reached — further skips omitted from diagnostics.\n`,
+                );
+            }
+            return;
+        }
+        skippedNodeMap.set(node.id, { nodeId: node.id, kind: node.kind, label: node.label, reason });
+    }
 
     for (const node of sortedNodes) {
         const { snippet, reason } = extractSnippet(project, node);
 
         if (reason) {
-            // Determine error type for diagnostic counts
-            if (reason.startsWith('file-not-found:') || reason.startsWith('ts-morph-error:')) {
-                fileReadErrors++;
+            // Bucket into the appropriate diagnostic counter.
+            switch (reason.kind) {
+                case 'file-not-found':
+                case 'ts-morph-error':
+                    fileReadErrors++;
+                    break;
+                case 'label-not-located':
+                    labelErrors++;
+                    break;
+                // 'transformer-error' is produced in the embed phase, not here.
             }
-            if (skippedNodes.length < SKIPPED_NODES_CAP) {
-                skippedNodes.push({ nodeId: node.id, kind: node.kind, label: node.label, reason });
-            }
+            recordSkip(node, reason);
             // A failed snippet means embed just label + kind (still useful)
             snippetMap.set(node.id, '');
             textMap.set(node.id, buildEmbedText(node, ''));
@@ -120,13 +143,12 @@ export async function buildSemanticIndex(opts: BuildSemanticOpts): Promise<Build
             vectors = await embedder(texts);
         } catch (err) {
             // Transformer failure for an entire batch — record each node as skipped
-            const reason = `transformer-error: ${err instanceof Error ? err.message : String(err)}`;
+            const message = err instanceof Error ? err.message : String(err);
+            process.stderr.write(`[arch-graph semantic] transformer error: ${message}\n`);
             transformerErrors += batch.length;
             for (const node of batch) {
                 failedEmbed.push(node.id);
-                if (skippedNodes.length < SKIPPED_NODES_CAP) {
-                    skippedNodes.push({ nodeId: node.id, kind: node.kind, label: node.label, reason });
-                }
+                recordSkip(node, { kind: 'transformer-error', message });
             }
             continue;
         }
@@ -148,9 +170,11 @@ export async function buildSemanticIndex(opts: BuildSemanticOpts): Promise<Build
         }
     }
 
-    // --- Compute skipped count (snippet failures that weren't embed-failed) --
-    const skippedCount = skippedNodes.filter((s) => !failedEmbed.includes(s.nodeId)).length +
-        failedEmbed.length;
+    // --- Compute skipped count --------------------------------------------------
+    // "skipped" means NOT indexed (embed failed). Snippet-failed nodes are still
+    // embedded (fallback to label+kind), so they count as indexed.
+    // Invariant: indexed + skipped === total (sortedNodes.length).
+    const skippedCount = failedEmbed.length;
 
     // --- Write sidecar files ------------------------------------------------
     const semanticDir = join(outDir, 'semantic');
@@ -159,6 +183,7 @@ export async function buildSemanticIndex(opts: BuildSemanticOpts): Promise<Build
 
     const builtAt = now();
     const manifest: SemanticManifest = {
+        schemaVersion: SEMANTIC_SCHEMA_VERSION,
         model: SEMANTIC_MODEL,
         dim: SEMANTIC_DIM,
         builtAt,
@@ -171,16 +196,21 @@ export async function buildSemanticIndex(opts: BuildSemanticOpts): Promise<Build
 
     const indexSizeBytes = await fileSizeBytes(embeddingsPath);
 
+    const skippedNodes = Array.from(skippedNodeMap.values());
+
     const semanticDiagnostics: SemanticDiagnostics = {
         model: SEMANTIC_MODEL,
         dim: SEMANTIC_DIM,
+        schemaVersion: SEMANTIC_SCHEMA_VERSION,
         counts: {
             indexed: records.length,
             skipped: skippedCount,
             fileReadErrors,
             transformerErrors,
+            labelErrors,
         },
-        skippedNodes: skippedNodes.slice(0, SKIPPED_NODES_CAP),
+        skippedNodes,
+        skippedNodesTruncated,
         indexSizeBytes,
     };
 
@@ -208,8 +238,11 @@ function buildEmbedText(node: GraphNode, snippet: string): string {
  * Read diagnostics.json (if present), inject the `semantic` field, and write
  * back — without touching any other field. This is the anti-clobber merge.
  *
- * If diagnostics.json is absent (e.g. user ran `semantic build` before `build`),
- * we write a minimal object that satisfies the type contract enough for callers.
+ * Distinguishes two cases:
+ *   - File absent (ENOENT): start fresh with an empty base object.
+ *   - File present but corrupt (JSON.parse fails): throw so the caller sees a
+ *     hard failure and existing analyzer data (nats/typeorm/etc.) is NOT silently
+ *     overwritten.
  */
 async function mergeDiagnostics(outDir: string, semanticDiag: SemanticDiagnostics): Promise<void> {
     const diagPath = join(outDir, 'diagnostics.json');
@@ -217,9 +250,25 @@ async function mergeDiagnostics(outDir: string, semanticDiag: SemanticDiagnostic
     let existing: Record<string, unknown> = {};
     try {
         const raw = await readFile(diagPath, 'utf8');
-        existing = JSON.parse(raw) as Record<string, unknown>;
-    } catch {
-        // File absent or unreadable — start fresh; the merge still succeeds.
+        // Parse separately so JSON.parse errors are NOT swallowed along with ENOENT.
+        try {
+            existing = JSON.parse(raw) as Record<string, unknown>;
+        } catch (parseErr) {
+            // diagnostics.json exists but is corrupt — propagate as a hard failure.
+            process.stderr.write(
+                `[arch-graph semantic] ERROR: diagnostics.json is corrupt and cannot be parsed. ` +
+                `Delete it and re-run \`arch-graph build\` to regenerate. ` +
+                `Details: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}\n`,
+            );
+            throw parseErr;
+        }
+    } catch (readErr) {
+        if ((readErr as NodeJS.ErrnoException).code === 'ENOENT') {
+            // File absent — start fresh; the merge still succeeds.
+            existing = {};
+        } else {
+            throw readErr;
+        }
     }
 
     // Inject (or overwrite) only the `semantic` key.

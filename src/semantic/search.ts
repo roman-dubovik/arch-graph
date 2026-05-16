@@ -66,10 +66,32 @@ export interface SearchOutput {
     dim: typeof SEMANTIC_DIM;
     indexBuiltAt: string;
     graphHashMatches: boolean;
-    /** Set when the sidecar is missing. */
-    error?: 'semantic-index-missing';
+    /**
+     * Structured error code when the sidecar is unavailable or incompatible.
+     * - `'semantic-index-missing'`: manifest or embeddings not found.
+     * - `'semantic-index-corrupt'`: files exist but content is invalid (bad JSON,
+     *    dimension mismatch, incompatible schemaVersion/model/dim).
+     */
+    error?: 'semantic-index-missing' | 'semantic-index-corrupt';
     /** Set together with `error`. */
     hint?: string;
+    /**
+     * Present when the query embedding failed. Callers can surface this to
+     * users as a diagnostic hint. Does not prevent other output fields from
+     * being populated.
+     *
+     * Optional forward-compatible field — not part of the base MCP contract
+     * required by 2-brain Phase 3, but surfaced for observability.
+     */
+    embedError?: string;
+    /**
+     * Present when the vector-augmentation re-read failed (MCP `includeVectors`
+     * path). Results are still returned; only vector attachment failed.
+     *
+     * Optional forward-compatible field — not part of the base MCP contract
+     * required by 2-brain Phase 3, but surfaced for observability.
+     */
+    vectorsError?: string;
 }
 
 /** Structured exit-code recommendation returned alongside SearchOutput. */
@@ -191,8 +213,10 @@ export async function semanticSearch(opts: SemanticSearchOpts): Promise<SearchRe
     let queryVector: number[];
     try {
         queryVector = await embedder(query);
-    } catch {
+    } catch (embedErr) {
         // Hard failure — cannot search without a query vector
+        const embedErrorMsg = embedErr instanceof Error ? embedErr.message : String(embedErr);
+        process.stderr.write(`[arch-graph semantic] embed failed: ${embedErrorMsg}\n`);
         const output: SearchOutput = {
             query,
             results: [],
@@ -200,6 +224,7 @@ export async function semanticSearch(opts: SemanticSearchOpts): Promise<SearchRe
             dim: manifest.dim,
             indexBuiltAt: manifest.builtAt,
             graphHashMatches,
+            embedError: embedErrorMsg,
         };
         return { output, exitCode: 1, stderrWarning };
     }
@@ -219,8 +244,10 @@ export async function semanticSearch(opts: SemanticSearchOpts): Promise<SearchRe
             if (record.snippet) result.snippet = record.snippet;
             scored.push({ result, score });
         }
-    } catch {
-        // embeddings.jsonl unreadable
+    } catch (jsonlErr) {
+        // embeddings.jsonl exists but content is corrupt (bad JSON, dim mismatch, etc.)
+        const jsonlErrorMsg = jsonlErr instanceof Error ? jsonlErr.message : String(jsonlErr);
+        process.stderr.write(`[arch-graph semantic] embeddings read error: ${jsonlErrorMsg}\n`);
         const output: SearchOutput = {
             query,
             results: [],
@@ -228,7 +255,7 @@ export async function semanticSearch(opts: SemanticSearchOpts): Promise<SearchRe
             dim: manifest.dim,
             indexBuiltAt: manifest.builtAt,
             graphHashMatches,
-            error: 'semantic-index-missing',
+            error: 'semantic-index-corrupt',
             hint: 'run: arch-graph semantic build',
         };
         return { output, exitCode: 1, stderrWarning };

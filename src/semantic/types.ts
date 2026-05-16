@@ -14,12 +14,17 @@ export const SEMANTIC_MODEL = 'Xenova/paraphrase-multilingual-MiniLM-L12-v2' as 
 /** Embedding dimensionality produced by SEMANTIC_MODEL. */
 export const SEMANTIC_DIM = 384 as const;
 
+/** Schema version for the manifest. Bump when the sidecar format changes. */
+export const SEMANTIC_SCHEMA_VERSION = 1 as const;
+
 /**
  * Written to `arch-graph-out/<repo>/semantic/manifest.json`.
  * Contains enough metadata to detect index staleness and cross-check
  * model compatibility with 2-brain federation consumers.
  */
 export interface SemanticManifest {
+    /** Schema version — must equal {@link SEMANTIC_SCHEMA_VERSION}. */
+    schemaVersion: typeof SEMANTIC_SCHEMA_VERSION;
     /** Locked value: {@link SEMANTIC_MODEL}. Checked by consumers. */
     model: typeof SEMANTIC_MODEL;
     /** Locked value: {@link SEMANTIC_DIM}. */
@@ -53,6 +58,17 @@ export interface SemanticRecord {
 }
 
 /**
+ * Discriminated union of reasons a node was skipped during `semantic build`.
+ * Using a DU (rather than a plain string) lets callers switch on `kind`
+ * without fragile string prefix checks.
+ */
+export type SkipReason =
+    | { kind: 'file-not-found'; path: string }
+    | { kind: 'ts-morph-error'; message: string }
+    | { kind: 'label-not-located'; label: string }
+    | { kind: 'transformer-error'; message: string };
+
+/**
  * Describes one node that was skipped during `semantic build`.
  * Honesty rule: no silent drops — every skipped node must appear here.
  */
@@ -60,7 +76,7 @@ export interface SkippedNode {
     nodeId: string;
     kind: NodeKind;
     label: string;
-    reason: string;
+    reason: SkipReason;
 }
 
 /**
@@ -71,14 +87,25 @@ export interface SkippedNode {
 export interface SemanticDiagnostics {
     model: typeof SEMANTIC_MODEL;
     dim: typeof SEMANTIC_DIM;
+    schemaVersion: typeof SEMANTIC_SCHEMA_VERSION;
     counts: {
         indexed: number;
         skipped: number;
         fileReadErrors: number;
         transformerErrors: number;
+        /** Nodes whose label could not be located in the source file. */
+        labelErrors: number;
     };
-    /** Capped at 50 entries to keep diagnostics.json small. */
+    /** Capped at {@link SKIPPED_NODES_CAP} entries to keep diagnostics.json small. */
     skippedNodes: SkippedNode[];
+    /**
+     * True when the skippedNodes list was truncated due to the cap.
+     * The total count is still accurate via `counts.skipped`.
+     */
+    skippedNodesTruncated: boolean;
     /** Size in bytes of `embeddings.jsonl`. */
     indexSizeBytes: number;
 }
+
+/** Maximum number of skipped nodes retained in diagnostics (exported for tests). */
+export const SKIPPED_NODES_CAP = 50 as const;

@@ -11,6 +11,7 @@
 import type { Project } from 'ts-morph';
 
 import type { GraphNode } from '../core/types.js';
+import type { SkipReason } from './types.js';
 
 /** Maximum characters returned in a snippet. */
 export const SNIPPET_MAX_CHARS = 400;
@@ -18,7 +19,7 @@ export const SNIPPET_MAX_CHARS = 400;
 export interface SnippetResult {
     snippet: string;
     /** Set only when extraction failed for a recoverable reason. */
-    reason?: string;
+    reason?: SkipReason;
 }
 
 /**
@@ -26,7 +27,7 @@ export interface SnippetResult {
  * `project`. Returns an empty snippet (no `reason`) for nodes with no `path`
  * — embedding `label + kind` alone still has value for those anchors.
  *
- * Never throws: all errors become `{ snippet: '', reason: '<message>' }`.
+ * Never throws: all errors become `{ snippet: '', reason: SkipReason }`.
  */
 export function extractSnippet(project: Project, node: GraphNode): SnippetResult {
     // Nodes with no path have no source to extract; expected, not a failure.
@@ -37,7 +38,7 @@ export function extractSnippet(project: Project, node: GraphNode): SnippetResult
     try {
         const sourceFile = project.getSourceFile(node.path);
         if (!sourceFile) {
-            return { snippet: '', reason: `file-not-found: ${node.path}` };
+            return { snippet: '', reason: { kind: 'file-not-found', path: node.path } };
         }
 
         // Try to find a declaration that matches the node's label.
@@ -55,9 +56,9 @@ export function extractSnippet(project: Project, node: GraphNode): SnippetResult
         }
 
         // Label not found in this file — return empty snippet with reason.
-        return { snippet: '', reason: `label-not-located: ${node.label}` };
+        return { snippet: '', reason: { kind: 'label-not-located', label: node.label } };
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
-        return { snippet: '', reason: `ts-morph-error: ${message}` };
+        return { snippet: '', reason: { kind: 'ts-morph-error', message } };
     }
 }

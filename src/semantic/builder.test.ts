@@ -12,8 +12,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ArchGraph } from '../core/types.js';
 import { inMemoryProject } from '../__fixtures__/in-memory-project.js';
 import { buildSemanticIndex } from './builder.js';
+import { semanticSearch } from './search.js';
 import type { SemanticDiagnostics } from './types.js';
-import { SEMANTIC_DIM, SEMANTIC_MODEL } from './types.js';
+import { SEMANTIC_DIM, SEMANTIC_MODEL, SEMANTIC_SCHEMA_VERSION } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -228,7 +229,7 @@ describe('buildSemanticIndex — partial failure', () => {
         expect(diagnostics.skippedNodes.length).toBeGreaterThanOrEqual(1);
         const skipped = diagnostics.skippedNodes.find((s) => s.nodeId === 'service:missing');
         expect(skipped).toBeDefined();
-        expect(skipped!.reason).toMatch(/file-not-found/);
+        expect(skipped!.reason.kind).toBe('file-not-found');
     });
 
     it('records transformer errors per-batch without hard-failing the run', async () => {
@@ -254,7 +255,7 @@ describe('buildSemanticIndex — partial failure', () => {
         expect(diagnostics.counts.indexed).toBe(0);
         expect(diagnostics.counts.transformerErrors).toBe(2);
         expect(diagnostics.skippedNodes.length).toBe(2);
-        expect(diagnostics.skippedNodes[0].reason).toMatch(/transformer-error/);
+        expect(diagnostics.skippedNodes[0]!.reason.kind).toBe('transformer-error');
 
         // embeddings.jsonl is empty but written
         const raw = await readFile(join(testDir, 'semantic', 'embeddings.jsonl'), 'utf8');
@@ -323,6 +324,29 @@ describe('buildSemanticIndex — diagnostics merge', () => {
             await readFile(join(testDir, 'diagnostics.json'), 'utf8'),
         ) as Record<string, unknown>;
         expect(written.semantic).toBeDefined();
+    });
+
+    it('SF-P0-2: throws (not silently clobbers) when diagnostics.json is corrupt JSON', async () => {
+        const graph = makeGraph({ nodes: [{ id: 'service:z', kind: 'service', label: 'z' }] });
+        await writeGraphJson(graph);
+
+        // Write corrupt JSON — NOT ENOENT, but a parse error
+        await writeFile(join(testDir, 'diagnostics.json'), '{ broken json', 'utf8');
+
+        // buildSemanticIndex must throw because of the corrupt diagnostics.json
+        // (anti-clobber: must NOT silently overwrite nats/typeorm/etc.)
+        await expect(
+            buildSemanticIndex({
+                graph,
+                project: inMemoryProject({}),
+                embedder: fakeEmbedder,
+                outDir: testDir,
+            }),
+        ).rejects.toThrow();
+
+        // Verify diagnostics.json was NOT overwritten with new data (stays corrupt)
+        const stillBad = await readFile(join(testDir, 'diagnostics.json'), 'utf8');
+        expect(stillBad).toBe('{ broken json');
     });
 });
 
@@ -410,7 +434,7 @@ describe('buildSemanticIndex — snippet content', () => {
         // label-not-located is recorded as a skip (not fileReadError)
         expect(diagnostics.counts.indexed).toBe(1); // still embedded (fallback to label+kind)
         expect(diagnostics.skippedNodes.length).toBeGreaterThanOrEqual(1);
-        expect(diagnostics.skippedNodes[0].reason).toMatch(/label-not-located/);
+        expect(diagnostics.skippedNodes[0]!.reason.kind).toBe('label-not-located');
     });
 });
 
@@ -491,7 +515,8 @@ describe('buildSemanticIndex — transformer error types', () => {
         });
 
         expect(diagnostics.counts.transformerErrors).toBe(1);
-        expect(diagnostics.skippedNodes[0].reason).toContain('plain string error');
+        expect(diagnostics.skippedNodes[0]!.reason.kind).toBe('transformer-error');
+        expect((diagnostics.skippedNodes[0]!.reason as { kind: 'transformer-error'; message: string }).message).toContain('plain string error');
     });
 });
 
@@ -527,5 +552,133 @@ describe('buildSemanticIndex — idempotency', () => {
 
         expect(jsonl1).toBe(jsonl2);
         expect(manifest1).toBe(manifest2);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// PT-P1-4 — Full diagnostics shape assertion
+// ---------------------------------------------------------------------------
+
+describe('buildSemanticIndex — complete diagnostics shape (PT-P1-4)', () => {
+    it('diagnostics has all required fields with correct types', async () => {
+        const graph = makeGraph({
+            nodes: [
+                // Success: will be indexed
+                { id: 'service:a', kind: 'service', label: 'a' },
+                // Snippet failure: path exists in project with different label → label-not-located
+                { id: 'service:b', kind: 'service', label: 'NonExistent', path: '/project/b.ts' },
+                // File not found: path not in project
+                { id: 'service:c', kind: 'service', label: 'c', path: '/no/such/file.ts' },
+            ],
+        });
+        await writeGraphJson(graph);
+
+        const project = inMemoryProject({
+            '/project/b.ts': 'class SomeOtherClass {}',
+        });
+
+        const { diagnostics } = await buildSemanticIndex({
+            graph,
+            project,
+            embedder: fakeEmbedder,
+            outDir: testDir,
+            now: () => '2026-05-16T12:00:00.000Z',
+        });
+
+        // Top-level fields
+        expect(diagnostics.model).toBe(SEMANTIC_MODEL);
+        expect(diagnostics.dim).toBe(SEMANTIC_DIM);
+        expect(diagnostics.schemaVersion).toBe(SEMANTIC_SCHEMA_VERSION);
+        expect(typeof diagnostics.indexSizeBytes).toBe('number');
+        expect(diagnostics.indexSizeBytes).toBeGreaterThan(0);
+        expect(typeof diagnostics.skippedNodesTruncated).toBe('boolean');
+        expect(diagnostics.skippedNodesTruncated).toBe(false); // only 3 nodes, below cap
+
+        // Counts shape
+        const { counts } = diagnostics;
+        expect(typeof counts.indexed).toBe('number');
+        expect(typeof counts.skipped).toBe('number');
+        expect(typeof counts.fileReadErrors).toBe('number');
+        expect(typeof counts.transformerErrors).toBe('number');
+        expect(typeof counts.labelErrors).toBe('number');
+
+        // All 3 nodes are indexed (snippet failures fall back to label+kind; embed still runs)
+        expect(counts.indexed).toBe(3);
+        expect(counts.skipped).toBe(0);
+
+        // One file-not-found, one label-not-located
+        expect(counts.fileReadErrors).toBe(1);
+        expect(counts.labelErrors).toBe(1);
+        expect(counts.transformerErrors).toBe(0);
+
+        // skippedNodes shape
+        expect(Array.isArray(diagnostics.skippedNodes)).toBe(true);
+        expect(diagnostics.skippedNodes.length).toBe(2); // b + c
+
+        for (const skipped of diagnostics.skippedNodes) {
+            expect(typeof skipped.nodeId).toBe('string');
+            expect(typeof skipped.kind).toBe('string');
+            expect(typeof skipped.label).toBe('string');
+            expect(skipped.reason).toBeDefined();
+            expect(typeof skipped.reason.kind).toBe('string');
+        }
+
+        const kinds = diagnostics.skippedNodes.map((s) => s.reason.kind);
+        expect(kinds).toContain('label-not-located');
+        expect(kinds).toContain('file-not-found');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// PT-P1-3 — Round-trip: build index then search, assert top-1 matches
+// ---------------------------------------------------------------------------
+
+describe('buildSemanticIndex + semanticSearch — round-trip (PT-P1-3)', () => {
+    it('builds a 3-node index and searches it; top-1 matches the most-similar node', async () => {
+        /**
+         * 3 nodes — sorted alphabetically in the builder:
+         *   nats-subject:gamma → batch index 0 → fakeVector(0)
+         *   service:alpha      → batch index 1 → fakeVector(1)
+         *   service:beta       → batch index 2 → fakeVector(2)
+         *
+         * Search query embedder returns fakeVector(1), so service:alpha
+         * (same vector) is the closest and must be top-1 (cosine = 1.0).
+         */
+        const graph = makeGraph({
+            nodes: [
+                { id: 'service:alpha', kind: 'service', label: 'alpha' },
+                { id: 'service:beta',  kind: 'service', label: 'beta' },
+                { id: 'nats-subject:gamma', kind: 'nats-subject', label: 'gamma' },
+            ],
+        });
+        await writeGraphJson(graph);
+
+        // Build the index with the same fakeEmbedder used elsewhere in this suite.
+        await buildSemanticIndex({
+            graph,
+            project: inMemoryProject({}),
+            embedder: fakeEmbedder,
+            outDir: testDir,
+        });
+
+        // Search with a query whose vector equals fakeVector(1) — identical to service:alpha
+        // (second in sorted order: nats-subject:gamma < service:alpha < service:beta).
+        const queryEmbedder = async (_text: string) => fakeVector(1);
+        const { output, exitCode } = await semanticSearch({
+            query: 'alpha service',
+            outDir: testDir,
+            embedder: queryEmbedder,
+            topK: 3,
+        });
+
+        expect(exitCode).toBe(0);
+        expect(output.results).toHaveLength(3);
+        // service:alpha must be top-1 with cosine = 1.0
+        expect(output.results[0]!.nodeId).toBe('service:alpha');
+        expect(output.results[0]!.score).toBeCloseTo(1.0, 5);
+        // All MCP contract fields present
+        expect(output.model).toBe(SEMANTIC_MODEL);
+        expect(output.dim).toBe(SEMANTIC_DIM);
+        expect(output.graphHashMatches).toBe(true);
     });
 });

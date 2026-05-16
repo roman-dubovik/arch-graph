@@ -16,7 +16,7 @@ import {
     writeEmbeddingsJsonl,
     writeManifest,
 } from './io.js';
-import { SEMANTIC_DIM, SEMANTIC_MODEL } from './types.js';
+import { SEMANTIC_DIM, SEMANTIC_MODEL, SEMANTIC_SCHEMA_VERSION } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -35,6 +35,7 @@ afterEach(async () => {
 
 function makeManifest(overrides: Partial<SemanticManifest> = {}): SemanticManifest {
     return {
+        schemaVersion: SEMANTIC_SCHEMA_VERSION,
         model: SEMANTIC_MODEL,
         dim: SEMANTIC_DIM,
         builtAt: '2026-05-16T00:00:00.000Z',
@@ -91,6 +92,27 @@ describe('writeManifest + readManifest', () => {
         const manifestPath = join(testDir, 'bad.json');
         await writeFile(manifestPath, '{ not valid json', 'utf8');
         await expect(readManifest(manifestPath)).rejects.toThrow();
+    });
+
+    it('readManifest throws on incompatible schemaVersion', async () => {
+        const manifestPath = join(testDir, 'wrong-schema.json');
+        const bad = { ...makeManifest(), schemaVersion: 99 };
+        await writeFile(manifestPath, JSON.stringify(bad), 'utf8');
+        await expect(readManifest(manifestPath)).rejects.toThrow(/schemaVersion/);
+    });
+
+    it('readManifest throws on incompatible model', async () => {
+        const manifestPath = join(testDir, 'wrong-model.json');
+        const bad = { ...makeManifest(), model: 'some-other-model' };
+        await writeFile(manifestPath, JSON.stringify(bad), 'utf8');
+        await expect(readManifest(manifestPath)).rejects.toThrow(/model/);
+    });
+
+    it('readManifest throws on incompatible dim', async () => {
+        const manifestPath = join(testDir, 'wrong-dim.json');
+        const bad = { ...makeManifest(), dim: 768 };
+        await writeFile(manifestPath, JSON.stringify(bad), 'utf8');
+        await expect(readManifest(manifestPath)).rejects.toThrow(/dim/);
     });
 });
 

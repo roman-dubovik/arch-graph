@@ -80,6 +80,21 @@ describe('embed', () => {
         const [vec] = await embed(['semantic search']);
         expect(vec.every((v) => typeof v === 'number' && !isNaN(v))).toBe(true);
     });
+
+    it('PT-P1-5: calls extractor with { pooling: "mean", normalize: true }', async () => {
+        // Capture the extractor mock returned by pipeline() so we can assert
+        // the options passed to it.  Without normalize: true, cosine math is
+        // meaningless on unnormalised vectors.
+        const fakeExtractor = fakePipeline();
+        vi.mocked(pipeline).mockResolvedValue(fakeExtractor as unknown as Awaited<ReturnType<typeof pipeline>>);
+
+        await embed(['cosine-correctness check']);
+
+        expect(fakeExtractor).toHaveBeenCalledWith(
+            expect.anything(),
+            { pooling: 'mean', normalize: true },
+        );
+    });
 });
 
 describe('embedOne', () => {
