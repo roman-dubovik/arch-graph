@@ -1,4 +1,3 @@
-import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 import { loadConfig } from '../core/config.js';
@@ -16,6 +15,7 @@ import {
     parseClaudeArgs,
 } from './claude.js';
 import { hookInstall, hookStatus, hookUninstall, parseHookArgs } from './hooks.js';
+import { runInitWizard } from './init.js';
 import { installSkill } from './skill.js';
 import { parseQueryArgs, QUERY_CMDS, runQueryCommand } from './query-commands.js';
 import {
@@ -138,33 +138,8 @@ Mermaid slice modes (default writes graph.mermaid; flag adds an extra slice):
                     Keys: nats, bullmq, typeorm, http, di, ts-import, lib
 `;
 
-const INIT_TEMPLATE = `import { defineConfig } from 'arch-graph';
-
-export default defineConfig({
-    id: 'my-project',
-    root: '.',
-    appsGlob: 'apps/*',
-    libsGlob: 'libs/**',
-    nats: {
-        wrapperPublishApis: [
-            // { class: 'MyNatsService', methods: ['publish', 'request'] },
-        ],
-        wrapperSubscribeApis: [
-            // { class: 'MyNatsService', methods: ['subscribe'] },
-        ],
-    },
-    imports: {
-        // Emit file-level \`ts-import\` edges (file → file). Off by default —
-        // produces 10k+ edges in medium monorepos. Turn on for file-graph drill-downs.
-        // fileLevel: false,
-    },
-});
-`;
-
 async function cmdInit(out: string): Promise<void> {
-    const target = resolve(out);
-    await writeFile(target, INIT_TEMPLATE, 'utf8');
-    process.stdout.write(`wrote ${target}\n`);
+    await runInitWizard(out);
 }
 
 // ---------------------------------------------------------------------------
