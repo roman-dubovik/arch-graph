@@ -10,7 +10,15 @@ function field(
     nullable = false,
     decorator: ColumnDecorator = 'Column',
 ): EntityFieldSite {
-    return { entityClass, tableName, fieldName, fieldType, nullable, decorator, file: '/app/user.entity.ts', line: 10 };
+    return {
+        entityClass,
+        tableName,
+        fieldName,
+        fieldType,
+        nullable,
+        decorator,
+        location: { file: '/app/user.entity.ts', line: 10, column: 5 },
+    };
 }
 
 describe('mapEntityFieldsToGraph', () => {
@@ -29,11 +37,11 @@ describe('mapEntityFieldsToGraph', () => {
         expect(node!.label).toBe('users/email');
     });
 
-    it('creates db-table node', () => {
+    // P1-3: db-table nodes are NOT emitted by this mapper (they come from mapTypeOrmToGraph)
+    it('does NOT emit db-table nodes (owned by typeorm mapper)', () => {
         const result = mapEntityFieldsToGraph([field()]);
         const tableNode = result.nodes.find((n) => n.kind === 'db-table');
-        expect(tableNode).toBeDefined();
-        expect(tableNode!.id).toBe('db-table:users');
+        expect(tableNode).toBeUndefined();
     });
 
     it('creates entity-has-field edge from db-table to db-entity-field', () => {
@@ -44,25 +52,27 @@ describe('mapEntityFieldsToGraph', () => {
         expect(edge!.to).toBe('db-entity-field:users/email');
     });
 
-    it('deduplicates db-table nodes across multiple fields from same entity', () => {
+    it('creates one db-entity-field node per field (no tableNode deduplicate needed)', () => {
         const fields: EntityFieldSite[] = [
             field('UserEntity', 'users', 'email'),
             field('UserEntity', 'users', 'name'),
             field('UserEntity', 'users', 'id'),
         ];
         const result = mapEntityFieldsToGraph(fields);
-        const tableNodes = result.nodes.filter((n) => n.kind === 'db-table');
-        expect(tableNodes).toHaveLength(1);
+        const fieldNodes = result.nodes.filter((n) => n.kind === 'db-entity-field');
+        expect(fieldNodes).toHaveLength(3);
+        // No db-table node from this mapper
+        expect(result.nodes.filter((n) => n.kind === 'db-table')).toHaveLength(0);
     });
 
-    it('creates separate db-table nodes for different entities', () => {
+    it('emits edges with correct from pointing to non-existent-yet db-table node', () => {
+        // The db-table:posts node would come from mapTypeOrmToGraph in real usage
         const fields: EntityFieldSite[] = [
-            field('UserEntity', 'users', 'id'),
-            field('PostEntity', 'posts', 'id'),
+            field('PostEntity', 'posts', 'title'),
         ];
         const result = mapEntityFieldsToGraph(fields);
-        const tableNodes = result.nodes.filter((n) => n.kind === 'db-table');
-        expect(tableNodes).toHaveLength(2);
+        const edge = result.edges[0]!;
+        expect(edge.from).toBe('db-table:posts');
     });
 
     it('creates one db-entity-field node per unique table/field', () => {
@@ -104,8 +114,10 @@ describe('mapEntityFieldsToGraph', () => {
     });
 
     it('handles all 6 decorator types', () => {
-        const decorators = ['Column', 'PrimaryColumn', 'PrimaryGeneratedColumn',
-            'CreateDateColumn', 'UpdateDateColumn', 'DeleteDateColumn'];
+        const decorators: ColumnDecorator[] = [
+            'Column', 'PrimaryColumn', 'PrimaryGeneratedColumn',
+            'CreateDateColumn', 'UpdateDateColumn', 'DeleteDateColumn',
+        ];
         const fields: EntityFieldSite[] = decorators.map((d, i) =>
             field('Ent', 'table', `field${i}`, 'varchar', false, d),
         );
@@ -114,7 +126,7 @@ describe('mapEntityFieldsToGraph', () => {
         expect(result.edges).toHaveLength(6);
     });
 
-    it('includes file and line in edge', () => {
+    it('includes file and line from location in edge', () => {
         const result = mapEntityFieldsToGraph([field()]);
         const edge = result.edges[0]!;
         expect(edge.file).toContain('user.entity.ts');

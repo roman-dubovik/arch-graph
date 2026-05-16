@@ -10,15 +10,21 @@
  *   - fieldName: property name on the class
  *   - fieldType: string from decorator arg or TypeScript type (fallback to TS type)
  *   - nullable: true if decorator opts include { nullable: true }
+ *
+ * Inheritance (P0-3): properties declared on abstract base classes are collected
+ * by walking the base-class chain via getBaseClass(). A cycle guard prevents
+ * infinite loops on malformed/partial ASTs.
  */
 
 import {
+    ClassDeclaration,
     ObjectLiteralExpression,
     Project,
     PropertyAssignment,
+    PropertyDeclaration,
     SyntaxKind,
 } from 'ts-morph';
-import type { TypeOrmEntity } from '../../core/types.js';
+import type { SourceLoc, TypeOrmEntity } from '../../core/types.js';
 import { tableNameOf } from '../../core/types.js';
 import { isExcludedSourceFile } from '../shared.js';
 
@@ -32,7 +38,7 @@ export type ColumnDecorator =
     | 'DeleteDateColumn';
 
 export interface EntityFieldSite {
-    /** Parent entity class name. */
+    /** Parent entity class name (concrete @Entity class, even for inherited fields). */
     entityClass: string;
     /** Parent table name. */
     tableName: string;
@@ -44,9 +50,8 @@ export interface EntityFieldSite {
     fieldType: string;
     /** Is the column nullable. */
     nullable: boolean;
-    /** Source location. */
-    file: string;
-    line: number;
+    /** Source location (file + line where the decorator lives). */
+    location: SourceLoc;
 }
 
 export interface DbEntityFieldExtractResult {
@@ -154,7 +159,7 @@ function resolveNullable(
  * Get a simplified TS type string from a property declaration.
  * Strips nullability union for cleaner display.
  */
-function getTsTypeText(prop: import('ts-morph').PropertyDeclaration): string {
+function getTsTypeText(prop: PropertyDeclaration): string {
     const typeNode = prop.getTypeNode();
     if (!typeNode) return 'unknown';
     const txt = typeNode.getText();
@@ -163,10 +168,37 @@ function getTsTypeText(prop: import('ts-morph').PropertyDeclaration): string {
 }
 
 /**
+ * Recursively collect all property declarations from `cls` and its base class
+ * hierarchy. Concrete class properties come first; base-class properties follow.
+ *
+ * A `seen` Set guards against degenerate circular base-class chains (should be
+ * unreachable in valid TypeScript but can occur with partial/malformed ASTs).
+ * Returns `{ props, cycles }` so callers can accumulate the cycle count.
+ */
+export function getAllFieldProperties(
+    cls: ClassDeclaration,
+    seen = new Set<ClassDeclaration>(),
+): { props: PropertyDeclaration[]; cycles: number } {
+    if (seen.has(cls)) {
+        process.stderr.write(
+            `[typeorm/fields] BUG: circular base class chain at ${cls.getName?.() ?? '<anon>'}; truncating.\n`,
+        );
+        return { props: [], cycles: 1 };
+    }
+    seen.add(cls);
+    const base = cls.getBaseClass();
+    if (!base) return { props: cls.getProperties(), cycles: 0 };
+    const sub = getAllFieldProperties(base, seen);
+    return { props: [...cls.getProperties(), ...sub.props], cycles: sub.cycles };
+}
+
+/**
  * Extract db-entity-field sites from a ts-morph Project, using the provided
  * entity index (list of @Entity-decorated classes with their table names).
  *
  * The project is needed to walk source files and find the actual class declarations.
+ * Inherited @Column properties from abstract base classes are included via the
+ * base-class chain walk.
  */
 export function extractEntityFields(
     entities: TypeOrmEntity[],
@@ -200,11 +232,24 @@ export function extractEntityFields(
             if (!className) continue;
 
             const entity = entityByClass.get(className);
-            if (!entity) continue; // not in our index (e.g. warnings-only entity)
+            if (!entity) {
+                // @Entity class found in source but not in our entity index
+                // (e.g. built with warnings-only or non-static arg)
+                const loc = sf.getLineAndColumnAtPos(entityDec.getStart());
+                diagnostics.push({
+                    file: filePath,
+                    line: loc.line,
+                    message: `@Entity class ${className} not in entity index — fields skipped`,
+                });
+                continue;
+            }
 
             const tableName = tableNameOf(entity);
 
-            for (const prop of cls.getProperties()) {
+            // Walk own + inherited properties via base-class chain
+            const { props } = getAllFieldProperties(cls);
+
+            for (const prop of props) {
                 for (const dec of prop.getDecorators()) {
                     const decName = dec.getName();
                     if (!isColumnDecorator(decName)) continue;
@@ -215,6 +260,11 @@ export function extractEntityFields(
                     const fieldType = resolveFieldType(decName, dec.getArguments(), tsType);
                     const nullable = resolveNullable(dec.getArguments());
 
+                    // Location: use the decorator's own source file (base-class props
+                    // live in a different file than the entity source file)
+                    const decSf = dec.getSourceFile();
+                    const pos = decSf.getLineAndColumnAtPos(dec.getStart());
+
                     fields.push({
                         entityClass: className,
                         tableName,
@@ -222,8 +272,11 @@ export function extractEntityFields(
                         fieldName: propName,
                         fieldType,
                         nullable,
-                        file: filePath,
-                        line: dec.getStartLineNumber(),
+                        location: {
+                            file: decSf.getFilePath(),
+                            line: pos.line,
+                            column: pos.column,
+                        },
                     });
 
                     // Only process first matching field decorator per property

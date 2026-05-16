@@ -5,6 +5,9 @@
  *
  * Node id: `db-entity-field:<table>/<field>`
  * Edge: `entity-has-field` from db-table node → db-entity-field node
+ *
+ * P1-3: db-table nodes are NOT emitted here — they are already emitted by
+ * mapTypeOrmToGraph. This mapper only emits db-entity-field nodes + edges.
  */
 
 import type { GraphEdge, GraphNode } from '../core/types.js';
@@ -19,33 +22,24 @@ export interface EntityFieldsMapResult {
 /**
  * Map db-entity-field sites to graph nodes and edges.
  *
- * The db-table nodes are assumed to already exist in the main graph (emitted by
- * mapTypeOrmToGraph); this function only emits the db-entity-field nodes and
- * entity-has-field edges. Duplicate (table, field) pairs are deduplicated.
+ * Only `db-entity-field` nodes are emitted here. The `db-table` nodes are
+ * emitted by `mapTypeOrmToGraph`; duplicating them here would collide when
+ * both results are merged in `assembleGraph`.
+ *
+ * `entity-has-field` edges use `db-table:<tableName>` as their source (`from`)
+ * which references the node already in the graph from the TypeORM mapper.
+ * Duplicate (table, field) pairs are deduplicated.
  */
 export function mapEntityFieldsToGraph(
     fields: EntityFieldSite[],
 ): EntityFieldsMapResult {
     const fieldNodes = new Map<string, GraphNode>();
-    const tableNodes = new Map<string, GraphNode>();
     const edges = new Map<string, GraphEdge>();
     const diagnostics: Array<{ message: string }> = [];
 
     for (const field of fields) {
         const tableId = `db-table:${field.tableName}`;
         const fieldNodeId = `db-entity-field:${field.tableName}/${field.fieldName}`;
-
-        // Ensure parent db-table node exists (may already be in the graph from typeorm mapper)
-        if (!tableNodes.has(tableId)) {
-            tableNodes.set(tableId, {
-                id: tableId,
-                kind: 'db-table',
-                label: field.tableName,
-                meta: {
-                    entityClass: field.entityClass,
-                },
-            });
-        }
 
         // db-entity-field node (one per table/field combo)
         if (!fieldNodes.has(fieldNodeId)) {
@@ -72,8 +66,8 @@ export function mapEntityFieldsToGraph(
                 from: tableId,
                 to: fieldNodeId,
                 kind: 'entity-has-field',
-                file: field.file,
-                line: field.line,
+                file: field.location.file,
+                line: field.location.line,
                 meta: {
                     decorator: field.decorator,
                     fieldType: field.fieldType,
@@ -88,7 +82,7 @@ export function mapEntityFieldsToGraph(
     }
 
     return {
-        nodes: [...tableNodes.values(), ...fieldNodes.values()],
+        nodes: [...fieldNodes.values()],
         edges: [...edges.values()],
         diagnostics,
     };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractEntityFields } from './fields.js';
+import { extractEntityFields, getAllFieldProperties } from './fields.js';
 import { inMemoryProject } from '../../__fixtures__/in-memory-project.js';
 import type { TypeOrmEntity } from '../../core/types.js';
 
@@ -258,7 +258,7 @@ export class MixedEntity {
         expect(result.fields[0]!.nullable).toBe(true);
     });
 
-    it('returns file and line info', () => {
+    it('returns location info (file + line)', () => {
         const project = inMemoryProject({
             '/app/loc.entity.ts': `
 import { Entity, Column } from 'typeorm';
@@ -271,8 +271,8 @@ export class LocEntity {
         });
         const entities = [makeEntity('LocEntity', 'loc_table', '/app/loc.entity.ts')];
         const result = extractEntityFields(entities, project);
-        expect(result.fields[0]!.file).toContain('loc.entity.ts');
-        expect(result.fields[0]!.line).toBeGreaterThan(0);
+        expect(result.fields[0]!.location.file).toContain('loc.entity.ts');
+        expect(result.fields[0]!.location.line).toBeGreaterThan(0);
     });
 
     it('skips files without @Entity text (fast-path)', () => {
@@ -476,5 +476,106 @@ export class SpreadEntity {
         const result = extractEntityFields(entities, project);
         // SpreadAssignment is not PropertyAssignment → nullable defaults to false
         expect(result.fields[0]!.nullable).toBe(false);
+    });
+
+    // ---- P0-3: Inherited @Column from abstract base classes ----
+
+    it('collects @Column from abstract base class (single level)', () => {
+        const project = inMemoryProject({
+            '/app/base.entity.ts': `
+import { Column, PrimaryGeneratedColumn } from 'typeorm';
+export abstract class BaseEntity {
+    @PrimaryGeneratedColumn()
+    id: number;
+    @Column()
+    createdBy: string;
+}
+`,
+            '/app/user.entity.ts': `
+import { Entity, Column } from 'typeorm';
+import { BaseEntity } from './base.entity';
+@Entity('users')
+export class UserEntity extends BaseEntity {
+    @Column()
+    email: string;
+}
+`,
+        });
+        const entities = [makeEntity('UserEntity', 'users', '/app/user.entity.ts')];
+        const result = extractEntityFields(entities, project);
+        // Should get all 3 columns: id (from base), createdBy (from base), email (own)
+        const fieldNames = result.fields.map((f) => f.fieldName).sort();
+        expect(fieldNames).toContain('email');
+        expect(fieldNames).toContain('id');
+        expect(fieldNames).toContain('createdBy');
+        // entityClass is always the concrete entity
+        for (const f of result.fields) {
+            expect(f.entityClass).toBe('UserEntity');
+        }
+    });
+
+    it('all inherited fields have entityClass set to concrete entity', () => {
+        const project = inMemoryProject({
+            '/app/base.entity.ts': `
+import { Column } from 'typeorm';
+export abstract class TimestampBase {
+    @Column()
+    createdAt: Date;
+}
+`,
+            '/app/post.entity.ts': `
+import { Entity, Column } from 'typeorm';
+import { TimestampBase } from './base.entity';
+@Entity('posts')
+export class PostEntity extends TimestampBase {
+    @Column()
+    title: string;
+}
+`,
+        });
+        const entities = [makeEntity('PostEntity', 'posts', '/app/post.entity.ts')];
+        const result = extractEntityFields(entities, project);
+        const inherited = result.fields.find((f) => f.fieldName === 'createdAt');
+        expect(inherited).toBeDefined();
+        expect(inherited!.entityClass).toBe('PostEntity');
+        expect(inherited!.tableName).toBe('posts');
+    });
+
+    it('emits diagnostic for @Entity class not in entity index', () => {
+        const project = inMemoryProject({
+            '/app/unknown.entity.ts': `
+import { Entity, Column } from 'typeorm';
+@Entity('unknown_table')
+export class UnknownEntity {
+    @Column()
+    name: string;
+}
+`,
+        });
+        // Entity index has a different class — UnknownEntity is not indexed
+        const entities = [makeEntity('OtherEntity', 'other', '/app/other.ts')];
+        const result = extractEntityFields(entities, project);
+        // Fields skipped, but diagnostic emitted
+        expect(result.fields).toHaveLength(0);
+        expect(result.diagnostics.length).toBeGreaterThan(0);
+        expect(result.diagnostics[0]!.message).toContain('UnknownEntity');
+    });
+
+    it('getAllFieldProperties cycle guard returns empty and does not infinite-loop', () => {
+        // Simulate a cycle by constructing a mock ClassDeclaration that returns itself as base.
+        // TypeScript's type system forbids real cycles, but ts-morph on a partial AST can
+        // produce unexpected getBaseClass() results — the guard must handle it without hanging.
+        const seen = new Set<unknown>();
+        // Create a minimal mock that mimics a cycle (cls.getBaseClass() returns cls)
+        const mockCls = {
+            getName: () => 'CycleClass',
+            getProperties: () => [],
+            getBaseClass: () => mockCls,
+        } as unknown as import('ts-morph').ClassDeclaration;
+
+        seen.add(mockCls); // Pre-populate to trigger cycle on first call
+        const result = getAllFieldProperties(mockCls, seen as Set<import('ts-morph').ClassDeclaration>);
+        expect(result.props).toHaveLength(0);
+        expect(result.cycles).toBe(1);
     });
 });
