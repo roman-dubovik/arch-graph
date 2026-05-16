@@ -122,8 +122,8 @@ else
     ARCH_GRAPH_GIT="$REPO_DIR"
 fi
 
-ARCH_GRAPH_GIT="$ARCH_GRAPH_GIT" bash "$INSTALL_SCRIPT" >/dev/null 2>&1 \
-    || fail "install.sh exited non-zero"
+INSTALL_ERR=$(ARCH_GRAPH_GIT="$ARCH_GRAPH_GIT" bash "$INSTALL_SCRIPT" 2>&1 >/dev/null) \
+    || fail "install.sh failed: $INSTALL_ERR"
 
 command -v arch-graph >/dev/null 2>&1 \
     || fail "arch-graph not found on PATH after install (PATH=$PATH)"
@@ -133,8 +133,8 @@ ARCH_BIN=$(command -v arch-graph)
 echo "$ARCH_BIN" | grep -q "$WORK/bin" \
     || fail "arch-graph resolves to $ARCH_BIN (expected inside $WORK/bin)"
 
-arch-graph --help >/dev/null 2>&1 \
-    || fail "arch-graph --help exited non-zero"
+HELP_ERR=$(arch-graph --help 2>&1 >/dev/null) \
+    || fail "arch-graph --help failed: $HELP_ERR"
 
 step_ok
 
@@ -318,8 +318,8 @@ step_start 2 "init"
 cd "$FIXTURE"
 
 # Non-TTY → writes template config
-echo "" | arch-graph init >/dev/null 2>&1 \
-    || fail "arch-graph init exited non-zero"
+INIT_ERR=$(echo "" | arch-graph init 2>&1 >/dev/null) \
+    || fail "arch-graph init failed: $INIT_ERR"
 
 assert_file_exists "$FIXTURE/arch-graph.config.ts" "arch-graph init"
 
@@ -344,8 +344,8 @@ step_start 3 "build"
 
 cd "$FIXTURE"
 
-arch-graph build >/dev/null 2>&1 \
-    || fail "arch-graph build exited non-zero"
+BUILD_ERR=$(arch-graph build 2>&1 >/dev/null) \
+    || fail "arch-graph build failed: $BUILD_ERR"
 
 for f in graph.json diagnostics.json validation.json graph.mermaid; do
     assert_file_exists "$FIXTURE/arch-graph-out/$f" "build output"
@@ -362,7 +362,7 @@ step_start 4 "stats"
 
 cd "$FIXTURE"
 
-STATS_JSON=$(arch-graph stats --json 2>&1)
+STATS_JSON=$(arch-graph stats --json)
 
 echo "$STATS_JSON" | jq -e '.totals.nodes > 0 and .totals.edges > 0' >/dev/null \
     || fail "stats: expected totals.nodes > 0 and totals.edges > 0. Got: $STATS_JSON"
@@ -393,6 +393,11 @@ QUEUE_PROD=$(arch-graph queue-producers email-queue --json 2>&1)
 echo "$QUEUE_PROD" | jq -e '.found == true' >/dev/null \
     || fail "queue-producers email-queue: expected found=true. Got: $QUEUE_PROD"
 
+# queue-consumers email-queue
+QUEUE_CONS=$(arch-graph queue-consumers email-queue --json 2>&1)
+echo "$QUEUE_CONS" | jq -e '.found == true' >/dev/null \
+    || fail "queue-consumers email-queue: expected found=true. Got: $QUEUE_CONS"
+
 # table-users user  (TypeORM User entity maps to 'user' table by default)
 TABLE=$(arch-graph table-users user --json 2>&1)
 echo "$TABLE" | jq -e '.found == true' >/dev/null \
@@ -409,32 +414,32 @@ step_start 6 "integrations"
 cd "$FIXTURE"
 
 # -- claude install --
-arch-graph claude install >/dev/null 2>&1 \
-    || fail "arch-graph claude install exited non-zero"
+CLAUDE_INSTALL_ERR=$(arch-graph claude install 2>&1 >/dev/null) \
+    || fail "arch-graph claude install failed: $CLAUDE_INSTALL_ERR"
 
 assert_file_exists "$FIXTURE/CLAUDE.md" "claude install"
 grep -q "<!-- arch-graph:start -->" "$FIXTURE/CLAUDE.md" \
     || fail "CLAUDE.md missing arch-graph marker after install"
 
 # -- git init + hook install --
-git -C "$FIXTURE" init --quiet 2>/dev/null
+git -C "$FIXTURE" init --quiet || fail "git init failed in $FIXTURE"
 git -C "$FIXTURE" config user.email "test@example.com"
 git -C "$FIXTURE" config user.name  "Integration Test"
 
-arch-graph hook install >/dev/null 2>&1 \
-    || fail "arch-graph hook install exited non-zero"
+HOOK_INSTALL_ERR=$(arch-graph hook install 2>&1 >/dev/null) \
+    || fail "arch-graph hook install failed: $HOOK_INSTALL_ERR"
 
 assert_file_exists "$FIXTURE/.git/hooks/pre-commit" "hook install"
 grep -q "# >>> arch-graph >>>" "$FIXTURE/.git/hooks/pre-commit" \
     || fail ".git/hooks/pre-commit missing arch-graph marker after install"
 
 # -- hook status --
-arch-graph hook status >/dev/null 2>&1 \
-    || fail "arch-graph hook status exited non-zero"
+HOOK_STATUS_ERR=$(arch-graph hook status 2>&1 >/dev/null) \
+    || fail "arch-graph hook status failed: $HOOK_STATUS_ERR"
 
 # -- claude uninstall --
-arch-graph claude uninstall >/dev/null 2>&1 \
-    || fail "arch-graph claude uninstall exited non-zero"
+CLAUDE_UNINSTALL_ERR=$(arch-graph claude uninstall 2>&1 >/dev/null) \
+    || fail "arch-graph claude uninstall failed: $CLAUDE_UNINSTALL_ERR"
 
 if [ -f "$FIXTURE/CLAUDE.md" ]; then
     grep -q "<!-- arch-graph:start -->" "$FIXTURE/CLAUDE.md" \
@@ -442,8 +447,8 @@ if [ -f "$FIXTURE/CLAUDE.md" ]; then
 fi
 
 # -- hook uninstall --
-arch-graph hook uninstall >/dev/null 2>&1 \
-    || fail "arch-graph hook uninstall exited non-zero"
+HOOK_UNINSTALL_ERR=$(arch-graph hook uninstall 2>&1 >/dev/null) \
+    || fail "arch-graph hook uninstall failed: $HOOK_UNINSTALL_ERR"
 
 if [ -f "$FIXTURE/.git/hooks/pre-commit" ]; then
     grep -q "# >>> arch-graph >>>" "$FIXTURE/.git/hooks/pre-commit" \
