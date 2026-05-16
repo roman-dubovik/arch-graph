@@ -145,25 +145,46 @@ export function tableNameOf(e: TypeOrmEntity): string {
  * Captured `@ManyToOne` / `@OneToMany` / `@ManyToMany` / `@OneToOne`
  * relation decoration on an entity property.
  *
- * The `target` is the *referenced* entity class name as written in the
- * decorator's type-factory argument (`() => Other`). When the type-factory
- * resolves to a known `@Entity`, the mapper emits a `db-relation` edge
- * `tableA → tableB`. When it doesn't (string token, dynamic expression),
- * the relation is reported in diagnostics with `resolvedTarget = null`.
+ * The discriminated union encodes three resolution outcomes:
+ *   - `resolved`:    type-factory arg parsed + target class indexed as `@Entity`
+ *   - `not-indexed`: type-factory arg parsed but target class NOT in entity index
+ *   - `unparseable`: type-factory arg could not be parsed (dynamic expression, etc.)
+ *
+ * The co-invariant `resolvedTarget !== null → targetClass !== ''` is now
+ * structural — the type system prevents the two fields from drifting apart.
  */
-export interface TypeOrmRelation {
+export type TypeOrmRelation = {
     /** Decorator name as written. */
     decorator: 'ManyToOne' | 'OneToMany' | 'ManyToMany' | 'OneToOne';
     /** Class that owns the property bearing the relation decorator. */
     ownerClass: string;
     /** Property name on the owner class. */
     propertyName: string;
-    /** Identifier text in `() => Foo` — empty string if unresolvable. */
-    targetClass: string;
-    /** Resolved `@Entity` for `targetClass`, or null if unknown. */
-    resolvedTarget: TypeOrmEntity | null;
     location: SourceLoc;
-}
+} & (
+    | {
+          /** Parsed + indexed: `() => Foo` resolved to a known `@Entity`. */
+          targetClass: string;
+          resolvedTarget: TypeOrmEntity;
+          reason?: never;
+          raw?: never;
+      }
+    | {
+          /** Parsed but target class not in entity index (external / missing). */
+          targetClass: string;
+          resolvedTarget: null;
+          reason: 'not-indexed';
+          raw?: never;
+      }
+    | {
+          /** Could not parse the decorator argument (dynamic expression, etc.). */
+          targetClass: null;
+          resolvedTarget: null;
+          reason: 'unparseable';
+          /** Original source text of the first decorator argument, for diagnostics. */
+          raw: string;
+      }
+);
 
 /** Single `@InjectRepository(EntityClass)` injection site. */
 export interface TypeOrmInjectionSite {
@@ -210,9 +231,10 @@ export interface TypeOrmDiagnostics {
      */
     entityDecoratorWarnings: TypeOrmEntityDecoratorWarning[];
     /**
-     * `@ManyToOne / @OneToMany / @ManyToMany / @OneToOne` decorations whose
-     * `() => Foo` type-factory didn't resolve to a known entity (string
-     * token, dynamic expression, foreign class).
+     * Relations that could not be fully resolved: either the type-factory argument
+     * could not be parsed (`reason: 'unparseable'`) or the parsed class name was not
+     * found in the entity index (`reason: 'not-indexed'`). Each entry carries a
+     * structured `reason` field for downstream diagnostics.
      */
     unresolvedRelations: TypeOrmRelation[];
     counts: {
@@ -220,7 +242,10 @@ export interface TypeOrmDiagnostics {
         unresolvedEntity: number;
         unowned: number;
         entityDecoratorWarnings: number;
-        relations: number;
+        /** Number of `db-relation` edges emitted (after dedup + Policy A `@OneToMany` skip). */
+        relationsEmitted: number;
+        /** Number of input relations where `resolvedTarget !== null`, before Policy A filtering. */
+        relationsResolved: number;
         unresolvedRelations: number;
     };
 }

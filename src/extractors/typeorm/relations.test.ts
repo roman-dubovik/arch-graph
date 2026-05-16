@@ -47,6 +47,29 @@ describe('extractRelations — @ManyToOne', () => {
         expect(rel.location.file).toContain('order.entity.ts');
         expect(rel.location.line).toBeGreaterThan(0);
     });
+
+    it('extracts @ManyToOne with options object as second arg', () => {
+        const { relations } = setup({
+            '/apps/svc/order.entity.ts': `
+                import { Entity, ManyToOne } from 'typeorm';
+                @Entity()
+                export class Order {
+                    @ManyToOne(() => User, { eager: true })
+                    user: User;
+                }
+            `,
+            '/apps/svc/user.entity.ts': `
+                import { Entity } from 'typeorm';
+                @Entity()
+                export class User {}
+            `,
+        });
+
+        expect(relations).toHaveLength(1);
+        const rel = relations[0]!;
+        expect(rel.targetClass).toBe('User');
+        expect(rel.resolvedTarget).not.toBeNull();
+    });
 });
 
 describe('extractRelations — @OneToMany', () => {
@@ -131,11 +154,85 @@ describe('extractRelations — @OneToOne', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Unresolvable targets
+// Bare-identifier form: @ManyToOne(Foo) — older TypeORM idiom (CRITICAL fix #1)
+// ---------------------------------------------------------------------------
+
+describe('extractRelations — bare-identifier target', () => {
+    it('resolves @ManyToOne(User) bare identifier to the entity index', () => {
+        const { relations } = setup({
+            '/apps/svc/order.entity.ts': `
+                import { Entity, ManyToOne } from 'typeorm';
+                @Entity()
+                export class Order {
+                    @ManyToOne(User)
+                    user: User;
+                }
+            `,
+            '/apps/svc/user.entity.ts': `
+                import { Entity } from 'typeorm';
+                @Entity()
+                export class User {}
+            `,
+        });
+
+        expect(relations).toHaveLength(1);
+        const rel = relations[0]!;
+        expect(rel.targetClass).toBe('User');
+        expect(rel.resolvedTarget).not.toBeNull();
+        expect(rel.resolvedTarget?.className).toBe('User');
+        expect(rel.reason).toBeUndefined();
+    });
+
+    it('returns not-indexed when bare identifier is not a known @Entity', () => {
+        const { relations } = setup({
+            '/apps/svc/order.entity.ts': `
+                import { Entity, ManyToOne } from 'typeorm';
+                @Entity()
+                export class Order {
+                    @ManyToOne(SomeExternalClass)
+                    ext: any;
+                }
+            `,
+        });
+
+        expect(relations).toHaveLength(1);
+        const rel = relations[0]!;
+        expect(rel.targetClass).toBe('SomeExternalClass');
+        expect(rel.resolvedTarget).toBeNull();
+        expect(rel.reason).toBe('not-indexed');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// String-token form: @ManyToOne('CategoryReference') — forward-ref idiom (CRITICAL fix #2)
 // ---------------------------------------------------------------------------
 
 describe('extractRelations — string token target', () => {
-    it('sets targetClass="" and resolvedTarget=null for string-literal type factory', () => {
+    it('resolves @ManyToOne("CategoryReference") when the class is in the entity index', () => {
+        const { relations } = setup({
+            '/apps/svc/item.entity.ts': `
+                import { Entity, ManyToOne } from 'typeorm';
+                @Entity()
+                export class Item {
+                    @ManyToOne('Category', cat => cat.items)
+                    category: any;
+                }
+            `,
+            '/apps/svc/category.entity.ts': `
+                import { Entity } from 'typeorm';
+                @Entity()
+                export class Category {}
+            `,
+        });
+
+        expect(relations).toHaveLength(1);
+        const rel = relations[0]!;
+        expect(rel.targetClass).toBe('Category');
+        expect(rel.resolvedTarget).not.toBeNull();
+        expect(rel.resolvedTarget?.className).toBe('Category');
+    });
+
+    it('returns not-indexed for string token when class is not in entity index', () => {
         const { relations } = setup({
             '/apps/svc/item.entity.ts': `
                 import { Entity, ManyToOne } from 'typeorm';
@@ -149,13 +246,155 @@ describe('extractRelations — string token target', () => {
 
         expect(relations).toHaveLength(1);
         const rel = relations[0]!;
-        expect(rel.targetClass).toBe('');
+        // String form now provides the class name — not-indexed rather than unparseable
+        expect(rel.targetClass).toBe('CategoryReference');
         expect(rel.resolvedTarget).toBeNull();
+        expect(rel.reason).toBe('not-indexed');
     });
 });
 
+// ---------------------------------------------------------------------------
+// Arrow without parens: type => Foo (no-parens single-param arrow)
+// ---------------------------------------------------------------------------
+
+describe('extractRelations — arrow without parens', () => {
+    it('resolves `type => Foo` single-param arrow (no parens)', () => {
+        const { relations } = setup({
+            '/apps/svc/order.entity.ts': `
+                import { Entity, ManyToOne } from 'typeorm';
+                @Entity()
+                export class Order {
+                    @ManyToOne(type => User)
+                    user: User;
+                }
+            `,
+            '/apps/svc/user.entity.ts': `
+                import { Entity } from 'typeorm';
+                @Entity()
+                export class User {}
+            `,
+        });
+
+        expect(relations).toHaveLength(1);
+        const rel = relations[0]!;
+        expect(rel.targetClass).toBe('User');
+        expect(rel.resolvedTarget).not.toBeNull();
+        expect(rel.resolvedTarget?.className).toBe('User');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// forwardRef(() => Foo) — NestJS circular-import helper (HIGH fix #3)
+// ---------------------------------------------------------------------------
+
+describe('extractRelations — forwardRef', () => {
+    it('resolves forwardRef(() => Foo) when Foo is in entity index', () => {
+        const { relations } = setup({
+            '/apps/svc/order.entity.ts': `
+                import { Entity, ManyToOne } from 'typeorm';
+                import { forwardRef } from '@nestjs/common';
+                @Entity()
+                export class Order {
+                    @ManyToOne(() => forwardRef(() => User))
+                    user: User;
+                }
+            `,
+            '/apps/svc/user.entity.ts': `
+                import { Entity } from 'typeorm';
+                @Entity()
+                export class User {}
+            `,
+        });
+
+        expect(relations).toHaveLength(1);
+        const rel = relations[0]!;
+        expect(rel.targetClass).toBe('User');
+        expect(rel.resolvedTarget).not.toBeNull();
+        expect(rel.resolvedTarget?.className).toBe('User');
+    });
+
+    it('falls to unparseable for forwardRef(getTarget()) — non-arrow inner arg', () => {
+        const { relations } = setup({
+            '/apps/svc/order.entity.ts': `
+                import { Entity, ManyToOne } from 'typeorm';
+                @Entity()
+                export class Order {
+                    @ManyToOne(() => forwardRef(getTarget()))
+                    user: any;
+                }
+            `,
+        });
+
+        expect(relations).toHaveLength(1);
+        const rel = relations[0]!;
+        expect(rel.targetClass).toBeNull();
+        expect(rel.resolvedTarget).toBeNull();
+        expect(rel.reason).toBe('unparseable');
+    });
+
+    it('returns not-indexed when forwardRef target is not in entity index', () => {
+        const { relations } = setup({
+            '/apps/svc/order.entity.ts': `
+                import { Entity, ManyToOne } from 'typeorm';
+                @Entity()
+                export class Order {
+                    @ManyToOne(() => forwardRef(() => UnknownEntity))
+                    user: any;
+                }
+            `,
+        });
+
+        expect(relations).toHaveLength(1);
+        const rel = relations[0]!;
+        expect(rel.targetClass).toBe('UnknownEntity');
+        expect(rel.resolvedTarget).toBeNull();
+        expect(rel.reason).toBe('not-indexed');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Inheritance: relations on abstract base class (HIGH fix #6)
+// ---------------------------------------------------------------------------
+
+describe('extractRelations — inheritance from abstract base', () => {
+    it('walks relations declared on an abstract base class', () => {
+        const { relations } = setup({
+            '/apps/svc/base.entity.ts': `
+                import { ManyToOne } from 'typeorm';
+                export abstract class BaseEntity {
+                    @ManyToOne(() => User)
+                    createdBy: User;
+                }
+            `,
+            '/apps/svc/order.entity.ts': `
+                import { Entity } from 'typeorm';
+                import { BaseEntity } from './base.entity';
+                @Entity()
+                export class Order extends BaseEntity {}
+            `,
+            '/apps/svc/user.entity.ts': `
+                import { Entity } from 'typeorm';
+                @Entity()
+                export class User {}
+            `,
+        });
+
+        // Order inherits the relation from BaseEntity
+        expect(relations).toHaveLength(1);
+        const rel = relations[0]!;
+        // ownerClass must be the concrete entity, not the abstract base
+        expect(rel.ownerClass).toBe('Order');
+        expect(rel.targetClass).toBe('User');
+        expect(rel.resolvedTarget).not.toBeNull();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Unresolvable targets — now produce discriminated union variants
+// ---------------------------------------------------------------------------
+
 describe('extractRelations — dynamic/property-access body', () => {
-    it('sets targetClass="" and resolvedTarget=null for arrow with property access body', () => {
+    it('sets unparseable for arrow with property access body', () => {
         const { relations } = setup({
             '/apps/svc/item.entity.ts': `
                 import { Entity, ManyToOne } from 'typeorm';
@@ -169,11 +408,13 @@ describe('extractRelations — dynamic/property-access body', () => {
 
         expect(relations).toHaveLength(1);
         const rel = relations[0]!;
-        expect(rel.targetClass).toBe('');
+        expect(rel.targetClass).toBeNull();
         expect(rel.resolvedTarget).toBeNull();
+        expect(rel.reason).toBe('unparseable');
+        expect(typeof rel.raw).toBe('string');
     });
 
-    it('sets targetClass="" for arrow with call-expression body', () => {
+    it('sets unparseable for arrow with call-expression body', () => {
         const { relations } = setup({
             '/apps/svc/item.entity.ts': `
                 import { Entity, ManyToOne } from 'typeorm';
@@ -187,11 +428,12 @@ describe('extractRelations — dynamic/property-access body', () => {
 
         expect(relations).toHaveLength(1);
         const rel = relations[0]!;
-        expect(rel.targetClass).toBe('');
+        expect(rel.targetClass).toBeNull();
         expect(rel.resolvedTarget).toBeNull();
+        expect(rel.reason).toBe('unparseable');
     });
 
-    it('sets targetClass="" and resolvedTarget=null for no-arg decorator', () => {
+    it('sets unparseable for no-arg decorator', () => {
         const { relations } = setup({
             '/apps/svc/item.entity.ts': `
                 import { Entity, ManyToOne } from 'typeorm';
@@ -205,13 +447,36 @@ describe('extractRelations — dynamic/property-access body', () => {
 
         expect(relations).toHaveLength(1);
         const rel = relations[0]!;
-        expect(rel.targetClass).toBe('');
+        expect(rel.targetClass).toBeNull();
         expect(rel.resolvedTarget).toBeNull();
+        expect(rel.reason).toBe('unparseable');
+    });
+});
+
+describe('extractRelations — non-standard first argument', () => {
+    it('sets unparseable for a template-literal-with-expression first argument', () => {
+        const { relations } = setup({
+            '/apps/svc/item.entity.ts': `
+                import { Entity, ManyToOne } from 'typeorm';
+                @Entity()
+                export class Item {
+                    @ManyToOne(\`\${SomeClass}\`)
+                    category: any;
+                }
+            `,
+        });
+
+        // Template literal with substitution is unparseable
+        expect(relations).toHaveLength(1);
+        const rel = relations[0]!;
+        expect(rel.targetClass).toBeNull();
+        expect(rel.resolvedTarget).toBeNull();
+        expect(rel.reason).toBe('unparseable');
     });
 });
 
 describe('extractRelations — target known but not in entity index', () => {
-    it('sets resolvedTarget=null when target class is not a known @Entity', () => {
+    it('sets reason=not-indexed when target class is not a known @Entity', () => {
         const { relations } = setup({
             '/apps/svc/order.entity.ts': `
                 import { Entity, ManyToOne } from 'typeorm';
@@ -228,6 +493,7 @@ describe('extractRelations — target known but not in entity index', () => {
         const rel = relations[0]!;
         expect(rel.targetClass).toBe('SomeExternalClass');
         expect(rel.resolvedTarget).toBeNull();
+        expect(rel.reason).toBe('not-indexed');
     });
 });
 

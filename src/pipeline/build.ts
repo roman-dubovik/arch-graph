@@ -108,7 +108,7 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
     t0 = Date.now();
     const typeorm = await stage(`[${cfg.id}] typeorm.extract`, () => extractTypeOrm(cfg, project));
     process.stdout.write(
-        `  ${typeorm.sites.length} @InjectRepository sites, ${typeorm.entities.size()} @Entity classes in ${Date.now() - t0}ms\n`,
+        `  ${typeorm.sites.length} @InjectRepository sites, ${typeorm.entities.size()} @Entity classes, ${typeorm.relations.length} relations in ${Date.now() - t0}ms\n`,
     );
 
     process.stdout.write(`validating TypeORM against ground truth...\n`);
@@ -134,7 +134,7 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         typeorm.entities,
     );
     process.stdout.write(
-        `  nodes: ${typeormMapped.nodes.length}, edges: ${typeormMapped.edges.length}, unresolved: ${typeormMapped.diagnostics.unresolvedEntities.length}, unowned: ${typeormMapped.diagnostics.unowned.length}, entityWarnings: ${typeormMapped.diagnostics.entityDecoratorWarnings.length}, relations: ${typeormMapped.diagnostics.counts.relations}, unresolvedRelations: ${typeormMapped.diagnostics.counts.unresolvedRelations}\n`,
+        `  nodes: ${typeormMapped.nodes.length}, edges: ${typeormMapped.edges.length}, unresolved: ${typeormMapped.diagnostics.unresolvedEntities.length}, unowned: ${typeormMapped.diagnostics.unowned.length}, entityWarnings: ${typeormMapped.diagnostics.entityDecoratorWarnings.length}, relationsEmitted: ${typeormMapped.diagnostics.counts.relationsEmitted}, relationsResolved: ${typeormMapped.diagnostics.counts.relationsResolved}, unresolvedRelations: ${typeormMapped.diagnostics.counts.unresolvedRelations}\n`,
     );
 
     // ---- BullMQ domain ----

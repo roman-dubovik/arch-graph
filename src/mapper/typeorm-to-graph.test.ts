@@ -34,11 +34,11 @@ function makeInjectionSite(
     };
 }
 
-function makeRelation(
+function makeResolvedRelation(
     decorator: TypeOrmRelation['decorator'],
     ownerClass: string,
     targetClass: string,
-    resolvedTarget: TypeOrmEntity | null,
+    resolvedTarget: TypeOrmEntity,
     propertyName = 'relProp',
     file = '/apps/svc/entity.ts',
 ): TypeOrmRelation {
@@ -48,6 +48,37 @@ function makeRelation(
         propertyName,
         targetClass,
         resolvedTarget,
+        location: { file, line: 10, column: 5 },
+    };
+}
+
+function makeUnresolvedRelation(
+    decorator: TypeOrmRelation['decorator'],
+    ownerClass: string,
+    targetClass: string | null,
+    reason: 'not-indexed' | 'unparseable',
+    propertyName = 'relProp',
+    file = '/apps/svc/entity.ts',
+): TypeOrmRelation {
+    if (reason === 'unparseable') {
+        return {
+            decorator,
+            ownerClass,
+            propertyName,
+            targetClass: null,
+            resolvedTarget: null,
+            reason: 'unparseable',
+            raw: targetClass ?? '',
+            location: { file, line: 10, column: 5 },
+        };
+    }
+    return {
+        decorator,
+        ownerClass,
+        propertyName,
+        targetClass: targetClass ?? '',
+        resolvedTarget: null,
+        reason: 'not-indexed',
         location: { file, line: 10, column: 5 },
     };
 }
@@ -185,9 +216,6 @@ describe('mapTypeOrmToGraph — db-access edges', () => {
 
 describe('mapTypeOrmToGraph — db-relation edges', () => {
     it('emits a db-relation edge for a resolved ManyToOne relation', () => {
-        const userEntity = makeEntity('User', 'users', '/apps/svc/user.ts');
-        const orderEntity = makeEntity('Order', 'orders', '/apps/svc/order.ts');
-
         const project = inMemoryProject({
             '/apps/svc/user.ts': `
                 import { Entity } from 'typeorm';
@@ -218,7 +246,7 @@ describe('mapTypeOrmToGraph — db-relation edges', () => {
         expect(relEdge?.meta?.targetClass).toBe('User');
     });
 
-    it('emits OneToMany db-relation edge', () => {
+    it('does NOT emit a db-relation edge for @OneToMany (Policy A: FK lives on @ManyToOne side)', () => {
         const project = inMemoryProject({
             '/apps/svc/user.ts': `
                 import { Entity, OneToMany } from 'typeorm';
@@ -238,9 +266,11 @@ describe('mapTypeOrmToGraph — db-relation edges', () => {
         const relations = extractRelations(project, entityIndex);
         const result = mapTypeOrmToGraph([], makeOwnership(), [], relations, entityIndex);
 
-        const relEdge = result.edges.find((e) => e.kind === 'db-relation');
-        expect(relEdge).toBeDefined();
-        expect(relEdge?.meta?.decorator).toBe('OneToMany');
+        // No edge: @OneToMany is skipped under Policy A
+        const relEdges = result.edges.filter((e) => e.kind === 'db-relation');
+        expect(relEdges).toHaveLength(0);
+        // Extractor found it but mapper skips it — not in unresolvedRelations either
+        expect(result.diagnostics.unresolvedRelations).toHaveLength(0);
     });
 
     it('emits ManyToMany db-relation edge', () => {
@@ -293,7 +323,7 @@ describe('mapTypeOrmToGraph — db-relation edges', () => {
         expect(relEdge?.meta?.decorator).toBe('OneToOne');
     });
 
-    it('updates diagnostics.counts.relations for emitted db-relation edges', () => {
+    it('updates diagnostics.counts.relationsEmitted for emitted db-relation edges', () => {
         const project = inMemoryProject({
             '/apps/svc/a.ts': `
                 import { Entity, ManyToOne } from 'typeorm';
@@ -313,14 +343,41 @@ describe('mapTypeOrmToGraph — db-relation edges', () => {
         const relations = extractRelations(project, entityIndex);
         const result = mapTypeOrmToGraph([], makeOwnership(), [], relations, entityIndex);
 
-        expect(result.diagnostics.counts.relations).toBe(1);
+        expect(result.diagnostics.counts.relationsEmitted).toBe(1);
+        expect(result.diagnostics.counts.relationsResolved).toBe(1);
         expect(result.diagnostics.counts.unresolvedRelations).toBe(0);
     });
 
-    it('pushes unresolved relation (string token) to diagnostics.unresolvedRelations, no edge', () => {
-        const unresolvedRel = makeRelation('ManyToOne', 'Order', '', null, 'category');
-        const orderEntity = makeEntity('Order', 'orders');
+    it('relationsResolved counts resolved input relations regardless of Policy A (OneToMany skipped)', () => {
+        const project = inMemoryProject({
+            '/apps/svc/user.ts': `
+                import { Entity, ManyToOne, OneToMany } from 'typeorm';
+                @Entity()
+                export class User {
+                    @OneToMany(() => Order, o => o.user)
+                    orders: Order[];
+                }
+            `,
+            '/apps/svc/order.ts': `
+                import { Entity, ManyToOne } from 'typeorm';
+                @Entity()
+                export class Order {
+                    @ManyToOne(() => User)
+                    user: User;
+                }
+            `,
+        });
+        const entityIndex = buildEntityIndex(project);
+        const relations = extractRelations(project, entityIndex);
+        const result = mapTypeOrmToGraph([], makeOwnership(), [], relations, entityIndex);
 
+        // ManyToOne emits 1 edge; OneToMany skipped under Policy A
+        expect(result.diagnostics.counts.relationsEmitted).toBe(1);
+        // relationsResolved counts both ManyToOne and the skipped OneToMany (both have resolvedTarget)
+        expect(result.diagnostics.counts.relationsResolved).toBe(1);
+    });
+
+    it('pushes unresolved relation (string token not in index) to diagnostics.unresolvedRelations, no edge', () => {
         const project = inMemoryProject({
             '/apps/svc/order.ts': `
                 import { Entity, ManyToOne } from 'typeorm';
@@ -340,6 +397,8 @@ describe('mapTypeOrmToGraph — db-relation edges', () => {
         expect(result.diagnostics.counts.unresolvedRelations).toBe(1);
         const relEdges = result.edges.filter((e) => e.kind === 'db-relation');
         expect(relEdges).toHaveLength(0);
+        // reason field is carried through
+        expect(result.diagnostics.unresolvedRelations[0]!.reason).toBe('not-indexed');
     });
 
     it('emits two distinct db-relation edges for two FK columns on same owner→target', () => {
@@ -452,21 +511,18 @@ describe('mapTypeOrmToGraph — db-relation edges', () => {
     it('handles an empty relations array gracefully', () => {
         const result = mapTypeOrmToGraph([], makeOwnership(), [], [], undefined);
 
-        expect(result.diagnostics.counts.relations).toBe(0);
+        expect(result.diagnostics.counts.relationsEmitted).toBe(0);
+        expect(result.diagnostics.counts.relationsResolved).toBe(0);
         expect(result.diagnostics.counts.unresolvedRelations).toBe(0);
         expect(result.diagnostics.unresolvedRelations).toHaveLength(0);
     });
 
-    it('handles an unresolved relation with no entityIndex gracefully (falls to unresolved)', () => {
-        const orderEntity = makeEntity('Order', 'orders');
+    it('throws when relations are provided but entityIndex is omitted', () => {
         const userEntity = makeEntity('User', 'users');
-        // Pass a resolved relation but NO entityIndex — owner lookup returns null
-        const rel = makeRelation('ManyToOne', 'Order', 'User', userEntity);
+        const rel = makeResolvedRelation('ManyToOne', 'Order', 'User', userEntity);
 
-        const result = mapTypeOrmToGraph([], makeOwnership(), [], [rel], undefined);
-
-        // Without entityIndex, ownerEntity lookup returns null → unresolved
-        expect(result.diagnostics.unresolvedRelations).toHaveLength(1);
-        expect(result.edges.filter((e) => e.kind === 'db-relation')).toHaveLength(0);
+        expect(() => mapTypeOrmToGraph([], makeOwnership(), [], [rel], undefined)).toThrow(
+            'entityIndex is required when relations are provided',
+        );
     });
 });
