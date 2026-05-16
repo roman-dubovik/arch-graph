@@ -1,7 +1,7 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
-import type { ArchGraph, EdgeKind, GraphEdge, GraphNode, NodeKind } from '../core/types.js';
+import type { ArchGraph, CyclesDiagnostics, EdgeKind, GraphEdge, GraphNode, NodeKind } from '../core/types.js';
 
 // ============================================================================
 // Collision reporting
@@ -44,6 +44,12 @@ export interface MermaidWriteOptions {
      * Mermaid Live renders ~500 nodes; we warn early at 200. Default: 200.
      */
     largeGraphThreshold?: number;
+    /**
+     * When provided, nodes that participate in any cycle will receive a red
+     * `style` override and a dedicated `subgraph CYCLES` block at the bottom.
+     * When omitted or empty, output is identical to pre-cycles behaviour.
+     */
+    cycles?: CyclesDiagnostics;
 }
 
 /**
@@ -67,8 +73,10 @@ export async function writeGraphMermaid(
     const slice = options.slice ?? { kind: 'full' };
     const threshold = options.largeGraphThreshold ?? 200;
 
+    const cycles = options.cycles;
+
     if (slice.kind === 'full') {
-        const { body, collisionGroups } = renderMermaid(graph.nodes, graph.edges, threshold);
+        const { body, collisionGroups } = renderMermaid(graph.nodes, graph.edges, threshold, cycles);
         await ensureDir(outPath);
         await writeFile(outPath, body, 'utf8');
         await flushCollisionsFile(dirname(outPath), collisionGroups);
@@ -77,7 +85,7 @@ export async function writeGraphMermaid(
 
     if (slice.kind === 'domain') {
         const { nodes, edges } = sliceByDomain(graph, slice.domain);
-        const { body } = renderMermaid(nodes, edges, threshold);
+        const { body } = renderMermaid(nodes, edges, threshold, cycles);
         await ensureDir(outPath);
         await writeFile(outPath, body, 'utf8');
         // Domain/per-service slices operate on a subset of the graph — only the
@@ -93,7 +101,7 @@ export async function writeGraphMermaid(
         const { nodes, edges } = sliceByService(graph, svc.id);
         // Skip empty slices — a service with zero touching edges is uninteresting.
         if (edges.length === 0) continue;
-        const { body } = renderMermaid(nodes, edges, threshold);
+        const { body } = renderMermaid(nodes, edges, threshold, cycles);
         const file = join(outPath, `service-${sanitizeFilename(svc.label)}.mermaid`);
         await writeFile(file, body, 'utf8');
         written.push(file);
@@ -252,6 +260,7 @@ export function renderMermaid(
     nodes: GraphNode[],
     edges: GraphEdge[],
     largeGraphThreshold: number,
+    cycles?: CyclesDiagnostics,
 ): { body: string; collisionGroups: CollisionGroup[] } {
     const lines: string[] = [];
 
@@ -262,8 +271,17 @@ export function renderMermaid(
     const { map: idMap, collisionGroups } = buildIdMap(nodes);
 
     lines.push('flowchart LR');
-    // Header comment goes INSIDE the diagram (after the directive) — some Mermaid
+    // Header comments go INSIDE the diagram (after the directive) — some Mermaid
     // renderers require the first non-empty line to be the diagram directive.
+    //
+    // Degraded-run warning: emitted when cycle detection was skipped (e.g. stack
+    // overflow on a very large graph). Consumers who only look at graph.mermaid
+    // will see this comment even if they never read diagnostics.json.
+    if (cycles?.error) {
+        lines.push(
+            `    %% WARNING: cycle detection was skipped (${cycles.error}). Cycle styling may be incomplete.`,
+        );
+    }
     if (nodes.length > largeGraphThreshold) {
         lines.push(
             `    %% graph has ${nodes.length} nodes, ${edges.length} edges — consider per-service slicing`,
@@ -335,6 +353,31 @@ export function renderMermaid(
     for (const [cls, ids] of [...classBuckets.entries()].sort()) {
         // `class id1,id2 cls;` is the bulk-assign form.
         lines.push(`    class ${ids.sort().join(',')} ${cls};`);
+    }
+
+    // Cycle-aware styling — only when cycles were detected and passed in.
+    // We emit cross-subgraph `style` directives rather than a `subgraph CYCLES`
+    // block because Mermaid does not allow a node to belong to two subgraphs;
+    // re-declaring a node inside `subgraph CYCLES` silently moves it out of its
+    // domain subgraph (FILES, SERVICES, etc.) and breaks the layout.
+    if (cycles && cycles.cycles.length > 0) {
+        // Collect all unique node ids that participate in any cycle.
+        const cycleNodeIds = new Set<string>();
+        for (const cycle of cycles.cycles) {
+            for (const nodeId of cycle.nodes) {
+                cycleNodeIds.add(nodeId);
+            }
+        }
+
+        // Only emit style directives for cycle nodes that actually exist in this render.
+        const nodeIdSet = new Set(nodes.map((n) => n.id));
+        const relevantCycleIds = [...cycleNodeIds].filter((id) => nodeIdSet.has(id)).sort();
+
+        // Emit a red style override for each cycle node (works cross-subgraph).
+        for (const id of relevantCycleIds) {
+            const sanitized = idMap.get(id) ?? sanitizeId(id);
+            lines.push(`    style ${sanitized} fill:#fdd,stroke:#c00`);
+        }
     }
 
     return { body: lines.join('\n') + '\n', collisionGroups };

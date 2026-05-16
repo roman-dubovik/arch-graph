@@ -3,7 +3,7 @@ import { Project } from 'ts-morph';
 
 import type { ArchGraphConfig } from '../core/config.js';
 import { discoverOwnership } from '../core/service-registry.js';
-import type { ArchGraph, BuildValidation, DiagnosticsReport } from '../core/types.js';
+import type { ArchGraph, BuildValidation, CyclesDiagnostics, DiagnosticsReport } from '../core/types.js';
 import { extractBullMq } from '../extractors/bullmq/extractor.js';
 import { extractDi } from '../extractors/di/extractor.js';
 import { extractHttp } from '../extractors/http/extractor.js';
@@ -24,11 +24,51 @@ import { buildImportsReport, enumerateImportsGroundTruth } from '../validation/i
 import { enumerateSenders } from '../validation/senders.js';
 import { enumerateTypeOrmGroundTruth, buildTypeOrmReport } from '../validation/typeorm-validator.js';
 import { buildReport as buildNatsReport } from '../validation/validator.js';
+import { detectCycles } from '../detectors/cycles.js';
 
 export interface BuildResult {
     graph: ArchGraph;
     diagnostics: DiagnosticsReport;
     validation: BuildValidation;
+}
+
+/**
+ * Wrapper around `detectCycles` that degrades gracefully on RangeError (stack
+ * overflow on very large graphs) and re-throws any other unexpected error.
+ *
+ * Extracted so tests can import this function directly and exercise the same
+ * error-handling paths that production uses — no inline copy required.
+ *
+ * @param graph  The assembled ArchGraph to analyse.
+ * @param detect Injected detector — defaults to the real `detectCycles`. Pass a
+ *               throwing stub in tests to exercise the catch branches without
+ *               building a real graph.
+ * @param write  Output channel for user-visible progress messages. Defaults to
+ *               `process.stdout.write` (progress belongs on stdout, not stderr).
+ */
+export function safeDetectCycles(
+    graph: ArchGraph,
+    detect: (g: ArchGraph) => CyclesDiagnostics = detectCycles,
+    write: (msg: string) => void = (m) => process.stdout.write(m),
+): CyclesDiagnostics {
+    try {
+        return detect(graph);
+    } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (err instanceof RangeError) {
+            // Stack overflow on a very large graph — degrade gracefully and record
+            // the failure structurally so consumers can detect degraded-mode runs.
+            write(`  cycles: detection skipped (stack overflow on large graph)\n`);
+            return {
+                cycles: [],
+                counts: { tsImport: 0, libUsage: 0, diImport: 0 },
+                error: `RangeError: ${message}`,
+            };
+        }
+        // Unknown errors are bugs — surface them loudly and fail the build.
+        write(`  cycles: detection failed: ${message}\n`);
+        throw err;
+    }
 }
 
 /**
@@ -241,6 +281,17 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         httpMapped,
         importsMapped,
     ]);
+
+    // ---- Cycle detection ----
+    process.stdout.write(`detecting cycles...\n`);
+    const cyclesDiagnostics = safeDetectCycles(graph);
+    {
+        const c = cyclesDiagnostics.counts;
+        process.stdout.write(
+            `  cycles: total: ${cyclesDiagnostics.cycles.length} (ts-import: ${c.tsImport}, lib-usage: ${c.libUsage}, di-import: ${c.diImport})\n`,
+        );
+    }
+
     const diagnostics: DiagnosticsReport = {
         projectId: cfg.id,
         timestamp: new Date().toISOString(),
@@ -250,7 +301,7 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         di: diMapped.diagnostics,
         http: httpMapped.diagnostics,
         imports: importsMapped.diagnostics,
-        cycles: { cycles: [], counts: { tsImport: 0, libUsage: 0, diImport: 0, total: 0 } },
+        cycles: cyclesDiagnostics,
     };
     const validation: BuildValidation = {
         projectId: cfg.id,

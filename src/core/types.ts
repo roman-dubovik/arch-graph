@@ -254,7 +254,8 @@ export interface DiagnosticsReport {
  */
 export interface ImportCycle {
     kind: 'ts-import' | 'lib-usage' | 'di-import';
-    nodes: string[];
+    /** At least one node required; a single-element array represents a self-loop. */
+    nodes: [string, ...string[]];
     /** Locations of the back-edge for each step (file:line where `import` lives). */
     edgeLocations: Array<{ from: string; to: string; location?: SourceLoc }>;
 }
@@ -265,8 +266,15 @@ export interface CyclesDiagnostics {
         tsImport: number;
         libUsage: number;
         diImport: number;
-        total: number;
     };
+    /**
+     * Set when cycle detection degraded or failed. A `RangeError` (stack overflow on
+     * a very large graph) populates this field and leaves `cycles: []`; the build
+     * continues. Any other unexpected error causes a hard re-throw instead.
+     *
+     * Consumers can check `if (diagnostics.cycles.error)` to detect degraded-mode runs.
+     */
+    error?: string;
 }
 
 // ============================================================================

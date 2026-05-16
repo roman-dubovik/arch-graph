@@ -515,7 +515,9 @@ async function cmdBuild(args: ParsedArgs): Promise<void> {
 
     // Always emit the full Mermaid flowchart alongside graph.json.
     const mermaidPath = `${outDir}/graph.mermaid`;
-    await writeGraphMermaid(result.graph, mermaidPath);
+    await writeGraphMermaid(result.graph, mermaidPath, {
+        cycles: result.diagnostics.cycles,
+    });
 
     // Optional extra slicing per user request.
     let extraSliceFiles: string[] = [];
@@ -524,15 +526,24 @@ async function cmdBuild(args: ParsedArgs): Promise<void> {
             extraSliceFiles = await writeGraphMermaid(
                 result.graph,
                 `${outDir}/mermaid`,
-                { slice: args.mermaidSlice },
+                { slice: args.mermaidSlice, cycles: result.diagnostics.cycles },
             );
         } else {
             // domain:<key>
             const file = `${outDir}/${args.mermaidSlice.domain}.mermaid`;
             extraSliceFiles = await writeGraphMermaid(result.graph, file, {
                 slice: args.mermaidSlice,
+                cycles: result.diagnostics.cycles,
             });
         }
+    }
+
+    // Surface degraded cycle detection visibly so operators notice it immediately
+    // (diagnostics.json contains the error too, but few people read it proactively).
+    if (result.diagnostics.cycles.error) {
+        process.stdout.write(
+            `\n⚠ cycle detection degraded: ${result.diagnostics.cycles.error}. graph.mermaid may not show cycle highlights.\n`,
+        );
     }
 
     if (!args.quiet) {
@@ -644,6 +655,13 @@ async function cmdDiagnose(args: ParsedArgs): Promise<void> {
         for (const u of im.unresolvedImports.slice(0, 10)) {
             process.stdout.write(`  ${u.location.file}:${u.location.line}  '${u.specifier}'\n`);
         }
+    }
+
+    // Surface degraded cycle detection visibly (same as cmdBuild).
+    if (result.diagnostics.cycles.error) {
+        process.stdout.write(
+            `\n⚠ cycle detection degraded: ${result.diagnostics.cycles.error}. graph.mermaid may not show cycle highlights.\n`,
+        );
     }
 
     const outDir = resolve(args.out);
