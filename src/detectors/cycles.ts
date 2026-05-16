@@ -38,7 +38,6 @@ export function detectCycles(graph: ArchGraph): CyclesDiagnostics {
             tsImport: tsImportCycles.length,
             libUsage: libUsageCycles.length,
             diImport: diImportCycles.length,
-            total: cycles.length,
         },
     };
 }
@@ -86,7 +85,8 @@ function detectForKind(
         seen.add(key);
 
         const edgeLocations = buildEdgeLocations(normalised, adj);
-        result.push({ kind, nodes: normalised, edgeLocations });
+        // canonicalise always returns at least one element (cycles are non-empty).
+        result.push({ kind, nodes: normalised as [string, ...string[]], edgeLocations });
     }
 
     return result;
@@ -153,20 +153,23 @@ function johnsons(
             const wIdx = nodeIndex.get(w);
             if (wIdx === undefined || wIdx < startIdx) continue;
             // Skip self-loops — handled separately above.
+            let edgeFound = false;
             if (w === stack[0]) {
                 // Found a cycle. Record it (omit closing back-node — Johnson's convention).
                 result.push([...stack]);
-                found = true;
+                edgeFound = true;
             } else if (!blocked.get(w)) {
-                if (circuit(w, startIdx)) {
-                    found = true;
-                }
+                edgeFound = circuit(w, startIdx);
             }
-            if (!found) {
-                // w was not part of a cycle reachable from v — add to B[w].
+            if (edgeFound) {
+                found = true;
+            } else {
+                // w was not part of a cycle reachable from v via this edge — add to B[w].
                 // B[w] is guaranteed to exist: the reset loop at the top of each
                 // outer iteration initialises every in-scope node. Non-null assertion
                 // is safe by construction.
+                // Per Johnson's 1975: B-entry registration is per-edge, not
+                // loop-cumulative — each blocked neighbor must be recorded independently.
                 B.get(w)!.add(v);
             }
         }
@@ -227,6 +230,10 @@ function buildEdgeLocations(
         const from = cycle[i]!;
         const to = cycle[(i + 1) % n]!;
         // adj is populated for every node in the cycle — non-null assertion is safe.
+        // Policy: when multiple parallel edges share the same (from, to) pair, .find()
+        // returns the first match. First-match-wins is intentional: the adjacency list
+        // is built in graph.edges insertion order. For determinism under parallel edges
+        // callers should ensure a stable edge order (e.g. sorted by file:line).
         const match = adj.get(from)!.find((nb) => nb.to === to);
         let location: SourceLoc | undefined;
         if (match && match.edge.file != null && match.edge.line != null) {
