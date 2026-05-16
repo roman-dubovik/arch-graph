@@ -515,7 +515,9 @@ async function cmdBuild(args: ParsedArgs): Promise<void> {
 
     // Always emit the full Mermaid flowchart alongside graph.json.
     const mermaidPath = `${outDir}/graph.mermaid`;
-    await writeGraphMermaid(result.graph, mermaidPath);
+    await writeGraphMermaid(result.graph, mermaidPath, {
+        cycles: result.diagnostics.cycles,
+    });
 
     // Optional extra slicing per user request.
     let extraSliceFiles: string[] = [];
@@ -524,13 +526,14 @@ async function cmdBuild(args: ParsedArgs): Promise<void> {
             extraSliceFiles = await writeGraphMermaid(
                 result.graph,
                 `${outDir}/mermaid`,
-                { slice: args.mermaidSlice },
+                { slice: args.mermaidSlice, cycles: result.diagnostics.cycles },
             );
         } else {
             // domain:<key>
             const file = `${outDir}/${args.mermaidSlice.domain}.mermaid`;
             extraSliceFiles = await writeGraphMermaid(result.graph, file, {
                 slice: args.mermaidSlice,
+                cycles: result.diagnostics.cycles,
             });
         }
     }
