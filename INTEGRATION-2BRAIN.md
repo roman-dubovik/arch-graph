@@ -2,7 +2,7 @@
 
 ## Why this exists
 
-arch-graph works as a standalone architecture extractor for NestJS monorepos — deterministic, structure-focused queries via CLI and MCP tools. The sister project **2-brain** (Anthropic's memory and code-context federation system) will add optional semantic search in Phase 3 (`memory.code_context`). The shared embedding model makes vectors comparable across both systems, enabling a future federated pattern: 2-brain can query arch-graph's semantic index via MCP, optionally combining results with its own dense retrieval over drawers.
+arch-graph works as a standalone architecture extractor for NestJS monorepos — deterministic, structure-focused queries via CLI and MCP tools. The sister project **2-brain** (a personal memory and code-context system, currently in development) will add optional semantic search in Phase 3 (`memory.code_context`). The shared embedding model makes vectors comparable across both systems, enabling a future federated pattern: 2-brain can query arch-graph's semantic index via MCP, optionally combining results with its own dense retrieval over drawers.
 
 ## Shared embedding model
 
