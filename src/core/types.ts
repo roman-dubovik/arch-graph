@@ -296,6 +296,12 @@ export interface DiagnosticsReport {
     http: HttpDiagnostics;
     imports: ImportsDiagnostics;
     cycles: CyclesDiagnostics;
+    /**
+     * Populated only when `arch-graph semantic build` has been run.
+     * Optional so plain `arch-graph build` keeps the same diagnostics.json
+     * shape without breaking existing consumers.
+     */
+    semantic?: import('../semantic/types.js').SemanticDiagnostics;
 }
 
 // ============================================================================

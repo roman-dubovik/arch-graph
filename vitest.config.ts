@@ -30,6 +30,7 @@ export default defineConfig({
                 'src/cli/build-tips.ts',
                 'src/cli/skill.ts',
                 'src/cli/marker-block.ts',
+                'src/cli/semantic-commands.ts',
                 // project-registry.ts is INCLUDED in coverage (per-file threshold below)
                 'src/mcp/**',
                 'src/compare/**',
@@ -116,6 +117,13 @@ export default defineConfig({
                     statements: 80,
                     functions: 85,
                     branches: 70,
+                },
+                // Task 2 — Semantic build CLI (standard gate: 95/95/95/90)
+                'src/semantic/builder.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
                 },
                 // Task 1 — Semantic foundation (standard gate: 95/95/95/90)
                 'src/semantic/types.ts': {

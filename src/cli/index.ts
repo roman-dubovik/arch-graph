@@ -19,6 +19,7 @@ import { runInitWizard } from './init.js';
 import { installSkill } from './skill.js';
 import { parseQueryArgs, QUERY_CMDS, runQueryCommand } from './query-commands.js';
 import { parseCompareArgs, runCompareCommand } from './compare-command.js';
+import { parseSemanticArgs, runSemanticBuild } from './semantic-commands.js';
 import {
     tipsForBullmq,
     tipsForDi,
@@ -714,6 +715,12 @@ async function main(): Promise<void> {
         if (sub === 'uninstall') return hookUninstall(args);
         if (sub === 'status') return hookStatus(args);
         process.stderr.write(`unknown subcommand: hook ${sub}\n${HELP}`);
+        process.exit(1);
+    }
+    if (cmd === 'semantic') {
+        const { sub, ...rest } = parseSemanticArgs(argv.slice(1));
+        if (sub === 'build') return runSemanticBuild({ sub, ...rest });
+        process.stderr.write(`unknown subcommand: semantic ${sub}\n  Usage: arch-graph semantic build [--out <dir>] [--config <path>] [--repo <id>]\n`);
         process.exit(1);
     }
     if (cmd === 'install-skill') {
