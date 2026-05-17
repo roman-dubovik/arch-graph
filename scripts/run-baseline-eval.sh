@@ -278,7 +278,9 @@ build_top_summary() {
 #           "single"               (single)
 #           "code"|"fallback-docs"|"fallback-miss"   (fallback)
 #           "both-buckets"|"both-buckets(code-errored)"|
-#             "both-buckets(docs-errored)"|"both-buckets(partial-error)"   (both-buckets)
+#             "both-buckets(docs-errored)"|"both-buckets(partial-errored)"   (both-buckets)
+#         All error-indicating mode tags share the "errored" substring so a
+#         single grep matches them all in aggregate_count.
 # ---------------------------------------------------------------------------
 run_query() {
   local proj_name="$1"
@@ -367,7 +369,7 @@ run_query() {
         # genuine miss on the other. Surface as ERROR so the aggregator's
         # error counter fires; otherwise the broken bucket gets hidden.
         verdict="ERROR"
-        mode_tag="both-buckets(partial-error)"
+        mode_tag="both-buckets(partial-errored)"
       else
         verdict="MISS"
         mode_tag="both-buckets"
