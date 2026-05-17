@@ -124,10 +124,15 @@ export async function extractFe(cfg: ArchGraphConfig, project: Project): Promise
             try {
                 const resolved = importDecl.getModuleSpecifierSourceFile();
                 resolvedFile = resolved?.getFilePath() ?? null;
-            } catch (err) /* v8 ignore next 4 */ {
-                // resolution failure — record for diagnostics
-                const msg = err instanceof Error ? err.message : String(err);
-                allUnresolvedImports.push({ file, specifier, error: msg });
+            } catch (err) /* v8 ignore next 7 */ {
+                // resolution failure — record for diagnostics unless it looks like a
+                // bare scoped npm package (@scope/pkg) that cannot be in the project tree.
+                // Pattern: @scope/pkg with no further path segments and no file extension.
+                const isScopedNpm = /^@[^/]+\/[^/.]+$/.test(specifier);
+                if (!isScopedNpm) {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    allUnresolvedImports.push({ file, specifier, error: msg });
+                }
             }
 
             // Collect all named + default imports

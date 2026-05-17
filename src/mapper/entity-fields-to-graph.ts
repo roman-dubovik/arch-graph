@@ -43,12 +43,18 @@ export function mapEntityFieldsToGraph(
 
         // db-entity-field node (one per table/field combo)
         if (!fieldNodes.has(fieldNodeId)) {
+            const anchor = `${field.entityClass}.${field.fieldName}`;
+            if (!anchor || anchor.trim() === '') {
+                throw new Error(
+                    `entity-fields mapper: anchor is required for ${fieldNodeId} (entityClass=${field.entityClass}, fieldName=${field.fieldName})`,
+                );
+            }
             fieldNodes.set(fieldNodeId, {
                 id: fieldNodeId,
                 kind: 'db-entity-field',
                 label: `${field.tableName}/${field.fieldName}`,
                 path: field.location.file,
-                anchor: `${field.entityClass}.${field.fieldName}`,
+                anchor,
                 meta: {
                     entityClass: field.entityClass,
                     tableName: field.tableName,

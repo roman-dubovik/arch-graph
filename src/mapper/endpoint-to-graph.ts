@@ -37,12 +37,18 @@ export function mapEndpointsToGraph(
         const nodeId = `endpoint:${site.method} ${site.pattern}`;
 
         if (!endpointNodes.has(nodeId)) {
+            const anchor = `${site.controllerClass}.${site.methodName}`;
+            if (!anchor || anchor.trim() === '') {
+                throw new Error(
+                    `endpoint mapper: anchor is required for ${nodeId} (controllerClass=${site.controllerClass}, methodName=${site.methodName})`,
+                );
+            }
             endpointNodes.set(nodeId, {
                 id: nodeId,
                 kind: 'endpoint',
                 label: `${site.method} ${site.pattern}`,
                 path: site.location.file,
-                anchor: `${site.controllerClass}.${site.methodName}`,
+                anchor,
                 meta: {
                     controllerClass: site.controllerClass,
                     methodName: site.methodName,
