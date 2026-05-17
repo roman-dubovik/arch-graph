@@ -260,7 +260,9 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
     process.stdout.write(`mapping DI to graph...\n`);
     // A1: build class index so provider/module nodes get path + anchor fields.
     const classIndex = buildClassIndex(project);
-    const diMapped = mapDiToGraph(di.modules, di.moduleIndex, ownership, di.filterChain, di.skippedAnonymousFiles, classIndex);
+    const diMapped = await stage(`[${cfg.id}] di.map`, () =>
+        mapDiToGraph(di.modules, di.moduleIndex, ownership, di.filterChain, di.skippedAnonymousFiles, classIndex),
+    );
     process.stdout.write(
         `  nodes: ${diMapped.nodes.length}, edges: ${diMapped.edges.length}, unresolvedRefs: ${diMapped.diagnostics.unresolvedRefs.length}, unowned: ${diMapped.diagnostics.unowned.length}, guards: ${diMapped.diagnostics.counts.guards}, interceptors: ${diMapped.diagnostics.counts.interceptors}, pipes: ${diMapped.diagnostics.counts.pipes}, unresolvedFilterRefs: ${diMapped.diagnostics.counts.unresolvedFilterRefs}, truncatedFilterRefs: ${diMapped.diagnostics.counts.truncatedFilterRefs}, skippedAnonymousFiles: ${diMapped.diagnostics.skippedAnonymousFiles.length}\n`,
     );
@@ -374,7 +376,9 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
     );
 
     process.stdout.write(`mapping config to graph...\n`);
-    const configMapped = mapConfigToGraph(config.fields, ownership);
+    const configMapped = await stage(`[${cfg.id}] config.map`, () =>
+        mapConfigToGraph(config.fields, ownership),
+    );
     process.stdout.write(
         `  nodes: ${configMapped.nodes.length}, edges: ${configMapped.edges.length}\n`,
     );
