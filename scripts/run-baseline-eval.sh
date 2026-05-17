@@ -13,8 +13,25 @@
 #   --skip-build  Skip graph + semantic rebuild (re-use existing index).
 #
 # Environment overrides:
-#   SKIP_BUILD=1  Same as --skip-build (env var form).
-#   EVAL_K=5      Number of top results to inspect (default: 5).
+#   SKIP_BUILD=1            Same as --skip-build (env var form).
+#   EVAL_K=10               Number of top results to inspect (default: 10).
+#   EVAL_MODE=per-category  Search routing strategy. One of:
+#     single        — single search call, no kind-bucket filter (legacy
+#                     baseline; doc-section dilutes code queries).
+#     per-category  — route by category:
+#                       A_find/B_debug/C_ui → --code-only
+#                       D_docs/E_arch       → --docs-only
+#                       D_links             → no filter (mixed by design)
+#                     Models an LLM that knows query intent and routes
+#                     correctly. Default.
+#     fallback      — naive two-call: always try --code-only first; if MISS,
+#                     retry --docs-only. Models an LLM with no intent
+#                     knowledge that just tries both buckets.
+#     both-buckets  — ALWAYS issue both --code-only AND --docs-only calls
+#                     and union the verdicts. Models an LLM that runs both
+#                     searches unconditionally and inspects two separately
+#                     labeled top-K lists. Doubles retrieval cost but
+#                     removes any intent-routing risk.
 #
 # Exit code:
 #   0 — all projects meet their expected threshold
@@ -29,9 +46,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKTREE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 QUERIES_FILE="$SCRIPT_DIR/eval/queries.json"
 CLI="$WORKTREE_DIR/src/cli/index.ts"
-K="${EVAL_K:-5}"
+K="${EVAL_K:-10}"
+EVAL_MODE="${EVAL_MODE:-per-category}"
+case "$EVAL_MODE" in
+  single|per-category|fallback|both-buckets) ;;
+  *) echo "ERROR: invalid EVAL_MODE='$EVAL_MODE'. Use single|per-category|fallback|both-buckets." >&2; exit 1 ;;
+esac
 DATE="$(date +%Y-%m-%d)"
-RESULTS_FILE="$SCRIPT_DIR/eval/results-${DATE}.md"
+RESULTS_FILE="$SCRIPT_DIR/eval/results-${DATE}-${EVAL_MODE}.md"
 SKIP_BUILD="${SKIP_BUILD:-0}"
 
 # Project paths
@@ -102,59 +124,104 @@ TMPDIR_RESULTS="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_RESULTS"' EXIT
 
 # ---------------------------------------------------------------------------
-# Per-query search and evaluation
+# Per-query helpers
 # ---------------------------------------------------------------------------
-# Writes: $TMPDIR_RESULTS/<qid>.result  — "HIT" or "MISS"
-#         $TMPDIR_RESULTS/<qid>.top5    — one-line top-5 summary
-run_query() {
-  local proj_name="$1"
-  local project_dir="$2"
-  local qid="$3"
 
-  local query min_score kinds_csv labels_csv
-  query=$(jq -r --arg id "$qid" '.[] | select(.id == $id) | .query' "$QUERIES_FILE")
-  min_score=$(jq -r --arg id "$qid" '.[] | select(.id == $id) | .minScore' "$QUERIES_FILE")
-  kinds_csv=$(jq -r --arg id "$qid" '
-    .[] | select(.id == $id) |
-    ((.expectedTopKindIn // .expectedKindIn) // []) | join(",")
-  ' "$QUERIES_FILE")
-  labels_csv=$(jq -r --arg id "$qid" '
-    .[] | select(.id == $id) |
-    (.expectedLabelHas // []) | join(",")
-  ' "$QUERIES_FILE")
+# Map a query category to the kind-bucket CLI flag for per-category mode.
+# Echoes "--code-only", "--docs-only", or "" (no filter).
+#
+# Fails loudly on unknown categories — otherwise adding a new category to
+# queries.json would silently fall through to "no filter" and corrupt the
+# per-category metric without any visible signal.
+route_filter_flag() {
+  local cat="$1"
+  case "$cat" in
+    A_find|B_debug|C_ui) echo "--code-only" ;;
+    D_docs|E_arch)       echo "--docs-only" ;;
+    D_links)             echo "" ;;
+    "")
+      echo "[eval] ERROR: route_filter_flag called with empty category" >&2
+      exit 1
+      ;;
+    *)
+      echo "[eval] ERROR: route_filter_flag: unknown category '$cat'. " \
+           "Update queries.json or extend the case statement in run-baseline-eval.sh." >&2
+      exit 1
+      ;;
+  esac
+}
 
-  local json_output top5 verdict
-  json_output=$(cd "$project_dir" && "$TSX_BIN" "$CLI" semantic search "$query" --k "$K" --json 2>/dev/null) || true
+# Run one search call, evaluate the result, and echo the verdict ("HIT",
+# "MISS", or "ERROR") to stdout. Stores raw CLI JSON in
+# $TMPDIR_RESULTS/_last.json so build_top_summary can render it afterward.
+#
+# Distinguishes three CLI outcomes:
+#   exit 0  — results returned; judge HIT/MISS by score+kind+label filters
+#   exit 4  — index OK, but no results passed the filter — judge MISS
+#   exit 1+ — hard failure (missing/corrupt index, embed error). Stderr is
+#             surfaced via warn() and the verdict is "ERROR" so the operator
+#             can distinguish infrastructure problems from genuine misses.
+#
+# Args: qid, project_dir, query, min_score, kinds_csv, labels_csv, filter_flag
+search_and_judge() {
+  local qid="$1" project_dir="$2" query="$3" min_score="$4" kinds_csv="$5" labels_csv="$6"
+  local filter_flag="$7"
 
-  # Build top-5 summary
-  top5=$(echo "$json_output" | jq -r '
-    if .error then
-      "ERROR: \(.error)"
-    elif ((.results // []) | length) == 0 then
-      "no results"
-    else
-      [.results[] | "\(.score | . * 1000 | round / 1000) \(.kind):\(.label)"] | join(" | ")
-    end
-  ' 2>/dev/null || echo "parse error")
+  local cli_stderr cli_exit json_output verdict result_count
+  cli_stderr=$(mktemp)
+  if [[ -n "$filter_flag" ]]; then
+    json_output=$(cd "$project_dir" && "$TSX_BIN" "$CLI" semantic search "$query" --k "$K" "$filter_flag" --json 2>"$cli_stderr")
+  else
+    json_output=$(cd "$project_dir" && "$TSX_BIN" "$CLI" semantic search "$query" --k "$K" --json 2>"$cli_stderr")
+  fi
+  cli_exit=$?
+  # Surface stderr unless every line matches a known-harmless banner.
+  # Inverted (denylist) instead of error-keyword-allowlist: a keyword list
+  # would silently drop real diagnostics that use different vocabulary
+  # ("timed out", "ECONNREFUSED", "ENOENT", "stale index", etc).
+  if [[ -s "$cli_stderr" ]]; then
+    # If the CLI failed at the exit-code level, always surface stderr.
+    # Otherwise check if ANY non-banner line is present.
+    if [[ "$cli_exit" != "0" && "$cli_exit" != "4" ]]; then
+      warn "[$qid] CLI stderr: $(tr '\n' ' ' < "$cli_stderr")"
+    elif grep -qvE '^\[arch-graph semantic\] (Loading model|Downloading|Fetching|Using cached)' "$cli_stderr"; then
+      warn "[$qid] CLI stderr: $(tr '\n' ' ' < "$cli_stderr")"
+    fi
+  fi
+  rm -f "$cli_stderr"
 
-  # Evaluate: check if any top-K result satisfies score + kind + label
+  echo "$json_output" > "$TMPDIR_RESULTS/_last.json"
+
+  # Hard CLI failure — do NOT count as a recall miss.
+  if [[ "$cli_exit" != "0" && "$cli_exit" != "4" ]]; then
+    warn "[$qid] CLI exit=$cli_exit (treating as ERROR, not MISS)"
+    echo "ERROR"
+    return
+  fi
+
+  # Validate the JSON envelope once, up front. If parse fails, that is also
+  # an infrastructure problem (stale tsx cache, unexpected stdout banner),
+  # not a recall miss.
+  if ! jq empty "$TMPDIR_RESULTS/_last.json" 2>/dev/null; then
+    warn "[$qid] CLI output is not valid JSON; treating as ERROR"
+    echo "ERROR"
+    return
+  fi
+
   verdict="MISS"
-  local result_count
-  result_count=$(echo "$json_output" | jq '(.results // []) | length' 2>/dev/null || echo 0)
+  result_count=$(jq '(.results // []) | length' "$TMPDIR_RESULTS/_last.json")
 
   local i
   for (( i=0; i<result_count; i++ )); do
     local score kind label
-    score=$(echo "$json_output" | jq -r ".results[$i].score" 2>/dev/null || echo 0)
-    kind=$(echo "$json_output" | jq -r ".results[$i].kind" 2>/dev/null || echo "")
-    label=$(echo "$json_output" | jq -r ".results[$i].label" 2>/dev/null || echo "")
+    score=$(jq -r ".results[$i].score" "$TMPDIR_RESULTS/_last.json")
+    kind=$(jq -r ".results[$i].kind" "$TMPDIR_RESULTS/_last.json")
+    label=$(jq -r ".results[$i].label" "$TMPDIR_RESULTS/_last.json")
 
-    # Score check
     local score_ok
     score_ok=$(awk -v s="$score" -v m="$min_score" 'BEGIN { print (s+0 >= m+0) ? "1" : "0" }')
     [[ "$score_ok" != "1" ]] && continue
 
-    # Kind filter
     local kind_ok=1
     if [[ -n "$kinds_csv" ]]; then
       kind_ok=0
@@ -166,7 +233,6 @@ run_query() {
     fi
     [[ "$kind_ok" != "1" ]] && continue
 
-    # Label filter (case-insensitive substring)
     local label_ok=1
     if [[ -n "$labels_csv" ]]; then
       label_ok=0
@@ -187,9 +253,135 @@ run_query() {
     break
   done
 
+  echo "$verdict"
+}
+
+# Render the top-K summary line from $TMPDIR_RESULTS/_last.json.
+build_top_summary() {
+  jq -r '
+    if .error then
+      "ERROR: \(.error)"
+    elif ((.results // []) | length) == 0 then
+      "no results"
+    else
+      [.results[] | "\(.score | . * 1000 | round / 1000) \(.kind):\(.label)"] | join(" | ")
+    end
+  ' "$TMPDIR_RESULTS/_last.json" 2>/dev/null || echo "parse error"
+}
+
+# ---------------------------------------------------------------------------
+# Per-query orchestrator — dispatches according to $EVAL_MODE.
+# Writes: $TMPDIR_RESULTS/<qid>.result — "HIT" or "MISS"
+#         $TMPDIR_RESULTS/<qid>.top5   — one-line top-K summary
+#         $TMPDIR_RESULTS/<qid>.mode   — one of:
+#           "code"|"docs"|"both"   (per-category)
+#           "single"               (single)
+#           "code"|"fallback-docs"|"fallback-miss"   (fallback)
+#           "both-buckets"|"both-buckets(code-errored)"|
+#             "both-buckets(docs-errored)"|"both-buckets(partial-errored)"   (both-buckets)
+#         All error-indicating mode tags share the "errored" substring so a
+#         single grep matches them all in aggregate_count.
+# ---------------------------------------------------------------------------
+run_query() {
+  local proj_name="$1"
+  local project_dir="$2"
+  local qid="$3"
+
+  local query min_score kinds_csv labels_csv cat
+  query=$(jq -r --arg id "$qid" '.[] | select(.id == $id) | .query' "$QUERIES_FILE")
+  min_score=$(jq -r --arg id "$qid" '.[] | select(.id == $id) | .minScore' "$QUERIES_FILE")
+  kinds_csv=$(jq -r --arg id "$qid" '
+    .[] | select(.id == $id) |
+    ((.expectedTopKindIn // .expectedKindIn) // []) | join(",")
+  ' "$QUERIES_FILE")
+  labels_csv=$(jq -r --arg id "$qid" '
+    .[] | select(.id == $id) |
+    (.expectedLabelHas // []) | join(",")
+  ' "$QUERIES_FILE")
+  cat=$(jq -r --arg id "$qid" '.[] | select(.id == $id) | .category' "$QUERIES_FILE")
+
+  local verdict mode_tag top5
+  case "$EVAL_MODE" in
+    single)
+      verdict=$(search_and_judge "$qid" "$project_dir" "$query" "$min_score" "$kinds_csv" "$labels_csv" "")
+      mode_tag="single"
+      top5=$(build_top_summary)
+      ;;
+    per-category)
+      local flag
+      flag=$(route_filter_flag "$cat")
+      verdict=$(search_and_judge "$qid" "$project_dir" "$query" "$min_score" "$kinds_csv" "$labels_csv" "$flag")
+      case "$flag" in
+        --code-only) mode_tag="code" ;;
+        --docs-only) mode_tag="docs" ;;
+        *)           mode_tag="both" ;;
+      esac
+      top5=$(build_top_summary)
+      ;;
+    fallback)
+      verdict=$(search_and_judge "$qid" "$project_dir" "$query" "$min_score" "$kinds_csv" "$labels_csv" "--code-only")
+      mode_tag="code"
+      top5=$(build_top_summary)
+      if [[ "$verdict" == "MISS" ]]; then
+        # Retry on docs. Update mode_tag/top5 unconditionally to reflect the
+        # last attempted bucket — distinguishes "code-only MISS" from
+        # "tried both and missed".
+        verdict=$(search_and_judge "$qid" "$project_dir" "$query" "$min_score" "$kinds_csv" "$labels_csv" "--docs-only")
+        if [[ "$verdict" == "HIT" ]]; then
+          mode_tag="fallback-docs"
+        else
+          mode_tag="fallback-miss"
+        fi
+        top5=$(build_top_summary)
+      fi
+      ;;
+    both-buckets)
+      # Always issue both calls; union verdicts. This models the production
+      # pattern where the LLM agent receives two separately-labeled top-K
+      # lists ("CODE:..." and "DOCS:...") and decides on the fly which one
+      # is more useful. The HIT verdict here is "at least one bucket
+      # satisfied the filters".
+      local code_verdict code_top5 docs_verdict docs_top5
+      code_verdict=$(search_and_judge "$qid" "$project_dir" "$query" "$min_score" "$kinds_csv" "$labels_csv" "--code-only")
+      code_top5=$(build_top_summary)
+      docs_verdict=$(search_and_judge "$qid" "$project_dir" "$query" "$min_score" "$kinds_csv" "$labels_csv" "--docs-only")
+      docs_top5=$(build_top_summary)
+
+      # Verdict union: ERROR must not override a confirmed HIT from the
+      # healthy bucket — a real LLM agent would still use that bucket's
+      # results. ERROR-only when BOTH buckets fail at the infrastructure
+      # layer. When one errors and the other yields a HIT, annotate which
+      # bucket errored so the operator can still see infrastructure signal.
+      if [[ "$code_verdict" == "ERROR" && "$docs_verdict" == "ERROR" ]]; then
+        verdict="ERROR"
+        mode_tag="both-buckets"
+      elif [[ "$code_verdict" == "HIT" || "$docs_verdict" == "HIT" ]]; then
+        verdict="HIT"
+        if [[ "$code_verdict" == "ERROR" ]]; then
+          mode_tag="both-buckets(code-errored)"
+        elif [[ "$docs_verdict" == "ERROR" ]]; then
+          mode_tag="both-buckets(docs-errored)"
+        else
+          mode_tag="both-buckets"
+        fi
+      elif [[ "$code_verdict" == "ERROR" || "$docs_verdict" == "ERROR" ]]; then
+        # One errored, other MISSed — infrastructure problem on one side,
+        # genuine miss on the other. Surface as ERROR so the aggregator's
+        # error counter fires; otherwise the broken bucket gets hidden.
+        verdict="ERROR"
+        mode_tag="both-buckets(partial-errored)"
+      else
+        verdict="MISS"
+        mode_tag="both-buckets"
+      fi
+      top5="CODE: ${code_top5} ⏐ DOCS: ${docs_top5}"
+      ;;
+  esac
+
   echo "$verdict" > "$TMPDIR_RESULTS/${qid}.result"
-  echo "$top5" > "$TMPDIR_RESULTS/${qid}.top5"
-  log "[$proj_name] $qid: $verdict"
+  echo "$top5"    > "$TMPDIR_RESULTS/${qid}.top5"
+  echo "$mode_tag" > "$TMPDIR_RESULTS/${qid}.mode"
+  log "[$proj_name] $qid: $verdict ($mode_tag)"
 }
 
 # ---------------------------------------------------------------------------
@@ -197,7 +389,7 @@ run_query() {
 # ---------------------------------------------------------------------------
 log "arch-graph baseline eval — $(date)"
 log "Worktree: $WORKTREE_DIR"
-log "k=$K  skip_build=$SKIP_BUILD"
+log "k=$K  mode=$EVAL_MODE  skip_build=$SKIP_BUILD"
 log ""
 
 PROJECTS="platform insyra beribuy2"
@@ -249,17 +441,35 @@ done
 aggregate_count() {
   local proj="$1"
   local cat="$2"
-  local hits=0 total=0
+  local hits=0 total=0 errors=0
 
   while IFS= read -r qid; do
     total=$((total + 1))
     local res_file="$TMPDIR_RESULTS/${qid}.result"
-    if [[ -f "$res_file" ]] && [[ "$(cat "$res_file")" == "HIT" ]]; then
-      hits=$((hits + 1))
+    local mode_file="$TMPDIR_RESULTS/${qid}.mode"
+    if [[ -f "$res_file" ]]; then
+      local v
+      v=$(cat "$res_file")
+      case "$v" in
+        HIT)
+          hits=$((hits + 1))
+          # both-buckets mode can produce a HIT verdict while one bucket
+          # errored at the infrastructure layer — preserve the HIT in the
+          # recall metric but ALSO count the partial-error so the broken
+          # bucket surfaces in proj_errors_all and triggers GLOBAL_EXIT=1.
+          if [[ -f "$mode_file" ]] && grep -q 'errored' "$mode_file"; then
+            errors=$((errors + 1))
+          fi
+          ;;
+        ERROR) errors=$((errors + 1)) ;;
+      esac
     fi
   done < <(jq -r --arg p "$proj" --arg c "$cat" '.[] | select(.project == $p and .category == $c) | .id' "$QUERIES_FILE")
 
-  echo "$hits $total"
+  # ERROR queries count toward total (conservative — surfaces infrastructure
+  # problems in the hit-rate rather than hiding them as zero-denominator).
+  # The third value lets the caller emit a separate "N errored" warning.
+  echo "$hits $total $errors"
 }
 
 # ---------------------------------------------------------------------------
@@ -302,6 +512,7 @@ GLOBAL_EXIT=0
   echo "**Worktree**: \`$WORKTREE_DIR\`  "
   echo "**CLI**: \`$CLI\`  "
   echo "**k**: $K  "
+  echo "**mode**: \`$EVAL_MODE\`  "
   echo "**skip_build**: $SKIP_BUILD  "
   echo "**Run at**: $(date)"
   echo ""
@@ -331,13 +542,15 @@ GLOBAL_EXIT=0
 
     proj_hits_all=0
     proj_total_all=0
+    proj_errors_all=0
 
     for cat in A_find B_debug C_ui E_arch D_docs D_links; do
-      read -r hits total <<< "$(aggregate_count "$proj" "$cat")"
+      read -r hits total errors <<< "$(aggregate_count "$proj" "$cat")"
       [[ "$total" == "0" ]] && continue
 
       proj_hits_all=$((proj_hits_all + hits))
       proj_total_all=$((proj_total_all + total))
+      proj_errors_all=$((proj_errors_all + errors))
 
       pct=$(awk "BEGIN { printf \"%d\", ($hits/$total)*100 }")
       expected=$(get_threshold "$proj" "$cat")
@@ -345,8 +558,19 @@ GLOBAL_EXIT=0
       [[ "$status" == "⚠" ]] && GLOBAL_EXIT=1
 
       expected_display="${expected:-?}%"
-      echo "| $proj | $cat | ${hits}/${total} | ${pct}% | $expected_display | $status |"
+      err_suffix=""
+      [[ "$errors" -gt 0 ]] && err_suffix=" (${errors} ERROR)"
+      echo "| $proj | $cat | ${hits}/${total}${err_suffix} | ${pct}% | $expected_display | $status |"
     done
+
+    if [[ "$proj_errors_all" -gt 0 ]]; then
+      warn "[$proj] ${proj_errors_all} queries errored (CLI exit ≠ 0/4 or invalid JSON). " \
+           "Check the [eval] WARN lines above; these were counted as failures in the hit-rate."
+      # Errored queries indicate infrastructure breakage. Unconditionally fail
+      # the eval — without this, an unthresholded category can silently absorb
+      # every ERROR and still let the script exit 0 (CI false-green).
+      GLOBAL_EXIT=1
+    fi
 
     # Overall
     if [[ "$proj_total_all" -gt 0 ]]; then
@@ -369,22 +593,27 @@ GLOBAL_EXIT=0
   for proj in $PROJECTS; do
     echo "### $proj"
     echo ""
-    echo "| id | category | status | top-$K summary |"
-    echo "|----|----------|--------|----------------|"
+    echo "| id | category | status | mode | top-$K summary |"
+    echo "|----|----------|--------|------|----------------|"
 
     while IFS= read -r qid; do
       cat=$(jq -r --arg id "$qid" '.[] | select(.id == $id) | .category' "$QUERIES_FILE")
       res_file="$TMPDIR_RESULTS/${qid}.result"
       top5_file="$TMPDIR_RESULTS/${qid}.top5"
+      mode_file="$TMPDIR_RESULTS/${qid}.mode"
       status="SKIP"
       top5="—"
+      mode_tag="—"
       if [[ -f "$res_file" ]]; then
         status="$(cat "$res_file")"
       fi
       if [[ -f "$top5_file" ]]; then
         top5="$(cat "$top5_file")"
       fi
-      echo "| $qid | $cat | $status | $top5 |"
+      if [[ -f "$mode_file" ]]; then
+        mode_tag="$(cat "$mode_file")"
+      fi
+      echo "| $qid | $cat | $status | $mode_tag | $top5 |"
     done < <(jq -r --arg p "$proj" '.[] | select(.project == $p) | .id' "$QUERIES_FILE")
 
     echo ""

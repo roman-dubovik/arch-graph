@@ -135,6 +135,124 @@ describe('parseSemanticArgs — --kinds validation (F5)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// --exclude-kinds / --code-only / --docs-only
+// ---------------------------------------------------------------------------
+
+describe('parseSemanticArgs — kind-bucket flags', () => {
+    it('--exclude-kinds populates excludeKinds and leaves kinds undefined', () => {
+        const args = parseSemanticArgs(['search', 'q', '--exclude-kinds=doc-section,lib']);
+        expect(args.excludeKinds).toEqual(['doc-section', 'lib']);
+        expect(args.kinds).toBeUndefined();
+    });
+
+    it('--code-only is sugar for --exclude-kinds=doc-section', () => {
+        const args = parseSemanticArgs(['search', 'q', '--code-only']);
+        expect(args.excludeKinds).toEqual(['doc-section']);
+        expect(args.kinds).toBeUndefined();
+    });
+
+    it('--docs-only is sugar for --kinds=doc-section', () => {
+        const args = parseSemanticArgs(['search', 'q', '--docs-only']);
+        expect(args.kinds).toEqual(['doc-section']);
+        expect(args.excludeKinds).toBeUndefined();
+    });
+
+    it('rejects --code-only combined with --docs-only', () => {
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        expect(() => parseSemanticArgs(['search', 'q', '--code-only', '--docs-only'])).toThrow(
+            'process.exit',
+        );
+        expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('rejects --code-only combined with --kinds', () => {
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        expect(() =>
+            parseSemanticArgs(['search', 'q', '--code-only', '--kinds=service']),
+        ).toThrow('process.exit');
+        expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('rejects --exclude-kinds combined with --docs-only', () => {
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        expect(() =>
+            parseSemanticArgs(['search', 'q', '--exclude-kinds=lib', '--docs-only']),
+        ).toThrow('process.exit');
+        expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('rejects unknown --exclude-kinds value', () => {
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        expect(() => parseSemanticArgs(['search', 'q', '--exclude-kinds=banana'])).toThrow(
+            'process.exit',
+        );
+        expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('rejects --kinds combined with --exclude-kinds', () => {
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        expect(() =>
+            parseSemanticArgs(['search', 'q', '--kinds=service', '--exclude-kinds=doc-section']),
+        ).toThrow('process.exit');
+        expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('rejects trailing --exclude-kinds with no value', () => {
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        expect(() => parseSemanticArgs(['search', 'q', '--exclude-kinds'])).toThrow(
+            'process.exit',
+        );
+        expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('rejects trailing --kinds with no value', () => {
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        expect(() => parseSemanticArgs(['search', 'q', '--kinds'])).toThrow('process.exit');
+        expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('rejects --kinds specified more than once (no silent last-write-wins)', () => {
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        expect(() =>
+            parseSemanticArgs(['search', 'q', '--kinds=service', '--kinds=lib']),
+        ).toThrow('process.exit');
+        expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+});
+
+// ---------------------------------------------------------------------------
 // F3 — table mode: embedError branch is shown before "No results found"
 // ---------------------------------------------------------------------------
 
@@ -211,6 +329,118 @@ describe('runSemanticSearch — embedError in table mode (F3)', () => {
         stdoutSpy.mockRestore();
         exitSpy.mockRestore();
         searchSpy.mockRestore();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// End-to-end wiring: parsed --code-only flag must propagate excludeKinds
+// down to the semanticSearch call (regression guard).
+// ---------------------------------------------------------------------------
+
+describe('runSemanticSearch — excludeKinds wiring (parse → search)', () => {
+    it('propagates --code-only excludeKinds=[doc-section] into the search call', async () => {
+        const { SEMANTIC_MODEL, SEMANTIC_DIM, SEMANTIC_SCHEMA_VERSION } = await import(
+            '../semantic/types.js'
+        );
+
+        await writeFile(
+            join(testDir, 'semantic', 'manifest.json'),
+            JSON.stringify({
+                schemaVersion: SEMANTIC_SCHEMA_VERSION,
+                model: SEMANTIC_MODEL,
+                dim: SEMANTIC_DIM,
+                builtAt: '2026-05-16T00:00:00.000Z',
+                graphHash: 'a'.repeat(64),
+                nodeCount: 0,
+            }),
+            'utf8',
+        );
+        await writeFile(join(testDir, 'semantic', 'embeddings.jsonl'), '', 'utf8');
+        await writeFile(join(testDir, 'graph.json'), '{}', 'utf8');
+
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+        vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        const searchModule = await import('../semantic/search.js');
+        const searchSpy = vi.spyOn(searchModule, 'semanticSearch').mockResolvedValue({
+            output: {
+                query: 'q',
+                results: [],
+                model: SEMANTIC_MODEL,
+                dim: SEMANTIC_DIM,
+                indexBuiltAt: '2026-05-16T00:00:00.000Z',
+                graphHashMatches: true,
+            },
+            exitCode: 4,
+            stderrWarning: undefined,
+        });
+
+        const args = parseSemanticArgs(['search', 'q', '--code-only']);
+        try {
+            await runSemanticSearch({ ...args, out: testDir });
+        } catch {
+            /* process.exit */
+        }
+
+        expect(searchSpy).toHaveBeenCalledTimes(1);
+        const callArgs = searchSpy.mock.calls[0]![0];
+        expect(callArgs.excludeKinds).toEqual(['doc-section']);
+        expect(callArgs.kinds).toBeUndefined();
+    });
+
+    it('propagates --docs-only kinds=[doc-section] into the search call', async () => {
+        const { SEMANTIC_MODEL, SEMANTIC_DIM, SEMANTIC_SCHEMA_VERSION } = await import(
+            '../semantic/types.js'
+        );
+
+        await writeFile(
+            join(testDir, 'semantic', 'manifest.json'),
+            JSON.stringify({
+                schemaVersion: SEMANTIC_SCHEMA_VERSION,
+                model: SEMANTIC_MODEL,
+                dim: SEMANTIC_DIM,
+                builtAt: '2026-05-16T00:00:00.000Z',
+                graphHash: 'a'.repeat(64),
+                nodeCount: 0,
+            }),
+            'utf8',
+        );
+        await writeFile(join(testDir, 'semantic', 'embeddings.jsonl'), '', 'utf8');
+        await writeFile(join(testDir, 'graph.json'), '{}', 'utf8');
+
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+        vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        const searchModule = await import('../semantic/search.js');
+        const searchSpy = vi.spyOn(searchModule, 'semanticSearch').mockResolvedValue({
+            output: {
+                query: 'q',
+                results: [],
+                model: SEMANTIC_MODEL,
+                dim: SEMANTIC_DIM,
+                indexBuiltAt: '2026-05-16T00:00:00.000Z',
+                graphHashMatches: true,
+            },
+            exitCode: 4,
+            stderrWarning: undefined,
+        });
+
+        const args = parseSemanticArgs(['search', 'q', '--docs-only']);
+        try {
+            await runSemanticSearch({ ...args, out: testDir });
+        } catch {
+            /* process.exit */
+        }
+
+        const callArgs = searchSpy.mock.calls[0]![0];
+        expect(callArgs.kinds).toEqual(['doc-section']);
+        expect(callArgs.excludeKinds).toBeUndefined();
     });
 });
 

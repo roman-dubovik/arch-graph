@@ -253,6 +253,105 @@ describe('semanticSearch — kinds filter (AC 6-2)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// excludeKinds blacklist (code-vs-docs split)
+// ---------------------------------------------------------------------------
+
+describe('semanticSearch — excludeKinds filter', () => {
+    it('excludes results of the specified kind', async () => {
+        const graphHash = await writeGraphJson('{"nodes":[]}');
+        const manifest = makeManifest({ graphHash, nodeCount: 4 });
+
+        const records: SemanticRecord[] = [
+            makeRecord('doc1', 'doc-section', unitVec(0)),
+            makeRecord('doc2', 'doc-section', unitVec(0)),
+            makeRecord('svc1', 'service', unitVec(0)),
+            makeRecord('svc2', 'service', unitVec(0)),
+        ];
+        await writeSidecar(records, manifest);
+
+        const { output, exitCode } = await semanticSearch({
+            query: 'q',
+            outDir: testDir,
+            embedder: fakeEmbedder(unitVec(0)),
+            excludeKinds: ['doc-section'],
+            topK: 10,
+        });
+
+        expect(exitCode).toBe(0);
+        expect(output.results).toHaveLength(2);
+        for (const r of output.results) {
+            expect(r.kind).not.toBe('doc-section');
+        }
+    });
+
+    it('exclude wins over include when a kind appears in both lists', async () => {
+        const graphHash = await writeGraphJson('{}');
+        const manifest = makeManifest({ graphHash, nodeCount: 2 });
+        await writeSidecar(
+            [
+                makeRecord('svc1', 'service', unitVec(0)),
+                makeRecord('doc1', 'doc-section', unitVec(0)),
+            ],
+            manifest,
+        );
+
+        const { output } = await semanticSearch({
+            query: 'q',
+            outDir: testDir,
+            embedder: fakeEmbedder(unitVec(0)),
+            kinds: ['service', 'doc-section'],
+            excludeKinds: ['doc-section'],
+        });
+
+        expect(output.results).toHaveLength(1);
+        expect(output.results[0]?.kind).toBe('service');
+    });
+
+    it('returns exit 4 when excludeKinds removes every result', async () => {
+        const graphHash = await writeGraphJson('{}');
+        const manifest = makeManifest({ graphHash, nodeCount: 1 });
+        await writeSidecar([makeRecord('doc1', 'doc-section', unitVec(0))], manifest);
+
+        const { output, exitCode } = await semanticSearch({
+            query: 'q',
+            outDir: testDir,
+            embedder: fakeEmbedder(unitVec(0)),
+            excludeKinds: ['doc-section'],
+        });
+
+        expect(exitCode).toBe(4);
+        expect(output.results).toHaveLength(0);
+    });
+
+    it('empty / omitted excludeKinds is a no-op', async () => {
+        const graphHash = await writeGraphJson('{}');
+        const manifest = makeManifest({ graphHash, nodeCount: 2 });
+        await writeSidecar(
+            [
+                makeRecord('svc1', 'service', unitVec(0)),
+                makeRecord('doc1', 'doc-section', unitVec(0)),
+            ],
+            manifest,
+        );
+
+        const { output: outA } = await semanticSearch({
+            query: 'q',
+            outDir: testDir,
+            embedder: fakeEmbedder(unitVec(0)),
+            excludeKinds: [],
+        });
+        const { output: outB } = await semanticSearch({
+            query: 'q',
+            outDir: testDir,
+            embedder: fakeEmbedder(unitVec(0)),
+        });
+
+        expect(outA.results).toHaveLength(2);
+        expect(outB.results).toHaveLength(2);
+    });
+});
+
+// ---------------------------------------------------------------------------
 // AC 6-3: Empty index → exit 4
 // ---------------------------------------------------------------------------
 
