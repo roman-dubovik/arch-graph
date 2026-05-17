@@ -65,7 +65,7 @@ function varStatementIsNamed(node: Node): { exported: boolean; defaultExport: bo
     // node is VariableDeclaration → parent is VariableDeclarationList → parent is VariableStatement
     const stmt = node.getParent()?.getParent();
     /* v8 ignore next 3 */
-    if (!stmt || stmt.getKind() !== SyntaxKind.VariableStatement) {
+    if (!stmt || !Node.isVariableStatement(stmt)) {
         return { exported: false, defaultExport: false };
     }
     /* v8 ignore next 1 */

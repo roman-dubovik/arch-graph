@@ -38,9 +38,9 @@ async function getPipeline(): Promise<Awaited<ReturnType<typeof pipeline>>> {
 export async function embed(texts: string[]): Promise<number[][]> {
     if (texts.length === 0) return [];
     const extractor = await getPipeline();
-    const output = await extractor(texts, { pooling: 'mean', normalize: true });
+    const output = await (extractor as (input: unknown, opts: unknown) => Promise<{ tolist(): number[][] }>)(texts, { pooling: 'mean', normalize: true });
     // output.tolist() returns number[][] for batch inputs
-    return (output.tolist() as number[][]);
+    return output.tolist();
 }
 
 /**
