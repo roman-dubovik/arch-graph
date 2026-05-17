@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ArchGraph } from '../core/types.js';
+import type { ArchGraph, GraphNode } from '../core/types.js';
 import { inMemoryProject } from '../__fixtures__/in-memory-project.js';
 import { buildSemanticIndex } from './builder.js';
 import { semanticSearch } from './search.js';
@@ -877,5 +877,190 @@ describe('buildSemanticIndex — doc-section integration', () => {
 
         // Vector is 384-dimensional
         expect(record.vector).toHaveLength(SEMANTIC_DIM);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// AC-7-F: buildEmbedText — OpenAPI info appended for endpoint nodes
+// ---------------------------------------------------------------------------
+
+describe('buildSemanticIndex — AC-7-F OpenAPI info in embed text', () => {
+    it('appends description/summary/tags/paramSummary to embed text for endpoint node with openapiInfo', async () => {
+        const receivedTexts: string[] = [];
+        const trackingEmbedder = vi.fn(async (texts: string[]) => {
+            receivedTexts.push(...texts);
+            return texts.map((_, i) => fakeVector(i));
+        });
+
+        const endpointNode: GraphNode = {
+            id: 'endpoint:GET /categories',
+            kind: 'endpoint',
+            label: 'GET /categories',
+            meta: {
+                methodName: 'getCategories',
+                controllerClass: 'CategoriesController',
+                openapiInfo: {
+                    description: 'Получение списка категорий',
+                    summary: 'List categories',
+                    tags: ['Категории', 'Read'],
+                    paramSummary: 'limit: Максимальное количество',
+                },
+            },
+        };
+
+        const graph = makeGraph({ nodes: [endpointNode] });
+        await writeGraphJson(graph);
+
+        const project = inMemoryProject({});
+
+        await buildSemanticIndex({
+            graph,
+            project,
+            embedder: trackingEmbedder,
+            outDir: testDir,
+        });
+
+        expect(receivedTexts).toHaveLength(1);
+        const embedText = receivedTexts[0]!;
+
+        // Base label + kind present
+        expect(embedText).toContain('GET /categories');
+        expect(embedText).toContain('endpoint');
+
+        // Russian description present
+        expect(embedText).toContain('Получение списка категорий');
+
+        // Summary present
+        expect(embedText).toContain('List categories');
+
+        // Tags joined with comma
+        expect(embedText).toContain('Категории, Read');
+
+        // Param summary present
+        expect(embedText).toContain('limit: Максимальное количество');
+    });
+
+    it('endpoint node WITHOUT openapiInfo produces same embed text as before (label + kind + snippet)', async () => {
+        const receivedTexts: string[] = [];
+        const trackingEmbedder = vi.fn(async (texts: string[]) => {
+            receivedTexts.push(...texts);
+            return texts.map((_, i) => fakeVector(i));
+        });
+
+        const endpointNode: GraphNode = {
+            id: 'endpoint:POST /users',
+            kind: 'endpoint',
+            label: 'POST /users',
+            meta: {
+                methodName: 'createUser',
+                controllerClass: 'UsersController',
+                // No openapiInfo
+            },
+        };
+
+        const graph = makeGraph({ nodes: [endpointNode] });
+        await writeGraphJson(graph);
+
+        const project = inMemoryProject({});
+
+        await buildSemanticIndex({
+            graph,
+            project,
+            embedder: trackingEmbedder,
+            outDir: testDir,
+        });
+
+        expect(receivedTexts).toHaveLength(1);
+        const embedText = receivedTexts[0]!;
+
+        // Base content present
+        expect(embedText).toContain('POST /users');
+        expect(embedText).toContain('endpoint');
+
+        // No Russian text or extra content
+        expect(embedText).not.toContain('Получение');
+        expect(embedText).not.toContain('summary');
+
+        // Exact shape: "POST /users endpoint" (no snippet since no path, no openapiInfo)
+        expect(embedText).toBe('POST /users endpoint');
+    });
+
+    it('non-endpoint node is unaffected even if meta has openapiInfo-like fields', async () => {
+        const receivedTexts: string[] = [];
+        const trackingEmbedder = vi.fn(async (texts: string[]) => {
+            receivedTexts.push(...texts);
+            return texts.map((_, i) => fakeVector(i));
+        });
+
+        const serviceNode: GraphNode = {
+            id: 'service:api',
+            kind: 'service',
+            label: 'api',
+            meta: {
+                // hypothetical meta field — should NOT be appended to embed text
+                openapiInfo: {
+                    description: 'This should not appear',
+                },
+            },
+        };
+
+        const graph = makeGraph({ nodes: [serviceNode] });
+        await writeGraphJson(graph);
+
+        const project = inMemoryProject({});
+
+        await buildSemanticIndex({
+            graph,
+            project,
+            embedder: trackingEmbedder,
+            outDir: testDir,
+        });
+
+        expect(receivedTexts).toHaveLength(1);
+        const embedText = receivedTexts[0]!;
+
+        // Only label + kind, no openapiInfo appended
+        expect(embedText).not.toContain('This should not appear');
+        expect(embedText).toBe('api service');
+    });
+
+    it('appends only present openapiInfo fields (partial info)', async () => {
+        const receivedTexts: string[] = [];
+        const trackingEmbedder = vi.fn(async (texts: string[]) => {
+            receivedTexts.push(...texts);
+            return texts.map((_, i) => fakeVector(i));
+        });
+
+        const endpointNode: GraphNode = {
+            id: 'endpoint:DELETE /items/:id',
+            kind: 'endpoint',
+            label: 'DELETE /items/:id',
+            meta: {
+                methodName: 'deleteItem',
+                controllerClass: 'ItemsController',
+                openapiInfo: {
+                    description: 'Удаление элемента',
+                    // summary, tags, paramSummary all absent
+                },
+            },
+        };
+
+        const graph = makeGraph({ nodes: [endpointNode] });
+        await writeGraphJson(graph);
+        const project = inMemoryProject({});
+
+        await buildSemanticIndex({
+            graph,
+            project,
+            embedder: trackingEmbedder,
+            outDir: testDir,
+        });
+
+        const embedText = receivedTexts[0]!;
+        expect(embedText).toContain('DELETE /items/:id');
+        expect(embedText).toContain('Удаление элемента');
+        // Only one extra line was appended
+        const lines = embedText.split('\n');
+        expect(lines).toHaveLength(2); // "DELETE /items/:id endpoint" + "Удаление элемента"
     });
 });

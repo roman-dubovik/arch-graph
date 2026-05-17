@@ -23,6 +23,7 @@ import { fileSizeBytes, writeEmbeddingsJsonl, writeManifest } from './io.js';
 import { extractSnippet } from './snippet.js';
 import type { SemanticDiagnostics, SemanticManifest, SemanticRecord, SkipReason, SkippedNode } from './types.js';
 import { SEMANTIC_DIM, SEMANTIC_MODEL, SEMANTIC_SCHEMA_VERSION, SKIPPED_NODES_CAP } from './types.js';
+import type { OpenApiInfo } from '../extractors/openapi/enrich-endpoints.js';
 
 /** Default batch size for the embedder. Safe for typical RAM budgets. */
 export const EMBED_BATCH_SIZE = 32 as const;
@@ -251,7 +252,25 @@ export async function buildSemanticIndex(opts: BuildSemanticOpts): Promise<Build
  */
 function buildEmbedText(node: GraphNode, snippet: string): string {
     const base = `${node.label} ${node.kind}`;
-    return snippet ? `${base}\n${snippet}` : base;
+    let text = snippet ? `${base}\n${snippet}` : base;
+
+    // For endpoint nodes with OpenAPI info, append description/summary/tags/paramSummary
+    // to the embed text. This dramatically improves semantic recall on projects where
+    // endpoint paths are dynamic (e.g. `/<dynamic>/...`) but the YAML has rich
+    // Russian descriptions (e.g. beribuy2).
+    if (node.kind === 'endpoint' && node.meta?.openapiInfo) {
+        const info = node.meta.openapiInfo as OpenApiInfo;
+        const parts: string[] = [];
+        if (info.description) parts.push(info.description);
+        if (info.summary) parts.push(info.summary);
+        if (info.tags && info.tags.length > 0) parts.push(info.tags.join(', '));
+        if (info.paramSummary) parts.push(info.paramSummary);
+        if (parts.length > 0) {
+            text += '\n' + parts.join('\n');
+        }
+    }
+
+    return text;
 }
 
 /**

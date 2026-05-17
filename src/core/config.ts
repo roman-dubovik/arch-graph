@@ -28,6 +28,8 @@ export interface ArchGraphConfig {
     imports?: ImportsConfig;
     /** Documentation scanning settings. */
     docs?: DocsConfig;
+    /** OpenAPI YAML enrichment settings. */
+    openapi?: OpenApiConfig;
     /**
      * Opt-out flags per domain. When a domain is `true` (default) the CLI gate
      * treats zero ground-truth as a hard failure (regex-typo, missing glob, etc.).
@@ -103,6 +105,22 @@ export interface DocsConfig {
     chunkTokens?: number;
     /** Max file size in bytes before the file is skipped as oversized. */
     maxFileBytes?: number;
+}
+
+/**
+ * OpenAPI YAML enrichment settings.
+ *
+ * Controls which YAML files are scanned for endpoint metadata (descriptions,
+ * summaries, tags, parameters). Matched operations are injected into endpoint
+ * node `meta.openapiInfo` and picked up by the semantic embed-text builder.
+ */
+export interface OpenApiConfig {
+    /**
+     * Glob patterns (relative to project root) matching OpenAPI YAML files.
+     * Defaults to common locations: api globs and well-known openapi/swagger file names.
+     * See DEFAULT_OPENAPI_GLOBS in enrich-endpoints.ts for the exact defaults.
+     */
+    globs?: string[];
 }
 
 export const DOCS_DEFAULT_INCLUDE: readonly string[] = [
