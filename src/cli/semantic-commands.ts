@@ -125,7 +125,31 @@ export function parseSemanticArgs(argv: string[]): SemanticArgs {
             );
             process.exit(1);
         }
+        if (kindFilterSource === flag) {
+            // Repeated same flag — last-write would silently win without an error.
+            // Refuse so the user notices and merges values into a single list.
+            process.stderr.write(
+                `arch-graph semantic search: ${flag} specified more than once. ` +
+                `Provide a single comma-separated list instead.\n`,
+            );
+            process.exit(1);
+        }
         kindFilterSource = flag;
+    }
+
+    /**
+     * Reject a flag that requires a value but was given none (e.g. trailing
+     * `--exclude-kinds` with no following positional). Without this, the
+     * `&& rest[i + 1]` guard in the parse loop silently drops the flag.
+     */
+    function requireValue(flag: string, value: string | undefined): string {
+        if (!value) {
+            process.stderr.write(
+                `arch-graph semantic search: ${flag} requires a value.\n`,
+            );
+            process.exit(1);
+        }
+        return value;
     }
 
     // For 'search', the first non-flag argument after the subcommand is the query.
@@ -154,15 +178,15 @@ export function parseSemanticArgs(argv: string[]): SemanticArgs {
             format = 'json';
         } else if (a === '--table') {
             format = 'table';
-        } else if (a === '--kinds' && rest[i + 1]) {
+        } else if (a === '--kinds') {
             claimFilterSource('--kinds');
-            kinds = parseKinds(rest[++i]!, '--kinds');
+            kinds = parseKinds(requireValue('--kinds', rest[++i]), '--kinds');
         } else if (a.startsWith('--kinds=')) {
             claimFilterSource('--kinds');
             kinds = parseKinds(a.slice('--kinds='.length), '--kinds');
-        } else if (a === '--exclude-kinds' && rest[i + 1]) {
+        } else if (a === '--exclude-kinds') {
             claimFilterSource('--exclude-kinds');
-            excludeKinds = parseKinds(rest[++i]!, '--exclude-kinds');
+            excludeKinds = parseKinds(requireValue('--exclude-kinds', rest[++i]), '--exclude-kinds');
         } else if (a.startsWith('--exclude-kinds=')) {
             claimFilterSource('--exclude-kinds');
             excludeKinds = parseKinds(a.slice('--exclude-kinds='.length), '--exclude-kinds');

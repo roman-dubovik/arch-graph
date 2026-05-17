@@ -430,7 +430,7 @@ export async function startMcpServer(opts: { out: string }): Promise<void> {
                 'If you need explanations, plans, or design rationale, call `docs_search` instead.',
             inputSchema: codeSearchInputShape,
         },
-        makeSemanticSearchHandler({ outDir: opts.out, excludeKinds: ['doc-section'] }),
+        makeSemanticSearchHandler({ outDir: opts.out, baseExcludeKinds: ['doc-section'] }),
     );
 
     server.registerTool(
@@ -442,7 +442,7 @@ export async function startMcpServer(opts: { out: string }): Promise<void> {
                 'Note: docs may contain stale plans or speculative content — prefer `code_search` when the question is "what does the code actually do".',
             inputSchema: docsSearchInputShape,
         },
-        makeSemanticSearchHandler({ outDir: opts.out, kinds: ['doc-section'] }),
+        makeSemanticSearchHandler({ outDir: opts.out, lockedKinds: ['doc-section'] }),
     );
 
     server.registerTool(
@@ -520,23 +520,37 @@ export interface SemanticSearchHandlerOpts {
     /** Injectable embedder — defaults to `embedOne` in production. */
     embedder?: (text: string) => Promise<number[]>;
     /**
-     * Preset `kinds` whitelist baked into the handler at construction time —
-     * used by `docs_search` to lock the tool to `doc-section` regardless of
-     * what the caller passes. When set, the caller cannot widen the filter.
+     * Locks the handler to this kind-whitelist. Authoritative — overrides any
+     * `kinds` passed in the caller input (and a runtime assert fires if the
+     * caller tries — see implementation). Used by `docs_search` to pin the
+     * tool to `doc-section`.
+     *
+     * The field name encodes the override semantics: this is a *lock*, not
+     * an additive default.
      */
-    kinds?: NodeKind[];
+    lockedKinds?: NodeKind[];
     /**
-     * Preset `excludeKinds` blacklist baked into the handler at construction
-     * time — used by `code_search` to always exclude `doc-section`. Merged
-     * with any per-call `excludeKinds` from the input.
+     * Base `excludeKinds` blacklist always applied by this handler. Unlike
+     * `lockedKinds`, this is *additive* — caller-supplied `excludeKinds` are
+     * appended to this list, so callers can drop MORE kinds but never restore
+     * any of these. Used by `code_search` to always exclude `doc-section`.
      */
-    excludeKinds?: NodeKind[];
+    baseExcludeKinds?: NodeKind[];
 }
 
 export interface SemanticSearchHandlerInput {
     query: string;
     topK?: number;
+    /**
+     * Caller-supplied `kinds` whitelist. Ignored when the handler was
+     * factory-constructed with `lockedKinds`; in that case the handler
+     * throws to prevent silent override of the locked bucket.
+     */
     kinds?: NodeKind[];
+    /**
+     * Caller-supplied `excludeKinds` blacklist. Merged additively with
+     * `baseExcludeKinds` if the handler factory set one.
+     */
     excludeKinds?: NodeKind[];
     includeVectors?: boolean;
 }
@@ -550,25 +564,30 @@ export interface SemanticSearchHandlerInput {
  * and error paths) without spinning up the MCP SDK transport.
  */
 export function makeSemanticSearchHandler(handlerOpts: SemanticSearchHandlerOpts) {
-    const {
-        outDir,
-        embedder: embedderFn = embedOne,
-        kinds: presetKinds,
-        excludeKinds: presetExcludeKinds,
-    } = handlerOpts;
+    const { outDir, embedder: embedderFn = embedOne, lockedKinds, baseExcludeKinds } = handlerOpts;
 
     return async (input: SemanticSearchHandlerInput) => {
         const { query, topK = 10, kinds, excludeKinds, includeVectors = false } = input;
 
-        // Preset (factory) `kinds` is authoritative — it locks the tool to a
-        // specific bucket (e.g. docs-only). Callers cannot widen it.
-        // Preset `excludeKinds` is merged additively with caller input so
-        // `code_search` always strips doc-section even if the caller adds more.
-        const effectiveKinds = presetKinds ?? kinds;
+        // Factory `lockedKinds` is authoritative. If the caller tries to pass
+        // `kinds`, that would be a silent contract violation in production —
+        // throw so it surfaces during development. (The MCP Zod boundary
+        // strips this field for external callers, so in practice this guards
+        // in-process consumers like tests and embedders.)
+        if (lockedKinds && kinds && kinds.length > 0) {
+            throw new Error(
+                `arch-graph semantic_search: handler was constructed with lockedKinds=[${lockedKinds.join(
+                    ',',
+                )}]; caller-supplied 'kinds' is not permitted on locked handlers.`,
+            );
+        }
+
+        // Factory `baseExcludeKinds` is additive — caller can extend, never reduce.
+        const effectiveKinds = lockedKinds ?? kinds;
         const effectiveExclude =
-            presetExcludeKinds && excludeKinds
-                ? [...presetExcludeKinds, ...excludeKinds]
-                : (presetExcludeKinds ?? excludeKinds);
+            baseExcludeKinds && excludeKinds
+                ? [...baseExcludeKinds, ...excludeKinds]
+                : (baseExcludeKinds ?? excludeKinds);
 
         const searchRes = await semanticSearch({
             query,

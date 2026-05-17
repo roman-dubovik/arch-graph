@@ -423,7 +423,7 @@ describe('makeSemanticSearchHandler — factory presets', () => {
         const handler = makeSemanticSearchHandler({
             outDir: testDir,
             embedder: fakeEmbedder,
-            excludeKinds: ['doc-section'],
+            baseExcludeKinds: ['doc-section'],
         });
         const result = await handler({ query: 'q', topK: 10, includeVectors: false });
 
@@ -434,21 +434,18 @@ describe('makeSemanticSearchHandler — factory presets', () => {
         }
     });
 
-    it('preset kinds (docs_search style) restricts to doc-section regardless of caller', async () => {
+    it('lockedKinds restricts to its bucket when caller omits kinds', async () => {
+        // Schema-level MCP callers cannot pass `kinds` to docs_search (the Zod
+        // shape strips it), so this is the production code-path: caller omits
+        // kinds, handler returns lockedKinds bucket only.
         await setupMixedSidecar();
 
         const handler = makeSemanticSearchHandler({
             outDir: testDir,
             embedder: fakeEmbedder,
-            kinds: ['doc-section'],
+            lockedKinds: ['doc-section'],
         });
-        // Caller tries to widen — preset still wins.
-        const result = await handler({
-            query: 'q',
-            topK: 10,
-            kinds: ['service', 'nats-subject'],
-            includeVectors: false,
-        });
+        const result = await handler({ query: 'q', topK: 10, includeVectors: false });
 
         const output = JSON.parse(result.content[0]!.text);
         expect(output.results.length).toBe(2);
@@ -457,13 +454,33 @@ describe('makeSemanticSearchHandler — factory presets', () => {
         }
     });
 
-    it('preset excludeKinds merges with caller excludeKinds (additive)', async () => {
+    it('lockedKinds + caller kinds throws (silent-override guard)', async () => {
         await setupMixedSidecar();
 
         const handler = makeSemanticSearchHandler({
             outDir: testDir,
             embedder: fakeEmbedder,
-            excludeKinds: ['doc-section'],
+            lockedKinds: ['doc-section'],
+        });
+        // In-process caller attempts to widen — must throw rather than silently
+        // discard the caller's input (Zod blocks this path for MCP wire callers).
+        await expect(
+            handler({
+                query: 'q',
+                topK: 10,
+                kinds: ['service', 'nats-subject'],
+                includeVectors: false,
+            }),
+        ).rejects.toThrow(/lockedKinds/);
+    });
+
+    it('baseExcludeKinds merges with caller excludeKinds (additive)', async () => {
+        await setupMixedSidecar();
+
+        const handler = makeSemanticSearchHandler({
+            outDir: testDir,
+            embedder: fakeEmbedder,
+            baseExcludeKinds: ['doc-section'],
         });
         const result = await handler({
             query: 'q',
@@ -475,5 +492,30 @@ describe('makeSemanticSearchHandler — factory presets', () => {
         const output = JSON.parse(result.content[0]!.text);
         const kinds = (output.results as Array<{ kind: string }>).map((r) => r.kind);
         expect(kinds).toEqual(['service']);
+    });
+
+    it('lockedKinds preset-poisoning: caller excludeKinds covering lockedKinds yields empty results', async () => {
+        // Caller can subtract from the locked bucket via excludeKinds because
+        // baseExcludeKinds is additive. The expected behaviour is well-defined:
+        // result set = (kinds ∩ ¬excludeKinds), so passing
+        // excludeKinds=['doc-section'] to a lockedKinds=['doc-section'] handler
+        // yields the empty set — not a runtime error. Document this in a test
+        // so it cannot regress silently.
+        await setupMixedSidecar();
+
+        const handler = makeSemanticSearchHandler({
+            outDir: testDir,
+            embedder: fakeEmbedder,
+            lockedKinds: ['doc-section'],
+        });
+        const result = await handler({
+            query: 'q',
+            topK: 10,
+            excludeKinds: ['doc-section'],
+            includeVectors: false,
+        });
+
+        const output = JSON.parse(result.content[0]!.text);
+        expect(output.results).toHaveLength(0);
     });
 });
