@@ -332,7 +332,7 @@ GLOBAL_EXIT=0
     proj_hits_all=0
     proj_total_all=0
 
-    for cat in A_find B_debug C_ui E_arch D_docs; do
+    for cat in A_find B_debug C_ui E_arch D_docs D_links; do
       read -r hits total <<< "$(aggregate_count "$proj" "$cat")"
       [[ "$total" == "0" ]] && continue
 

@@ -84,5 +84,31 @@
   {"id":"B17","query":"как организован процесс оформления и оплаты заказа","project":"beribuy2","category":"D_docs","expectedKindIn":[],"expectedLabelHas":[],"minScore":0.40},
   {"id":"B18","query":"как развернуть проект локально шаги установки","project":"beribuy2","category":"D_docs","expectedKindIn":[],"expectedLabelHas":["install","Install","Setup","setup","Getting"],"minScore":0.40},
   {"id":"B19","query":"архитектурные решения и технологический стек проекта","project":"beribuy2","category":"D_docs","expectedKindIn":[],"expectedLabelHas":[],"minScore":0.40},
-  {"id":"B20","query":"планы развития проекта и roadmap","project":"beribuy2","category":"D_docs","expectedKindIn":[],"expectedLabelHas":["roadmap","Roadmap","plan"],"minScore":0.40}
+  {"id":"B20","query":"планы развития проекта и roadmap","project":"beribuy2","category":"D_docs","expectedKindIn":[],"expectedLabelHas":["roadmap","Roadmap","plan"],"minScore":0.40},
+
+  {"id":"P41","query":"роли пользователей и матрица прав доступа","project":"platform","category":"D_docs","expectedKindIn":[],"expectedLabelHas":[],"minScore":0.40},
+  {"id":"P42","query":"конфигурационные параметры env переменные окружения","project":"platform","category":"D_docs","expectedKindIn":[],"expectedLabelHas":[],"minScore":0.40},
+  {"id":"P43","query":"руководство по миграции данных между версиями","project":"platform","category":"D_docs","expectedKindIn":[],"expectedLabelHas":[],"minScore":0.40},
+  {"id":"P44","query":"известные проблемы ограничения системы known issues","project":"platform","category":"D_docs","expectedKindIn":[],"expectedLabelHas":[],"minScore":0.40},
+  {"id":"P45","query":"contributing guide как контрибутить в проект","project":"platform","category":"D_docs","expectedKindIn":[],"expectedLabelHas":["contrib","Contrib"],"minScore":0.40},
+
+  {"id":"I24","query":"rate limits ограничения парсинга Instagram","project":"insyra","category":"D_docs","expectedKindIn":[],"expectedLabelHas":[],"minScore":0.40},
+  {"id":"I25","query":"тарифные планы pricing подписки и их лимиты","project":"insyra","category":"D_docs","expectedKindIn":[],"expectedLabelHas":[],"minScore":0.40},
+  {"id":"I26","query":"импорт списка Instagram аккаунтов формат данных","project":"insyra","category":"D_docs","expectedKindIn":[],"expectedLabelHas":[],"minScore":0.40},
+
+  {"id":"B21","query":"FAQ помощь продавцам и покупателям","project":"beribuy2","category":"D_docs","expectedKindIn":[],"expectedLabelHas":["FAQ","faq","help"],"minScore":0.40},
+  {"id":"B22","query":"модерация товаров продавцов правила","project":"beribuy2","category":"D_docs","expectedKindIn":[],"expectedLabelHas":[],"minScore":0.40},
+
+  {"id":"P51","query":"архитектура MssqlSync — документация и реализующие классы синхронизации","project":"platform","category":"D_links","expectedKindIn":[],"expectedLabelHas":[],"minScore":0.40},
+  {"id":"P52","query":"мультитенантность tenant ident — концепция в docs и код-сервисы","project":"platform","category":"D_links","expectedKindIn":[],"expectedLabelHas":[],"minScore":0.40},
+  {"id":"P53","query":"система уведомлений — описание в документации и провайдеры","project":"platform","category":"D_links","expectedKindIn":[],"expectedLabelHas":[],"minScore":0.40},
+  {"id":"P54","query":"telegram mini-app — архитектура в docs и реализация на фронте","project":"platform","category":"D_links","expectedKindIn":[],"expectedLabelHas":[],"minScore":0.40},
+
+  {"id":"I31","query":"Instagram Scraper — документация подхода и Scraper классы","project":"insyra","category":"D_links","expectedKindIn":[],"expectedLabelHas":[],"minScore":0.40},
+  {"id":"I32","query":"AI сценарии генерации контента — описание и AI-провайдеры","project":"insyra","category":"D_links","expectedKindIn":[],"expectedLabelHas":[],"minScore":0.40},
+  {"id":"I33","query":"Stripe биллинг — документация и сервисы оплаты","project":"insyra","category":"D_links","expectedKindIn":[],"expectedLabelHas":[],"minScore":0.40},
+
+  {"id":"B26","query":"checkout процесс — описание в docs и сервисы заказа","project":"beribuy2","category":"D_links","expectedKindIn":[],"expectedLabelHas":[],"minScore":0.40},
+  {"id":"B27","query":"промо-коды — документация и реализующие промо-сервисы","project":"beribuy2","category":"D_links","expectedKindIn":[],"expectedLabelHas":[],"minScore":0.40},
+  {"id":"B28","query":"доставка логистика — описание процесса и DeliveryService классы","project":"beribuy2","category":"D_links","expectedKindIn":[],"expectedLabelHas":[],"minScore":0.40}
 ]
