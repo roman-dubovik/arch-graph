@@ -13,7 +13,7 @@
  *
  * Usage (CLI or test harness):
  *   const result = await validateSnippetRecall('/path/to/arch-graph-out/semantic');
- *   if (!result.passed) throw new Error(...);
+ *   if (result.kind === 'corrupt' || result.kind === 'empty') throw new Error(...);
  */
 
 import { createReadStream } from 'node:fs';
@@ -63,33 +63,56 @@ export interface KindStats {
     passed: boolean;
 }
 
-export interface SnippetRecallResult {
-    /** True iff every kind that has ≥ 1 node meets its floor. */
-    passed: boolean;
-    /** Per-kind breakdown. */
-    byKind: KindStats[];
-    /** Total nodes examined (excluding KINDS_WITHOUT_SOURCE). */
+/**
+ * Aggregate fill-rate statistics for all source-backed node kinds.
+ */
+export interface SnippetStats {
+    /** Total source-backed nodes examined (excluding KINDS_WITHOUT_SOURCE). */
     totalNodes: number;
     /** Total nodes with non-empty snippets. */
     totalFilled: number;
-    /** Aggregate fill rate across all examined nodes. */
+    /** Aggregate fill rate: totalFilled / totalNodes. */
     aggregateFillRate: number;
-    /** Kinds that failed their floor (empty if passed === true). */
-    failures: KindStats[];
-    /**
-     * Number of lines that could not be parsed as valid JSON records.
-     * If malformedLines / totalLines > 0.05 (5%), passed is forced to false
-     * with a reason of 'index-corrupt'.
-     */
-    malformedLines: number;
-    /**
-     * True when the corruption threshold was exceeded (malformedLines / totalLines > 5%).
-     * When true, `passed` is always false regardless of per-kind fill rates.
-     * Surfaced in CLI output so users see "index appears corrupt" rather than
-     * a confusing empty failure-kinds list.
-     */
-    indexCorrupt: boolean;
+    /** Per-kind breakdown, sorted by fill rate ascending (worst first). */
+    byKind: KindStats[];
 }
+
+/**
+ * Discriminated-union result from `validateSnippetRecall`.
+ *
+ * Precedence is structurally enforced by the ordering in which the validator
+ * returns each variant:
+ *   1. `corrupt`     — malformed-line ratio > 5%; always fatal.
+ *   2. `empty`       — no source-backed nodes found (index not yet built or
+ *                      all records are KINDS_WITHOUT_SOURCE).
+ *   3. `below-floor` — at least one kind is below its recall floor.
+ *   4. `ok`          — all kinds meet their floor.
+ *
+ * Consumers should switch on `result.kind`; the precedence is intentional
+ * and matches CI severity: corrupt > empty > below-floor > ok.
+ */
+export type SnippetRecallResult =
+    | {
+          kind: 'ok';
+          stats: SnippetStats;
+      }
+    | {
+          kind: 'below-floor';
+          /** Kinds that failed their recall floor. */
+          failures: KindStats[];
+          stats: SnippetStats;
+      }
+    | {
+          kind: 'corrupt';
+          /**
+           * Number of lines that could not be parsed as valid JSON records.
+           * Use `malformedLines / totalLines` to recompute the ratio.
+           */
+          malformedLines: number;
+          /** Total non-empty lines in the JSONL file (denominator). */
+          totalLines: number;
+      }
+    | { kind: 'empty' };
 
 // ---------------------------------------------------------------------------
 // Validator
@@ -141,6 +164,15 @@ export async function validateSnippetRecall(semanticDir: string): Promise<Snippe
         rl.on('error', reject);
     });
 
+    // Corruption check: if more than 5% of lines are malformed, the index is suspect.
+    // Evaluated BEFORE the empty-index check so a fully-corrupt index (totalNodes=0
+    // because all lines failed to parse) is correctly flagged as corrupt rather than
+    // just "empty".
+    const corruptRatio = totalLines > 0 ? malformedLines / totalLines : 0;
+    if (corruptRatio > 0.05) {
+        return { kind: 'corrupt', malformedLines, totalLines };
+    }
+
     const byKind: KindStats[] = [];
     let totalNodes = 0;
     let totalFilled = 0;
@@ -161,58 +193,50 @@ export async function validateSnippetRecall(semanticDir: string): Promise<Snippe
     // Sort by fill rate ascending (worst first) for readable output.
     byKind.sort((a, b) => a.fillRate - b.fillRate);
 
-    const failures = byKind.filter((k) => !k.passed);
-
-    // Corruption check: if more than 5% of lines are malformed, the index is suspect.
-    // Evaluated BEFORE the empty-index check so a fully-corrupt index (totalNodes=0
-    // because all lines failed to parse) is correctly flagged as corrupt rather than
-    // just "empty".
-    const corruptRatio = totalLines > 0 ? malformedLines / totalLines : 0;
-    if (corruptRatio > 0.05) {
-        return {
-            passed: false,
-            byKind,
-            totalNodes,
-            totalFilled,
-            aggregateFillRate: totalNodes > 0 ? totalFilled / totalNodes : 0,
-            failures,
-            malformedLines,
-            indexCorrupt: true,
-        };
-    }
-
     // Empty index (no source-backed nodes at all) is a failure, not a vacuous pass.
     if (totalNodes === 0) {
-        return {
-            passed: false,
-            byKind,
-            totalNodes: 0,
-            totalFilled: 0,
-            aggregateFillRate: 0,
-            failures,
-            malformedLines,
-            indexCorrupt: false,
-        };
+        return { kind: 'empty' };
     }
 
-    const passed = failures.length === 0;
-    const aggregateFillRate = totalFilled / totalNodes;
+    const stats: SnippetStats = {
+        totalNodes,
+        totalFilled,
+        aggregateFillRate: totalFilled / totalNodes,
+        byKind,
+    };
 
-    return { passed, byKind, totalNodes, totalFilled, aggregateFillRate, failures, malformedLines, indexCorrupt: false };
+    const failures = byKind.filter((k) => !k.passed);
+    if (failures.length > 0) {
+        return { kind: 'below-floor', failures, stats };
+    }
+
+    return { kind: 'ok', stats };
 }
 
 /**
  * Format a SnippetRecallResult as a human-readable string (for CLI / test output).
  */
 export function formatRecallResult(result: SnippetRecallResult): string {
+    if (result.kind === 'corrupt') {
+        return (
+            `Snippet recall: index appears corrupt — ` +
+            `${result.malformedLines} of ${result.totalLines} lines malformed ` +
+            `(${((result.malformedLines / result.totalLines) * 100).toFixed(1)}% > 5% threshold)`
+        );
+    }
+    if (result.kind === 'empty') {
+        return 'Snippet recall: index is empty (no source-backed nodes found)';
+    }
+
+    const { stats } = result;
     const lines: string[] = [
-        `Snippet recall: ${(result.aggregateFillRate * 100).toFixed(1)}% (${result.totalFilled}/${result.totalNodes} nodes)`,
+        `Snippet recall: ${(stats.aggregateFillRate * 100).toFixed(1)}% (${stats.totalFilled}/${stats.totalNodes} nodes)`,
         '',
         'Per-kind breakdown:',
         'KIND               TOTAL   FILLED   RATE    FLOOR   STATUS',
         '-'.repeat(65),
     ];
-    for (const k of result.byKind) {
+    for (const k of stats.byKind) {
         const pct = (k.fillRate * 100).toFixed(1).padStart(5);
         const floor = (k.floor * 100).toFixed(0).padStart(3);
         const status = k.passed ? 'PASS' : 'FAIL';
@@ -220,7 +244,7 @@ export function formatRecallResult(result: SnippetRecallResult): string {
             `${k.kind.padEnd(20)} ${String(k.total).padStart(5)}   ${String(k.filled).padStart(6)}  ${pct}%  ≥${floor}%  ${status}`,
         );
     }
-    if (!result.passed) {
+    if (result.kind === 'below-floor') {
         lines.push('');
         lines.push(`FAILED kinds: ${result.failures.map((f) => f.kind).join(', ')}`);
     }
