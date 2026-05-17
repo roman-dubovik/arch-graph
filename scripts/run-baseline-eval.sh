@@ -13,8 +13,20 @@
 #   --skip-build  Skip graph + semantic rebuild (re-use existing index).
 #
 # Environment overrides:
-#   SKIP_BUILD=1  Same as --skip-build (env var form).
-#   EVAL_K=5      Number of top results to inspect (default: 5).
+#   SKIP_BUILD=1            Same as --skip-build (env var form).
+#   EVAL_K=10               Number of top results to inspect (default: 10).
+#   EVAL_MODE=per-category  Search routing strategy. One of:
+#     single        — single search call, no kind-bucket filter (legacy
+#                     baseline; doc-section dilutes code queries).
+#     per-category  — route by category:
+#                       A_find/B_debug/C_ui → --code-only
+#                       D_docs/E_arch       → --docs-only
+#                       D_links             → no filter (mixed by design)
+#                     Models an LLM that knows query intent and routes
+#                     correctly. Default.
+#     fallback      — naive two-call: always try --code-only first; if MISS,
+#                     retry --docs-only. Models an LLM with no intent
+#                     knowledge that just tries both buckets.
 #
 # Exit code:
 #   0 — all projects meet their expected threshold
@@ -29,9 +41,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKTREE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 QUERIES_FILE="$SCRIPT_DIR/eval/queries.json"
 CLI="$WORKTREE_DIR/src/cli/index.ts"
-K="${EVAL_K:-5}"
+K="${EVAL_K:-10}"
+EVAL_MODE="${EVAL_MODE:-per-category}"
+case "$EVAL_MODE" in
+  single|per-category|fallback) ;;
+  *) echo "ERROR: invalid EVAL_MODE='$EVAL_MODE'. Use single|per-category|fallback." >&2; exit 1 ;;
+esac
 DATE="$(date +%Y-%m-%d)"
-RESULTS_FILE="$SCRIPT_DIR/eval/results-${DATE}.md"
+RESULTS_FILE="$SCRIPT_DIR/eval/results-${DATE}-${EVAL_MODE}.md"
 SKIP_BUILD="${SKIP_BUILD:-0}"
 
 # Project paths
@@ -102,44 +119,41 @@ TMPDIR_RESULTS="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_RESULTS"' EXIT
 
 # ---------------------------------------------------------------------------
-# Per-query search and evaluation
+# Per-query helpers
 # ---------------------------------------------------------------------------
-# Writes: $TMPDIR_RESULTS/<qid>.result  — "HIT" or "MISS"
-#         $TMPDIR_RESULTS/<qid>.top5    — one-line top-5 summary
-run_query() {
-  local proj_name="$1"
-  local project_dir="$2"
-  local qid="$3"
 
-  local query min_score kinds_csv labels_csv
-  query=$(jq -r --arg id "$qid" '.[] | select(.id == $id) | .query' "$QUERIES_FILE")
-  min_score=$(jq -r --arg id "$qid" '.[] | select(.id == $id) | .minScore' "$QUERIES_FILE")
-  kinds_csv=$(jq -r --arg id "$qid" '
-    .[] | select(.id == $id) |
-    ((.expectedTopKindIn // .expectedKindIn) // []) | join(",")
-  ' "$QUERIES_FILE")
-  labels_csv=$(jq -r --arg id "$qid" '
-    .[] | select(.id == $id) |
-    (.expectedLabelHas // []) | join(",")
-  ' "$QUERIES_FILE")
+# Map a query category to the kind-bucket CLI flag for per-category mode.
+# Echoes "--code-only", "--docs-only", or "" (no filter).
+route_filter_flag() {
+  local cat="$1"
+  case "$cat" in
+    A_find|B_debug|C_ui) echo "--code-only" ;;
+    D_docs|E_arch)       echo "--docs-only" ;;
+    D_links)             echo "" ;;
+    *)                   echo "" ;;
+  esac
+}
 
-  local json_output top5 verdict
-  json_output=$(cd "$project_dir" && "$TSX_BIN" "$CLI" semantic search "$query" --k "$K" --json 2>/dev/null) || true
+# Run one search call and write top-K summary + HIT/MISS verdict for a
+# (query, optional flag) pair. Echoes the verdict to stdout so callers can
+# chain (fallback mode).
+#
+# Args: project_dir, query, min_score, kinds_csv, labels_csv, filter_flag
+search_and_judge() {
+  local project_dir="$1" query="$2" min_score="$3" kinds_csv="$4" labels_csv="$5"
+  local filter_flag="$6"
 
-  # Build top-5 summary
-  top5=$(echo "$json_output" | jq -r '
-    if .error then
-      "ERROR: \(.error)"
-    elif ((.results // []) | length) == 0 then
-      "no results"
-    else
-      [.results[] | "\(.score | . * 1000 | round / 1000) \(.kind):\(.label)"] | join(" | ")
-    end
-  ' 2>/dev/null || echo "parse error")
+  local json_output verdict result_count
+  if [[ -n "$filter_flag" ]]; then
+    json_output=$(cd "$project_dir" && "$TSX_BIN" "$CLI" semantic search "$query" --k "$K" "$filter_flag" --json 2>/dev/null) || true
+  else
+    json_output=$(cd "$project_dir" && "$TSX_BIN" "$CLI" semantic search "$query" --k "$K" --json 2>/dev/null) || true
+  fi
 
-  # Evaluate: check if any top-K result satisfies score + kind + label
+  # Store the raw output so the caller can build top-K summary later.
+  echo "$json_output" > "$TMPDIR_RESULTS/_last.json"
+
   verdict="MISS"
-  local result_count
   result_count=$(echo "$json_output" | jq '(.results // []) | length' 2>/dev/null || echo 0)
 
   local i
@@ -149,12 +163,10 @@ run_query() {
     kind=$(echo "$json_output" | jq -r ".results[$i].kind" 2>/dev/null || echo "")
     label=$(echo "$json_output" | jq -r ".results[$i].label" 2>/dev/null || echo "")
 
-    # Score check
     local score_ok
     score_ok=$(awk -v s="$score" -v m="$min_score" 'BEGIN { print (s+0 >= m+0) ? "1" : "0" }')
     [[ "$score_ok" != "1" ]] && continue
 
-    # Kind filter
     local kind_ok=1
     if [[ -n "$kinds_csv" ]]; then
       kind_ok=0
@@ -166,7 +178,6 @@ run_query() {
     fi
     [[ "$kind_ok" != "1" ]] && continue
 
-    # Label filter (case-insensitive substring)
     local label_ok=1
     if [[ -n "$labels_csv" ]]; then
       label_ok=0
@@ -187,9 +198,82 @@ run_query() {
     break
   done
 
+  echo "$verdict"
+}
+
+# Render the top-K summary line from $TMPDIR_RESULTS/_last.json.
+build_top_summary() {
+  jq -r '
+    if .error then
+      "ERROR: \(.error)"
+    elif ((.results // []) | length) == 0 then
+      "no results"
+    else
+      [.results[] | "\(.score | . * 1000 | round / 1000) \(.kind):\(.label)"] | join(" | ")
+    end
+  ' "$TMPDIR_RESULTS/_last.json" 2>/dev/null || echo "parse error"
+}
+
+# ---------------------------------------------------------------------------
+# Per-query orchestrator — dispatches according to $EVAL_MODE.
+# Writes: $TMPDIR_RESULTS/<qid>.result — "HIT" or "MISS"
+#         $TMPDIR_RESULTS/<qid>.top5   — one-line top-K summary
+#         $TMPDIR_RESULTS/<qid>.mode   — "code"|"docs"|"both"|"single"|"fallback-docs"
+# ---------------------------------------------------------------------------
+run_query() {
+  local proj_name="$1"
+  local project_dir="$2"
+  local qid="$3"
+
+  local query min_score kinds_csv labels_csv cat
+  query=$(jq -r --arg id "$qid" '.[] | select(.id == $id) | .query' "$QUERIES_FILE")
+  min_score=$(jq -r --arg id "$qid" '.[] | select(.id == $id) | .minScore' "$QUERIES_FILE")
+  kinds_csv=$(jq -r --arg id "$qid" '
+    .[] | select(.id == $id) |
+    ((.expectedTopKindIn // .expectedKindIn) // []) | join(",")
+  ' "$QUERIES_FILE")
+  labels_csv=$(jq -r --arg id "$qid" '
+    .[] | select(.id == $id) |
+    (.expectedLabelHas // []) | join(",")
+  ' "$QUERIES_FILE")
+  cat=$(jq -r --arg id "$qid" '.[] | select(.id == $id) | .category' "$QUERIES_FILE")
+
+  local verdict mode_tag top5
+  case "$EVAL_MODE" in
+    single)
+      verdict=$(search_and_judge "$project_dir" "$query" "$min_score" "$kinds_csv" "$labels_csv" "")
+      mode_tag="single"
+      top5=$(build_top_summary)
+      ;;
+    per-category)
+      local flag
+      flag=$(route_filter_flag "$cat")
+      verdict=$(search_and_judge "$project_dir" "$query" "$min_score" "$kinds_csv" "$labels_csv" "$flag")
+      case "$flag" in
+        --code-only) mode_tag="code" ;;
+        --docs-only) mode_tag="docs" ;;
+        *)           mode_tag="both" ;;
+      esac
+      top5=$(build_top_summary)
+      ;;
+    fallback)
+      verdict=$(search_and_judge "$project_dir" "$query" "$min_score" "$kinds_csv" "$labels_csv" "--code-only")
+      mode_tag="code"
+      top5=$(build_top_summary)
+      if [[ "$verdict" == "MISS" ]]; then
+        verdict=$(search_and_judge "$project_dir" "$query" "$min_score" "$kinds_csv" "$labels_csv" "--docs-only")
+        if [[ "$verdict" == "HIT" ]]; then
+          mode_tag="fallback-docs"
+          top5=$(build_top_summary)
+        fi
+      fi
+      ;;
+  esac
+
   echo "$verdict" > "$TMPDIR_RESULTS/${qid}.result"
-  echo "$top5" > "$TMPDIR_RESULTS/${qid}.top5"
-  log "[$proj_name] $qid: $verdict"
+  echo "$top5"    > "$TMPDIR_RESULTS/${qid}.top5"
+  echo "$mode_tag" > "$TMPDIR_RESULTS/${qid}.mode"
+  log "[$proj_name] $qid: $verdict ($mode_tag)"
 }
 
 # ---------------------------------------------------------------------------
@@ -197,7 +281,7 @@ run_query() {
 # ---------------------------------------------------------------------------
 log "arch-graph baseline eval — $(date)"
 log "Worktree: $WORKTREE_DIR"
-log "k=$K  skip_build=$SKIP_BUILD"
+log "k=$K  mode=$EVAL_MODE  skip_build=$SKIP_BUILD"
 log ""
 
 PROJECTS="platform insyra beribuy2"
@@ -302,6 +386,7 @@ GLOBAL_EXIT=0
   echo "**Worktree**: \`$WORKTREE_DIR\`  "
   echo "**CLI**: \`$CLI\`  "
   echo "**k**: $K  "
+  echo "**mode**: \`$EVAL_MODE\`  "
   echo "**skip_build**: $SKIP_BUILD  "
   echo "**Run at**: $(date)"
   echo ""
@@ -369,22 +454,27 @@ GLOBAL_EXIT=0
   for proj in $PROJECTS; do
     echo "### $proj"
     echo ""
-    echo "| id | category | status | top-$K summary |"
-    echo "|----|----------|--------|----------------|"
+    echo "| id | category | status | mode | top-$K summary |"
+    echo "|----|----------|--------|------|----------------|"
 
     while IFS= read -r qid; do
       cat=$(jq -r --arg id "$qid" '.[] | select(.id == $id) | .category' "$QUERIES_FILE")
       res_file="$TMPDIR_RESULTS/${qid}.result"
       top5_file="$TMPDIR_RESULTS/${qid}.top5"
+      mode_file="$TMPDIR_RESULTS/${qid}.mode"
       status="SKIP"
       top5="—"
+      mode_tag="—"
       if [[ -f "$res_file" ]]; then
         status="$(cat "$res_file")"
       fi
       if [[ -f "$top5_file" ]]; then
         top5="$(cat "$top5_file")"
       fi
-      echo "| $qid | $cat | $status | $top5 |"
+      if [[ -f "$mode_file" ]]; then
+        mode_tag="$(cat "$mode_file")"
+      fi
+      echo "| $qid | $cat | $status | $mode_tag | $top5 |"
     done < <(jq -r --arg p "$proj" '.[] | select(.project == $p) | .id' "$QUERIES_FILE")
 
     echo ""
