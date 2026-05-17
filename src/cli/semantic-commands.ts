@@ -316,6 +316,20 @@ export async function runSemanticBuild(args: SemanticArgs): Promise<void> {
                         `  recall: ${k.kind} ${k.filled}/${k.total} (${pct}%) [PASS floor=${floor}%]\n`,
                     );
                 }
+                const vn = stats.virtualNodes;
+                const vnEntries: string[] = [];
+                if (vn.lib > 0) vnEntries.push(`lib: ${vn.lib}`);
+                if (vn.service > 0) vnEntries.push(`service: ${vn.service}`);
+                if (vn.moduleExternal > 0) vnEntries.push(`module (external): ${vn.moduleExternal}`);
+                if (vn.natsSubject > 0) vnEntries.push(`nats-subject: ${vn.natsSubject}`);
+                if (vn.dbTable > 0) vnEntries.push(`db-table: ${vn.dbTable}`);
+                if (vn.queue > 0) vnEntries.push(`queue: ${vn.queue}`);
+                if (vn.external > 0) vnEntries.push(`external: ${vn.external}`);
+                if (vnEntries.length > 0) {
+                    process.stdout.write(
+                        `  Virtual nodes (no source expected, excluded from denominator): ${vnEntries.join(', ')}\n`,
+                    );
+                }
                 break;
             }
             case 'below-floor': {
@@ -327,6 +341,20 @@ export async function runSemanticBuild(args: SemanticArgs): Promise<void> {
                     const status = k.passed ? 'PASS' : 'FAIL';
                     process.stdout.write(
                         `  recall: ${k.kind} ${k.filled}/${k.total} (${pct}%) [${status} floor=${floor}%]\n`,
+                    );
+                }
+                const vn2 = stats.virtualNodes;
+                const vnEntries2: string[] = [];
+                if (vn2.lib > 0) vnEntries2.push(`lib: ${vn2.lib}`);
+                if (vn2.service > 0) vnEntries2.push(`service: ${vn2.service}`);
+                if (vn2.moduleExternal > 0) vnEntries2.push(`module (external): ${vn2.moduleExternal}`);
+                if (vn2.natsSubject > 0) vnEntries2.push(`nats-subject: ${vn2.natsSubject}`);
+                if (vn2.dbTable > 0) vnEntries2.push(`db-table: ${vn2.dbTable}`);
+                if (vn2.queue > 0) vnEntries2.push(`queue: ${vn2.queue}`);
+                if (vn2.external > 0) vnEntries2.push(`external: ${vn2.external}`);
+                if (vnEntries2.length > 0) {
+                    process.stdout.write(
+                        `  Virtual nodes (no source expected, excluded from denominator): ${vnEntries2.join(', ')}\n`,
                     );
                 }
                 const failedKinds = failures.map((f) => f.kind).join(', ');

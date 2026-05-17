@@ -306,6 +306,45 @@ describe('runSemanticBuild — validateSnippetRecall wiring (P1-3)', () => {
         buildSpy.mockRestore();
         recallSpy.mockRestore();
     });
+
+    it('emits Virtual nodes diagnostic line when virtualNodes counts are non-zero (CT-AC7)', async () => {
+        const { configSpy, buildSpy } = await setupBuildMocks(testDir);
+
+        const validatorModule = await import('../validation/snippet-recall-validator.js');
+        const recallSpy = vi.spyOn(validatorModule, 'validateSnippetRecall').mockResolvedValue({
+            kind: 'ok',
+            stats: {
+                byKind: [{ kind: 'module', total: 120, filled: 120, fillRate: 1.0, floor: 0.9, passed: true }],
+                totalNodes: 120,
+                totalFilled: 120,
+                aggregateFillRate: 1.0,
+                virtualNodes: { lib: 5, service: 0, moduleExternal: 10, natsSubject: 0, dbTable: 0, queue: 0, external: 0 },
+            },
+        });
+
+        const stdoutLines: string[] = [];
+        vi.spyOn(process.stdout, 'write').mockImplementation((s) => {
+            stdoutLines.push(String(s));
+            return true;
+        });
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+        await runSemanticBuild({
+            sub: 'build',
+            config: join(testDir, 'arch-graph.config.ts'),
+            out: testDir,
+            format: 'json',
+        });
+
+        const stdoutOutput = stdoutLines.join('');
+        expect(stdoutOutput).toContain('Virtual nodes');
+        expect(stdoutOutput).toContain('lib: 5');
+        expect(stdoutOutput).toContain('module (external): 10');
+
+        configSpy.mockRestore();
+        buildSpy.mockRestore();
+        recallSpy.mockRestore();
+    });
 });
 
 // ---------------------------------------------------------------------------
