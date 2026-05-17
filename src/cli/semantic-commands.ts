@@ -8,7 +8,9 @@
  * Shapes:
  *   arch-graph semantic build [--out <dir>] [--config <path>] [--repo <id>]
  *   arch-graph semantic search "<query>" [--out <dir>] [--repo <id>] [--k <n>]
- *                              [--json|--table] [--kinds k1,k2,...]
+ *                              [--json|--table]
+ *                              [--kinds k1,k2,... | --exclude-kinds k1,k2,...
+ *                               | --code-only | --docs-only]
  *
  * Exit codes:
  *   build:  0 success, 1 hard failure
@@ -44,6 +46,8 @@ export interface SemanticArgs {
     format: 'json' | 'table';
     /** search: node kinds whitelist (validated against NODE_KIND_VALUES) */
     kinds?: NodeKind[];
+    /** search: node kinds blacklist (validated against NODE_KIND_VALUES) */
+    excludeKinds?: NodeKind[];
     /**
      * build: when true, exit 1 if recall is below floor for any kind, or if
      * the index is empty. Has no effect on corrupt indexes, which always exit 1
@@ -66,6 +70,9 @@ export function parseSemanticArgs(argv: string[]): SemanticArgs {
     let k: number | undefined;
     let format: 'json' | 'table' = 'json';
     let kinds: NodeKind[] | undefined;
+    let excludeKinds: NodeKind[] | undefined;
+    /** Track which preset / explicit filter flag was used so we can reject mixes. */
+    let kindFilterSource: '--kinds' | '--exclude-kinds' | '--code-only' | '--docs-only' | null = null;
 
     /**
      * Validate a raw --k value string.  Returns the parsed integer on success.
@@ -92,17 +99,33 @@ export function parseSemanticArgs(argv: string[]): SemanticArgs {
      * Validate and parse a comma-separated --kinds value.
      * Rejects any value not in NODE_KIND_VALUES and exits with an error.
      */
-    function parseKinds(raw: string): NodeKind[] {
+    function parseKinds(raw: string, flagLabel: string): NodeKind[] {
         const tokens = raw.split(',').map((s) => s.trim()).filter(Boolean);
         const invalid = tokens.filter((t) => !(NODE_KIND_VALUES as readonly string[]).includes(t));
         if (invalid.length > 0) {
             process.stderr.write(
-                `arch-graph semantic search: unknown --kinds value(s): ${invalid.join(', ')}.\n` +
+                `arch-graph semantic search: unknown ${flagLabel} value(s): ${invalid.join(', ')}.\n` +
                 `  Valid kinds: ${NODE_KIND_VALUES.join(', ')}\n`,
             );
             process.exit(1);
         }
         return tokens as NodeKind[];
+    }
+
+    /**
+     * Mark a kind-filter flag as used. Reject mixing presets with each other
+     * or with --kinds / --exclude-kinds — a single search call should use
+     * exactly one bucket strategy.
+     */
+    function claimFilterSource(flag: typeof kindFilterSource): void {
+        if (kindFilterSource && kindFilterSource !== flag) {
+            process.stderr.write(
+                `arch-graph semantic search: cannot combine ${kindFilterSource} with ${flag}. ` +
+                `Use one of --kinds, --exclude-kinds, --code-only, --docs-only.\n`,
+            );
+            process.exit(1);
+        }
+        kindFilterSource = flag;
     }
 
     // For 'search', the first non-flag argument after the subcommand is the query.
@@ -132,9 +155,23 @@ export function parseSemanticArgs(argv: string[]): SemanticArgs {
         } else if (a === '--table') {
             format = 'table';
         } else if (a === '--kinds' && rest[i + 1]) {
-            kinds = parseKinds(rest[++i]!);
+            claimFilterSource('--kinds');
+            kinds = parseKinds(rest[++i]!, '--kinds');
         } else if (a.startsWith('--kinds=')) {
-            kinds = parseKinds(a.slice('--kinds='.length));
+            claimFilterSource('--kinds');
+            kinds = parseKinds(a.slice('--kinds='.length), '--kinds');
+        } else if (a === '--exclude-kinds' && rest[i + 1]) {
+            claimFilterSource('--exclude-kinds');
+            excludeKinds = parseKinds(rest[++i]!, '--exclude-kinds');
+        } else if (a.startsWith('--exclude-kinds=')) {
+            claimFilterSource('--exclude-kinds');
+            excludeKinds = parseKinds(a.slice('--exclude-kinds='.length), '--exclude-kinds');
+        } else if (a === '--code-only') {
+            claimFilterSource('--code-only');
+            excludeKinds = ['doc-section'];
+        } else if (a === '--docs-only') {
+            claimFilterSource('--docs-only');
+            kinds = ['doc-section'];
         } else if (!a.startsWith('-')) {
             positionals.push(a);
         }
@@ -148,7 +185,18 @@ export function parseSemanticArgs(argv: string[]): SemanticArgs {
     // Parse --strict-recall anywhere in the arg list
     const strictRecall = rest.includes('--strict-recall');
 
-    return { sub: sub ?? '', config, out, repo, query, k, format, kinds, strictRecall };
+    return {
+        sub: sub ?? '',
+        config,
+        out,
+        repo,
+        query,
+        k,
+        format,
+        kinds,
+        excludeKinds,
+        strictRecall,
+    };
 }
 
 // ---------------------------------------------------------------------------
@@ -447,7 +495,8 @@ export async function runSemanticSearch(args: SemanticArgs): Promise<void> {
     if (!args.query) {
         process.stderr.write(
             'arch-graph semantic search: missing query argument.\n' +
-            '  Usage: arch-graph semantic search "<query>" [--out <dir>] [--repo <id>] [--k <n>] [--json|--table] [--kinds k1,k2,...]\n',
+            '  Usage: arch-graph semantic search "<query>" [--out <dir>] [--repo <id>] [--k <n>] [--json|--table]\n' +
+            '         [--kinds k1,k2,... | --exclude-kinds k1,k2,... | --code-only | --docs-only]\n',
         );
         process.exit(1);
     }
@@ -461,6 +510,7 @@ export async function runSemanticSearch(args: SemanticArgs): Promise<void> {
         embedder: embedOne,
         topK: args.k,
         kinds: args.kinds,
+        excludeKinds: args.excludeKinds,
     });
 
     // Emit hash-drift or other warnings to stderr

@@ -135,6 +135,78 @@ describe('parseSemanticArgs — --kinds validation (F5)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// --exclude-kinds / --code-only / --docs-only
+// ---------------------------------------------------------------------------
+
+describe('parseSemanticArgs — kind-bucket flags', () => {
+    it('--exclude-kinds populates excludeKinds and leaves kinds undefined', () => {
+        const args = parseSemanticArgs(['search', 'q', '--exclude-kinds=doc-section,lib']);
+        expect(args.excludeKinds).toEqual(['doc-section', 'lib']);
+        expect(args.kinds).toBeUndefined();
+    });
+
+    it('--code-only is sugar for --exclude-kinds=doc-section', () => {
+        const args = parseSemanticArgs(['search', 'q', '--code-only']);
+        expect(args.excludeKinds).toEqual(['doc-section']);
+        expect(args.kinds).toBeUndefined();
+    });
+
+    it('--docs-only is sugar for --kinds=doc-section', () => {
+        const args = parseSemanticArgs(['search', 'q', '--docs-only']);
+        expect(args.kinds).toEqual(['doc-section']);
+        expect(args.excludeKinds).toBeUndefined();
+    });
+
+    it('rejects --code-only combined with --docs-only', () => {
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        expect(() => parseSemanticArgs(['search', 'q', '--code-only', '--docs-only'])).toThrow(
+            'process.exit',
+        );
+        expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('rejects --code-only combined with --kinds', () => {
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        expect(() =>
+            parseSemanticArgs(['search', 'q', '--code-only', '--kinds=service']),
+        ).toThrow('process.exit');
+        expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('rejects --exclude-kinds combined with --docs-only', () => {
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        expect(() =>
+            parseSemanticArgs(['search', 'q', '--exclude-kinds=lib', '--docs-only']),
+        ).toThrow('process.exit');
+        expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('rejects unknown --exclude-kinds value', () => {
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        expect(() => parseSemanticArgs(['search', 'q', '--exclude-kinds=banana'])).toThrow(
+            'process.exit',
+        );
+        expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+});
+
+// ---------------------------------------------------------------------------
 // F3 — table mode: embedError branch is shown before "No results found"
 // ---------------------------------------------------------------------------
 
