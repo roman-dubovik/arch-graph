@@ -524,3 +524,155 @@ export class InjectableService {
         expect(result.endpoints).toHaveLength(0);
     });
 });
+
+// ---- AC-6: Enum member resolution tests ----
+describe('extractEndpoints — enum member resolution', () => {
+    // AC-6A: Basic same-file enum resolution for @Controller
+    it('AC-6A: resolves @Controller(E.U) where E.U = "users" to /users', () => {
+        const project = inMemoryProject({
+            '/app/enum.controller.ts': `
+import { Controller, Get } from '@nestjs/common';
+enum EApiEndpoints { USERS = "users" }
+@Controller(EApiEndpoints.USERS)
+export class UsersController {
+    @Get('list')
+    list() {}
+}
+`,
+        });
+        const result = extractEndpoints(project);
+        expect(result.endpoints).toHaveLength(1);
+        expect(result.endpoints[0]!.pattern).toBe('/users/list');
+        // No dynamic diagnostic for the controller prefix
+        const controllerDiag = result.diagnostics.find(d => d.message.includes('UsersController') && d.message.includes('<dynamic>'));
+        expect(controllerDiag).toBeUndefined();
+        // enumPrefixResolved should be 1
+        expect(result.enumPrefixResolved).toBe(1);
+    });
+
+    // AC-6B: Cross-file enum resolution
+    it('AC-6B: resolves cross-file enum @Controller(EApiEndpoints.USERS) where enum is in separate file', () => {
+        const project = inMemoryProject({
+            '/lib/api-endpoints.ts': `
+export enum EApiEndpoints { USERS = "users", ADMIN = "admin" }
+`,
+            '/app/users.controller.ts': `
+import { Controller, Get } from '@nestjs/common';
+import { EApiEndpoints } from '../lib/api-endpoints';
+@Controller(EApiEndpoints.USERS)
+export class UsersController {
+    @Get()
+    findAll() {}
+}
+`,
+        });
+        const result = extractEndpoints(project);
+        expect(result.endpoints).toHaveLength(1);
+        expect(result.endpoints[0]!.pattern).toBe('/users');
+        expect(result.enumPrefixResolved).toBe(1);
+    });
+
+    // AC-6C: Computed initializer falls through to <dynamic> and is recorded in enumPrefixUnresolved
+    it('AC-6C: computed enum initializer falls through to <dynamic> and is recorded in enumPrefixUnresolved', () => {
+        const project = inMemoryProject({
+            '/app/computed.controller.ts': `
+import { Controller, Get } from '@nestjs/common';
+function computeStr() { return "users"; }
+enum EApiEndpoints { USERS = computeStr() as any }
+@Controller(EApiEndpoints.USERS)
+export class ComputedController {
+    @Get()
+    findAll() {}
+}
+`,
+        });
+        const result = extractEndpoints(project);
+        expect(result.endpoints).toHaveLength(1);
+        expect(result.endpoints[0]!.pattern).toBe('/<dynamic>');
+        expect(result.enumPrefixUnresolved).toHaveLength(1);
+        expect(result.enumPrefixUnresolved![0]!.expression).toBe('EApiEndpoints.USERS');
+    });
+
+    // AC-6D: Method path resolution via enum
+    it('AC-6D: resolves @Get(E.PROFILE) where E.PROFILE = "profile"', () => {
+        const project = inMemoryProject({
+            '/app/profile.controller.ts': `
+import { Controller, Get } from '@nestjs/common';
+enum EApiPaths { PROFILE = "profile", BY_ID = ":id" }
+@Controller("users")
+export class ProfileController {
+    @Get(EApiPaths.PROFILE)
+    getProfile() {}
+    @Get(EApiPaths.BY_ID)
+    getById() {}
+}
+`,
+        });
+        const result = extractEndpoints(project);
+        expect(result.endpoints).toHaveLength(2);
+        const profileEp = result.endpoints.find(e => e.methodName === 'getProfile')!;
+        const byIdEp = result.endpoints.find(e => e.methodName === 'getById')!;
+        expect(profileEp.pattern).toBe('/users/profile');
+        expect(byIdEp.pattern).toBe('/users/:id');
+        // Both method-path resolutions should be tracked
+        expect(result.enumPrefixResolved).toBe(2);
+    });
+
+    // AC-6E: Regression — existing string-literal behavior unchanged
+    it('AC-6E: regression — @Controller("admin") string literal still works exactly', () => {
+        const project = inMemoryProject({
+            '/app/admin.controller.ts': `
+import { Controller, Get, Post, Delete } from '@nestjs/common';
+@Controller('admin')
+export class AdminController {
+    @Get('users')
+    listUsers() {}
+    @Post('users')
+    createUser() {}
+    @Delete('users/:id')
+    deleteUser() {}
+}
+`,
+        });
+        const result = extractEndpoints(project);
+        expect(result.endpoints).toHaveLength(3);
+        const patterns = result.endpoints.map(e => e.pattern).sort();
+        expect(patterns).toEqual(['/admin/users', '/admin/users', '/admin/users/:id'].sort());
+        expect(result.enumPrefixResolved).toBe(0);
+        expect(result.enumPrefixUnresolved).toHaveLength(0);
+    });
+
+    // AC-6F: Numeric enum members
+    it('AC-6F: numeric enum member resolves to string representation', () => {
+        const project = inMemoryProject({
+            '/app/numeric.controller.ts': `
+import { Controller, Get } from '@nestjs/common';
+enum EHttpCodes { OK = 200 }
+enum EVersions { V1 = 1 }
+@Controller('api')
+export class NumericController {
+    @Get('status')
+    status() {}
+}
+`,
+        });
+        // Numeric enums in controller/method path args are unusual but valid per AC-6F.
+        // The main thing to verify is that numeric enum members don't throw.
+        const project2 = inMemoryProject({
+            '/app/numeric2.controller.ts': `
+import { Controller, Get } from '@nestjs/common';
+enum PathNums { BASE = 42 }
+@Controller(PathNums.BASE)
+export class NumericPathController {
+    @Get('health')
+    health() {}
+}
+`,
+        });
+        const result = extractEndpoints(project2);
+        expect(result.endpoints).toHaveLength(1);
+        // Numeric literal resolves to string "42"
+        expect(result.endpoints[0]!.pattern).toBe('/42/health');
+        expect(result.enumPrefixResolved).toBe(1);
+    });
+});
