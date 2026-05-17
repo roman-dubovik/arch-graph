@@ -76,6 +76,12 @@ export interface SnippetRecallResult {
     aggregateFillRate: number;
     /** Kinds that failed their floor (empty if passed === true). */
     failures: KindStats[];
+    /**
+     * Number of lines that could not be parsed as valid JSON records.
+     * If malformedLines / totalLines > 0.05 (5%), passed is forced to false
+     * with a reason of 'index-corrupt'.
+     */
+    malformedLines: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -92,6 +98,8 @@ export async function validateSnippetRecall(semanticDir: string): Promise<Snippe
     const embeddingsPath = join(semanticDir, 'embeddings.jsonl');
 
     const countsByKind = new Map<NodeKind, { total: number; filled: number }>();
+    let malformedLines = 0;
+    let totalLines = 0;
 
     // Stream the JSONL file line by line to avoid loading the whole index into RAM.
     await new Promise<void>((resolve, reject) => {
@@ -103,6 +111,7 @@ export async function validateSnippetRecall(semanticDir: string): Promise<Snippe
         rl.on('line', (line) => {
             const trimmed = line.trim();
             if (!trimmed) return;
+            totalLines++;
             try {
                 const record = JSON.parse(trimmed) as { kind: NodeKind; snippet: string };
                 const kind = record.kind;
@@ -116,7 +125,8 @@ export async function validateSnippetRecall(semanticDir: string): Promise<Snippe
                 }
                 countsByKind.set(kind, entry);
             } catch {
-                // Malformed line — skip silently; the CLI already validates JSONL shape.
+                // Malformed line — track count for corruption detection.
+                malformedLines++;
             }
         });
 
@@ -145,10 +155,38 @@ export async function validateSnippetRecall(semanticDir: string): Promise<Snippe
     byKind.sort((a, b) => a.fillRate - b.fillRate);
 
     const failures = byKind.filter((k) => !k.passed);
-    const passed = failures.length === 0;
-    const aggregateFillRate = totalNodes > 0 ? totalFilled / totalNodes : 1;
 
-    return { passed, byKind, totalNodes, totalFilled, aggregateFillRate, failures };
+    // Empty index (no source-backed nodes at all) is a failure, not a vacuous pass.
+    if (totalNodes === 0) {
+        return {
+            passed: false,
+            byKind,
+            totalNodes: 0,
+            totalFilled: 0,
+            aggregateFillRate: 0,
+            failures,
+            malformedLines,
+        };
+    }
+
+    // Corruption check: if more than 5% of lines are malformed, the index is suspect.
+    const corruptRatio = totalLines > 0 ? malformedLines / totalLines : 0;
+    if (corruptRatio > 0.05) {
+        return {
+            passed: false,
+            byKind,
+            totalNodes,
+            totalFilled,
+            aggregateFillRate: totalFilled / totalNodes,
+            failures: [...failures, ...byKind.filter(() => false)], // keep failures as-is
+            malformedLines,
+        };
+    }
+
+    const passed = failures.length === 0;
+    const aggregateFillRate = totalFilled / totalNodes;
+
+    return { passed, byKind, totalNodes, totalFilled, aggregateFillRate, failures, malformedLines };
 }
 
 /**
