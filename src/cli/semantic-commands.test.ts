@@ -215,64 +215,69 @@ describe('runSemanticSearch — embedError in table mode (F3)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Shared build-mock helper
+// ---------------------------------------------------------------------------
+
+async function setupBuildMocks(testDir: string) {
+    const { SEMANTIC_MODEL, SEMANTIC_DIM, SEMANTIC_SCHEMA_VERSION } = await import('../semantic/types.js');
+
+    const configModule = await import('../core/config.js');
+    const configSpy = vi.spyOn(configModule, 'loadConfig').mockResolvedValue({
+        id: 'test-repo',
+        root: testDir,
+        appsGlob: 'apps/**',
+        libsGlob: undefined,
+        excludeGlobs: undefined,
+    });
+
+    const builderModule = await import('../semantic/builder.js');
+    const manifest = {
+        schemaVersion: SEMANTIC_SCHEMA_VERSION,
+        model: SEMANTIC_MODEL,
+        dim: SEMANTIC_DIM,
+        builtAt: '2026-05-16T00:00:00.000Z',
+        graphHash: 'a'.repeat(64),
+        nodeCount: 1,
+    };
+    const buildSpy = vi.spyOn(builderModule, 'buildSemanticIndex').mockResolvedValue({
+        manifest,
+        diagnostics: {
+            model: SEMANTIC_MODEL,
+            dim: SEMANTIC_DIM,
+            schemaVersion: SEMANTIC_SCHEMA_VERSION,
+            counts: { indexed: 1, skipped: 0, fileReadErrors: 0, transformerErrors: 0, labelErrors: 0 },
+            skippedNodes: [],
+            skippedNodesTruncated: false,
+            indexSizeBytes: 100,
+        },
+    });
+
+    await writeFile(join(testDir, 'graph.json'), JSON.stringify({
+        version: '1', buildAt: '', root: testDir, nodes: [], edges: [],
+    }), 'utf8');
+
+    return { configSpy, buildSpy };
+}
+
+// ---------------------------------------------------------------------------
 // P1-3 — validateSnippetRecall is wired into runSemanticBuild
 // ---------------------------------------------------------------------------
 
 describe('runSemanticBuild — validateSnippetRecall wiring (P1-3)', () => {
     it('calls validateSnippetRecall after a successful build and prints recall lines', async () => {
-        // Arrange: write a minimal config, graph.json, and sidecar so runSemanticBuild
-        // can load and succeed without needing real source files.
-        const { SEMANTIC_MODEL, SEMANTIC_DIM, SEMANTIC_SCHEMA_VERSION } = await import('../semantic/types.js');
+        const { configSpy, buildSpy } = await setupBuildMocks(testDir);
 
-        // Write a minimal arch-graph.config.ts (loadConfig will require it).
-        // We mock loadConfig and buildSemanticIndex to avoid real I/O.
-        const configModule = await import('../core/config.js');
-        const configSpy = vi.spyOn(configModule, 'loadConfig').mockResolvedValue({
-            id: 'test-repo',
-            root: testDir,
-            appsGlob: 'apps/**',
-            libsGlob: undefined,
-            excludeGlobs: undefined,
-        });
-
-        const builderModule = await import('../semantic/builder.js');
-        const manifest = {
-            schemaVersion: SEMANTIC_SCHEMA_VERSION,
-            model: SEMANTIC_MODEL,
-            dim: SEMANTIC_DIM,
-            builtAt: '2026-05-16T00:00:00.000Z',
-            graphHash: 'a'.repeat(64),
-            nodeCount: 1,
-        };
-        const buildSpy = vi.spyOn(builderModule, 'buildSemanticIndex').mockResolvedValue({
-            manifest,
-            diagnostics: {
-                model: SEMANTIC_MODEL,
-                dim: SEMANTIC_DIM,
-                schemaVersion: SEMANTIC_SCHEMA_VERSION,
-                counts: { indexed: 1, skipped: 0, fileReadErrors: 0, transformerErrors: 0, labelErrors: 0 },
-                skippedNodes: [],
-                skippedNodesTruncated: false,
-                indexSizeBytes: 100,
-            },
-        });
-
-        // Write graph.json so readFile doesn't fail
-        await writeFile(join(testDir, 'graph.json'), JSON.stringify({
-            version: '1', buildAt: '', root: testDir, nodes: [], edges: [],
-        }), 'utf8');
-
-        // Mock validateSnippetRecall in the validator module
+        // Mock validateSnippetRecall — DU variant: kind='ok'
         const validatorModule = await import('../validation/snippet-recall-validator.js');
         const recallSpy = vi.spyOn(validatorModule, 'validateSnippetRecall').mockResolvedValue({
-            passed: true,
-            byKind: [{ kind: 'provider', total: 10, filled: 10, fillRate: 1.0, floor: 0.95, passed: true }],
-            totalNodes: 10,
-            totalFilled: 10,
-            aggregateFillRate: 1.0,
-            failures: [],
-            malformedLines: 0,
-            indexCorrupt: false,
+            kind: 'ok',
+            stats: {
+                byKind: [{ kind: 'provider', total: 10, filled: 10, fillRate: 1.0, floor: 0.95, passed: true }],
+                totalNodes: 10,
+                totalFilled: 10,
+                aggregateFillRate: 1.0,
+            },
         });
 
         const stdoutLines: string[] = [];
@@ -295,6 +300,135 @@ describe('runSemanticBuild — validateSnippetRecall wiring (P1-3)', () => {
         const stdoutOutput = stdoutLines.join('');
         expect(stdoutOutput).toContain('recall:');
         expect(stdoutOutput).toContain('provider');
+
+        configSpy.mockRestore();
+        buildSpy.mockRestore();
+        recallSpy.mockRestore();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// P1-A — exit-code on corrupt + --strict-recall flag
+// ---------------------------------------------------------------------------
+
+describe('runSemanticBuild — corrupt index exits 1 unconditionally (P1-A)', () => {
+    it('exits 1 and writes ERROR to stderr when indexCorrupt=true (kind=corrupt)', async () => {
+        const { configSpy, buildSpy } = await setupBuildMocks(testDir);
+
+        const validatorModule = await import('../validation/snippet-recall-validator.js');
+        const recallSpy = vi.spyOn(validatorModule, 'validateSnippetRecall').mockResolvedValue({
+            kind: 'corrupt',
+            malformedLines: 8,
+            totalLines: 10,
+        });
+
+        const stderrLines: string[] = [];
+        vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+        vi.spyOn(process.stderr, 'write').mockImplementation((s) => {
+            stderrLines.push(String(s));
+            return true;
+        });
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        await expect(
+            runSemanticBuild({
+                sub: 'build',
+                config: join(testDir, 'arch-graph.config.ts'),
+                out: testDir,
+                format: 'json',
+            }),
+        ).rejects.toThrow('process.exit');
+
+        expect(exitSpy).toHaveBeenCalledWith(1);
+        const stderrOutput = stderrLines.join('');
+        expect(stderrOutput).toContain('ERROR');
+        expect(stderrOutput).toContain('corrupt');
+        expect(stderrOutput).toContain('8 of 10');
+
+        configSpy.mockRestore();
+        buildSpy.mockRestore();
+        recallSpy.mockRestore();
+    });
+});
+
+describe('runSemanticBuild — --strict-recall flag (P1-A)', () => {
+    it('exits 1 when kind=below-floor and --strict-recall is set', async () => {
+        const { configSpy, buildSpy } = await setupBuildMocks(testDir);
+
+        const validatorModule = await import('../validation/snippet-recall-validator.js');
+        const recallSpy = vi.spyOn(validatorModule, 'validateSnippetRecall').mockResolvedValue({
+            kind: 'below-floor',
+            failures: [{ kind: 'provider', total: 100, filled: 80, fillRate: 0.8, floor: 0.95, passed: false }],
+            stats: {
+                byKind: [{ kind: 'provider', total: 100, filled: 80, fillRate: 0.8, floor: 0.95, passed: false }],
+                totalNodes: 100,
+                totalFilled: 80,
+                aggregateFillRate: 0.8,
+            },
+        });
+
+        vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+        const stderrLines: string[] = [];
+        vi.spyOn(process.stderr, 'write').mockImplementation((s) => {
+            stderrLines.push(String(s));
+            return true;
+        });
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        await expect(
+            runSemanticBuild({
+                sub: 'build',
+                config: join(testDir, 'arch-graph.config.ts'),
+                out: testDir,
+                format: 'json',
+                strictRecall: true,
+            }),
+        ).rejects.toThrow('process.exit');
+
+        expect(exitSpy).toHaveBeenCalledWith(1);
+        const stderrOutput = stderrLines.join('');
+        expect(stderrOutput).toContain('strict-recall');
+
+        configSpy.mockRestore();
+        buildSpy.mockRestore();
+        recallSpy.mockRestore();
+    });
+
+    it('exits 0 (does NOT exit 1) when kind=below-floor without --strict-recall', async () => {
+        const { configSpy, buildSpy } = await setupBuildMocks(testDir);
+
+        const validatorModule = await import('../validation/snippet-recall-validator.js');
+        const recallSpy = vi.spyOn(validatorModule, 'validateSnippetRecall').mockResolvedValue({
+            kind: 'below-floor',
+            failures: [{ kind: 'provider', total: 100, filled: 80, fillRate: 0.8, floor: 0.95, passed: false }],
+            stats: {
+                byKind: [{ kind: 'provider', total: 100, filled: 80, fillRate: 0.8, floor: 0.95, passed: false }],
+                totalNodes: 100,
+                totalFilled: 80,
+                aggregateFillRate: 0.8,
+            },
+        });
+
+        vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        // Should complete without calling process.exit
+        await runSemanticBuild({
+            sub: 'build',
+            config: join(testDir, 'arch-graph.config.ts'),
+            out: testDir,
+            format: 'json',
+            strictRecall: false,
+        });
+
+        expect(exitSpy).not.toHaveBeenCalled();
 
         configSpy.mockRestore();
         buildSpy.mockRestore();

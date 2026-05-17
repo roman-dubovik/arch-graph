@@ -44,6 +44,12 @@ export interface SemanticArgs {
     format: 'json' | 'table';
     /** search: node kinds whitelist (validated against NODE_KIND_VALUES) */
     kinds?: NodeKind[];
+    /**
+     * build: when true, exit 1 if recall is below floor for any kind, or if
+     * the index is corrupt or empty. Without this flag only index corruption
+     * causes a non-zero exit; below-floor is informational.
+     */
+    strictRecall?: boolean;
 }
 
 /**
@@ -139,7 +145,10 @@ export function parseSemanticArgs(argv: string[]): SemanticArgs {
         query = positionals[0];
     }
 
-    return { sub: sub ?? '', config, out, repo, query, k, format, kinds };
+    // Parse --strict-recall anywhere in the arg list
+    const strictRecall = rest.includes('--strict-recall');
+
+    return { sub: sub ?? '', config, out, repo, query, k, format, kinds, strictRecall };
 }
 
 // ---------------------------------------------------------------------------
@@ -283,32 +292,79 @@ export async function runSemanticBuild(args: SemanticArgs): Promise<void> {
     }
 
     // --- Snippet recall validation ------------------------------------------
+    // Exit codes:
+    //   corrupt     → always exit 1 (corruption is never informational)
+    //   empty       → exit 1 with --strict-recall
+    //   below-floor → exit 1 with --strict-recall; informational otherwise
+    //   ok          → no action
+    //
+    // Note: process.exit() calls are made OUTSIDE the try/catch so that a
+    // test mock that throws from process.exit() is not swallowed by the catch.
+    let recallExitCode: number | null = null;
+
     try {
         const recallResult = await validateSnippetRecall(join(outDir, 'semantic'));
-        process.stdout.write('\nSnippet recall:\n');
-        for (const k of recallResult.byKind) {
-            const pct = (k.fillRate * 100).toFixed(1);
-            const floor = (k.floor * 100).toFixed(0);
-            const status = k.passed ? 'PASS' : 'FAIL';
-            process.stdout.write(
-                `  recall: ${k.kind} ${k.filled}/${k.total} (${pct}%) [${status} floor=${floor}%]\n`,
-            );
-        }
-        if (!recallResult.passed) {
-            if (recallResult.indexCorrupt) {
-                process.stderr.write(
-                    `\n[arch-graph semantic] WARNING: index appears corrupt — ` +
-                    `${recallResult.malformedLines} of ${recallResult.malformedLines + recallResult.totalNodes} ` +
-                    `lines malformed (>${5}% threshold). Re-run \`arch-graph semantic build\` to rebuild.\n`,
-                );
-            } else if (recallResult.failures.length > 0) {
-                const failedKinds = recallResult.failures.map((f) => f.kind).join(', ');
-                const details = recallResult.failures
+
+        switch (recallResult.kind) {
+            case 'ok': {
+                const { stats } = recallResult;
+                process.stdout.write('\nSnippet recall:\n');
+                for (const k of stats.byKind) {
+                    const pct = (k.fillRate * 100).toFixed(1);
+                    const floor = (k.floor * 100).toFixed(0);
+                    process.stdout.write(
+                        `  recall: ${k.kind} ${k.filled}/${k.total} (${pct}%) [PASS floor=${floor}%]\n`,
+                    );
+                }
+                break;
+            }
+            case 'below-floor': {
+                const { stats, failures } = recallResult;
+                process.stdout.write('\nSnippet recall:\n');
+                for (const k of stats.byKind) {
+                    const pct = (k.fillRate * 100).toFixed(1);
+                    const floor = (k.floor * 100).toFixed(0);
+                    const status = k.passed ? 'PASS' : 'FAIL';
+                    process.stdout.write(
+                        `  recall: ${k.kind} ${k.filled}/${k.total} (${pct}%) [${status} floor=${floor}%]\n`,
+                    );
+                }
+                const failedKinds = failures.map((f) => f.kind).join(', ');
+                const details = failures
                     .map((f) => `  ${f.kind}: ${(f.fillRate * 100).toFixed(1)}% (need ${(f.floor * 100).toFixed(0)}%)`)
                     .join('\n');
                 process.stderr.write(
                     `\n[arch-graph semantic] WARNING: snippet recall below floor for: ${failedKinds}\n${details}\n`,
                 );
+                if (args.strictRecall) {
+                    process.stderr.write(
+                        `[arch-graph semantic] --strict-recall: exiting 1 due to below-floor recall.\n`,
+                    );
+                    recallExitCode = 1;
+                }
+                break;
+            }
+            case 'corrupt': {
+                process.stderr.write(
+                    `\n[arch-graph semantic] ERROR: index appears corrupt — ` +
+                    `${recallResult.malformedLines} of ${recallResult.totalLines} ` +
+                    `lines malformed (>${5}% threshold). Re-run \`arch-graph semantic build\` to rebuild.\n`,
+                );
+                // Corruption is never informational — always exit 1.
+                recallExitCode = 1;
+                break;
+            }
+            case 'empty': {
+                process.stderr.write(
+                    `\n[arch-graph semantic] WARNING: index is empty — no source-backed nodes were indexed.\n`,
+                );
+                if (args.strictRecall) {
+                    process.stderr.write(
+                        `[arch-graph semantic] --strict-recall: exiting 1 due to empty index.\n`,
+                    );
+                    recallExitCode = 1;
+                }
+                break;
             }
         }
     } catch (recallErr) {
@@ -316,6 +372,11 @@ export async function runSemanticBuild(args: SemanticArgs): Promise<void> {
         process.stderr.write(
             `\n[arch-graph semantic] WARNING: could not run snippet recall validation: ${(recallErr as Error).message}\n`,
         );
+    }
+
+    // Exit outside the try/catch so process.exit mocks in tests are not swallowed.
+    if (recallExitCode !== null) {
+        process.exit(recallExitCode);
     }
 
     // Exit 0 — non-zero skipped count is diagnostic, not failure (per AC 6).
