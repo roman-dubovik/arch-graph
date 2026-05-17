@@ -175,12 +175,16 @@ search_and_judge() {
     json_output=$(cd "$project_dir" && "$TSX_BIN" "$CLI" semantic search "$query" --k "$K" --json 2>"$cli_stderr")
   fi
   cli_exit=$?
-  # Only surface stderr when the CLI signaled failure OR the stderr line
-  # looks error-flavoured. The embedder prints harmless "Loading model..."
-  # banners to stderr on first run; warning on every banner buries real
-  # errors in noise.
+  # Surface stderr unless every line matches a known-harmless banner.
+  # Inverted (denylist) instead of error-keyword-allowlist: a keyword list
+  # would silently drop real diagnostics that use different vocabulary
+  # ("timed out", "ECONNREFUSED", "ENOENT", "stale index", etc).
   if [[ -s "$cli_stderr" ]]; then
-    if [[ "$cli_exit" != "0" && "$cli_exit" != "4" ]] || grep -qiE 'error|failed|warning|corrupt' "$cli_stderr"; then
+    # If the CLI failed at the exit-code level, always surface stderr.
+    # Otherwise check if ANY non-banner line is present.
+    if [[ "$cli_exit" != "0" && "$cli_exit" != "4" ]]; then
+      warn "[$qid] CLI stderr: $(tr '\n' ' ' < "$cli_stderr")"
+    elif grep -qvE '^\[arch-graph semantic\] (Loading model|Downloading|Fetching|Using cached)' "$cli_stderr"; then
       warn "[$qid] CLI stderr: $(tr '\n' ' ' < "$cli_stderr")"
     fi
   fi
@@ -440,11 +444,21 @@ aggregate_count() {
   while IFS= read -r qid; do
     total=$((total + 1))
     local res_file="$TMPDIR_RESULTS/${qid}.result"
+    local mode_file="$TMPDIR_RESULTS/${qid}.mode"
     if [[ -f "$res_file" ]]; then
       local v
       v=$(cat "$res_file")
       case "$v" in
-        HIT) hits=$((hits + 1)) ;;
+        HIT)
+          hits=$((hits + 1))
+          # both-buckets mode can produce a HIT verdict while one bucket
+          # errored at the infrastructure layer — preserve the HIT in the
+          # recall metric but ALSO count the partial-error so the broken
+          # bucket surfaces in proj_errors_all and triggers GLOBAL_EXIT=1.
+          if [[ -f "$mode_file" ]] && grep -q 'errored' "$mode_file"; then
+            errors=$((errors + 1))
+          fi
+          ;;
         ERROR) errors=$((errors + 1)) ;;
       esac
     fi
