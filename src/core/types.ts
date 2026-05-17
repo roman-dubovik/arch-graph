@@ -137,6 +137,15 @@ export interface GraphNode {
     kind: NodeKind;
     label: string;
     path?: string;
+    /**
+     * Optional anchor into the source file for kinds where the label is not the
+     * declaration name (e.g. `endpoint` labels are `"POST /path"`, but the anchor
+     * is `"ControllerClass.methodName"`; `db-entity-field` labels are `"table/col"`,
+     * anchor is `"EntityClass.propertyName"`).
+     *
+     * Format: flat string — either a bare name or "ClassName.memberName".
+     */
+    anchor?: string;
     meta?: Record<string, unknown>;
 }
 

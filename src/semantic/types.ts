@@ -108,4 +108,4 @@ export interface SemanticDiagnostics {
 }
 
 /** Maximum number of skipped nodes retained in diagnostics (exported for tests). */
-export const SKIPPED_NODES_CAP = 50 as const;
+export const SKIPPED_NODES_CAP = 10_000 as const;
