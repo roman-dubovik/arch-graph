@@ -126,3 +126,4 @@ The MCP contract above is **stable for federation**. Any breaking change require
 - **MCP tool name**: `semantic_search` — automatically available when `arch-graph mcp` is running.
 - **Sidecar location**: `arch-graph-out/<repo>/semantic/` (peer to `graph.json`).
 - **Design doc**: `docs/plans/2026-05-16-semantic-sidecar-design.md` (for implementers).
+- **Cross-project migration analysis (bge-m3)**: `2-brain/docs/plans/2026-05-17-embedder-bge-m3-migration-analysis.md` — joint cost/benefit if both projects bump the federation contract to `bge-m3`. Decision is gated on three measured thresholds (recall lift, build time, OOM); not yet ratified.
