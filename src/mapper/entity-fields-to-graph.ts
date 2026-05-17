@@ -43,10 +43,13 @@ export function mapEntityFieldsToGraph(
 
         // db-entity-field node (one per table/field combo)
         if (!fieldNodes.has(fieldNodeId)) {
-            const anchor = `${field.entityClass}.${field.fieldName}`;
+            // Use declaringClass for the anchor so snippet extraction can use
+            // a direct primary lookup (sf.getClass(declaringClass).getProperty(fieldName))
+            // instead of a fallback scan of all classes in the file.
+            const anchor = `${field.declaringClass}.${field.fieldName}`;
             if (!anchor || anchor.trim() === '') {
                 throw new Error(
-                    `entity-fields mapper: anchor is required for ${fieldNodeId} (entityClass=${field.entityClass}, fieldName=${field.fieldName})`,
+                    `entity-fields mapper: anchor is required for ${fieldNodeId} (declaringClass=${field.declaringClass}, fieldName=${field.fieldName})`,
                 );
             }
             fieldNodes.set(fieldNodeId, {
@@ -57,6 +60,7 @@ export function mapEntityFieldsToGraph(
                 anchor,
                 meta: {
                     entityClass: field.entityClass,
+                    declaringClass: field.declaringClass,
                     tableName: field.tableName,
                     fieldName: field.fieldName,
                     fieldType: field.fieldType,
