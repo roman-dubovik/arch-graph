@@ -2,8 +2,10 @@ import { join } from 'node:path';
 import { Project, ts } from 'ts-morph';
 
 import type { ArchGraphConfig } from '../core/config.js';
+import { applyDocsDefaults } from '../core/config.js';
 import { discoverOwnership } from '../core/service-registry.js';
 import type { ArchGraph, BuildValidation, CyclesDiagnostics, DiagnosticsReport } from '../core/types.js';
+import { extractDocs } from '../extractors/docs/extract-docs.js';
 import { extractBullMq } from '../extractors/bullmq/extractor.js';
 import { extractDi } from '../extractors/di/extractor.js';
 import { extractFe } from '../extractors/fe/extractor.js';
@@ -15,6 +17,7 @@ import { extractEndpoints } from '../extractors/endpoint/extractor.js';
 import { extractConfig } from '../extractors/config/extractor.js';
 import { extractScoped } from '../extractors/scoped/extractor.js';
 import { extractEntityFields } from '../extractors/typeorm/fields.js';
+import { mapDocsToGraph } from '../mapper/docs-to-graph.js';
 import { mapBullMqToGraph } from '../mapper/bullmq-to-graph.js';
 import { mapDiToGraph } from '../mapper/di-to-graph.js';
 import { mapFeToGraph } from '../mapper/fe-to-graph.js';
@@ -38,6 +41,7 @@ import { validateEndpoints } from '../validation/endpoint-validator.js';
 import { validateConfig } from '../validation/config-validator.js';
 import { validateDbEntityFields } from '../validation/db-entity-fields-validator.js';
 import { buildReport as buildNatsReport } from '../validation/validator.js';
+import { countTokens } from '../semantic/tokenizer.js';
 import { detectCycles } from '../detectors/cycles.js';
 
 export interface BuildResult {
@@ -438,6 +442,20 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         );
     }
 
+    // ─── docs pass ────────────────────────────────────────────────────────────
+    const docsConfig = applyDocsDefaults(cfg.docs);
+    const docs = await extractDocs({
+        projectRoot: cfg.root,
+        include: docsConfig.include,
+        exclude: docsConfig.exclude,
+        respectGitignore: docsConfig.respectGitignore,
+        chunkTokens: docsConfig.chunkTokens,
+        maxFileBytes: docsConfig.maxFileBytes,
+        countTokens,
+    });
+    const docNodes = mapDocsToGraph(docs.sites, cfg.root);
+    graph.nodes.push(...docNodes);
+
     const diagnostics: DiagnosticsReport = {
         projectId: cfg.id,
         timestamp: new Date().toISOString(),
@@ -477,6 +495,7 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
             markerCount: scoped.markers.length,
             messages: scoped.diagnostics,
         },
+        docs: docs.diagnostics,
     };
     const validation: BuildValidation = {
         projectId: cfg.id,
