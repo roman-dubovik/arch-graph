@@ -12,6 +12,7 @@
 
 import type { GraphEdge, GraphNode } from '../core/types.js';
 import type { EntityFieldSite } from '../extractors/typeorm/fields.js';
+import { buildClassMemberAnchor } from './anchor.js';
 
 export interface EntityFieldsMapResult {
     nodes: GraphNode[];
@@ -46,12 +47,7 @@ export function mapEntityFieldsToGraph(
             // Use declaringClass for the anchor so snippet extraction can use
             // a direct primary lookup (sf.getClass(declaringClass).getProperty(fieldName))
             // instead of a fallback scan of all classes in the file.
-            const anchor = `${field.declaringClass}.${field.fieldName}`;
-            if (!anchor || anchor.trim() === '') {
-                throw new Error(
-                    `entity-fields mapper: anchor is required for ${fieldNodeId} (declaringClass=${field.declaringClass}, fieldName=${field.fieldName})`,
-                );
-            }
+            const anchor = buildClassMemberAnchor(field.declaringClass, field.fieldName, fieldNodeId);
             fieldNodes.set(fieldNodeId, {
                 id: fieldNodeId,
                 kind: 'db-entity-field',

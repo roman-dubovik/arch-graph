@@ -10,6 +10,7 @@ import type { GraphEdge, GraphNode } from '../core/types.js';
 import { OwnershipRegistry } from '../core/service-registry.js';
 import type { EndpointSite } from '../extractors/endpoint/extractor.js';
 import { ownerNodeFor, ownerNodeId } from './owner-node.js';
+import { buildClassMemberAnchor } from './anchor.js';
 
 export interface EndpointMapResult {
     nodes: GraphNode[];
@@ -37,12 +38,7 @@ export function mapEndpointsToGraph(
         const nodeId = `endpoint:${site.method} ${site.pattern}`;
 
         if (!endpointNodes.has(nodeId)) {
-            const anchor = `${site.controllerClass}.${site.methodName}`;
-            if (!anchor || anchor.trim() === '') {
-                throw new Error(
-                    `endpoint mapper: anchor is required for ${nodeId} (controllerClass=${site.controllerClass}, methodName=${site.methodName})`,
-                );
-            }
+            const anchor = buildClassMemberAnchor(site.controllerClass, site.methodName, nodeId);
             endpointNodes.set(nodeId, {
                 id: nodeId,
                 kind: 'endpoint',
