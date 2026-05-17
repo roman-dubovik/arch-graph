@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { parseSemanticArgs, runSemanticSearch } from './semantic-commands.js';
+import { parseSemanticArgs, runSemanticSearch, runSemanticBuild } from './semantic-commands.js';
 
 // ---------------------------------------------------------------------------
 // Test directory lifecycle (for runSemanticSearch integration tests)
@@ -211,5 +211,92 @@ describe('runSemanticSearch — embedError in table mode (F3)', () => {
         stdoutSpy.mockRestore();
         exitSpy.mockRestore();
         searchSpy.mockRestore();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// P1-3 — validateSnippetRecall is wired into runSemanticBuild
+// ---------------------------------------------------------------------------
+
+describe('runSemanticBuild — validateSnippetRecall wiring (P1-3)', () => {
+    it('calls validateSnippetRecall after a successful build and prints recall lines', async () => {
+        // Arrange: write a minimal config, graph.json, and sidecar so runSemanticBuild
+        // can load and succeed without needing real source files.
+        const { SEMANTIC_MODEL, SEMANTIC_DIM, SEMANTIC_SCHEMA_VERSION } = await import('../semantic/types.js');
+
+        // Write a minimal arch-graph.config.ts (loadConfig will require it).
+        // We mock loadConfig and buildSemanticIndex to avoid real I/O.
+        const configModule = await import('../core/config.js');
+        const configSpy = vi.spyOn(configModule, 'loadConfig').mockResolvedValue({
+            id: 'test-repo',
+            root: testDir,
+            appsGlob: 'apps/**',
+            libsGlob: undefined,
+            excludeGlobs: undefined,
+        });
+
+        const builderModule = await import('../semantic/builder.js');
+        const manifest = {
+            schemaVersion: SEMANTIC_SCHEMA_VERSION,
+            model: SEMANTIC_MODEL,
+            dim: SEMANTIC_DIM,
+            builtAt: '2026-05-16T00:00:00.000Z',
+            graphHash: 'a'.repeat(64),
+            nodeCount: 1,
+        };
+        const buildSpy = vi.spyOn(builderModule, 'buildSemanticIndex').mockResolvedValue({
+            manifest,
+            diagnostics: {
+                model: SEMANTIC_MODEL,
+                dim: SEMANTIC_DIM,
+                schemaVersion: SEMANTIC_SCHEMA_VERSION,
+                counts: { indexed: 1, skipped: 0, fileReadErrors: 0, transformerErrors: 0, labelErrors: 0 },
+                skippedNodes: [],
+                skippedNodesTruncated: false,
+                indexSizeBytes: 100,
+            },
+        });
+
+        // Write graph.json so readFile doesn't fail
+        await writeFile(join(testDir, 'graph.json'), JSON.stringify({
+            version: '1', buildAt: '', root: testDir, nodes: [], edges: [],
+        }), 'utf8');
+
+        // Mock validateSnippetRecall in the validator module
+        const validatorModule = await import('../validation/snippet-recall-validator.js');
+        const recallSpy = vi.spyOn(validatorModule, 'validateSnippetRecall').mockResolvedValue({
+            passed: true,
+            byKind: [{ kind: 'provider', total: 10, filled: 10, fillRate: 1.0, floor: 0.95, passed: true }],
+            totalNodes: 10,
+            totalFilled: 10,
+            aggregateFillRate: 1.0,
+            failures: [],
+            malformedLines: 0,
+        });
+
+        const stdoutLines: string[] = [];
+        vi.spyOn(process.stdout, 'write').mockImplementation((s) => {
+            stdoutLines.push(String(s));
+            return true;
+        });
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+        await runSemanticBuild({
+            sub: 'build',
+            config: join(testDir, 'arch-graph.config.ts'),
+            out: testDir,
+            format: 'json',
+        });
+
+        // validateSnippetRecall must have been called
+        expect(recallSpy).toHaveBeenCalledWith(join(testDir, 'semantic'));
+        // stdout should contain a recall line
+        const stdoutOutput = stdoutLines.join('');
+        expect(stdoutOutput).toContain('recall:');
+        expect(stdoutOutput).toContain('provider');
+
+        configSpy.mockRestore();
+        buildSpy.mockRestore();
+        recallSpy.mockRestore();
     });
 });

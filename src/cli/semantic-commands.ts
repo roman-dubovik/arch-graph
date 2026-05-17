@@ -25,6 +25,7 @@ import type { ArchGraph, NodeKind } from '../core/types.js';
 import { NODE_KIND_VALUES } from '../core/types.js';
 import { semanticSearch } from '../semantic/search.js';
 import type { SearchResult } from '../semantic/search.js';
+import { validateSnippetRecall } from '../validation/snippet-recall-validator.js';
 
 // ---------------------------------------------------------------------------
 // Arg parsing
@@ -268,8 +269,44 @@ export async function runSemanticBuild(args: SemanticArgs): Promise<void> {
     if (d.skipped > 0) {
         process.stderr.write(
             `\n[arch-graph semantic] ${d.skipped} node(s) skipped ` +
-            `(fileReadErrors=${d.fileReadErrors}, transformerErrors=${d.transformerErrors}). ` +
+            `(fileReadErrors=${d.fileReadErrors}, transformerErrors=${d.transformerErrors}, labelErrors=${d.labelErrors}). ` +
             `See diagnostics.json for details.\n`,
+        );
+    }
+
+    // Warn when label errors occurred but the skipped cap was not reached
+    // (meaning all label errors are attributable — no silent swallowing).
+    if (d.labelErrors > 0 && d.skipped === 0) {
+        process.stderr.write(
+            `\nWARNING: ${d.labelErrors} node(s) indexed with empty snippet (label not located — check anchor/label alignment).\n`,
+        );
+    }
+
+    // --- Snippet recall validation ------------------------------------------
+    try {
+        const recallResult = await validateSnippetRecall(join(outDir, 'semantic'));
+        process.stdout.write('\nSnippet recall:\n');
+        for (const k of recallResult.byKind) {
+            const pct = (k.fillRate * 100).toFixed(1);
+            const floor = (k.floor * 100).toFixed(0);
+            const status = k.passed ? 'PASS' : 'FAIL';
+            process.stdout.write(
+                `  recall: ${k.kind} ${k.filled}/${k.total} (${pct}%) [${status} floor=${floor}%]\n`,
+            );
+        }
+        if (!recallResult.passed) {
+            const failedKinds = recallResult.failures.map((f) => f.kind).join(', ');
+            const details = recallResult.failures
+                .map((f) => `  ${f.kind}: ${(f.fillRate * 100).toFixed(1)}% (need ${(f.floor * 100).toFixed(0)}%)`)
+                .join('\n');
+            process.stderr.write(
+                `\n[arch-graph semantic] WARNING: snippet recall below floor for: ${failedKinds}\n${details}\n`,
+            );
+        }
+    } catch (recallErr) {
+        // Non-fatal: recall validation is informational only.
+        process.stderr.write(
+            `\n[arch-graph semantic] WARNING: could not run snippet recall validation: ${(recallErr as Error).message}\n`,
         );
     }
 
