@@ -229,7 +229,9 @@ function extractConfigFieldSnippet(sf: SourceFile, node: GraphNode): SnippetResu
 
 /**
  * fe-component / fe-page: try variable, function, class by label.
- * Also includes JSDoc and JSX text literals, capped at FE_SNIPPET_MAX_CHARS.
+ * Also includes JSDoc, JSX text literals, and a `classes:` prefix block
+ * with deduped className string-literal values.
+ * Capped at FE_SNIPPET_MAX_CHARS.
  */
 function extractFeComponentSnippet(sf: SourceFile, node: GraphNode): SnippetResult {
     const name = node.anchor ?? node.label;
@@ -245,7 +247,8 @@ function extractFeComponentSnippet(sf: SourceFile, node: GraphNode): SnippetResu
         const jsDocs = stmt?.getJsDocs() ?? [];
         const jsDocText = jsDocs.map((d: TsMorphNode) => d.getText()).join('\n');
         const jsxText = extractJsxTextFromNode(varDecl, 200);
-        const full = [jsDocText, declText.slice(0, 400), jsxText].filter(Boolean).join('\n');
+        const classesBlock = buildClassesBlock(varDecl, cap);
+        const full = [classesBlock, jsDocText, declText.slice(0, 400), jsxText].filter(Boolean).join('\n');
         return { snippet: full.slice(0, cap) };
     }
 
@@ -256,7 +259,8 @@ function extractFeComponentSnippet(sf: SourceFile, node: GraphNode): SnippetResu
         const jsDocText = jsDocs.map((d: TsMorphNode) => d.getText()).join('\n');
         const fnText = fn.getText();
         const jsxText = extractJsxTextFromNode(fn, 200);
-        const full = [jsDocText, fnText.slice(0, 400), jsxText].filter(Boolean).join('\n');
+        const classesBlock = buildClassesBlock(fn, cap);
+        const full = [classesBlock, jsDocText, fnText.slice(0, 400), jsxText].filter(Boolean).join('\n');
         return { snippet: full.slice(0, cap) };
     }
 
@@ -265,7 +269,8 @@ function extractFeComponentSnippet(sf: SourceFile, node: GraphNode): SnippetResu
     if (cls) {
         const jsDocs = cls.getJsDocs();
         const jsDocText = jsDocs.map((d: TsMorphNode) => d.getText()).join('\n');
-        const full = [jsDocText, cls.getText().slice(0, 400)].filter(Boolean).join('\n');
+        const classesBlock = buildClassesBlock(cls, cap);
+        const full = [classesBlock, jsDocText, cls.getText().slice(0, 400)].filter(Boolean).join('\n');
         return { snippet: full.slice(0, cap) };
     }
 
@@ -432,4 +437,73 @@ function extractJsxTextFromNode(node: TsMorphNode, maxChars: number): string {
 
     walk(node);
     return texts.join(' ').slice(0, maxChars);
+}
+
+/**
+ * Walk a node's descendants and collect all `className="..."` string-literal
+ * values (skips template-literal and expression-based className attributes).
+ * Returns a deduped array of individual class tokens.
+ */
+function collectClassNameTokens(node: TsMorphNode): string[] {
+    const seen = new Set<string>();
+    const tokens: string[] = [];
+
+    function walk(n: TsMorphNode): void {
+        // Look for JsxAttribute nodes whose name is "className"
+        if (n.getKind() === SyntaxKind.JsxAttribute) {
+            const attrName = n.getChildren()[0];
+            if (attrName?.getText() === 'className') {
+                // The initializer is the part after `=`
+                // Structure: JsxAttribute → [ Identifier("className"), EqualsToken, JsxExpression | StringLiteral ]
+                const children = n.getChildren();
+                // Find the initializer — either StringLiteral or JsxExpression wrapping a StringLiteral
+                for (const child of children) {
+                    if (child.getKind() === SyntaxKind.StringLiteral) {
+                        const raw = child.getLiteralText();
+                        for (const tok of raw.split(/\s+/).filter(Boolean)) {
+                            if (!seen.has(tok)) {
+                                seen.add(tok);
+                                tokens.push(tok);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        for (const child of n.getChildren()) {
+            walk(child);
+        }
+    }
+
+    walk(node);
+    return tokens;
+}
+
+/**
+ * Build the `classes: <tokens>` prefix line for a fe-component snippet.
+ *
+ * The line is truncated at a whole-token boundary so it never bisects a class
+ * name. If there are no class tokens, returns an empty string (no prefix line).
+ *
+ * Budget: reserves up to `Math.floor(cap / 4)` characters for the classes block
+ * to keep headroom for the declaration body + JSDoc + JSX text.
+ */
+function buildClassesBlock(node: TsMorphNode, cap: number): string {
+    const tokens = collectClassNameTokens(node);
+    if (tokens.length === 0) return '';
+
+    const PREFIX = 'classes: ';
+    const budget = Math.floor(cap / 4); // up to 200 chars for fe-component (cap=800)
+    let line = PREFIX;
+    for (let i = 0; i < tokens.length; i++) {
+        const token = tokens[i]!;
+        const separator = i === 0 ? '' : ' ';
+        const candidate = line + separator + token;
+        if (candidate.length > budget) break;
+        line = candidate;
+    }
+
+    // If nothing was added beyond the prefix (all tokens exceeded budget), return empty
+    if (line === PREFIX) return '';
+    return line;
 }
