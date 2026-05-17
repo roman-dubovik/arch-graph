@@ -3,7 +3,6 @@
  */
 import { describe, expect, it } from 'vitest';
 import { buildAnchor, buildClassMemberAnchor } from './anchor.js';
-import type { Anchor } from './anchor.js';
 
 describe('buildAnchor', () => {
     it('returns value as Anchor for a valid non-empty string', () => {
@@ -41,24 +40,14 @@ describe('buildAnchor', () => {
 // ---------------------------------------------------------------------------
 // Anchor newtype compile-time assertions
 // ---------------------------------------------------------------------------
-// Bare strings must NOT be directly assignable to Anchor (write direction).
-// The line below would be rejected by tsc if Anchor were just `string`.
-// We use a runtime-only workaround since .test-d.ts is outside the vitest
-// include pattern; the @ts-expect-error annotation proves the brand is real.
+// The @ts-expect-error brand check has been migrated to anchor.test-d.ts
+// and is enforced by vitest's typecheck runner (vitest.config.ts: typecheck.enabled).
 describe('Anchor branded type', () => {
     it('Anchor is still a string structurally (read direction)', () => {
         const anchor = buildAnchor('MyService', 'node:1');
         // Anchor must be readable as a plain string without casting.
         const s: string = anchor;
         expect(s).toBe('MyService');
-    });
-
-    it('bare string is not directly assignable to Anchor (compile-time check)', () => {
-        // @ts-expect-error — Anchor is branded; raw strings are forbidden without buildAnchor
-        const _bareStringIsNotAnchor: Anchor = 'foo';
-        // The @ts-expect-error above proves the brand blocks assignment at compile time.
-        // The void suppresses the "unused variable" lint.
-        void _bareStringIsNotAnchor;
     });
 });
 
@@ -97,6 +86,12 @@ describe('buildClassMemberAnchor', () => {
         expect(() => buildClassMemberAnchor({ className: 'UserController', memberName: '   ', nodeId: 'endpoint:GET /users' })).toThrow(
             'anchor: memberName is invalid',
         );
+    });
+
+    it('throws when className is <anonymous>', () => {
+        expect(() =>
+            buildClassMemberAnchor({ className: '<anonymous>', memberName: 'findOne', nodeId: 'endpoint:GET /users' }),
+        ).toThrow("anchor: className is invalid for endpoint:GET /users (got '<anonymous>')");
     });
 
     it('throws when memberName is <anonymous>', () => {

@@ -45,8 +45,9 @@ export function buildAnchor(value: string, nodeId: string): Anchor {
  * @param args.memberName  Name of the method or property (e.g. "findOne").
  * @param args.nodeId      Node ID used in the error message for traceability.
  * @returns                "className.memberName" anchor string branded as Anchor.
- * @throws                 If className is empty or whitespace-only; if memberName is empty,
- *                         whitespace-only, or the sentinel string `<anonymous>`.
+ * @throws                 If className is empty, whitespace-only, or the sentinel string
+ *                         `<anonymous>`; if memberName is empty, whitespace-only, or the
+ *                         sentinel string `<anonymous>`.
  */
 export function buildClassMemberAnchor(args: {
     className: string;
@@ -56,6 +57,9 @@ export function buildClassMemberAnchor(args: {
     const { className, memberName, nodeId } = args;
     if (!className.trim()) {
         throw new Error(`anchor: className is empty for ${nodeId}`);
+    }
+    if (className === '<anonymous>') {
+        throw new Error(`anchor: className is invalid for ${nodeId} (got '<anonymous>')`);
     }
     if (!memberName.trim() || memberName === '<anonymous>') {
         throw new Error(`anchor: memberName is invalid for ${nodeId} (got '${memberName}')`);
