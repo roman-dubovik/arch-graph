@@ -240,6 +240,24 @@ publisher  my-api        user.created   nats-publish  apps/api/user.service.ts  
 
 The Claude Code skill calls these subcommands automatically when answering architecture questions — it's cheaper than an MCP round-trip and requires no running server.
 
+## Semantic search (optional)
+
+The above commands answer **deterministic structural questions** — "who publishes on this subject?" — using exact edge traversal. For fuzzy intent like "find code about X" or "how does authentication work?", arch-graph optionally adds **semantic dense-vector search** over node embeddings.
+
+The semantic layer is independent and opt-in: arch-graph works identically well without it. If you enable it, the CLI and MCP server gain new tools:
+
+- **Model**: `Xenova/paraphrase-multilingual-MiniLM-L12-v2` (384-dimensional, multilingual, cross-comparable with sister project 2-brain).
+- **How it works**: each GraphNode (service, module, table, queue) gets a dense vector computed from `label + kind + AST snippet`, persisted in a sidecar at `arch-graph-out/<repo>/semantic/`.
+- **Quick start**: 
+  ```sh
+  arch-graph semantic build              # one-time: downloads model (~135 MB, cached), extracts snippets, embeds
+  arch-graph semantic search "auth flow" # fuzzy search for top 10 results
+  arch-graph semantic search "logging" --k 20 --json  # top 20, structured output
+  ```
+- **First build**: the model downloads ~135 MB on first run and is cached under `~/.cache/transformers/` (or via `HF_HOME` env var), so subsequent `semantic build` and `semantic search` run much faster.
+- **Sidecar layout**: `arch-graph-out/<repo>/semantic/{manifest.json, embeddings.jsonl}` — one JSON record per line, streamable for large graphs.
+- **MCP tool**: when the MCP server is running (`arch-graph mcp`), the tool `semantic_search` becomes available with the same query semantics. See `INTEGRATION-2BRAIN.md` for the federation contract (2-brain Phase 3 will optionally use this).
+
 ## MCP server
 
 Optional — for editors with an MCP client configured:

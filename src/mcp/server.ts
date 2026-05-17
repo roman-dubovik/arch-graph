@@ -16,7 +16,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 
-import type { ArchGraph, EdgeKind } from '../core/types.js';
+import type { ArchGraph, EdgeKind, NodeKind } from '../core/types.js';
+import { NODE_KIND_VALUES } from '../core/types.js';
 import {
     explain,
     findPath,
@@ -30,6 +31,10 @@ import {
     serviceDependents,
     tableUsers,
 } from './graph-queries.js';
+import { semanticSearch, MAX_TOP_K } from '../semantic/search.js';
+import { embedOne } from '../semantic/embedder.js';
+import { readEmbeddingsJsonl } from '../semantic/io.js';
+import { SEMANTIC_DIM, SEMANTIC_MODEL } from '../semantic/types.js';
 
 const SERVER_NAME = 'arch-graph';
 const SERVER_VERSION = '0.1.0';
@@ -60,10 +65,48 @@ const EDGE_KIND_CHECK: Record<EdgeKind, null> = {
     'di-pipe': null,
     'ts-import': null,
     'lib-usage': null,
+    'fe-imports': null,
+    'fe-renders': null,
+    'fe-routes-to': null,
+    'endpoint-of': null,
+    'endpoint-calls': null,
+    'config-read-by': null,
+    'entity-has-field': null,
+    'scoped': null,
 };
 const EDGE_KIND_VALUES = Object.keys(EDGE_KIND_CHECK) as [EdgeKind, ...EdgeKind[]];
 
 const edgeKindSchema = z.enum(EDGE_KIND_VALUES);
+
+// NODE_KIND_VALUES is imported from src/core/types.ts — the authoritative home
+// for NodeKind exhaustiveness. Centralised so CLI + MCP always share the same set.
+const nodeKindSchema = z.enum(NODE_KIND_VALUES);
+
+/**
+ * Zod shape for the `semantic_search` tool input — exported so tests can build
+ * `z.object(semanticSearchInputShape)` and validate against the exact same
+ * constraints that the registered MCP tool enforces.  Avoids schema drift.
+ */
+export const semanticSearchInputShape = {
+    query: z.string().min(1).describe('Query text to search for.'),
+    topK: z
+        .number()
+        .int()
+        .min(1)
+        .max(MAX_TOP_K)
+        .optional()
+        .default(10)
+        .describe(`Number of results to return (1-${MAX_TOP_K}, default 10).`),
+    kinds: z
+        .array(nodeKindSchema)
+        .optional()
+        .describe('Optional filter: only return nodes of these NodeKind values.'),
+    includeVectors: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe('If true, include the embedding vector for each result.'),
+} as const;
 
 interface GraphHandle {
     path: string;
@@ -329,6 +372,18 @@ export async function startMcpServer(opts: { out: string }): Promise<void> {
     );
 
     server.registerTool(
+        'semantic_search',
+        {
+            description:
+                'Semantic kNN search over the sidecar index. Query is embedded and compared to indexed node embeddings using cosine similarity.',
+            inputSchema: semanticSearchInputShape,
+        },
+        // Reuse the exported handler factory so the test-accessible path and the
+        // production registration share exactly the same logic.
+        makeSemanticSearchHandler({ outDir: opts.out }),
+    );
+
+    server.registerTool(
         'query',
         {
             description:
@@ -391,3 +446,68 @@ export async function startMcpServer(opts: { out: string }): Promise<void> {
 // Exported for test use — the keyword router is also a pure function and
 // worth exercising directly without round-tripping through the SDK.
 export { routeQuestion };
+
+// ---------------------------------------------------------------------------
+// Exported handler factory — lets tests exercise the exact same logic as the
+// registered MCP tool without wiring the SDK transport.
+// ---------------------------------------------------------------------------
+
+export interface SemanticSearchHandlerOpts {
+    /** Directory where arch-graph-out lives (contains graph.json + semantic/). */
+    outDir: string;
+    /** Injectable embedder — defaults to `embedOne` in production. */
+    embedder?: (text: string) => Promise<number[]>;
+}
+
+export interface SemanticSearchHandlerInput {
+    query: string;
+    topK?: number;
+    kinds?: NodeKind[];
+    includeVectors?: boolean;
+}
+
+/**
+ * Create the `semantic_search` MCP handler as a standalone async function.
+ * This is the canonical handler logic — `startMcpServer` calls
+ * `server.registerTool(…, handler)` using the same code path.
+ *
+ * Use this in tests to exercise the full handler (including vector augmentation
+ * and error paths) without spinning up the MCP SDK transport.
+ */
+export function makeSemanticSearchHandler(handlerOpts: SemanticSearchHandlerOpts) {
+    const { outDir, embedder: embedderFn = embedOne } = handlerOpts;
+
+    return async (input: SemanticSearchHandlerInput) => {
+        const { query, topK = 10, kinds, includeVectors = false } = input;
+
+        const searchRes = await semanticSearch({
+            query,
+            outDir,
+            embedder: embedderFn,
+            topK,
+            kinds,
+        });
+
+        const output = searchRes.output;
+
+        if (includeVectors && output.results.length > 0 && !output.error) {
+            const embeddingsPath = `${outDir}/semantic/embeddings.jsonl`;
+            const resultNodeIds = new Set(output.results.map((r) => r.nodeId));
+
+            try {
+                for await (const record of readEmbeddingsJsonl(embeddingsPath)) {
+                    const result = output.results.find((r) => r.nodeId === record.nodeId);
+                    if (result && resultNodeIds.has(record.nodeId)) {
+                        result.vector = record.vector;
+                    }
+                }
+            } catch (vecErr) {
+                const vecErrMsg = vecErr instanceof Error ? vecErr.message : String(vecErr);
+                process.stderr.write(`[arch-graph semantic] vector augmentation read error: ${vecErrMsg}\n`);
+                output.vectorsError = `read-error: ${vecErrMsg}`;
+            }
+        }
+
+        return jsonResult(output);
+    };
+}

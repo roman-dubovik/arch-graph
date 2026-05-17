@@ -1,0 +1,378 @@
+/**
+ * Extracts a short source snippet for a GraphNode using ts-morph.
+ *
+ * Snippet length is capped at {@link SNIPPET_MAX_CHARS} (400 chars) for most
+ * node kinds; `fe-component` and `fe-page` use a relaxed cap of
+ * {@link FE_SNIPPET_MAX_CHARS} (800 chars) to include JSDoc + JSX text.
+ *
+ * Nodes without a `path` (e.g. `nats-subject`, `db-table`) return an empty
+ * snippet without a `reason` — that is expected behaviour, not a failure.
+ *
+ * Contract: **never throws**. All failure modes are returned as values with
+ * a structured `reason` string so callers can record them in diagnostics.
+ *
+ * A8: kind-aware resolution uses `node.anchor` to locate declarations that
+ * cannot be found by `node.label` alone:
+ *   - `endpoint`:              anchor = "ControllerClass.methodName"
+ *   - `db-entity-field`:       anchor = "EntityClass.propertyName"
+ *   - `config-field`:          anchor = key string (line-window scan)
+ *   - `scoped-marker`:         anchor = "ClassName" (class decorator)
+ *   - `provider`/`module`:     anchor = class name
+ *   - `fe-component`/`fe-page`: try variable, function, class; include JSDoc + JSX text
+ *   - `fe-hook`:               try function, variable
+ *   - `fe-route`:              label = URL pattern; anchor is never set; falls back to
+ *                              default export then first exported function in the page file
+ */
+import { SyntaxKind } from 'ts-morph';
+import type { Node as TsMorphNode } from 'ts-morph';
+import type { Project, SourceFile } from 'ts-morph';
+
+import type { GraphNode } from '../core/types.js';
+import type { SkipReason } from './types.js';
+
+/** Maximum characters returned in a snippet (most node kinds). */
+export const SNIPPET_MAX_CHARS = 400;
+
+/** Relaxed snippet cap for fe-component and fe-page (includes JSDoc + JSX text). */
+export const FE_SNIPPET_MAX_CHARS = 800;
+
+export interface SnippetResult {
+    snippet: string;
+    /** Set only when extraction failed for a recoverable reason. */
+    reason?: SkipReason;
+}
+
+/**
+ * Extract a representative source snippet for `node` from the ts-morph
+ * `project`. Returns an empty snippet (no `reason`) for nodes with no `path`
+ * — embedding `label + kind` alone still has value for those anchors.
+ *
+ * Never throws: all errors become `{ snippet: '', reason: SkipReason }`.
+ */
+export function extractSnippet(project: Project, node: GraphNode): SnippetResult {
+    // Nodes with no path have no source to extract; expected, not a failure.
+    if (!node.path) {
+        return { snippet: '' };
+    }
+
+    try {
+        const sourceFile = project.getSourceFile(node.path);
+        if (!sourceFile) {
+            return { snippet: '', reason: { kind: 'file-not-found', path: node.path } };
+        }
+
+        return extractKindAwareSnippet(sourceFile, node);
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { snippet: '', reason: { kind: 'ts-morph-error', message } };
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Kind-aware dispatch
+// ---------------------------------------------------------------------------
+
+function extractKindAwareSnippet(sf: SourceFile, node: GraphNode): SnippetResult {
+    switch (node.kind) {
+        case 'provider':
+        case 'module':
+            return extractClassNode(sf, node, SNIPPET_MAX_CHARS);
+
+        case 'service':
+            // service nodes use label as class name (e.g. owner-node.ts)
+            return extractClassOrFunctionByLabel(sf, node, SNIPPET_MAX_CHARS);
+
+        case 'endpoint':
+            return extractEndpointSnippet(sf, node);
+
+        case 'db-entity-field':
+        case 'scoped-marker':
+            return extractClassPropertySnippet(sf, node);
+
+        case 'config-field':
+            return extractConfigFieldSnippet(sf, node);
+
+        case 'fe-component':
+        case 'fe-page':
+            return extractFeComponentSnippet(sf, node);
+
+        case 'fe-hook':
+            return extractFeHookSnippet(sf, node);
+
+        case 'fe-route':
+            // fe-route has path set to the page file; try to extract by anchor (page name)
+            return extractFeRouteSnippet(sf, node);
+
+        default:
+            // Generic fallback: try class → function → interface → type → variable by label
+            return extractClassOrFunctionByLabel(sf, node, SNIPPET_MAX_CHARS);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Kind-specific extractors
+// ---------------------------------------------------------------------------
+
+/**
+ * Provider/module: anchor = class name.
+ */
+function extractClassNode(sf: SourceFile, node: GraphNode, cap: number): SnippetResult {
+    const name = node.anchor ?? node.label;
+    const cls = sf.getClass(name);
+    if (cls) {
+        return { snippet: cls.getText().slice(0, cap) };
+    }
+    // Fallback: label-based search (handles token providers that may be interfaces/vars)
+    return extractClassOrFunctionByLabel(sf, node, cap);
+}
+
+/**
+ * Endpoint: anchor = "ControllerClass.methodName".
+ */
+function extractEndpointSnippet(sf: SourceFile, node: GraphNode): SnippetResult {
+    const anchor = node.anchor;
+    if (anchor) {
+        const dotIdx = anchor.indexOf('.');
+        if (dotIdx !== -1) {
+            const className = anchor.slice(0, dotIdx);
+            const methodName = anchor.slice(dotIdx + 1);
+            if (className && methodName) {
+                const cls = sf.getClass(className);
+                const method = cls?.getMethod(methodName);
+                if (method) {
+                    return { snippet: method.getText().slice(0, SNIPPET_MAX_CHARS) };
+                }
+            }
+        }
+    }
+    return { snippet: '', reason: { kind: 'label-not-located', label: node.anchor ?? node.label } };
+}
+
+/**
+ * db-entity-field / scoped-marker: anchor = "ClassName.propertyName".
+ * Returns the property declaration text including its decorators.
+ */
+function extractClassPropertySnippet(sf: SourceFile, node: GraphNode): SnippetResult {
+    const anchor = node.anchor;
+    if (anchor) {
+        const dotIdx = anchor.indexOf('.');
+        if (dotIdx !== -1) {
+            const className = anchor.slice(0, dotIdx);
+            const propName = anchor.slice(dotIdx + 1);
+
+            // Primary lookup: class name as declared in anchor.
+            // For inherited fields the anchor now uses declaringClass (the base class
+            // that owns the @Column decorator), so this direct lookup is always correct.
+            // The old scan-all-classes fallback has been removed (it was semantically
+            // wrong — it would silently return the first class with a matching property
+            // even if the anchor class didn't exist).
+            const prop = sf.getClass(className)?.getProperty(propName);
+
+            if (prop) {
+                // Include decorator text before the property
+                const decorators = prop.getDecorators();
+                const decoratorText = decorators.map((d) => d.getText()).join('\n');
+                const propText = prop.getText();
+                const full = decoratorText ? `${decoratorText}\n${propText}` : propText;
+                return { snippet: full.slice(0, SNIPPET_MAX_CHARS) };
+            }
+        }
+    }
+    return { snippet: '', reason: { kind: 'label-not-located', label: node.anchor ?? node.label } };
+}
+
+/**
+ * config-field: anchor = key string (e.g. 'DATABASE_URL').
+ * Extracts a ~200-char window around the first occurrence of `get('KEY')` or `process.env.KEY`.
+ */
+function extractConfigFieldSnippet(sf: SourceFile, node: GraphNode): SnippetResult {
+    const key = node.anchor ?? node.label;
+    const text = sf.getFullText();
+
+    // Look for configService.get('KEY') / configService.getOrThrow('KEY') / process.env.KEY
+    const patterns = [
+        `'${key}'`,
+        `"${key}"`,
+        `process.env.${key}`,
+    ];
+
+    let matchIdx = -1;
+    for (const pat of patterns) {
+        const idx = text.indexOf(pat);
+        if (idx !== -1) {
+            matchIdx = idx;
+            break;
+        }
+    }
+
+    if (matchIdx === -1) {
+        return { snippet: '', reason: { kind: 'label-not-located', label: key } };
+    }
+
+    // Extract a ~200-char window around the match
+    const start = Math.max(0, matchIdx - 60);
+    const end = Math.min(text.length, matchIdx + 140);
+    const window = text.slice(start, end).trim();
+    return { snippet: window.slice(0, SNIPPET_MAX_CHARS) };
+}
+
+/**
+ * fe-component / fe-page: try variable, function, class by label.
+ * Also includes JSDoc and JSX text literals, capped at FE_SNIPPET_MAX_CHARS.
+ */
+function extractFeComponentSnippet(sf: SourceFile, node: GraphNode): SnippetResult {
+    const name = node.anchor ?? node.label;
+    const cap = FE_SNIPPET_MAX_CHARS;
+
+    // Try variable declaration (arrow function components: `const Foo = () => ...`)
+    const varDecl = sf.getVariableDeclaration(name);
+    if (varDecl) {
+        // Get the full variable statement (includes `export const`).
+        // JSDoc lives on the VariableStatement, not the VariableDeclaration.
+        const stmt = varDecl.getVariableStatement();
+        const declText = stmt ? stmt.getText() : varDecl.getText();
+        const jsDocs = stmt?.getJsDocs() ?? [];
+        const jsDocText = jsDocs.map((d: TsMorphNode) => d.getText()).join('\n');
+        const jsxText = extractJsxTextFromNode(varDecl, 200);
+        const full = [jsDocText, declText.slice(0, 400), jsxText].filter(Boolean).join('\n');
+        return { snippet: full.slice(0, cap) };
+    }
+
+    // Try function declaration
+    const fn = sf.getFunction(name);
+    if (fn) {
+        const jsDocs = fn.getJsDocs();
+        const jsDocText = jsDocs.map((d: TsMorphNode) => d.getText()).join('\n');
+        const fnText = fn.getText();
+        const jsxText = extractJsxTextFromNode(fn, 200);
+        const full = [jsDocText, fnText.slice(0, 400), jsxText].filter(Boolean).join('\n');
+        return { snippet: full.slice(0, cap) };
+    }
+
+    // Try class (class components)
+    const cls = sf.getClass(name);
+    if (cls) {
+        const jsDocs = cls.getJsDocs();
+        const jsDocText = jsDocs.map((d: TsMorphNode) => d.getText()).join('\n');
+        const full = [jsDocText, cls.getText().slice(0, 400)].filter(Boolean).join('\n');
+        return { snippet: full.slice(0, cap) };
+    }
+
+    return { snippet: '', reason: { kind: 'label-not-located', label: name } };
+}
+
+/**
+ * fe-hook: try function, then variable.
+ */
+function extractFeHookSnippet(sf: SourceFile, node: GraphNode): SnippetResult {
+    const name = node.anchor ?? node.label;
+
+    const fn = sf.getFunction(name);
+    if (fn) {
+        return { snippet: fn.getText().slice(0, SNIPPET_MAX_CHARS) };
+    }
+
+    const varDecl = sf.getVariableDeclaration(name);
+    if (varDecl) {
+        const stmt = varDecl.getVariableStatement();
+        return { snippet: (stmt ? stmt.getText() : varDecl.getText()).slice(0, SNIPPET_MAX_CHARS) };
+    }
+
+    return { snippet: '', reason: { kind: 'label-not-located', label: name } };
+}
+
+/**
+ * fe-route: try anchor as component name in the page file, then scan for
+ * the first exported function/class/variable (page components are rarely
+ * `export default` in App Router — they're named exports).
+ */
+function extractFeRouteSnippet(sf: SourceFile, node: GraphNode): SnippetResult {
+    // If anchor is set use it as the component name
+    if (node.anchor) {
+        const result = extractFeComponentSnippet(sf, { ...node, label: node.anchor });
+        if (result.snippet) return result;
+    }
+
+    // Try default export symbol (Pages Router / explicit default)
+    const defaultExport = sf.getDefaultExportSymbol();
+    if (defaultExport) {
+        const decls = defaultExport.getDeclarations();
+        if (decls.length > 0) {
+            const text = decls[0]!.getText();
+            if (text.trim()) return { snippet: text.slice(0, FE_SNIPPET_MAX_CHARS) };
+        }
+    }
+
+    // Scan exported function/class/variable declarations (App Router page.tsx pattern)
+    for (const fn of sf.getFunctions()) {
+        if (fn.isExported()) {
+            const result = extractFeComponentSnippet(sf, { ...node, label: fn.getName() ?? '' });
+            if (result.snippet) return result;
+        }
+    }
+    for (const cls of sf.getClasses()) {
+        if (cls.isExported()) {
+            return { snippet: cls.getText().slice(0, FE_SNIPPET_MAX_CHARS) };
+        }
+    }
+    for (const varStmt of sf.getVariableStatements()) {
+        if (varStmt.isExported()) {
+            const text = varStmt.getText();
+            if (text.trim()) return { snippet: text.slice(0, FE_SNIPPET_MAX_CHARS) };
+        }
+    }
+
+    return { snippet: '', reason: { kind: 'label-not-located', label: node.label } };
+}
+
+/**
+ * Generic fallback: class → function → interface → type alias → variable, by label.
+ */
+function extractClassOrFunctionByLabel(sf: SourceFile, node: GraphNode, cap: number): SnippetResult {
+    const declaration =
+        sf.getClass(node.label) ??
+        sf.getFunction(node.label) ??
+        sf.getInterface(node.label) ??
+        sf.getTypeAlias(node.label) ??
+        sf.getVariableDeclaration(node.label);
+
+    if (declaration) {
+        const text = declaration.getText();
+        return { snippet: text.slice(0, cap) };
+    }
+
+    return { snippet: '', reason: { kind: 'label-not-located', label: node.label } };
+}
+
+// ---------------------------------------------------------------------------
+// JSX text extraction helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Walk a node's descendants and collect the first `maxChars` characters of
+ * JsxText content. Returns empty string if none found.
+ *
+ * Used to enrich fe-component snippets with rendered text.
+ */
+function extractJsxTextFromNode(node: TsMorphNode, maxChars: number): string {
+    const texts: string[] = [];
+    let total = 0;
+
+    function walk(n: TsMorphNode): void {
+        if (total >= maxChars) return;
+        if (n.getKind() === SyntaxKind.JsxText) {
+            const t = n.getText().trim();
+            if (t) {
+                texts.push(t);
+                total += t.length;
+            }
+        }
+        for (const child of n.getChildren()) {
+            if (total >= maxChars) break;
+            walk(child);
+        }
+    }
+
+    walk(node);
+    return texts.join(' ').slice(0, maxChars);
+}
