@@ -17,9 +17,11 @@
  *
  * Filter order:
  *   1. Compute cosine score for every indexed record.
- *   2. Apply `kinds` filter (if any).
- *   3. Sort descending by score.
- *   4. Take top-K (default 10, capped at 50).
+ *   2. Apply `kinds` whitelist (if any).
+ *   3. Apply `excludeKinds` blacklist (if any).  Exclude wins over include
+ *      when a kind appears in both lists.
+ *   4. Sort descending by score.
+ *   5. Take top-K (default 10, capped at 50).
  */
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
@@ -127,6 +129,13 @@ export interface SemanticSearchOpts {
     topK?: number;
     /** Optional NodeKind whitelist.  Filter applied after scoring, before top-K. */
     kinds?: NodeKind[];
+    /**
+     * Optional NodeKind blacklist.  Applied AFTER the `kinds` whitelist, so a
+     * kind listed in both is excluded (exclude wins).  Empty / omitted = no
+     * blacklist.  Use this for "give me everything except doc-section" style
+     * queries, which is the canonical code-only search pattern.
+     */
+    excludeKinds?: NodeKind[];
 }
 
 // ---------------------------------------------------------------------------
@@ -172,7 +181,7 @@ export function cosineSimilarity(a: number[], b: number[]): number {
  * Never throws — all failures become structured {@link SearchResponse} values.
  */
 export async function semanticSearch(opts: SemanticSearchOpts): Promise<SearchResponse> {
-    const { query, outDir, embedder, kinds } = opts;
+    const { query, outDir, embedder, kinds, excludeKinds } = opts;
     const topK = Math.min(opts.topK ?? DEFAULT_TOP_K, MAX_TOP_K);
 
     const manifestPath = join(outDir, 'semantic', 'manifest.json');
@@ -299,11 +308,17 @@ export async function semanticSearch(opts: SemanticSearchOpts): Promise<SearchRe
         return { output, exitCode: 1, stderrWarning };
     }
 
-    // --- Apply kinds filter (after scoring, before top-K) -------------------
-    const filtered =
-        kinds && kinds.length > 0
-            ? scored.filter((s) => kinds.includes(s.result.kind))
-            : scored;
+    // --- Apply kinds filters (after scoring, before top-K) -----------------
+    // Whitelist first, blacklist second.  Exclude wins over include for kinds
+    // that appear in both lists — matching the contract documented in the
+    // file-level JSDoc.
+    const excludeSet =
+        excludeKinds && excludeKinds.length > 0 ? new Set(excludeKinds) : null;
+    const filtered = scored.filter((s) => {
+        if (kinds && kinds.length > 0 && !kinds.includes(s.result.kind)) return false;
+        if (excludeSet && excludeSet.has(s.result.kind)) return false;
+        return true;
+    });
 
     // --- Sort descending, take top-K ----------------------------------------
     filtered.sort((a, b) => b.score - a.score);
