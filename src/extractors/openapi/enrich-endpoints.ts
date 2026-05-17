@@ -6,13 +6,12 @@
  *
  * Matching strategy (operationId-first, path/method fallback):
  *   1. Primary: `operationId === node.meta.methodName`
- *   2. Fallback: `(yamlMethod, yamlPath)` vs parsed `node.label` + `node.id`
+ *   2. Fallback: `(yamlMethod, yamlPath)` vs parsed `node.label`
  *
  * No throw on parse errors or unmatched entries — all failures are recorded
  * in the returned diagnostics.
  */
 
-import { join } from 'node:path';
 import { readFile } from 'node:fs/promises';
 import fastGlob from 'fast-glob';
 import yaml from 'js-yaml';
@@ -35,6 +34,8 @@ export interface OpenApiEnrichDiagnostics {
     endpointsMatched: number;
     endpointsUnmatched: Array<{ operationId?: string; method: string; path: string }>;
     parseErrors: Array<{ file: string; error: string }>;
+    /** operationIds that matched more than one endpoint node (all candidates are enriched). */
+    ambiguousOperationIds: Array<{ operationId: string; candidates: string[] }>;
 }
 
 export interface OpenApiEnrichResult {
@@ -101,7 +102,14 @@ export async function enrichEndpointsFromOpenApi(
         endpointsMatched: 0,
         endpointsUnmatched: [],
         parseErrors: [],
+        ambiguousOperationIds: [],
     };
+
+    // Track which node IDs have been enriched so duplicate YAML files don't
+    // inflate endpointsMatched (P2-B).
+    const matchedNodeIds = new Set<string>();
+    // Accumulate ambiguous operationId candidates across all YAML files (P2-C).
+    const ambiguityMap = new Map<string, string[]>();
 
     // Discover YAML files
     const files = await fastGlob(globs, {
@@ -116,23 +124,33 @@ export async function enrichEndpointsFromOpenApi(
 
     // Build lookup index over endpoint nodes for efficient matching
     const endpointNodes = nodes.filter((n) => n.kind === 'endpoint');
-    // Index by methodName → node (for operationId-first match)
-    const byMethodName = new Map<string, GraphNode>();
-    // Index by "METHOD /path" (lowercase method) → node (for fallback match)
+    // Index by methodName → node[] (for operationId-first match; P2-C: multiple nodes can share methodName)
+    const byMethodName = new Map<string, GraphNode[]>();
+    // Index by "METHOD /path" (lowercase method, params normalised to :x) → node (for fallback match)
     const byMethodPath = new Map<string, GraphNode>();
+
+    /** Normalise OpenAPI `{param}` placeholders to NestJS `:param` form. */
+    function normalisePath(p: string): string {
+        return p.replace(/\{([^}]+)\}/g, ':$1');
+    }
 
     for (const node of endpointNodes) {
         const methodName = node.meta?.methodName;
         if (typeof methodName === 'string' && methodName) {
-            byMethodName.set(methodName, node);
+            const existing = byMethodName.get(methodName);
+            if (existing) {
+                existing.push(node);
+            } else {
+                byMethodName.set(methodName, [node]);
+            }
         }
-        // label format: "GET /users/:id"
+        // label format: "GET /users/:id" — normalise path side to :x form
         const label = node.label;
         if (label) {
             const spaceIdx = label.indexOf(' ');
             if (spaceIdx > 0) {
                 const method = label.slice(0, spaceIdx).toLowerCase();
-                const path = label.slice(spaceIdx + 1);
+                const path = normalisePath(label.slice(spaceIdx + 1));
                 byMethodPath.set(`${method}:${path}`, node);
             }
         }
@@ -188,23 +206,36 @@ export async function enrichEndpointsFromOpenApi(
                 const yamlMethod = methodKey.toLowerCase();
 
                 // --- Primary match: operationId === methodName ---
-                let matchedNode: GraphNode | undefined;
+                let matchedNodes: GraphNode[] = [];
                 if (operationId) {
-                    matchedNode = byMethodName.get(operationId);
+                    matchedNodes = byMethodName.get(operationId) ?? [];
                 }
 
-                // --- Fallback match: (method, path) ---
-                if (!matchedNode) {
-                    matchedNode = byMethodPath.get(`${yamlMethod}:${apiPath}`);
+                // --- Fallback match: (method, normalised path) ---
+                if (matchedNodes.length === 0) {
+                    const normPath = normalisePath(apiPath);
+                    const fallback = byMethodPath.get(`${yamlMethod}:${normPath}`);
+                    if (fallback) {
+                        matchedNodes = [fallback];
+                    }
                 }
 
-                if (!matchedNode) {
+                if (matchedNodes.length === 0) {
                     diagnostics.endpointsUnmatched.push({
                         operationId,
                         method: yamlMethod,
                         path: apiPath,
                     });
                     continue;
+                }
+
+                // Record ambiguity when multiple nodes share the same operationId (P2-C)
+                if (operationId && matchedNodes.length > 1) {
+                    const candidateIds = matchedNodes.map((n) => n.id);
+                    const existing = ambiguityMap.get(operationId);
+                    if (!existing) {
+                        ambiguityMap.set(operationId, candidateIds);
+                    }
                 }
 
                 // Build openapiInfo
@@ -240,11 +271,20 @@ export async function enrichEndpointsFromOpenApi(
                     }
                 }
 
-                // Mutate node meta in-place
-                matchedNode.meta = { ...(matchedNode.meta ?? {}), openapiInfo: info };
-                diagnostics.endpointsMatched++;
+                // Mutate all matched nodes in-place; track unique enriched IDs (P2-B)
+                for (const matchedNode of matchedNodes) {
+                    matchedNode.meta = { ...(matchedNode.meta ?? {}), openapiInfo: info };
+                    matchedNodeIds.add(matchedNode.id);
+                }
             }
         }
+    }
+
+    // Compute final counters from sets (P2-B: deduped count)
+    diagnostics.endpointsMatched = matchedNodeIds.size;
+    // Flush ambiguity map to diagnostics (P2-C)
+    for (const [operationId, candidates] of ambiguityMap) {
+        diagnostics.ambiguousOperationIds.push({ operationId, candidates });
     }
 
     return { diagnostics };

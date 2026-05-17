@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { describe, it, expect, beforeEach } from 'vitest';
 
 import type { GraphNode } from '../../core/types.js';
-import { enrichEndpointsFromOpenApi, type OpenApiInfo } from './enrich-endpoints.js';
+import { enrichEndpointsFromOpenApi, type OpenApiInfo, type OpenApiEnrichDiagnostics } from './enrich-endpoints.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -479,5 +479,147 @@ paths:
         expect(result.diagnostics.endpointsMatched).toBe(2);
         expect((nodes[0]!.meta?.openapiInfo as OpenApiInfo).description).toBe('Описание A');
         expect((nodes[1]!.meta?.openapiInfo as OpenApiInfo).description).toBe('Описание B');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// P2-A: Path-param normalisation — {id} vs :id fallback match
+// ---------------------------------------------------------------------------
+
+describe('enrichEndpointsFromOpenApi — P2-A path-param normalisation', () => {
+    let tmpDir: string;
+
+    beforeEach(async () => {
+        tmpDir = await mkdtemp(join(tmpdir(), 'ag-openapi-test-'));
+        await mkdir(join(tmpDir, 'api'), { recursive: true });
+    });
+
+    it('fallback-matches YAML /users/{id} GET against endpoint node labeled GET /users/:id when operationId is absent', async () => {
+        // No operationId — forces fallback path match
+        const yamlContent = `
+openapi: 3.0.0
+paths:
+  /users/{id}:
+    get:
+      summary: Get user by ID
+      description: Получение пользователя по идентификатору
+`;
+        await writeTmpYaml(join(tmpDir, 'api'), 'api.yaml', yamlContent);
+
+        // NestJS-style label uses :id, not {id}
+        const nodes: GraphNode[] = [
+            makeEndpointNode('GET', '/users/:id', 'getUserById'),
+        ];
+
+        const result = await enrichEndpointsFromOpenApi(nodes, tmpDir, ['api/*.yaml']);
+
+        expect(result.diagnostics.endpointsMatched).toBe(1);
+        expect(result.diagnostics.endpointsUnmatched).toHaveLength(0);
+
+        const info = nodes[0]!.meta?.openapiInfo as OpenApiInfo;
+        expect(info.summary).toBe('Get user by ID');
+        expect(info.description).toBe('Получение пользователя по идентификатору');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// P2-B: Duplicate enrichment counter — two YAML files matching same endpoint
+// ---------------------------------------------------------------------------
+
+describe('enrichEndpointsFromOpenApi — P2-B deduped endpointsMatched', () => {
+    let tmpDir: string;
+
+    beforeEach(async () => {
+        tmpDir = await mkdtemp(join(tmpdir(), 'ag-openapi-test-'));
+        await mkdir(join(tmpDir, 'api'), { recursive: true });
+    });
+
+    it('counts endpointsMatched as 1 when two YAML files both match the same endpoint node', async () => {
+        // Both YAMLs reference the same operationId
+        const yaml1 = `
+openapi: 3.0.0
+paths:
+  /users:
+    get:
+      operationId: listUsers
+      description: Описание из файла 1
+`;
+        const yaml2 = `
+openapi: 3.0.0
+paths:
+  /users:
+    get:
+      operationId: listUsers
+      description: Описание из файла 2
+`;
+        await writeTmpYaml(join(tmpDir, 'api'), 'a.yaml', yaml1);
+        await writeTmpYaml(join(tmpDir, 'api'), 'b.yaml', yaml2);
+
+        const nodes: GraphNode[] = [
+            makeEndpointNode('GET', '/users', 'listUsers'),
+        ];
+
+        const result = await enrichEndpointsFromOpenApi(nodes, tmpDir, ['api/*.yaml']);
+
+        expect(result.diagnostics.filesProcessed).toBe(2);
+        // Even though matched twice, same node → counted once
+        expect(result.diagnostics.endpointsMatched).toBe(1);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// P2-C: Ambiguous operationId — two nodes with same methodName both enriched
+// ---------------------------------------------------------------------------
+
+describe('enrichEndpointsFromOpenApi — P2-C ambiguous operationId', () => {
+    let tmpDir: string;
+
+    beforeEach(async () => {
+        tmpDir = await mkdtemp(join(tmpdir(), 'ag-openapi-test-'));
+        await mkdir(join(tmpDir, 'api'), { recursive: true });
+    });
+
+    it('enriches all nodes sharing the same methodName and records ambiguity in diagnostics', async () => {
+        const yamlContent = `
+openapi: 3.0.0
+paths:
+  /users:
+    get:
+      operationId: findAll
+      description: Все пользователи
+      summary: List all users
+`;
+        await writeTmpYaml(join(tmpDir, 'api'), 'api.yaml', yamlContent);
+
+        // Two controllers each expose a `findAll` endpoint
+        const node1: GraphNode = {
+            id: 'endpoint:GET /users',
+            kind: 'endpoint',
+            label: 'GET /users',
+            meta: { methodName: 'findAll', controllerClass: 'UsersController' },
+        };
+        const node2: GraphNode = {
+            id: 'endpoint:GET /admin/users',
+            kind: 'endpoint',
+            label: 'GET /admin/users',
+            meta: { methodName: 'findAll', controllerClass: 'AdminController' },
+        };
+
+        const result = await enrichEndpointsFromOpenApi([node1, node2], tmpDir, ['api/*.yaml']);
+
+        // Both nodes enriched
+        expect(result.diagnostics.endpointsMatched).toBe(2);
+        const info1 = node1.meta?.openapiInfo as OpenApiInfo;
+        const info2 = node2.meta?.openapiInfo as OpenApiInfo;
+        expect(info1.description).toBe('Все пользователи');
+        expect(info2.description).toBe('Все пользователи');
+
+        // Ambiguity recorded
+        const diag = result.diagnostics as OpenApiEnrichDiagnostics;
+        expect(diag.ambiguousOperationIds).toHaveLength(1);
+        const ambig = diag.ambiguousOperationIds[0]!;
+        expect(ambig.operationId).toBe('findAll');
+        expect(ambig.candidates).toContain('endpoint:GET /users');
+        expect(ambig.candidates).toContain('endpoint:GET /admin/users');
     });
 });
