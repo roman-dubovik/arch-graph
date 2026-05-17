@@ -27,6 +27,11 @@
 #     fallback      — naive two-call: always try --code-only first; if MISS,
 #                     retry --docs-only. Models an LLM with no intent
 #                     knowledge that just tries both buckets.
+#     both-buckets  — ALWAYS issue both --code-only AND --docs-only calls
+#                     and union the verdicts. Models an LLM that runs both
+#                     searches unconditionally and inspects two separately
+#                     labeled top-K lists. Doubles retrieval cost but
+#                     removes any intent-routing risk.
 #
 # Exit code:
 #   0 — all projects meet their expected threshold
@@ -44,8 +49,8 @@ CLI="$WORKTREE_DIR/src/cli/index.ts"
 K="${EVAL_K:-10}"
 EVAL_MODE="${EVAL_MODE:-per-category}"
 case "$EVAL_MODE" in
-  single|per-category|fallback) ;;
-  *) echo "ERROR: invalid EVAL_MODE='$EVAL_MODE'. Use single|per-category|fallback." >&2; exit 1 ;;
+  single|per-category|fallback|both-buckets) ;;
+  *) echo "ERROR: invalid EVAL_MODE='$EVAL_MODE'. Use single|per-category|fallback|both-buckets." >&2; exit 1 ;;
 esac
 DATE="$(date +%Y-%m-%d)"
 RESULTS_FILE="$SCRIPT_DIR/eval/results-${DATE}-${EVAL_MODE}.md"
@@ -312,6 +317,29 @@ run_query() {
         fi
         top5=$(build_top_summary)
       fi
+      ;;
+    both-buckets)
+      # Always issue both calls; union verdicts. This models the production
+      # pattern where the LLM agent receives two separately-labeled top-K
+      # lists ("CODE:..." and "DOCS:...") and decides on the fly which one
+      # is more useful. The HIT verdict here is "at least one bucket
+      # satisfied the filters".
+      local code_verdict code_top5 docs_verdict docs_top5
+      code_verdict=$(search_and_judge "$qid" "$project_dir" "$query" "$min_score" "$kinds_csv" "$labels_csv" "--code-only")
+      code_top5=$(build_top_summary)
+      docs_verdict=$(search_and_judge "$qid" "$project_dir" "$query" "$min_score" "$kinds_csv" "$labels_csv" "--docs-only")
+      docs_top5=$(build_top_summary)
+
+      # Propagate ERROR if either call failed at the infrastructure layer.
+      if [[ "$code_verdict" == "ERROR" || "$docs_verdict" == "ERROR" ]]; then
+        verdict="ERROR"
+      elif [[ "$code_verdict" == "HIT" || "$docs_verdict" == "HIT" ]]; then
+        verdict="HIT"
+      else
+        verdict="MISS"
+      fi
+      mode_tag="both-buckets"
+      top5="CODE: ${code_top5} ⏐ DOCS: ${docs_top5}"
       ;;
   esac
 
