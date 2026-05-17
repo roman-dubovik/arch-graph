@@ -24,11 +24,14 @@ export type { Anchor };
  * @param value   The raw string to brand as an Anchor.
  * @param nodeId  Node ID used in the error message for traceability.
  * @returns       The value cast to `Anchor`.
- * @throws        If value is empty or whitespace-only.
+ * @throws        If value is empty, whitespace-only, or the sentinel string `<anonymous>`.
  */
 export function buildAnchor(value: string, nodeId: string): Anchor {
     if (!value.trim()) {
         throw new Error(`anchor: value is empty for ${nodeId}`);
+    }
+    if (value === '<anonymous>') {
+        throw new Error(`anchor: value is invalid for ${nodeId} (got '<anonymous>')`);
     }
     return value as Anchor;
 }

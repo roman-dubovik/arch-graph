@@ -115,14 +115,29 @@ export type SnippetRecallResult =
     | { kind: 'empty' };
 
 // ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Assert a non-empty array at runtime and narrow its type to a non-empty tuple.
+ * The check is technically redundant at every call site (callers already guard
+ * for a non-empty condition), but it makes the invariant structural and reusable.
+ */
+function toNonEmpty<T>(arr: T[]): [T, ...T[]] {
+    if (arr.length === 0) throw new Error('invariant: array must be non-empty');
+    return arr as [T, ...T[]];
+}
+
+// ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
 
 /**
  * Build a SnippetStats object, computing aggregateFillRate from totals.
- * Keeps aggregateFillRate consistent: 0 when totalNodes is 0.
+ * Centralises the zero-guard for aggregateFillRate — inline construction
+ * would compute 0/0 = NaN when totalNodes is 0.
  */
-function makeSnippetStats(
+export function makeSnippetStats(
     totalNodes: number,
     totalFilled: number,
     byKind: KindStats[],
@@ -223,7 +238,7 @@ export async function validateSnippetRecall(semanticDir: string): Promise<Snippe
 
     const failures = byKind.filter((k) => !k.passed);
     if (failures.length > 0) {
-        return { kind: 'below-floor', failures: failures as [KindStats, ...KindStats[]], stats };
+        return { kind: 'below-floor', failures: toNonEmpty(failures), stats };
     }
 
     return { kind: 'ok', stats };
