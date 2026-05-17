@@ -135,12 +135,20 @@ export interface ResolvedDocsConfig {
 }
 
 export function applyDocsDefaults(d: DocsConfig | undefined): ResolvedDocsConfig {
+    const chunkTokens = d?.chunkTokens ?? 100;
+    const maxFileBytes = d?.maxFileBytes ?? 10 * 1024 * 1024;
+    if (!Number.isInteger(chunkTokens) || chunkTokens <= 0) {
+        throw new Error(`docs.chunkTokens must be a positive integer, got ${String(chunkTokens)}`);
+    }
+    if (!Number.isInteger(maxFileBytes) || maxFileBytes <= 0) {
+        throw new Error(`docs.maxFileBytes must be a positive integer, got ${String(maxFileBytes)}`);
+    }
     return {
         include: d?.include ?? [...DOCS_DEFAULT_INCLUDE],
         exclude: d?.exclude ?? [...DOCS_DEFAULT_EXCLUDE],
         respectGitignore: d?.respectGitignore ?? true,
-        chunkTokens: d?.chunkTokens ?? 100,
-        maxFileBytes: d?.maxFileBytes ?? 10 * 1024 * 1024,
+        chunkTokens,
+        maxFileBytes,
     };
 }
 

@@ -36,4 +36,13 @@ describe('applyDocsDefaults', () => {
         expect(r.include).toEqual(['ONLY_THIS.md']);
         expect(r.exclude).toEqual(['NEVER_THIS.md']);
     });
+
+    it('throws on non-positive chunkTokens', () => {
+        expect(() => applyDocsDefaults({ chunkTokens: 0 })).toThrow(/positive integer/);
+        expect(() => applyDocsDefaults({ chunkTokens: -5 })).toThrow(/positive integer/);
+    });
+
+    it('throws on non-positive maxFileBytes', () => {
+        expect(() => applyDocsDefaults({ maxFileBytes: 0 })).toThrow(/positive integer/);
+    });
 });

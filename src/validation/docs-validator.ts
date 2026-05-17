@@ -10,9 +10,21 @@
  * recall = (processedFiles.size + realSkipped) / filesIncluded
  */
 
-import type { DocsDiagnostics, DocsValidationReport, GraphNode } from '../core/types.js';
+import type { DocsDiagnostics, DocsSkipReason, DocsValidationReport, GraphNode } from '../core/types.js';
 
-const REAL_SKIP_REASONS = new Set(['oversized', 'non-utf8', 'empty', 'read-error']);
+/**
+ * Exhaustive classification of every DocsSkipReason variant.
+ * Adding a new DocsSkipReason to types.ts produces a compile error here,
+ * forcing the author to decide how it contributes to recall.
+ */
+const SKIP_CLASSIFICATION: Record<DocsSkipReason, 'real' | 'user-excluded'> = {
+    'oversized':          'real',
+    'non-utf8':           'real',
+    'empty':              'real',
+    'read-error':         'real',
+    'gitignored':         'user-excluded',
+    'excluded-by-config': 'user-excluded',
+};
 
 export function validateDocs(
     diagnostics: DocsDiagnostics,
@@ -27,7 +39,7 @@ export function validateDocs(
     let realSkipped = 0;
     let userExcluded = 0;
     for (const s of diagnostics.filesSkipped) {
-        if (REAL_SKIP_REASONS.has(s.reason)) realSkipped += 1;
+        if (SKIP_CLASSIFICATION[s.reason] === 'real') realSkipped += 1;
         else userExcluded += 1;
     }
 

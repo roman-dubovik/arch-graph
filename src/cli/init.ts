@@ -15,6 +15,7 @@ import { stdin as input, stdout as output } from 'node:process';
 
 import fastGlob from 'fast-glob';
 
+import { DOCS_DEFAULT_INCLUDE } from '../core/config.js';
 import { claudeInstall } from './claude.js';
 import * as hooksModule from './hooks.js';
 import { registerProject } from './project-registry.js';
@@ -79,16 +80,6 @@ function methodsArray(methods: string[]): string {
 
 // ─── docs discovery ───────────────────────────────────────────────────────────
 
-const DEFAULT_DOC_INCLUDE = [
-    'README.md',
-    'docs/**/*.md',
-    'apps/*/README.md',
-    'libs/*/README.md',
-    'packages/*/README.md',
-    'CHANGELOG.md',
-    'ROADMAP.md',
-];
-
 async function discoverExtraMdFiles(repoRoot: string, respectGitignore: boolean): Promise<string[]> {
     let all: string[];
     if (respectGitignore) {
@@ -97,7 +88,9 @@ async function discoverExtraMdFiles(repoRoot: string, respectGitignore: boolean)
                 encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
             });
             all = stdout.split('\n').filter(s => s.length > 0);
-        } catch {
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            process.stderr.write(`Warning: git ls-files failed (${message}); falling back to unfiltered glob — .gitignore NOT respected.\n`);
             all = await fastGlob(['**/*.md'], {
                 cwd: repoRoot, ignore: ['**/node_modules/**'], dot: false,
             });
@@ -107,7 +100,7 @@ async function discoverExtraMdFiles(repoRoot: string, respectGitignore: boolean)
             cwd: repoRoot, ignore: ['**/node_modules/**'], dot: false,
         });
     }
-    const defaultMatches = new Set(await fastGlob(DEFAULT_DOC_INCLUDE, { cwd: repoRoot }));
+    const defaultMatches = new Set(await fastGlob([...DOCS_DEFAULT_INCLUDE], { cwd: repoRoot }));
     return all.filter(f => !defaultMatches.has(f)).sort();
 }
 
@@ -179,7 +172,7 @@ export function buildConfigTemplate(a: WizardAnswers): string {
     let docsBlockStr = '';
     if (a.docs !== undefined) {
         const customInclude = a.docs.userInclude.length > 0
-            ? `        include: [${[...DEFAULT_DOC_INCLUDE, ...a.docs.userInclude].map(q).join(', ')}],\n`
+            ? `        include: [${[...DOCS_DEFAULT_INCLUDE, ...a.docs.userInclude].map(q).join(', ')}],\n`
             : '';
         const customExclude = a.docs.userExclude.length > 0
             ? `        exclude: [${a.docs.userExclude.map(q).join(', ')}],\n`
