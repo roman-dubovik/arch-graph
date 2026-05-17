@@ -320,3 +320,51 @@ describe('semantic_search handler — vectorsError on augmentation failure', () 
         expect(output.vectorsError).toContain('disk read failure');
     });
 });
+
+// ---------------------------------------------------------------------------
+// Case 9: kinds filter — only doc-section nodes returned
+// ---------------------------------------------------------------------------
+
+describe('semantic_search handler — kinds filter: doc-section', () => {
+    it('returns only doc-section nodes when kinds: ["doc-section"] is passed', async () => {
+        const graphHash = await writeGraphJson('{"nodes":[]}');
+
+        // Mixed-kind sidecar: 2 doc-section + 2 other kinds
+        const records = [
+            makeRecord('doc-section:readme#install', 'doc-section', unitVec(0), {
+                label: 'Installation',
+            }),
+            makeRecord('doc-section:readme#usage', 'doc-section', unitVec(1), {
+                label: 'Usage',
+            }),
+            makeRecord('service:api', 'service', unitVec(2), { label: 'API Service' }),
+            makeRecord('nats-subject:orders', 'nats-subject', unitVec(3), {
+                label: 'orders',
+            }),
+        ];
+        await writeSidecar(records, graphHash);
+
+        const handler = makeSemanticSearchHandler({ outDir: testDir, embedder: fakeEmbedder });
+        const result = await handler({
+            query: 'installation docs',
+            topK: 10,
+            kinds: ['doc-section'],
+            includeVectors: false,
+        });
+
+        const output = JSON.parse(result.content[0]!.text);
+        expect(output.results).toBeDefined();
+        expect(Array.isArray(output.results)).toBe(true);
+
+        // Only doc-section results must be returned
+        expect(output.results.length).toBeGreaterThan(0);
+        for (const res of output.results as Array<{ nodeId: string; kind: string }>) {
+            expect(res.kind).toBe('doc-section');
+        }
+
+        // The non-doc-section records must not appear
+        const returnedIds = (output.results as Array<{ nodeId: string }>).map((r) => r.nodeId);
+        expect(returnedIds).not.toContain('service:api');
+        expect(returnedIds).not.toContain('nats-subject:orders');
+    });
+});

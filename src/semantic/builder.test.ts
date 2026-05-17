@@ -7,6 +7,7 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ArchGraph } from '../core/types.js';
@@ -796,5 +797,85 @@ describe('buildSemanticIndex — skippedNodes cap truncation (P1-6)', () => {
     it('SKIPPED_NODES_CAP constant is 10_000', () => {
         // Ensure the production cap value is not accidentally changed.
         expect(SKIPPED_NODES_CAP).toBe(10_000);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Integration: doc-section node produces SemanticRecord with heading-chain
+// snippet and 384-dim vector
+// ---------------------------------------------------------------------------
+
+describe('buildSemanticIndex — doc-section integration', () => {
+    it('produces a SemanticRecord with heading-chain snippet and 384-dim vector', async () => {
+        /**
+         * doc-section extractor uses readFileSync(node.path) directly — bypasses
+         * the ts-morph Project.  We point node.path at the real fixture file on
+         * disk so extractDocSectionSnippet can read it.
+         *
+         * Fixture: src/__fixtures__/docs/sample/README.md
+         *   Line 5:  ## Installation
+         *   Line 6:  (blank)
+         *   Line 7:  How to install.
+         *
+         * meta.headingChain = ['Sample Project', 'Installation']
+         * meta.startLine = 6, meta.endLine = 7
+         *
+         * Expected snippet prefix: "# Sample Project > Installation"
+         */
+        const fixtureReadme = fileURLToPath(
+            new URL('../__fixtures__/docs/sample/README.md', import.meta.url),
+        );
+
+        const graph = makeGraph({
+            nodes: [
+                {
+                    id: 'doc-section:sample/README.md#installation',
+                    kind: 'doc-section',
+                    label: 'Installation',
+                    path: fixtureReadme,
+                    meta: {
+                        headingChain: ['Sample Project', 'Installation'],
+                        startLine: 6,
+                        endLine: 7,
+                    },
+                },
+            ],
+        });
+        await writeGraphJson(graph);
+
+        const { diagnostics } = await buildSemanticIndex({
+            graph,
+            project: inMemoryProject({}), // unused for doc-section (readFileSync bypass)
+            embedder: fakeEmbedder,
+            outDir: testDir,
+        });
+
+        // Node must be successfully indexed (no snippet failure)
+        expect(diagnostics.counts.indexed).toBe(1);
+        expect(diagnostics.counts.skipped).toBe(0);
+        expect(diagnostics.counts.fileReadErrors).toBe(0);
+        expect(diagnostics.skippedNodes).toHaveLength(0);
+
+        // Read back the JSONL to inspect the full SemanticRecord on disk
+        const raw = await readFile(join(testDir, 'semantic', 'embeddings.jsonl'), 'utf8');
+        const lines = raw.trim().split('\n');
+        expect(lines).toHaveLength(1);
+
+        const record = JSON.parse(lines[0]!) as {
+            nodeId: string;
+            kind: string;
+            snippet: string;
+            vector: number[];
+        };
+
+        // Kind is preserved
+        expect(record.kind).toBe('doc-section');
+
+        // Snippet starts with the heading-chain prefix
+        expect(record.snippet.startsWith('# Sample Project > Installation')).toBe(true);
+        expect(record.snippet.length).toBeGreaterThan(0);
+
+        // Vector is 384-dimensional
+        expect(record.vector).toHaveLength(SEMANTIC_DIM);
     });
 });
