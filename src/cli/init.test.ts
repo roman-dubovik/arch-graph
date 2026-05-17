@@ -6,7 +6,7 @@
 //   - writeStrategySnippet tested with a tmpdir fixture.
 //   - Non-interactive path verified via mocked process.stdin.isTTY + writeFile spy.
 
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';

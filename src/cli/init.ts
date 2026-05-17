@@ -8,7 +8,7 @@
 
 import { existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { appendFile, readFile, writeFile } from 'node:fs/promises';
+import { appendFile, writeFile } from 'node:fs/promises';
 import { createInterface } from 'node:readline/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import { stdin as input, stdout as output } from 'node:process';
@@ -470,7 +470,9 @@ export async function runInitWizard(target: string): Promise<void> {
         await registerProject(dirname(targetPath));
         process.stdout.write(`wrote ${targetPath}\n`);
         // Non-interactive: default to both-buckets, separate snippet file.
-        const snippetPath = await writeStrategySnippet('both-buckets', 'separate', dirname(targetPath));
+        // Use CWD (resolve('.')) so the snippet lands in the project root,
+        // consistent with the interactive path.
+        const snippetPath = await writeStrategySnippet('both-buckets', 'separate', resolve('.'));
         process.stdout.write(`wrote ${snippetPath}\n`);
         return;
     }
@@ -580,15 +582,12 @@ export async function runInitWizard(target: string): Promise<void> {
     }
 
     // ── Semantic strategy snippet ─────────────────────────────────────────────
-    // Determine effective snippet target: if installClaude just wrote CLAUDE.md
-    // and there was no pre-existing one, we still write a separate file so we
-    // don't clobber the fresh arch-graph block. Only append when the user
-    // explicitly chose 'append' (meaning CLAUDE.md pre-existed).
-    const effectiveSnippetTarget: SnippetTarget =
-        answers.snippetTarget === 'append' ? 'append' : 'separate';
+    // snippetTarget is 'append' only when CLAUDE.md pre-existed AND the user
+    // explicitly chose option 1. Otherwise always 'separate' (preserves any
+    // fresh arch-graph block that claudeInstall may have just written).
     const writtenSnippetPath = await writeStrategySnippet(
         answers.semanticStrategy,
-        effectiveSnippetTarget,
+        answers.snippetTarget,
         resolve('.'),
     );
     output.write(`✓ wrote ${writtenSnippetPath}\n`);
@@ -628,7 +627,7 @@ export async function runInitWizard(target: string): Promise<void> {
     const configRel = relative(process.cwd(), targetPath) || targetPath;
     const claudePart = installClaude ? ' CLAUDE.md' : '';
     const snippetRel = relative(process.cwd(), writtenSnippetPath) || writtenSnippetPath;
-    const snippetPart = effectiveSnippetTarget === 'separate' ? ` ${snippetRel}` : '';
+    const snippetPart = answers.snippetTarget === 'separate' ? ` ${snippetRel}` : '';
     output.write(`  • Commit the config: git add ${configRel}${claudePart}${snippetPart} && git commit\n`);
 
     if (hookMode !== 'none') {
