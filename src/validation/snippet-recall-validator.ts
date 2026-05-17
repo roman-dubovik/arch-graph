@@ -98,8 +98,8 @@ export type SnippetRecallResult =
       }
     | {
           kind: 'below-floor';
-          /** Kinds that failed their recall floor. */
-          failures: KindStats[];
+          /** Kinds that failed their recall floor (at least one entry guaranteed). */
+          failures: [KindStats, ...KindStats[]];
           stats: SnippetStats;
       }
     | {
@@ -113,6 +113,27 @@ export type SnippetRecallResult =
           totalLines: number;
       }
     | { kind: 'empty' };
+
+// ---------------------------------------------------------------------------
+// Factory
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a SnippetStats object, computing aggregateFillRate from totals.
+ * Keeps aggregateFillRate consistent: 0 when totalNodes is 0.
+ */
+function makeSnippetStats(
+    totalNodes: number,
+    totalFilled: number,
+    byKind: KindStats[],
+): SnippetStats {
+    return {
+        totalNodes,
+        totalFilled,
+        aggregateFillRate: totalNodes > 0 ? totalFilled / totalNodes : 0,
+        byKind,
+    };
+}
 
 // ---------------------------------------------------------------------------
 // Validator
@@ -198,16 +219,11 @@ export async function validateSnippetRecall(semanticDir: string): Promise<Snippe
         return { kind: 'empty' };
     }
 
-    const stats: SnippetStats = {
-        totalNodes,
-        totalFilled,
-        aggregateFillRate: totalFilled / totalNodes,
-        byKind,
-    };
+    const stats = makeSnippetStats(totalNodes, totalFilled, byKind);
 
     const failures = byKind.filter((k) => !k.passed);
     if (failures.length > 0) {
-        return { kind: 'below-floor', failures, stats };
+        return { kind: 'below-floor', failures: failures as [KindStats, ...KindStats[]], stats };
     }
 
     return { kind: 'ok', stats };
