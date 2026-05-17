@@ -8,14 +8,17 @@
  *   - Routes derived from file paths — .tsx/.jsx only
  *   - JSX render references (fe-renders edges) — .tsx/.jsx only
  *   - Import references between FE files (fe-imports edges) — .tsx/.jsx only
+ *   - i18n strings (next-intl / react-i18next) — .tsx/.jsx only
  */
-import { resolve } from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 
 import type { Project, SourceFile } from 'ts-morph';
 
 import type { ArchGraphConfig } from '../../core/config.js';
 import { isExcludedSourceFile } from '../shared.js';
 import { extractReactPatterns } from './react-patterns.js';
+import { extractI18nStringsForFile, loadMessagesFromJson, type MessagesObject } from './i18n-resolver.js';
 import { deriveRoute, extractPageFromFile } from './router-patterns.js';
 import type {
     FeComponent,
@@ -54,11 +57,39 @@ function isFESourceFile(sf: SourceFile): { include: boolean; hooksOnly: boolean 
 }
 
 /**
+ * Load project i18n messages from well-known locations under `root`.
+ * Priority: messages/ru.json → messages/en.json → locales/ru/translation.json
+ *           → locales/en/translation.json.
+ * Returns empty object when no file is found (graceful no-op, AC-B3).
+ */
+async function loadProjectMessages(root: string): Promise<MessagesObject> {
+    const candidates = [
+        join(root, 'messages', 'ru.json'),
+        join(root, 'messages', 'en.json'),
+        join(root, 'locales', 'ru', 'translation.json'),
+        join(root, 'locales', 'en', 'translation.json'),
+    ];
+    for (const candidate of candidates) {
+        try {
+            const raw = await readFile(candidate, 'utf8');
+            const parsed = loadMessagesFromJson(raw);
+            if (Object.keys(parsed).length > 0) return parsed;
+        } catch {
+            // File absent or unreadable — try next candidate
+        }
+    }
+    return {};
+}
+
+/**
  * Extract FE components, hooks, pages, routes, renders, and imports
  * from all .tsx/.jsx files (and hooks from .ts files) in the ts-morph project.
  */
 export async function extractFe(cfg: ArchGraphConfig, project: Project): Promise<FeExtractResult> {
     const root = resolve(cfg.root);
+
+    // Load i18n messages once per extractFe call (shared across all files).
+    const projectMessages = await loadProjectMessages(root);
 
     const allComponents: FeComponent[] = [];
     const allHooks: FeHook[] = [];
@@ -91,12 +122,19 @@ export async function extractFe(cfg: ArchGraphConfig, project: Project): Promise
         // --- Full FE patterns (components, hooks, renders) for .tsx/.jsx ---
         const { components, hooks, renders } = extractReactPatterns(sf, { hooksOnly: false });
 
+        // Resolve i18n strings for this file once (shared by all components in the file,
+        // since useTranslations/useTranslation is typically called at file scope).
+        // AC-B1..B4: next-intl + react-i18next only; graceful no-op for others.
+        const fileI18nStrings = extractI18nStringsForFile(sf, projectMessages);
+
         // Apply fallback name for anonymous components (P1-4)
         for (const comp of components) {
             /* v8 ignore next 3 */
             if (!comp.name) {
                 comp.name = `${comp.kind}@${comp.location.line}`;
             }
+            // Attach resolved i18n strings (may be empty array — that's fine)
+            comp.i18nStrings = fileI18nStrings;
             allComponents.push(comp);
         }
         allHooks.push(...hooks);

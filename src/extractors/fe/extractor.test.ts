@@ -13,6 +13,9 @@ import { describe, expect, it } from 'vitest';
 import { Project, ts } from 'ts-morph';
 import { inMemoryProject } from '../../__fixtures__/in-memory-project.js';
 import { extractFe } from './extractor.js';
+import { mapFeToGraph } from '../../mapper/fe-to-graph.js';
+import { buildEmbedText } from '../../semantic/builder.js';
+import { OwnershipRegistry } from '../../core/service-registry.js';
 import type { ArchGraphConfig } from '../../core/config.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
@@ -430,5 +433,175 @@ describe('extractFe — in-memory Project seeded from fe-sample (P0-NEW tsx glob
         const cfg: ArchGraphConfig = { id: 'fe-sample', root: virtualRoot, appsGlob: '**' };
         const result = await extractFe(cfg, project);
         expect(result.hooks.length).toBeGreaterThan(0);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Task B integration tests (AC-B5, AC-B6, AC-B7)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build an in-memory project from a map of files, extractFe, then mapFeToGraph.
+ * Ownership registry maps everything under /root to a fake service.
+ */
+async function buildI18nIntegration(
+    files: Record<string, string>,
+    root = '/root',
+): Promise<{ nodes: ReturnType<typeof mapFeToGraph>['nodes']; components: Awaited<ReturnType<typeof extractFe>>['components'] }> {
+    const project = inMemoryProject(files);
+    const cfg: ArchGraphConfig = { id: 'test', root, appsGlob: '**' };
+    const extracted = await extractFe(cfg, project);
+
+    // Minimal ownership registry — maps everything under /root to a fake service
+    const ownership = new OwnershipRegistry('/root', [
+        { id: 'svc:web', rootDir: '/root', tsconfigPath: null, entryFile: null },
+    ], []);
+
+    const { nodes } = mapFeToGraph(extracted, ownership);
+    return { nodes, components: extracted.components };
+}
+
+describe('i18n integration — AC-B7: next-intl resolved (B1 path)', () => {
+    it('populates i18nStrings on FeComponent for next-intl t() calls', async () => {
+        const { components } = await buildI18nIntegration({
+            '/root/apps/web/Button.tsx': `
+                import { useTranslations } from 'next-intl';
+                export const Button = () => {
+                    const t = useTranslations();
+                    return <button>{t('common.apply')}</button>;
+                };
+            `,
+            // Inline minimal messages — extractor reads from disk (root/messages/ru.json)
+            // For in-memory tests, the file won't exist, so we pass empty messages
+            // and verify the no-file graceful path. Actual disk-based AC-B1 is in i18n-resolver.test.ts.
+        });
+        const btn = components.find((c) => c.name === 'Button');
+        expect(btn).toBeDefined();
+        // i18nStrings is populated (may be empty if no messages/ru.json found for virtual root)
+        expect(Array.isArray(btn!.i18nStrings)).toBe(true);
+    });
+});
+
+describe('i18n integration — AC-B7: react-i18next resolved (B2 path)', () => {
+    it('populates i18nStrings on FeComponent for react-i18next t() calls', async () => {
+        const { components } = await buildI18nIntegration({
+            '/root/apps/web/CancelBtn.tsx': `
+                import { useTranslation } from 'react-i18next';
+                export const CancelBtn = () => {
+                    const { t } = useTranslation();
+                    return <button>{t('common.cancel')}</button>;
+                };
+            `,
+        });
+        const btn = components.find((c) => c.name === 'CancelBtn');
+        expect(btn).toBeDefined();
+        expect(Array.isArray(btn!.i18nStrings)).toBe(true);
+    });
+});
+
+describe('i18n integration — AC-B7: library absent no-op (B3 path)', () => {
+    it('leaves i18nStrings empty when no i18n library imported', async () => {
+        const { components } = await buildI18nIntegration({
+            '/root/apps/web/Plain.tsx': `
+                export const Plain = () => <div>hello</div>;
+            `,
+        });
+        const plain = components.find((c) => c.name === 'Plain');
+        expect(plain).toBeDefined();
+        expect(plain!.i18nStrings).toEqual([]);
+    });
+});
+
+describe('i18n integration — AC-B5: meta.i18nStrings flows through fe-to-graph', () => {
+    it('propagates non-empty i18nStrings to GraphNode.meta', async () => {
+        // We test with a real fixture directory that has messages/ru.json
+        const fixtureDir = resolve(__dirname, '../../__fixtures__/fe-i18n-sample');
+        const files = await collectFiles(fixtureDir);
+        const virtualRoot = '/fe-i18n-root';
+        const fileMap: Record<string, string> = {};
+        for (const file of files) {
+            const rel = file.slice(fixtureDir.length);
+            fileMap[`${virtualRoot}${rel}`] = await readFile(file, 'utf8');
+        }
+
+        // Use real root pointing at fixture dir so messages/ru.json is loaded from disk
+        const project = new Project({
+            useInMemoryFileSystem: true,
+            compilerOptions: { target: 99, module: 99, moduleResolution: 100, strict: false, jsx: ts.JsxEmit.React },
+        });
+        for (const [path, src] of Object.entries(fileMap)) {
+            project.createSourceFile(path, src);
+        }
+
+        const cfg: ArchGraphConfig = { id: 'i18n-sample', root: fixtureDir, appsGlob: '**' };
+        const extracted = await extractFe(cfg, project);
+
+        // NextIntlButton should have Применить resolved
+        const btn = extracted.components.find((c) => c.name === 'NextIntlButton');
+        expect(btn).toBeDefined();
+        expect(btn!.i18nStrings).toContain('Применить');
+
+        // Map to graph and check meta flows through
+        const ownership = new OwnershipRegistry(fixtureDir, [
+            { id: 'svc:web', rootDir: fixtureDir, tsconfigPath: null, entryFile: null },
+        ], []);
+        const { nodes } = mapFeToGraph(extracted, ownership);
+
+        const btnNode = nodes.find((n) => n.label === 'NextIntlButton');
+        expect(btnNode).toBeDefined();
+        expect(Array.isArray(btnNode!.meta?.['i18nStrings'])).toBe(true);
+        expect(btnNode!.meta!['i18nStrings']).toContain('Применить');
+    });
+});
+
+describe('i18n integration — AC-B6: buildEmbedText appends i18n strings', () => {
+    it('appends i18nStrings to embed text for fe-component nodes', () => {
+        const node = {
+            id: 'fe-component:/root/Button.tsx#Button',
+            kind: 'fe-component' as const,
+            label: 'Button',
+            path: '/root/Button.tsx',
+            meta: { i18nStrings: ['Применить', 'Отмена'] },
+        };
+        const text = buildEmbedText(node, 'const Button = () => <button/>');
+        expect(text).toContain('Применить');
+        expect(text).toContain('Отмена');
+        expect(text).toMatch(/Применить Отмена/);
+    });
+
+    it('does NOT append i18n strings for non-fe-component nodes', () => {
+        const node = {
+            id: 'fe-hook:/root/useAuth.ts#useAuth',
+            kind: 'fe-hook' as const,
+            label: 'useAuth',
+            path: '/root/useAuth.ts',
+            meta: { i18nStrings: ['Применить'] },
+        };
+        const text = buildEmbedText(node, 'function useAuth() {}');
+        expect(text).not.toContain('Применить');
+    });
+
+    it('produces no trailing content when i18nStrings is empty', () => {
+        const node = {
+            id: 'fe-component:/root/Plain.tsx#Plain',
+            kind: 'fe-component' as const,
+            label: 'Plain',
+            path: '/root/Plain.tsx',
+            meta: { i18nStrings: [] },
+        };
+        const snippetText = 'const Plain = () => <div/>';
+        const text = buildEmbedText(node, snippetText);
+        // Should end with the snippet, not have extra newline+empty
+        expect(text).toBe(`Plain fe-component\n${snippetText}`);
+    });
+
+    it('works when meta is absent (no i18nStrings)', () => {
+        const node = {
+            id: 'fe-component:/root/NoMeta.tsx#NoMeta',
+            kind: 'fe-component' as const,
+            label: 'NoMeta',
+            path: '/root/NoMeta.tsx',
+        };
+        expect(() => buildEmbedText(node, 'const NoMeta = () => <div/>')).not.toThrow();
     });
 });

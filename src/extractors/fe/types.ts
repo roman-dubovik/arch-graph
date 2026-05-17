@@ -28,6 +28,14 @@ export interface FeComponent {
     exported: boolean;
     /** True for default exports. */
     defaultExport: boolean;
+    /**
+     * Resolved i18n strings for this component (AC-B1..B4).
+     * Populated by the i18n-resolver when a recognised library (next-intl /
+     * react-i18next) is imported in the component's file. Empty array when no
+     * library is detected or no keys resolve. Intentionally NOT in snippet —
+     * only propagated to embed-text for retrieval.
+     */
+    i18nStrings?: string[];
 }
 
 export interface FeHook {

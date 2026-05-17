@@ -78,6 +78,10 @@ export function mapFeToGraph(
                     componentKind: comp.kind,
                     exported: comp.exported,
                     defaultExport: comp.defaultExport,
+                    // AC-B5: propagate i18n strings to GraphNode.meta for embed-text
+                    ...(comp.i18nStrings && comp.i18nStrings.length > 0
+                        ? { i18nStrings: comp.i18nStrings }
+                        : {}),
                 },
             });
         }
