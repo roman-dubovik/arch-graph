@@ -644,18 +644,6 @@ export class AdminController {
 
     // AC-6F: Numeric enum members
     it('AC-6F: numeric enum member resolves to string representation', () => {
-        const project = inMemoryProject({
-            '/app/numeric.controller.ts': `
-import { Controller, Get } from '@nestjs/common';
-enum EHttpCodes { OK = 200 }
-enum EVersions { V1 = 1 }
-@Controller('api')
-export class NumericController {
-    @Get('status')
-    status() {}
-}
-`,
-        });
         // Numeric enums in controller/method path args are unusual but valid per AC-6F.
         // The main thing to verify is that numeric enum members don't throw.
         const project2 = inMemoryProject({
