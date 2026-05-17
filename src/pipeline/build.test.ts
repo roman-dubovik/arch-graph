@@ -2,7 +2,9 @@
  * Tests for stage() error handling and stack preservation.
  */
 import { describe, expect, it } from 'vitest';
-import { stage } from './build.js';
+import { resolve } from 'node:path';
+import { stage, runBuild } from './build.js';
+import type { ArchGraphConfig } from '../core/config.js';
 
 describe('stage()', () => {
     it('preserves Error stack when inner function throws an Error', async () => {
@@ -52,5 +54,30 @@ describe('stage()', () => {
             const e = err as Error;
             expect(e.message).toMatch(/^custom-stage-name failed:/);
         }
+    });
+});
+
+describe('build — docs pass', () => {
+    it('emits doc-section nodes when docs.include matches files', async () => {
+        const fixtureRoot = resolve(__dirname, '../__fixtures__/docs/sample');
+        const cfg: ArchGraphConfig = {
+            id: 'docs-test',
+            root: fixtureRoot,
+            appsGlob: 'apps/*',
+            docs: {
+                include: ['README.md', 'ADR.md'],
+                exclude: [],
+                respectGitignore: false,
+                chunkTokens: 100,
+                maxFileBytes: 10_000_000,
+            },
+        };
+
+        const result = await runBuild(cfg);
+
+        const docNodes = result.graph.nodes.filter(n => n.kind === 'doc-section');
+        expect(docNodes.length).toBeGreaterThan(0);
+        expect(result.diagnostics.docs).toBeDefined();
+        expect(result.diagnostics.docs!.counts.nodesEmitted).toBe(docNodes.length);
     });
 });

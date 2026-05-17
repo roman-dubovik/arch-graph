@@ -621,3 +621,75 @@ describe('extractSnippet — nodes without path (no regression)', () => {
         expect(() => extractSnippet(project, node)).not.toThrow();
     });
 });
+
+// ---------------------------------------------------------------------------
+// doc-section — line-range + heading-chain prefix
+// ---------------------------------------------------------------------------
+
+const DOC_FIXTURE_PATH = new URL('../__fixtures__/docs/sample/README.md', import.meta.url).pathname;
+
+describe('extractSnippet — doc-section', () => {
+    function makeDocNode(overrides: Partial<GraphNode>): GraphNode {
+        return {
+            id: 'doc-section:README.md#installation',
+            kind: 'doc-section',
+            label: 'Installation',
+            path: DOC_FIXTURE_PATH,
+            anchor: 'installation' as GraphNode['anchor'],
+            meta: {
+                headingChain: ['Sample Project', 'Installation'],
+                headingLevel: 2,
+                startLine: 6,
+                endLine: 7,
+                charCount: 16,
+                tokenCount: 4,
+                wasSplit: false,
+            },
+            ...overrides,
+        };
+    }
+
+    it('reads body from file and prepends heading-chain prefix', () => {
+        const project = new Project({ useInMemoryFileSystem: false });
+        const result = extractSnippet(project, makeDocNode({}));
+        expect(result.reason).toBeUndefined();
+        expect(result.snippet.startsWith('# Sample Project > Installation')).toBe(true);
+        expect(result.snippet).toContain('How to install.');
+    });
+
+    it('returns reason=file-not-found when path is absent on disk', () => {
+        const project = new Project({ useInMemoryFileSystem: false });
+        const result = extractSnippet(project, makeDocNode({ path: '/no/such/file.md' }));
+        expect(result.snippet).toBe('');
+        expect(result.reason?.kind).toBe('file-not-found');
+    });
+
+    it('handles __root__ node (no headings) with file-label prefix', () => {
+        const project = new Project({ useInMemoryFileSystem: false });
+        const node = makeDocNode({
+            id: 'doc-section:README.md#__root__',
+            label: 'README',
+            meta: {
+                headingChain: [],
+                headingLevel: 0,
+                startLine: 1,
+                endLine: 3,
+                charCount: 0,
+                tokenCount: 0,
+                wasSplit: false,
+            },
+        });
+        const result = extractSnippet(project, node);
+        expect(result.snippet.startsWith('# README')).toBe(true);
+    });
+
+    it('returns reason=label-not-located when meta.startLine is missing', () => {
+        const project = new Project({ useInMemoryFileSystem: false });
+        const node = makeDocNode({
+            meta: { headingChain: [], headingLevel: 0, charCount: 0, tokenCount: 0, wasSplit: false } as unknown as GraphNode['meta'],
+        });
+        const result = extractSnippet(project, node);
+        expect(result.snippet).toBe('');
+        expect(result.reason?.kind).toBe('label-not-located');
+    });
+});

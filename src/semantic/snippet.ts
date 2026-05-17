@@ -23,6 +23,8 @@
  *   - `fe-route`:              label = URL pattern; anchor is never set; falls back to
  *                              default export then first exported function in the page file
  */
+import { readFileSync } from 'node:fs';
+
 import { SyntaxKind } from 'ts-morph';
 import type { Node as TsMorphNode } from 'ts-morph';
 import type { Project, SourceFile } from 'ts-morph';
@@ -35,6 +37,9 @@ export const SNIPPET_MAX_CHARS = 400;
 
 /** Relaxed snippet cap for fe-component and fe-page (includes JSDoc + JSX text). */
 export const FE_SNIPPET_MAX_CHARS = 800;
+
+/** Relaxed snippet cap for doc-section (heading chain + adaptive-sized chunk). */
+export const DOC_SECTION_SNIPPET_MAX_CHARS = 800;
 
 export interface SnippetResult {
     snippet: string;
@@ -53,6 +58,12 @@ export function extractSnippet(project: Project, node: GraphNode): SnippetResult
     // Nodes with no path have no source to extract; expected, not a failure.
     if (!node.path) {
         return { snippet: '' };
+    }
+
+    // doc-section nodes are Markdown files — ts-morph cannot parse them.
+    // Guard here so we never call getSourceFile() on a .md path.
+    if (node.kind === 'doc-section') {
+        return extractDocSectionSnippet(node);
     }
 
     try {
@@ -342,6 +353,52 @@ function extractClassOrFunctionByLabel(sf: SourceFile, node: GraphNode, cap: num
     }
 
     return { snippet: '', reason: { kind: 'label-not-located', label: node.label } };
+}
+
+// ---------------------------------------------------------------------------
+// doc-section extractor
+// ---------------------------------------------------------------------------
+
+function formatHeadingChain(chain: readonly string[], fileLabel: string): string {
+    if (chain.length === 0) return `# ${fileLabel}\n\n`;
+    return `# ${chain.join(' > ')}\n\n`;
+}
+
+function extractDocSectionSnippet(node: GraphNode): SnippetResult {
+    if (!node.path) {
+        return { snippet: '' };
+    }
+    const meta = node.meta as
+        | { headingChain?: string[]; startLine?: number; endLine?: number }
+        | undefined;
+    if (meta === undefined || meta.startLine === undefined || meta.endLine === undefined) {
+        return { snippet: '', reason: { kind: 'label-not-located', label: node.label } };
+    }
+
+    let raw: string;
+    try {
+        raw = readFileSync(node.path, 'utf8');
+    } catch (err) {
+        const code = (err as NodeJS.ErrnoException).code;
+        return {
+            snippet: '',
+            reason: code === 'ENOENT'
+                ? { kind: 'file-not-found', path: node.path }
+                : { kind: 'ts-morph-error', message: (err as Error).message },
+        };
+    }
+
+    const lines = raw.replace(/\r\n/g, '\n').split('\n');
+    const start = Math.max(0, meta.startLine - 1);
+    const end = Math.min(lines.length, meta.endLine);
+    const bodySlice = lines.slice(start, end).join('\n');
+
+    const prefix = formatHeadingChain(meta.headingChain ?? [], node.label);
+    let snippet = prefix + bodySlice;
+    if (snippet.length > DOC_SECTION_SNIPPET_MAX_CHARS) {
+        snippet = snippet.slice(0, DOC_SECTION_SNIPPET_MAX_CHARS);
+    }
+    return { snippet };
 }
 
 // ---------------------------------------------------------------------------
