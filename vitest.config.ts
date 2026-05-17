@@ -2,7 +2,12 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
     test: {
-        include: ['src/**/*.test.ts'],
+        include: ['src/**/*.test.ts', 'src/**/*.test-d.ts'],
+        typecheck: {
+            enabled: true,
+            tsconfig: './tsconfig.typecheck.json',
+            include: ['src/**/*.test-d.ts'],
+        },
         exclude: ['node_modules', 'dist', 'arch-graph-out', 'poc', '.worktrees'],
         coverage: {
             provider: 'v8',
