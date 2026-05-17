@@ -219,15 +219,16 @@ describe('validateSnippetRecall — P1-5 malformed lines + edge cases', () => {
         expect(result.totalNodes).toBe(0);
     });
 
-    it('fully-corrupt index (100% malformed) → passed=false', async () => {
+    it('fully-corrupt index (100% malformed) → passed=false, indexCorrupt=true', async () => {
         const lines = Array.from({ length: 10 }, () => 'CORRUPT LINE NOT JSON').join('\n');
         writeFileSync(join(tmpDir, 'semantic', 'embeddings.jsonl'), lines, 'utf8');
         const result = await validateSnippetRecall(join(tmpDir, 'semantic'));
         expect(result.passed).toBe(false);
         expect(result.malformedLines).toBe(10);
+        expect(result.indexCorrupt).toBe(true);
     });
 
-    it('90%-corrupt index exceeds 5% threshold → passed=false', async () => {
+    it('90%-corrupt index exceeds 5% threshold → passed=false, indexCorrupt=true', async () => {
         // 1 good line (provider with snippet) + 9 bad lines → 90% malformed, exceeds 5% threshold
         const goodLine = JSON.stringify({ kind: 'provider', snippet: 'class P {}' });
         const badLines = Array.from({ length: 9 }, () => 'BAD');
@@ -239,6 +240,7 @@ describe('validateSnippetRecall — P1-5 malformed lines + edge cases', () => {
         const result = await validateSnippetRecall(join(tmpDir, 'semantic'));
         expect(result.passed).toBe(false);
         expect(result.malformedLines).toBe(9);
+        expect(result.indexCorrupt).toBe(true);
     });
 
     it('4%-malformed index (below threshold) does not force passed=false via corruption', async () => {
@@ -255,6 +257,7 @@ describe('validateSnippetRecall — P1-5 malformed lines + edge cases', () => {
         // Should pass (96% fill rate ≥ 95% floor, corruption < 5%)
         expect(result.passed).toBe(true);
         expect(result.malformedLines).toBe(4);
+        expect(result.indexCorrupt).toBe(false);
     });
 });
 

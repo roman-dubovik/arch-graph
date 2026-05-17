@@ -272,6 +272,7 @@ describe('runSemanticBuild — validateSnippetRecall wiring (P1-3)', () => {
             aggregateFillRate: 1.0,
             failures: [],
             malformedLines: 0,
+            indexCorrupt: false,
         });
 
         const stdoutLines: string[] = [];

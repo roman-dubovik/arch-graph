@@ -295,13 +295,21 @@ export async function runSemanticBuild(args: SemanticArgs): Promise<void> {
             );
         }
         if (!recallResult.passed) {
-            const failedKinds = recallResult.failures.map((f) => f.kind).join(', ');
-            const details = recallResult.failures
-                .map((f) => `  ${f.kind}: ${(f.fillRate * 100).toFixed(1)}% (need ${(f.floor * 100).toFixed(0)}%)`)
-                .join('\n');
-            process.stderr.write(
-                `\n[arch-graph semantic] WARNING: snippet recall below floor for: ${failedKinds}\n${details}\n`,
-            );
+            if (recallResult.indexCorrupt) {
+                process.stderr.write(
+                    `\n[arch-graph semantic] WARNING: index appears corrupt — ` +
+                    `${recallResult.malformedLines} of ${recallResult.malformedLines + recallResult.totalNodes} ` +
+                    `lines malformed (>${5}% threshold). Re-run \`arch-graph semantic build\` to rebuild.\n`,
+                );
+            } else if (recallResult.failures.length > 0) {
+                const failedKinds = recallResult.failures.map((f) => f.kind).join(', ');
+                const details = recallResult.failures
+                    .map((f) => `  ${f.kind}: ${(f.fillRate * 100).toFixed(1)}% (need ${(f.floor * 100).toFixed(0)}%)`)
+                    .join('\n');
+                process.stderr.write(
+                    `\n[arch-graph semantic] WARNING: snippet recall below floor for: ${failedKinds}\n${details}\n`,
+                );
+            }
         }
     } catch (recallErr) {
         // Non-fatal: recall validation is informational only.

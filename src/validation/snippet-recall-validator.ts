@@ -82,6 +82,13 @@ export interface SnippetRecallResult {
      * with a reason of 'index-corrupt'.
      */
     malformedLines: number;
+    /**
+     * True when the corruption threshold was exceeded (malformedLines / totalLines > 5%).
+     * When true, `passed` is always false regardless of per-kind fill rates.
+     * Surfaced in CLI output so users see "index appears corrupt" rather than
+     * a confusing empty failure-kinds list.
+     */
+    indexCorrupt: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -156,6 +163,24 @@ export async function validateSnippetRecall(semanticDir: string): Promise<Snippe
 
     const failures = byKind.filter((k) => !k.passed);
 
+    // Corruption check: if more than 5% of lines are malformed, the index is suspect.
+    // Evaluated BEFORE the empty-index check so a fully-corrupt index (totalNodes=0
+    // because all lines failed to parse) is correctly flagged as corrupt rather than
+    // just "empty".
+    const corruptRatio = totalLines > 0 ? malformedLines / totalLines : 0;
+    if (corruptRatio > 0.05) {
+        return {
+            passed: false,
+            byKind,
+            totalNodes,
+            totalFilled,
+            aggregateFillRate: totalNodes > 0 ? totalFilled / totalNodes : 0,
+            failures,
+            malformedLines,
+            indexCorrupt: true,
+        };
+    }
+
     // Empty index (no source-backed nodes at all) is a failure, not a vacuous pass.
     if (totalNodes === 0) {
         return {
@@ -166,27 +191,14 @@ export async function validateSnippetRecall(semanticDir: string): Promise<Snippe
             aggregateFillRate: 0,
             failures,
             malformedLines,
-        };
-    }
-
-    // Corruption check: if more than 5% of lines are malformed, the index is suspect.
-    const corruptRatio = totalLines > 0 ? malformedLines / totalLines : 0;
-    if (corruptRatio > 0.05) {
-        return {
-            passed: false,
-            byKind,
-            totalNodes,
-            totalFilled,
-            aggregateFillRate: totalFilled / totalNodes,
-            failures: [...failures, ...byKind.filter(() => false)], // keep failures as-is
-            malformedLines,
+            indexCorrupt: false,
         };
     }
 
     const passed = failures.length === 0;
     const aggregateFillRate = totalFilled / totalNodes;
 
-    return { passed, byKind, totalNodes, totalFilled, aggregateFillRate, failures, malformedLines };
+    return { passed, byKind, totalNodes, totalFilled, aggregateFillRate, failures, malformedLines, indexCorrupt: false };
 }
 
 /**
