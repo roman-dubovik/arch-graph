@@ -61,8 +61,11 @@ export function buildClassMemberAnchor(args: {
     if (className === '<anonymous>') {
         throw new Error(`anchor: className is invalid for ${nodeId} (got '<anonymous>')`);
     }
-    if (!memberName.trim() || memberName === '<anonymous>') {
-        throw new Error(`anchor: memberName is invalid for ${nodeId} (got '${memberName}')`);
+    if (!memberName.trim()) {
+        throw new Error(`anchor: memberName is empty for ${nodeId}`);
+    }
+    if (memberName === '<anonymous>') {
+        throw new Error(`anchor: memberName is invalid for ${nodeId} (got '<anonymous>')`);
     }
     return `${className}.${memberName}` as Anchor;
 }

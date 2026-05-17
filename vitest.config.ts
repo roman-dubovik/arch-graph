@@ -5,6 +5,7 @@ export default defineConfig({
         include: ['src/**/*.test.ts', 'src/**/*.test-d.ts'],
         typecheck: {
             enabled: true,
+            // Separate tsconfig — base tsconfig.json excludes *.test-d.ts; this override re-includes them for typecheck only.
             tsconfig: './tsconfig.typecheck.json',
             include: ['src/**/*.test-d.ts'],
         },

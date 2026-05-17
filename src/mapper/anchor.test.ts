@@ -78,13 +78,13 @@ describe('buildClassMemberAnchor', () => {
 
     it('throws when memberName is empty string', () => {
         expect(() => buildClassMemberAnchor({ className: 'UserController', memberName: '', nodeId: 'endpoint:GET /users' })).toThrow(
-            "anchor: memberName is invalid for endpoint:GET /users (got '')",
+            'anchor: memberName is empty for endpoint:GET /users',
         );
     });
 
     it('throws when memberName is whitespace only', () => {
         expect(() => buildClassMemberAnchor({ className: 'UserController', memberName: '   ', nodeId: 'endpoint:GET /users' })).toThrow(
-            'anchor: memberName is invalid',
+            'anchor: memberName is empty',
         );
     });
 

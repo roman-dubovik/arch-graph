@@ -505,7 +505,7 @@ function pct(n: number): string {
  * Otherwise a fatal NATS-grep failure surfaces as a bare `ENOENT: ...` with
  * no indication of which pipeline phase produced it.
  */
-async function stage<T>(label: string, fn: () => T | Promise<T>): Promise<Awaited<T>> {
+export async function stage<T>(label: string, fn: () => T | Promise<T>): Promise<Awaited<T>> {
     try {
         return await fn();
     } catch (err) {
@@ -516,6 +516,7 @@ async function stage<T>(label: string, fn: () => T | Promise<T>): Promise<Awaite
         // `.stack` will still open with the un-prefixed message — that is
         // expected and harmless.
         const e = err instanceof Error ? err : new Error(String(err));
+        // Non-Error branch (new Error(...)) has no original stack; it will be rooted here.
         e.message = `${label} failed: ${e.message}`;
         throw e;
     }
