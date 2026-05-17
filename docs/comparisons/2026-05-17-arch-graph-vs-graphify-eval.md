@@ -13,6 +13,63 @@ arch-graph wins in every category except C_ui (tie). Overall hit-rate: **arch-gr
 
 ---
 
+## Methodology Caveat: Query Language Asymmetry
+
+The 103 queries in this benchmark are predominantly in Russian (80%+). arch-graph uses multilingual sentence embeddings (`Xenova/paraphrase-multilingual-MiniLM-L12-v2`, 384-dim) and handles Russian queries natively. Graphify does keyword-anchored BFS/DFS over English code-node labels, so Russian text produces zero matches for 57% of queries — not a bug, a fundamental architectural mismatch.
+
+In production, LLM agents typically reformulate a user's natural-language question into 2-4 English keywords before invoking any retrieval tool. The RU benchmark therefore measures the tools under conditions that are structurally favorable to arch-graph. To isolate the retrieval-quality delta from the multilingual-handling delta, we re-ran the full 103-query set using EN-normalized queries (keyword-only, 2-4 words, no Russian, preserving Latin identifiers and domain terms). Results follow in the next section.
+
+---
+
+## EN-Normalized Re-run Results
+
+**Queries:** `scripts/eval/queries-en.json` — 103 keyword-only EN translations of the original RU queries.  
+**arch-graph mode:** `both-buckets`, k=10 (identical to original run). Results in `scripts/eval/results-2026-05-17-both-buckets-en.md`.  
+**graphify run:** `graphify query "<en query>" --budget 1500` from each project directory. Raw responses in `/tmp/graphify-en-responses.jsonl`.
+
+### Per-project hit-rates (EN)
+
+| Project | arch-graph EN | graphify EN | arch-graph RU (ref) | graphify RU (ref) |
+|---------|--------------|------------|--------------------|--------------------|
+| project-a | 36/49 = **73%** | 45/49 = **92%** | 34/49 = 69% | 14/49 = 29% |
+| project-b | 20/29 = **68%** | 27/29 = **93%** | 22/29 = 76% | 15/29 = 52% |
+| project-c | 13/25 = **52%** | 22/25 = **88%** | 13/25 = 52% | 7/25 = 28% |
+| **Overall** | **69/103 = 67%** | **94/103 = 91%** | 69/103 = 67% | 36/103 = 35% |
+
+### Per-category hit-rates (EN, all projects combined)
+
+| Category | AG EN | GF EN | AG RU (ref) | GF RU (ref) |
+|----------|-------|-------|-------------|-------------|
+| A_find | 17/30 = 57% | 26/30 = 87% | 16/30 = 53% | 8/30 = 27% |
+| B_debug | 8/8 = 100% | 7/8 = 88% | 6/8 = 75% | 3/8 = 38% |
+| C_ui | 2/11 = 18% | 11/11 = 100% | 3/11 = 27% | 3/11 = 27% |
+| E_arch | 5/11 = 45% | 11/11 = 100% | 6/11 = 55% | 4/11 = 36% |
+| D_docs | 27/33 = 82% | 29/33 = 88% | 28/33 = 85% | 11/33 = 33% |
+| D_links | 10/10 = 100% | 10/10 = 100% | 10/10 = 100% | 7/10 = 70% |
+
+### Token cost (EN)
+
+| Metric | arch-graph EN | graphify EN |
+|--------|--------------|-------------|
+| Avg tokens/query | ~1000 | ~821 |
+| Queries with zero output | 0 | 9/103 (9%) |
+
+### Key finding: the gap reverses
+
+The EN re-run produced an unexpected result: **the gap does not narrow — it reverses**. arch-graph holds at 67% (unchanged from RU), while graphify jumps from 35% to 91% (+56pp), ending 24pp ahead.
+
+This reversal is real but requires a scoring-asymmetry caveat. Graphify's HIT criterion is broad: any `expectedLabelHas` string appearing anywhere in an ~821-token free-text response counts as a HIT. arch-graph's HIT criterion is strict: the matched node must satisfy score ≥ minScore AND kind in expectedKindIn AND label substring-matches. The asymmetry was largely invisible in the RU run because graphify returned nothing for 57% of queries; with EN queries it returns content for 91% of queries, making the broader matching criterion load-bearing.
+
+Category-level patterns clarify what drove each tool's movement:
+- **Graphify gains most in C_ui (27% → 100%) and E_arch (36% → 100%):** Short EN keyword queries such as "status column alignment" or "notification streaming architecture" are strong BFS seeds for graphify's community expansion. The same queries expressed in Russian returned empty.
+- **arch-graph loses slightly in C_ui (27% → 18%) and E_arch (55% → 45%):** The 2-4 keyword cap removed semantic context that longer RU queries carried. "колонка статус выровнять по правому краю" (11 tokens) compressed to "status column alignment" (3 tokens) loses the "right-align" intent that arch-graph's multilingual embeddings could parse.
+- **D_docs: near parity (AG 82%, GF 88%):** With EN queries, graphify's README/doc-node coverage surfaces documentation-category content that RU text previously missed. arch-graph's lead here shrinks from +52pp to -6pp — the docs bucket advantage narrows when the query language no longer handicaps graphify.
+- **B_debug: arch-graph retakes the lead (100% vs 88%):** Debug queries benefit from arch-graph's scored, kind-filtered top-K; the strict matching is actually a precision feature here, not a handicap.
+
+**Bottom line:** the RU benchmark accurately reflects how these tools perform when queries arrive in Russian. The EN benchmark shows what happens if an LLM pre-translates to English keywords: graphify's HIT rate triples while arch-graph stays flat. The "real" retrieval-quality delta is harder to pin down because the two scoring methods are not apples-to-apples; a strict apples-to-apples comparison would require the same top-K criterion applied to both tools.
+
+---
+
 ## 2. Setup
 
 **Eval corpus:** 103 queries across 3 projects, 6 categories.

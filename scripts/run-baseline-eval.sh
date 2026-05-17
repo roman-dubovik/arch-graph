@@ -44,7 +44,7 @@ set -uo pipefail
 # ---------------------------------------------------------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKTREE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-QUERIES_FILE="$SCRIPT_DIR/eval/queries.json"
+QUERIES_FILE="${QUERIES_FILE:-$SCRIPT_DIR/eval/queries.json}"
 CLI="$WORKTREE_DIR/src/cli/index.ts"
 K="${EVAL_K:-10}"
 EVAL_MODE="${EVAL_MODE:-per-category}"
@@ -53,7 +53,7 @@ case "$EVAL_MODE" in
   *) echo "ERROR: invalid EVAL_MODE='$EVAL_MODE'. Use single|per-category|fallback|both-buckets." >&2; exit 1 ;;
 esac
 DATE="$(date +%Y-%m-%d)"
-RESULTS_FILE="$SCRIPT_DIR/eval/results-${DATE}-${EVAL_MODE}.md"
+RESULTS_FILE="${RESULTS_FILE:-$SCRIPT_DIR/eval/results-${DATE}-${EVAL_MODE}.md}"
 SKIP_BUILD="${SKIP_BUILD:-0}"
 
 # Project paths — replace these with your local checkout locations OR set them
