@@ -459,7 +459,8 @@ function collectClassNameTokens(node: TsMorphNode): string[] {
                 // Find the initializer — either StringLiteral or JsxExpression wrapping a StringLiteral
                 for (const child of children) {
                     if (child.getKind() === SyntaxKind.StringLiteral) {
-                        const raw = child.getLiteralText();
+                        // Narrow Node<Node> to StringLiteral so .getLiteralText() is available.
+                        const raw = child.asKindOrThrow(SyntaxKind.StringLiteral).getLiteralText();
                         for (const tok of raw.split(/\s+/).filter(Boolean)) {
                             if (!seen.has(tok)) {
                                 seen.add(tok);
