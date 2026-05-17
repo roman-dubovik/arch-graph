@@ -509,7 +509,14 @@ async function stage<T>(label: string, fn: () => T | Promise<T>): Promise<Awaite
     try {
         return await fn();
     } catch (err) {
-        const e = err as Error;
-        throw new Error(`${label} failed: ${e.message}`, { cause: err });
+        // Mutate message in-place instead of constructing a new Error so the
+        // original throw-site stack frames are preserved.  A `new Error(...)`
+        // would produce a fresh stack rooted here, burying the actual source.
+        // Note: V8 freezes the first line of `.stack` at construction time, so
+        // `.stack` will still open with the un-prefixed message — that is
+        // expected and harmless.
+        const e = err instanceof Error ? err : new Error(String(err));
+        e.message = `${label} failed: ${e.message}`;
+        throw e;
     }
 }
