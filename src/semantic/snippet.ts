@@ -20,7 +20,8 @@
  *   - `provider`/`module`:     anchor = class name
  *   - `fe-component`/`fe-page`: try variable, function, class; include JSDoc + JSX text
  *   - `fe-hook`:               try function, variable
- *   - `fe-route`:              label = URL pattern; try anchor as component name
+ *   - `fe-route`:              label = URL pattern; anchor is never set; falls back to
+ *                              default export then first exported function in the page file
  */
 import { SyntaxKind } from 'ts-morph';
 import type { Node as TsMorphNode } from 'ts-morph';
@@ -158,8 +159,24 @@ function extractClassPropertySnippet(sf: SourceFile, node: GraphNode): SnippetRe
         if (dotIdx !== -1) {
             const className = anchor.slice(0, dotIdx);
             const propName = anchor.slice(dotIdx + 1);
-            const cls = sf.getClass(className);
-            const prop = cls?.getProperty(propName);
+
+            // Primary lookup: class name as declared in anchor (concrete entity class).
+            // Fallback: scan all classes in the file for the property — handles inherited
+            // fields whose anchor uses the concrete entity class name but whose decorator
+            // lives in a base-class file (P1-10: db-entity-field recall regression).
+            let prop = sf.getClass(className)?.getProperty(propName);
+
+            if (!prop) {
+                // Walk all classes in this source file looking for the property.
+                for (const cls of sf.getClasses()) {
+                    const candidate = cls.getProperty(propName);
+                    if (candidate) {
+                        prop = candidate;
+                        break;
+                    }
+                }
+            }
+
             if (prop) {
                 // Include decorator text before the property
                 const decorators = prop.getDecorators();
