@@ -106,7 +106,6 @@ function partitionByHeadings(body: string): RawSection[] {
 
         const setextLevel = i + 1 < lines.length ? isSetextUnderline(lines[i + 1]) : null;
         if (setextLevel !== null && line.trim() !== '') {
-            currentBody.pop();
             flushCurrent(lineNum - 1);
             while (stack.length > 0 && stack.at(-1)!.level >= setextLevel) stack.pop();
             stack.push({ level: setextLevel, text: line.trim() });

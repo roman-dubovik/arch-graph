@@ -94,4 +94,20 @@ describe('extractDocs', () => {
         const skipped = result.diagnostics.filesSkipped.find(s => s.path.endsWith('README.md'));
         expect(skipped?.reason).toBe('oversized');
     });
+
+    it('parses frontmatter even when file ends without trailing newline', async () => {
+        const result = await extractDocs({
+            projectRoot: FIXTURES,
+            include: ['NO_NEWLINE_END.md'],
+            exclude: [],
+            respectGitignore: false,
+            chunkTokens: 100,
+            maxFileBytes: 10_000_000,
+            countTokens: stubCountTokens,
+        });
+        const sites = result.sites.filter(s => s.filePath.endsWith('NO_NEWLINE_END.md'));
+        expect(sites.length).toBeGreaterThan(0);
+        expect(sites[0].frontmatter).toMatchObject({ title: 'At-EOF Close' });
+        expect(result.diagnostics.frontmatterErrors).toHaveLength(0);
+    });
 });

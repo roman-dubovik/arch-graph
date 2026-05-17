@@ -73,4 +73,28 @@ describe('splitMarkdown', () => {
         expect(out[0].chunkIndex).toBeUndefined();
         expect(out[0].chunkOf).toBeUndefined();
     });
+
+    it('handles setext H2 (--- underline)', async () => {
+        const md = ['Section', '-------', '', 'body'].join('\n');
+        const out = await splitMarkdown(md, { chunkTokens: 100, countTokens: stubCount });
+        expect(out).toHaveLength(1);
+        expect(out[0].headingChain).toEqual(['Section']);
+        expect(out[0].headingLevel).toBe(2);
+    });
+
+    it('does not drop content lines preceding a setext heading', async () => {
+        // Input line 1: 'intro line', line 2: 'My Title', line 3: '========', line 4: '', line 5: 'body'
+        // The setext branch must NOT pop 'intro line' from currentBody.
+        // After the fix: a root section (covering line 1) is emitted before 'My Title' section.
+        const md = ['intro line', 'My Title', '========', '', 'body'].join('\n');
+        const out = await splitMarkdown(md, { chunkTokens: 100, countTokens: stubCount });
+        const title = out.find(s => s.headingChain[0] === 'My Title');
+        expect(title).toBeDefined();
+        // A root section covering the intro line must exist.
+        const root = out.find(s => s.headingChain.length === 0);
+        expect(root).toBeDefined();
+        // The root section should cover at least line 1 (the intro line).
+        // If pop() bug were present, root would be suppressed (all-blank guard fires).
+        expect(root!.charCount).toBeGreaterThan(0);
+    });
 });

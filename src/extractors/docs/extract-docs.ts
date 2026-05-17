@@ -39,7 +39,7 @@ export interface ExtractDocsResult {
 }
 
 const FRONTMATTER_START = '---\n';
-const FRONTMATTER_END_RE = /\n---\s*\n/;
+const FRONTMATTER_END_RE = /\n---\s*(?:\n|$)/;
 
 interface ParsedContent {
     body: string;
