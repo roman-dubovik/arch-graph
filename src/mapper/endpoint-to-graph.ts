@@ -38,7 +38,7 @@ export function mapEndpointsToGraph(
         const nodeId = `endpoint:${site.method} ${site.pattern}`;
 
         if (!endpointNodes.has(nodeId)) {
-            const anchor = buildClassMemberAnchor(site.controllerClass, site.methodName, nodeId);
+            const anchor = buildClassMemberAnchor({ className: site.controllerClass, memberName: site.methodName, nodeId });
             endpointNodes.set(nodeId, {
                 id: nodeId,
                 kind: 'endpoint',

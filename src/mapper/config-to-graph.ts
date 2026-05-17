@@ -12,6 +12,7 @@ import type { GraphEdge, GraphNode } from '../core/types.js';
 import { OwnershipRegistry } from '../core/service-registry.js';
 import type { ConfigFieldSite } from '../extractors/config/extractor.js';
 import { ownerNodeFor, ownerNodeId } from './owner-node.js';
+import { buildAnchor } from './anchor.js';
 
 export interface ConfigMapResult {
     nodes: GraphNode[];
@@ -42,7 +43,7 @@ export function mapConfigToGraph(
                 kind: 'config-field',
                 label: site.key,
                 path: site.location.file,
-                anchor: site.key,
+                anchor: buildAnchor(site.key, configNodeId),
                 meta: {
                     source: site.source,
                     firstLine: site.location.line,

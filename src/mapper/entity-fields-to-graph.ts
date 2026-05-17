@@ -47,7 +47,7 @@ export function mapEntityFieldsToGraph(
             // Use declaringClass for the anchor so snippet extraction can use
             // a direct primary lookup (sf.getClass(declaringClass).getProperty(fieldName))
             // instead of a fallback scan of all classes in the file.
-            const anchor = buildClassMemberAnchor(field.declaringClass, field.fieldName, fieldNodeId);
+            const anchor = buildClassMemberAnchor({ className: field.declaringClass, memberName: field.fieldName, nodeId: fieldNodeId });
             fieldNodes.set(fieldNodeId, {
                 id: fieldNodeId,
                 kind: 'db-entity-field',

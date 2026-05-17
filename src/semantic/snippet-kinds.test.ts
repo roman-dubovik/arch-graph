@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { Project, ts } from 'ts-morph';
 
 import type { GraphNode } from '../core/types.js';
+import { buildAnchor } from '../mapper/anchor.js';
 import { FE_SNIPPET_MAX_CHARS, SNIPPET_MAX_CHARS, extractSnippet } from './snippet.js';
 
 // ---------------------------------------------------------------------------
@@ -55,7 +56,7 @@ export class AuthService {
             kind: 'provider',
             label: 'AuthService',
             path: '/apps/auth/src/auth.service.ts',
-            anchor: 'AuthService',
+            anchor: buildAnchor('AuthService', 'test'),
         });
         const result = extractSnippet(project, node);
         expect(result.snippet).toContain('AuthService');
@@ -85,7 +86,7 @@ export class AuthService {
             kind: 'provider',
             label: 'AuthService',
             path: '/apps/auth/src/auth.service.ts',
-            anchor: 'AuthService',
+            anchor: buildAnchor('AuthService', 'test'),
         });
         const result = extractSnippet(project, node);
         expect(result.snippet).toBe('');
@@ -116,7 +117,7 @@ export class UsersController {
             kind: 'endpoint',
             label: 'GET /users/:id',
             path: '/apps/api/src/users.controller.ts',
-            anchor: 'UsersController.findOne',
+            anchor: buildAnchor('UsersController.findOne', 'test'),
         });
         const result = extractSnippet(project, node);
         expect(result.snippet).toContain('findOne');
@@ -133,7 +134,7 @@ export class UsersController {
             kind: 'endpoint',
             label: 'GET /users',
             path: '/apps/api/src/users.controller.ts',
-            anchor: 'UsersController.findAll',
+            anchor: buildAnchor('UsersController.findAll', 'test'),
         });
         const result = extractSnippet(project, node);
         expect(result.snippet).toBe('');
@@ -149,7 +150,7 @@ export class UsersController {
             kind: 'endpoint',
             label: 'GET /users',
             path: '/apps/api/src/users.controller.ts',
-            anchor: 'UsersController.findAll',
+            anchor: buildAnchor('UsersController.findAll', 'test'),
         });
         const result = extractSnippet(project, node);
         expect(result.snippet).toBe('');
@@ -173,7 +174,7 @@ export class BigController {
             kind: 'endpoint',
             label: 'POST /big',
             path: '/apps/api/src/big.controller.ts',
-            anchor: 'BigController.create',
+            anchor: buildAnchor('BigController.create', 'test'),
         });
         const result = extractSnippet(project, node);
         expect(result.snippet.length).toBeLessThanOrEqual(SNIPPET_MAX_CHARS);
@@ -204,7 +205,7 @@ export class User {
             kind: 'db-entity-field',
             label: 'users/email',
             path: '/apps/db/src/user.entity.ts',
-            anchor: 'User.email',
+            anchor: buildAnchor('User.email', 'test'),
         });
         const result = extractSnippet(project, node);
         expect(result.snippet).toContain('email');
@@ -221,7 +222,7 @@ export class User {
             kind: 'db-entity-field',
             label: 'users/email',
             path: '/apps/db/src/user.entity.ts',
-            anchor: 'User.email',
+            anchor: buildAnchor('User.email', 'test'),
         });
         const result = extractSnippet(project, node);
         expect(result.snippet).toBe('');
@@ -250,7 +251,7 @@ export abstract class BaseEntity {
             // path points to the base-entity file (where the declaring class lives)
             path: '/libs/nest-shared/src/db/entities/base-entity.ts',
             // anchor uses declaringClass — the class that actually owns @CreateDateColumn
-            anchor: 'BaseEntity.created_at',
+            anchor: buildAnchor('BaseEntity.created_at', 'test'),
         });
         const result = extractSnippet(project, node);
         // Primary lookup succeeds — no fallback needed
@@ -279,7 +280,7 @@ export class Real {
             label: 'table/foo',
             path: '/libs/db/src/real.entity.ts',
             // NonExistent is not in the file — only Real is
-            anchor: 'NonExistent.foo',
+            anchor: buildAnchor('NonExistent.foo', 'test'),
         });
         const result = extractSnippet(project, node);
         // Must not silently return Real.foo
@@ -314,7 +315,7 @@ export class AuthConfig {
             kind: 'config-field',
             label: 'JWT_SECRET',
             path: '/apps/auth/src/auth.config.ts',
-            anchor: 'JWT_SECRET',
+            anchor: buildAnchor('JWT_SECRET', 'test'),
         });
         const result = extractSnippet(project, node);
         expect(result.snippet).toContain('JWT_SECRET');
@@ -333,7 +334,7 @@ const host = process.env.HOST ?? 'localhost';
             kind: 'config-field',
             label: 'PORT',
             path: '/apps/api/src/config.ts',
-            anchor: 'PORT',
+            anchor: buildAnchor('PORT', 'test'),
         });
         const result = extractSnippet(project, node);
         expect(result.snippet).toContain('PORT');
@@ -349,7 +350,7 @@ const host = process.env.HOST ?? 'localhost';
             kind: 'config-field',
             label: 'MISSING_KEY',
             path: '/apps/api/src/config.ts',
-            anchor: 'MISSING_KEY',
+            anchor: buildAnchor('MISSING_KEY', 'test'),
         });
         const result = extractSnippet(project, node);
         expect(result.snippet).toBe('');
@@ -376,7 +377,7 @@ export const Button = ({ label }: { label: string }) => {
             kind: 'fe-component',
             label: 'Button',
             path: '/apps/web/src/button.tsx',
-            anchor: 'Button',
+            anchor: buildAnchor('Button', 'test'),
         });
         const result = extractSnippet(project, node);
         expect(result.snippet).toContain('Button');
@@ -399,7 +400,7 @@ export const BigComponent = () => {
             kind: 'fe-component',
             label: 'BigComponent',
             path: '/apps/web/src/big.tsx',
-            anchor: 'BigComponent',
+            anchor: buildAnchor('BigComponent', 'test'),
         });
         const result = extractSnippet(project, node);
         // Should be capped at FE_SNIPPET_MAX_CHARS, not SNIPPET_MAX_CHARS
@@ -420,7 +421,7 @@ export function Header({ title }: { title: string }) {
             kind: 'fe-component',
             label: 'Header',
             path: '/apps/web/src/header.tsx',
-            anchor: 'Header',
+            anchor: buildAnchor('Header', 'test'),
         });
         const result = extractSnippet(project, node);
         expect(result.snippet).toContain('Header');
@@ -446,7 +447,7 @@ export const SaveAvatar = ({ name }: { name: string }) => (
             kind: 'fe-component',
             label: 'SaveAvatar',
             path: '/apps/web/src/save-avatar.tsx',
-            anchor: 'SaveAvatar',
+            anchor: buildAnchor('SaveAvatar', 'test'),
         });
         const result = extractSnippet(project, node);
         expect(result.reason).toBeUndefined();
@@ -477,7 +478,7 @@ export function useAuth() {
             kind: 'fe-hook',
             label: 'useAuth',
             path: '/apps/web/src/use-auth.ts',
-            anchor: 'useAuth',
+            anchor: buildAnchor('useAuth', 'test'),
         });
         const result = extractSnippet(project, node);
         expect(result.snippet).toContain('useAuth');
@@ -498,7 +499,7 @@ export const useToggle = (initial = false) => {
             kind: 'fe-hook',
             label: 'useToggle',
             path: '/apps/web/src/use-toggle.ts',
-            anchor: 'useToggle',
+            anchor: buildAnchor('useToggle', 'test'),
         });
         const result = extractSnippet(project, node);
         expect(result.snippet).toContain('useToggle');
@@ -541,7 +542,7 @@ export const SettingsPage = () => <div>Settings</div>;
             kind: 'fe-route',
             label: '/settings',
             path: '/apps/web/src/pages/settings.tsx',
-            anchor: 'SettingsPage',
+            anchor: buildAnchor('SettingsPage', 'test'),
         });
         const result = extractSnippet(project, node);
         expect(result.snippet).toContain('SettingsPage');
@@ -567,7 +568,7 @@ export class AuthModule {}
             kind: 'module',
             label: 'AuthModule',
             path: '/apps/auth/src/auth.module.ts',
-            anchor: 'AuthModule',
+            anchor: buildAnchor('AuthModule', 'test'),
         });
         const result = extractSnippet(project, node);
         expect(result.snippet).toContain('AuthModule');

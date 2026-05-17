@@ -12,6 +12,7 @@ import type {
 import { OwnershipRegistry } from '../core/service-registry.js';
 import { DiModuleIndex } from '../extractors/di/module-index.js';
 import type { ClassIndex } from '../extractors/di/class-index.js';
+import { buildAnchor } from './anchor.js';
 
 export interface MapDiResult {
     nodes: GraphNode[];
@@ -266,7 +267,7 @@ function ensureModuleNode(
         id,
         kind: 'module',
         label: className,
-        ...(indexed ? { path: indexed.file, anchor: className } : {}),
+        ...(indexed ? { path: indexed.file, anchor: buildAnchor(className, id) } : {}),
         meta: { local: indexed !== undefined },
     };
     nodes.set(id, node);
@@ -303,7 +304,7 @@ function ensureProviderNode(
             id,
             kind: 'provider',
             label: ref.name,
-            ...(resolvedPath ? { path: resolvedPath, anchor: ref.name } : {}),
+            ...(resolvedPath ? { path: resolvedPath, anchor: buildAnchor(ref.name, id) } : {}),
             meta,
         });
     } else if (ref.kind === 'token') {

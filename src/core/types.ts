@@ -1,4 +1,17 @@
 // ============================================================================
+// Branded types
+// ============================================================================
+
+/**
+ * Branded newtype for graph node anchor strings.
+ *
+ * Prevents accidental assignment of arbitrary strings to `GraphNode.anchor`.
+ * Construct via `buildClassMemberAnchor` (for "Class.member" form) or
+ * `buildAnchor` (for bare-name forms like config keys or class names).
+ */
+export type Anchor = string & { readonly __anchor: unique symbol };
+
+// ============================================================================
 // Source locations
 // ============================================================================
 
@@ -145,7 +158,7 @@ export interface GraphNode {
      *
      * Format: flat string — either a bare name or "ClassName.memberName".
      */
-    anchor?: string;
+    anchor?: Anchor;
     meta?: Record<string, unknown>;
 }
 

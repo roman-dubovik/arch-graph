@@ -6,44 +6,44 @@ import { buildClassMemberAnchor } from './anchor.js';
 
 describe('buildClassMemberAnchor', () => {
     it('returns "ClassName.memberName" for valid inputs', () => {
-        expect(buildClassMemberAnchor('UserController', 'findOne', 'endpoint:GET /users/:id')).toBe(
+        expect(buildClassMemberAnchor({ className: 'UserController', memberName: 'findOne', nodeId: 'endpoint:GET /users/:id' })).toBe(
             'UserController.findOne',
         );
     });
 
     it('works with compound class names', () => {
-        expect(buildClassMemberAnchor('UserService', 'createUser', 'provider:user-svc')).toBe(
+        expect(buildClassMemberAnchor({ className: 'UserService', memberName: 'createUser', nodeId: 'provider:user-svc' })).toBe(
             'UserService.createUser',
         );
     });
 
     it('throws when className is empty string', () => {
-        expect(() => buildClassMemberAnchor('', 'findOne', 'endpoint:GET /users')).toThrow(
+        expect(() => buildClassMemberAnchor({ className: '', memberName: 'findOne', nodeId: 'endpoint:GET /users' })).toThrow(
             'anchor: className is empty for endpoint:GET /users',
         );
     });
 
     it('throws when className is whitespace only', () => {
-        expect(() => buildClassMemberAnchor('   ', 'findOne', 'endpoint:GET /users')).toThrow(
+        expect(() => buildClassMemberAnchor({ className: '   ', memberName: 'findOne', nodeId: 'endpoint:GET /users' })).toThrow(
             'anchor: className is empty',
         );
     });
 
     it('throws when memberName is empty string', () => {
-        expect(() => buildClassMemberAnchor('UserController', '', 'endpoint:GET /users')).toThrow(
+        expect(() => buildClassMemberAnchor({ className: 'UserController', memberName: '', nodeId: 'endpoint:GET /users' })).toThrow(
             "anchor: memberName is invalid for endpoint:GET /users (got '')",
         );
     });
 
     it('throws when memberName is whitespace only', () => {
-        expect(() => buildClassMemberAnchor('UserController', '   ', 'endpoint:GET /users')).toThrow(
+        expect(() => buildClassMemberAnchor({ className: 'UserController', memberName: '   ', nodeId: 'endpoint:GET /users' })).toThrow(
             'anchor: memberName is invalid',
         );
     });
 
     it('throws when memberName is <anonymous>', () => {
         expect(() =>
-            buildClassMemberAnchor('UserController', '<anonymous>', 'endpoint:GET /users'),
+            buildClassMemberAnchor({ className: 'UserController', memberName: '<anonymous>', nodeId: 'endpoint:GET /users' }),
         ).toThrow("anchor: memberName is invalid for endpoint:GET /users (got '<anonymous>')");
     });
 
@@ -51,15 +51,15 @@ describe('buildClassMemberAnchor', () => {
         // memberName must literally be '<anonymous>' (not trimmed) — whitespace trimming
         // is only for empty-string detection; '<anonymous>' is a sentinel exact match.
         expect(() =>
-            buildClassMemberAnchor('UserController', '<anonymous>', 'node:x'),
+            buildClassMemberAnchor({ className: 'UserController', memberName: '<anonymous>', nodeId: 'node:x' }),
         ).toThrow("got '<anonymous>'");
     });
 
     it('nodeId appears in error messages for both className and memberName failures', () => {
-        expect(() => buildClassMemberAnchor('', 'method', 'db-entity-field:users/id')).toThrow(
+        expect(() => buildClassMemberAnchor({ className: '', memberName: 'method', nodeId: 'db-entity-field:users/id' })).toThrow(
             'db-entity-field:users/id',
         );
-        expect(() => buildClassMemberAnchor('MyClass', '<anonymous>', 'db-entity-field:users/id')).toThrow(
+        expect(() => buildClassMemberAnchor({ className: 'MyClass', memberName: '<anonymous>', nodeId: 'db-entity-field:users/id' })).toThrow(
             'db-entity-field:users/id',
         );
     });
