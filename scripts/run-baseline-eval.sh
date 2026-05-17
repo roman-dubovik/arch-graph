@@ -278,6 +278,9 @@ get_threshold() {
     insyra:overall)   echo 85 ;;
     beribuy2:A_find)  echo 65 ;;
     beribuy2:overall) echo 65 ;;
+    # D_docs: thresholds intentionally empty for the first measurement —
+    # results display as "—" (informational, do not gate exit code). Tune
+    # after observing actual hit-rates on real READMEs/ROADMAPs.
     *) echo "" ;;
   esac
 }
@@ -329,7 +332,7 @@ GLOBAL_EXIT=0
     proj_hits_all=0
     proj_total_all=0
 
-    for cat in A_find B_debug C_ui E_arch; do
+    for cat in A_find B_debug C_ui E_arch D_docs; do
       read -r hits total <<< "$(aggregate_count "$proj" "$cat")"
       [[ "$total" == "0" ]] && continue
 
