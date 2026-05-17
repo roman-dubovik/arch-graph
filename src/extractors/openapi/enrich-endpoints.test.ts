@@ -2,7 +2,7 @@
  * Unit tests for OpenAPI YAML enrichment pass.
  *
  * All tests use in-memory YAML fixtures and a tmp directory for file-backed tests.
- * No actual beribuy/platform/insyra files are read.
+ * No actual project-c/project-a/project-b files are read.
  */
 
 import { mkdtemp, writeFile, mkdir } from 'node:fs/promises';

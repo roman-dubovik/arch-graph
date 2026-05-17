@@ -15,23 +15,23 @@
 
 | project | category | hits/total | hit-rate | expected | status |
 |---------|----------|-----------|---------|---------|--------|
-| platform | A_find | 4/5 | 80% | 80% | ✅ |
-| platform | B_debug | 2/3 | 66% | 100% | ⚠ |
-| platform | C_ui | 0/3 | 0% | 65% | ⚠ |
-| platform | E_arch | 3/4 | 75% | 85% | ⚠ |
-| **platform** | **overall** | **9/15** | **60%** | **85%** | **⚠** |
-| insyra | A_find | 4/5 | 80% | 85% | ⚠ |
-| insyra | C_ui | 0/1 | 0% | 50% | ⚠ |
-| **insyra** | **overall** | **4/6** | **66%** | **85%** | **⚠** |
-| beribuy2 | A_find | 2/5 | 40% | 65% | ⚠ |
-| **beribuy2** | **overall** | **2/5** | **40%** | **65%** | **⚠** |
+| project-a | A_find | 4/5 | 80% | 80% | ✅ |
+| project-a | B_debug | 2/3 | 66% | 100% | ⚠ |
+| project-a | C_ui | 0/3 | 0% | 65% | ⚠ |
+| project-a | E_arch | 3/4 | 75% | 85% | ⚠ |
+| **project-a** | **overall** | **9/15** | **60%** | **85%** | **⚠** |
+| project-b | A_find | 4/5 | 80% | 85% | ⚠ |
+| project-b | C_ui | 0/1 | 0% | 50% | ⚠ |
+| **project-b** | **overall** | **4/6** | **66%** | **85%** | **⚠** |
+| project-c | A_find | 2/5 | 40% | 65% | ⚠ |
+| **project-c** | **overall** | **2/5** | **40%** | **65%** | **⚠** |
 
 ## Per-Query Detail
 
 > HIT = top-5 contains a result satisfying score + kind + label filters.  
 > MISS = no result in top-5 satisfies all filters.
 
-### platform
+### project-a
 
 | id | category | status | top-5 summary |
 |----|----------|--------|----------------|
@@ -49,9 +49,9 @@
 | P12 | E_arch | HIT | 0.718 endpoint:PATCH /mssql-sync/agents/:id | 0.701 endpoint:POST /mssql-sync/agents/:id/revoke-token | 0.695 endpoint:PATCH /mssql-sync/agents/:agentId/task-overrides/:id | 0.694 endpoint:POST /mssql-sync/agents | 0.694 endpoint:PATCH /mssql-sync/agents/:id/settings |
 | P13 | E_arch | HIT | 0.594 provider:ServicesService | 0.578 nats-subject:admin.cron.services-health | 0.544 nats-subject:admin.cron.jobs | 0.525 provider:ServiceMapperService | 0.519 provider:ProfessionBridgeHandler |
 | P14 | E_arch | MISS | 0.499 fe-component:PaletteItem | 0.476 fe-component:Separator | 0.468 fe-component:Separator | 0.462 fe-component:MultipleChoiceQuestion | 0.459 fe-component:AttachmentItem |
-| P15 | E_arch | HIT | 0.674 service:platform-miniapp | 0.667 endpoint:POST /app/auth/telegram-widget | 0.666 fe-component:TelegramIcon | 0.665 provider:TelegramMiniAppAuthHandler | 0.652 provider:TelegramChannelHandler |
+| P15 | E_arch | HIT | 0.674 service:project-a-miniapp | 0.667 endpoint:POST /app/auth/telegram-widget | 0.666 fe-component:TelegramIcon | 0.665 provider:TelegramMiniAppAuthHandler | 0.652 provider:TelegramChannelHandler |
 
-### insyra
+### project-b
 
 | id | category | status | top-5 summary |
 |----|----------|--------|----------------|
@@ -60,9 +60,9 @@
 | I3 | A_find | MISS | 0.505 fe-component:AvatarUpload | 0.498 fe-route:/topic-evolution | 0.497 fe-component:AvatarUpload | 0.476 fe-component:AnalyticsSkeleton | 0.468 fe-component:Avatar |
 | I4 | A_find | HIT | 0.708 db-entity-field:notification_email_suppressions/id | 0.703 db-entity-field:notification_email_suppressions/email | 0.694 db-entity-field:notification_logs/recipientEmail | 0.693 db-entity-field:notification_email_events/email | 0.693 db-entity-field:notification_email_events/notificationLogId |
 | I5 | A_find | HIT | 0.575 fe-component:AdminHeader | 0.571 provider:FollowersTrendService | 0.557 fe-component:AdminHeader | 0.545 nats-subject:admin.webhooks.detail | 0.542 fe-component:AdminUsersPage |
-| I6 | C_ui | MISS | 0.633 db-table:insyra_sessions | 0.625 db-table:insyra_password_resets | 0.609 db-table:insyra_api_clients | 0.608 db-table:insyra_users | 0.606 db-table:insyra_waitlist |
+| I6 | C_ui | MISS | 0.633 db-table:project-b_sessions | 0.625 db-table:project-b_password_resets | 0.609 db-table:project-b_api_clients | 0.608 db-table:project-b_users | 0.606 db-table:project-b_waitlist |
 
-### beribuy2
+### project-c
 
 | id | category | status | top-5 summary |
 |----|----------|--------|----------------|
@@ -76,27 +76,27 @@
 
 Queries that did NOT hit, with top-5 results:
 
-- **P4** [platform/A_find] "карты в напоминаниях о записи"
+- **P4** [project-a/A_find] "карты в напоминаниях о записи"
   - top-5: 0.573 fe-page:PlanCard | 0.569 fe-page:DiscountsCard | 0.55 fe-page:StatsDashboard | 0.549 fe-page:SummaryCard | 0.544 fe-route:/analytics/components/calls-summary-cards
-- **P6** [platform/B_debug] "mssql агент синк ошибки логи"
+- **P6** [project-a/B_debug] "mssql агент синк ошибки логи"
   - top-5: 0.668 endpoint:POST /mssql-sync/agents/:id/revoke-token | 0.66 endpoint:GET /mssql-sync/agents/:agentId/executions | 0.657 endpoint:PATCH /mssql-sync/agents/:id | 0.655 endpoint:POST /mssql-sync/agents | 0.651 endpoint:GET /mssql-sync/agents/:id
-- **P9** [platform/C_ui] "обрезать последнее сообщение в списке чатов в 3 точки"
+- **P9** [project-a/C_ui] "обрезать последнее сообщение в списке чатов в 3 точки"
   - top-5: 0.679 endpoint:POST /chat-groups | 0.671 endpoint:POST /chats/:chatId/messages/:messageId/pin | 0.635 endpoint:POST /templates | 0.634 endpoint:POST /notifications/mutes | 0.631 endpoint:POST /chat-groups/:id/chats
-- **P10** [platform/C_ui] "дровер справа при клике по клиенту в админке"
+- **P10** [project-a/C_ui] "дровер справа при клике по клиенту в админке"
   - top-5: 0.545 endpoint:PUT /email/templates/:id | 0.535 endpoint:POST /boards/from-template/:key | 0.534 provider:AutoReplyController | 0.514 endpoint:POST /users | 0.503 endpoint:POST /app/auth/session
-- **P11** [platform/C_ui] "колонка статус выровнять по правому краю"
+- **P11** [project-a/C_ui] "колонка статус выровнять по правому краю"
   - top-5: 0.573 endpoint:POST /boards/:id/columns | 0.562 endpoint:PATCH /boards/:id/columns/:colId | 0.525 endpoint:POST /branches | 0.496 endpoint:PATCH /boards/:id/columns/reorder | 0.491 endpoint:DELETE /boards/:id/columns/:colId
-- **P14** [platform/E_arch] "что такое тенант ident мульти-тенантность"
+- **P14** [project-a/E_arch] "что такое тенант ident мульти-тенантность"
   - top-5: 0.499 fe-component:PaletteItem | 0.476 fe-component:Separator | 0.468 fe-component:Separator | 0.462 fe-component:MultipleChoiceQuestion | 0.459 fe-component:AttachmentItem
-- **I3** [insyra/A_find] "AI сценарии генерация контента"
+- **I3** [project-b/A_find] "AI сценарии генерация контента"
   - top-5: 0.505 fe-component:AvatarUpload | 0.498 fe-route:/topic-evolution | 0.497 fe-component:AvatarUpload | 0.476 fe-component:AnalyticsSkeleton | 0.468 fe-component:Avatar
-- **I6** [insyra/C_ui] "клиент таблица колонка фронтенд"
-  - top-5: 0.633 db-table:insyra_sessions | 0.625 db-table:insyra_password_resets | 0.609 db-table:insyra_api_clients | 0.608 db-table:insyra_users | 0.606 db-table:insyra_waitlist
-- **B1** [beribuy2/A_find] "корзина оформление заказа checkout"
+- **I6** [project-b/C_ui] "клиент таблица колонка фронтенд"
+  - top-5: 0.633 db-table:project-b_sessions | 0.625 db-table:project-b_password_resets | 0.609 db-table:project-b_api_clients | 0.608 db-table:project-b_users | 0.606 db-table:project-b_waitlist
+- **B1** [project-c/A_find] "корзина оформление заказа checkout"
   - top-5: 0.471 provider:CacheService | 0.463 db-table:companies | 0.44 db-table:employees | 0.408 fe-page:CompaniesList | 0.405 provider:ScheduleFactory
-- **B2** [beribuy2/A_find] "промокод скидка"
+- **B2** [project-c/A_find] "промокод скидка"
   - top-5: 0.477 fe-component:Od | 0.435 fe-component:MuiRte | 0.396 fe-component:PromocodesRightHelper | 0.386 fe-component:PromocodeEdit | 0.386 lib:libs/fe-sdk
-- **B4** [beribuy2/A_find] "платежи оплата товара"
+- **B4** [project-c/A_find] "платежи оплата товара"
   - top-5: 0.365 provider:CacheService | 0.364 fe-component:Card | 0.345 fe-component:SummaryCards | 0.345 fe-component:SummaryCards | 0.343 fe-component:DeliveryIcon
 
 ## Notes

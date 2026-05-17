@@ -803,8 +803,8 @@ describe('i18n multi-file — AC-7 test 1: mode detection', () => {
 });
 
 // AC-7 Test 2: useTranslation('blogs') + t('title') resolves to locales/ru/blogs.json#/title
-describe('i18n multi-file — AC-7 test 2: namespace-based resolution (insyra pattern)', () => {
-    it('resolves useTranslation("blogs") + t("title") → "Заголовок" (insyra-like fixture)', async () => {
+describe('i18n multi-file — AC-7 test 2: namespace-based resolution (project-b pattern)', () => {
+    it('resolves useTranslation("blogs") + t("title") → "Заголовок" (project-b-like fixture)', async () => {
         const extracted = await buildFromMultiFileFixture('multi-file', {
             '/vroot/BlogsPage.tsx': `
                 import { useTranslation } from 'react-i18next';

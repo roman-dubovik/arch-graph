@@ -33,17 +33,17 @@ Before extending arch-graph (FE extractor / Variant 2), we measured the current 
 
 | Project | TS files | Graph nodes | Edges | Sidecar | Build time |
 |---|---|---|---|---|---|
-| **platform** | 2,054 | 699 | 1,141 | 5.5 MB | 90 s |
-| **insyra**  | ~1,800 | 897 | ~1,400 | 7.0 MB | 110 s |
-| **beribuy 2.0** | ~500 | 144 | ~250 | 1.1 MB | 25 s |
+| **project-a** | 2,054 | 699 | 1,141 | 5.5 MB | 90 s |
+| **project-b**  | ~1,800 | 897 | ~1,400 | 7.0 MB | 110 s |
+| **project-c** | ~500 | 144 | ~250 | 1.1 MB | 25 s |
 
 ### Hit rate by category (Variant 3 baseline)
 
 | Project | A. Find | B. Debug | C. UI | E. Arch | **Overall hit** |
 |---|---|---|---|---|---|
-| platform | 60% (3/5) | 100% (3/3) | 30% (1/3 partial) | 75% (3/4) | **60% (9/15)** |
-| insyra | 67% (4/6, 1 miss FE) | — | 17% (FE only) | — | **~50%** |
-| beribuy 2.0 | — | — | — | — | **40% (2/5)** |
+| project-a | 60% (3/5) | 100% (3/3) | 30% (1/3 partial) | 75% (3/4) | **60% (9/15)** |
+| project-b | 67% (4/6, 1 miss FE) | — | 17% (FE only) | — | **~50%** |
+| project-c | — | — | — | — | **40% (2/5)** |
 
 ### Cross-project patterns confirmed
 
@@ -58,7 +58,7 @@ Before extending arch-graph (FE extractor / Variant 2), we measured the current 
 | Limitation | Affected categories | Why |
 |---|---|---|
 | Frontend components not in graph | C (UI) — 30% hit | arch-graph indexes only backend (NestJS / NATS / BullMQ / TypeORM / HTTP / TS imports). No `.tsx`/`.jsx` AST extraction. |
-| REST endpoints (`@Get`/`@Post`) not nodes | A on REST-heavy projects (beribuy 2.0) | Existing "HTTP" extractor handles inter-service calls (caller → service), not endpoint definitions. |
+| REST endpoints (`@Get`/`@Post`) not nodes | A on REST-heavy projects (project-c) | Existing "HTTP" extractor handles inter-service calls (caller → service), not endpoint definitions. |
 | Config fields not nodes | Q like "redirect_url" | `@Config(...)` properties are not extracted as graph nodes. |
 | Cross-cutting concepts (multi-tenancy) | E partial | Concept spread across 50+ files; no single anchor node. |
 | Frontend routes / pages | A on FE-heavy queries | No router-pattern extractor. |
@@ -85,19 +85,19 @@ Before extending arch-graph (FE extractor / Variant 2), we measured the current 
 
 | Project | Baseline | + FE L1 | Δ |
 |---|---|---|---|
-| platform | 60% | **75-80%** | +15-20% |
-| insyra | 50% | **70-75%** | +20-25% |
-| beribuy 2.0 | 40% | **45%** | +5% (little FE) |
+| project-a | 60% | **75-80%** | +15-20% |
+| project-b | 50% | **70-75%** | +20-25% |
+| project-c | 40% | **45%** | +5% (little FE) |
 
 **Specific queries that should flip from ☆/★★ to ★★★+**:
 - Q4 «карты в напоминаниях» → `fe-component:ReminderMap` (if exists)
 - Q9 «3 точки в чатах» → `fe-component:ChatListItem`
 - Q10 «дровер по клиенту» → `fe-component:ClientDrawer`
 - Q11 «колонка статус» → `fe-component:ClientsTable` / `StatusColumn`
-- Insyra Q «клиент таблица фронтенд» → fe-admin components
+- Project-B Q «клиент таблица фронтенд» → fe-admin components
 
 **Acceptance bar**:
-- ≥ 70% hit rate on category C in platform after FE L1.
+- ≥ 70% hit rate on category C in project-a after FE L1.
 - ≥ 4 out of the 5 listed queries above must reach ★★★+.
 
 ### Extension B — Variant 2 (full): endpoint + module + config + scoped-marker extractors
@@ -121,21 +121,21 @@ Before extending arch-graph (FE extractor / Variant 2), we measured the current 
 
 | Project | Baseline | + Var 2 full | Δ |
 |---|---|---|---|
-| platform | 60% | **75-80%** | +15-20% |
-| insyra | 50% | **65-70%** | +15-20% |
-| beribuy 2.0 | 40% | **65-70%** | +25-30% (endpoint-heavy) |
+| project-a | 60% | **75-80%** | +15-20% |
+| project-b | 50% | **65-70%** | +15-20% |
+| project-c | 40% | **65-70%** | +25-30% (endpoint-heavy) |
 
 **Specific queries that should flip**:
 - Q2 «redirect_url» → `config-field:OAUTH_REDIRECT_URL` (★★★★+)
 - Q14 «multi-tenant tenant» → `scoped-marker:tenantContext` (★★★)
-- platform Q3 «ручки СРМ» now gives exact `endpoint:GET /api/schedule` instead of just ServiceClass
-- beribuy «корзина checkout», «оплата товара» — endpoint nodes appear if those handlers exist
+- project-a Q3 «ручки СРМ» now gives exact `endpoint:GET /api/schedule` instead of just ServiceClass
+- project-c «корзина checkout», «оплата товара» — endpoint nodes appear if those handlers exist
 - Most A-category queries should improve from top-3 service to top-1 endpoint+controller pair.
 
 **Acceptance bar**:
-- ≥ 80% hit rate on category A in platform after Var 2.
-- ≥ 65% hit rate on beribuy 2.0 (currently 40%, sensitive to endpoints).
-- Q2-equivalent config-field queries reach ★★★★+ on platform.
+- ≥ 80% hit rate on category A in project-a after Var 2.
+- ≥ 65% hit rate on project-c (currently 40%, sensitive to endpoints).
+- Q2-equivalent config-field queries reach ★★★★+ on project-a.
 
 ### Combined: FE L1 + Var 2
 
@@ -143,9 +143,9 @@ Before extending arch-graph (FE extractor / Variant 2), we measured the current 
 
 | Project | Baseline | + FE L1 + Var 2 | Δ |
 |---|---|---|---|
-| platform | 60% | **85-90%** | +25-30% |
-| insyra | 50% | **85%** | +35% |
-| beribuy 2.0 | 40% | **70%** | +30% |
+| project-a | 60% | **85-90%** | +25-30% |
+| project-b | 50% | **85%** | +35% |
+| project-c | 40% | **70%** | +30% |
 
 This is the target for the parallel-track implementation that follows this baseline.
 

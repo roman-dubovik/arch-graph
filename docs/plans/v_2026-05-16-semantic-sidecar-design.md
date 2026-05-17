@@ -47,7 +47,7 @@ The sidecar is independent of any other product — `arch-graph` continues to wo
 - **Model loads lazily** — only when `semantic build` or `semantic search` runs. The MCP server must not preload the model on startup; lazy on first `semantic_search` call.
 - **Determinism**: graph extraction stays deterministic. Semantic layer is explicitly probabilistic and is reported as such in diagnostics.
 - **No new runtime dependencies** beyond `@xenova/transformers`.
-- **`arch-graph-out/<repo>/semantic/` layout is mandatory** — must live as a peer of `graph.json`. Multi-repo configs (existing convention — see `arch-graph-out/insyra/`, `platform/`, etc.) must work without code changes.
+- **`arch-graph-out/<repo>/semantic/` layout is mandatory** — must live as a peer of `graph.json`. Multi-repo configs (existing convention — see `arch-graph-out/project-b/`, `project-a/`, etc.) must work without code changes.
 - **Diagnostics**: extend `DiagnosticsReport` with an optional `semantic?: SemanticDiagnostics` field. Field is optional so `arch-graph build` (without semantic) keeps emitting the same diagnostics.json shape.
 - **Honesty rules from `claude-md.template.md` apply**: any node that could not be embedded (file unreadable, snippet extraction failed, transformer error) must appear in `diagnostics.semantic.skippedNodes` with a `reason`. No silent drops.
 
@@ -65,7 +65,7 @@ arch-graph-out/<repo>/
 
 - `vector` is a `number[]` of length 384, float32 cast to JSON numbers (acceptable size for v1; binary packing is a v2 optimisation).
 - `graphHash` is a SHA-256 of `graph.json` at build time — `semantic search` warns if hash drifted (graph rebuilt after semantic, so the index is stale).
-- One line per node keeps the file streamable for very large graphs (platform: ~300; insyra: ~5k).
+- One line per node keeps the file streamable for very large graphs (project-a: ~300; project-b: ~5k).
 
 ## MCP contract (Task 4) — locked for 2-brain federation
 
@@ -163,8 +163,8 @@ For Task 2 specifically: additionally run `pnpm test:integration` after the inte
 
 ## Open questions (resolve during execution if hit)
 
-1. **Batch size for embedder**: 32 is a safe default. Profile on platform graph (~300 nodes); if RAM headroom allows, push to 64. Document the chosen value.
-2. **Snippet length cap**: target 400 chars. If labels alone are tiny and snippet is the main signal, allow up to 600 — but cap somewhere so JSONL stays under ~5 MB on insyra (5k nodes).
+1. **Batch size for embedder**: 32 is a safe default. Profile on project-a graph (~300 nodes); if RAM headroom allows, push to 64. Document the chosen value.
+2. **Snippet length cap**: target 400 chars. If labels alone are tiny and snippet is the main signal, allow up to 600 — but cap somewhere so JSONL stays under ~5 MB on project-b (5k nodes).
 3. **What to do with `nats-subject` / `db-table` nodes that have no `path`**: embed just `label + kind` — these are abstract anchors and their embedding still has value for "find all queues about retries" style queries.
 
 ## Risks

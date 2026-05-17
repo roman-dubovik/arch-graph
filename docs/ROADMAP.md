@@ -64,11 +64,11 @@
 
 **Решение**: после BGE-M3, по результатам. Маловероятно понадобится.
 
-### 🟡 4. beribuy2-specific extractor доводки
+### 🟡 4. project-c-specific extractor доводки
 
-**Что**: enum-resolver уже шипнут (главный win). Остался один pain — eval-queries (`B1`, `B4`, `B8`) ссылаются на cart/payment/delivery которых нет в beribuy2 (это аггрегатор промокодов). Это **проблема корпуса**, не arch-graph.
+**Что**: enum-resolver уже шипнут (главный win). Остался один pain — eval-queries (`B1`, `B4`, `B8`) ссылаются на cart/payment/delivery которых нет в project-c (это аггрегатор промокодов). Это **проблема корпуса**, не arch-graph.
 
-**Решение**: eval hygiene — переписать B1/B4/B8 под фактический домен beribuy2 (промокоды/блог). Это ~30 минут работы, но НЕ ROI на recall ANY других проектов.
+**Решение**: eval hygiene — переписать B1/B4/B8 под фактический домен project-c (промокоды/блог). Это ~30 минут работы, но НЕ ROI на recall ANY других проектов.
 
 ### ⚪ 5. Дополнительные NodeKinds под спрос
 
@@ -90,14 +90,14 @@
 
 - **Static extraction** — не видим runtime config, container env, динамически-построенные identifier'ы. Зафиксировано в `diagnostics.json`.
 - **C_ui recall ceiling 33-50%** — ограничено embedder'ом. Tasks A+B шипнуты но не двинули числа.
-- **beribuy2 A_find 30%** — после enum-resolver должно подняться (мы измерим в текущем eval'е). До этого был block'ан энумами.
+- **project-c A_find 30%** — после enum-resolver должно подняться (мы измерим в текущем eval'е). До этого был block'ан энумами.
 - **i18n project-specificity** — поддерживаем `messages/*.json` + `locales/<lang>/*.json` (single + multi-file). Проекты с экзотическими паттернами (`react-intl` ICU bundles, server-side `[[lang]]/messages.po`) пока не поддерживаются.
 
 ## Open questions (требуют решения пользователя)
 
 1. **BGE-M3 — когда?** Готовы выделять 1-2 дня? Это next-priority по матрице ROI.
-2. **eval hygiene на beribuy2** — переписать ли B1/B4/B8 или оставить как есть для исторической чистоты сравнения?
-3. **Дополнительные проекты в эвал-наборе?** Сейчас platform/insyra/beribuy2 — это 3 NestJS-проекта. Может пора добавить Node-monolith или GraphQL-проект для большего покрытия?
+2. **eval hygiene на project-c** — переписать ли B1/B4/B8 или оставить как есть для исторической чистоты сравнения?
+3. **Дополнительные проекты в эвал-наборе?** Сейчас project-a/project-b/project-c — это 3 NestJS-проекта. Может пора добавить Node-monolith или GraphQL-проект для большего покрытия?
 
 ## Шипнутые планы (архив)
 

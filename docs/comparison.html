@@ -439,7 +439,7 @@
 
         <h3 class="subsection-title">Reading the heuristic fairly</h3>
         <p class="prose">
-          Our scoring (substring-presence of ground-truth labels) is a permissive <em>necessary-condition</em> heuristic: "did the tool's output even <em>contain</em> the answer". It's not an end-to-end LLM eval. The dependency-cruiser row demonstrates how the heuristic can mislead — a tool that extracts <em>no</em> NestJS-architecture facts can still score double-digit recall purely from file-path coincidences (<code>be-insyra</code> appears in <code>apps/be-insyra/webpack.config.js</code>). The per-category breakdown (NATS / BullMQ / TypeORM / DI / imports) is the more honest cut. arch-graph stays at 100% across every category by construction; every other tool's strength shows up as a single category spike.
+          Our scoring (substring-presence of ground-truth labels) is a permissive <em>necessary-condition</em> heuristic: "did the tool's output even <em>contain</em> the answer". It's not an end-to-end LLM eval. The dependency-cruiser row demonstrates how the heuristic can mislead — a tool that extracts <em>no</em> NestJS-architecture facts can still score double-digit recall purely from file-path coincidences (<code>be-project-b</code> appears in <code>apps/be-project-b/webpack.config.js</code>). The per-category breakdown (NATS / BullMQ / TypeORM / DI / imports) is the more honest cut. arch-graph stays at 100% across every category by construction; every other tool's strength shows up as a single category spike.
         </p>
 
         <h3 class="subsection-title">What this benchmark <em>is</em> and <em>isn't</em></h3>

@@ -3,7 +3,7 @@ Date: 2026-05-17
 
 ## Goal
 1. **Track A**: fix the 90%-empty-snippet bug across ALL node kinds.
-   Currently 3753/4184 platform nodes embed only `label + kind` because
+   Currently 3753/4184 project-a nodes embed only `label + kind` because
    (a) provider/endpoint/db-entity-field/config-field nodes have no `path`,
    (b) `extractSnippet` cannot resolve composite labels (`users/email`,
        `POST /mssql-sync/agents/:id`),
@@ -121,7 +121,7 @@ This is what unblocks queries like P9 «3 точки в чатах»
 - **Strict tests as default AC**: each modified extractor/mapper/snippet
   function gets unit tests for happy path + ≥1 error/edge branch.
 - **Recall floor**: `snippet-recall-validator` requires ≥ 85% non-empty
-  snippet per kind across platform/insyra/beribuy2 fixtures, ≥ 95% for
+  snippet per kind across project-a/project-b/project-c fixtures, ≥ 95% for
   provider/endpoint/db-entity-field/config-field (those have single
   unambiguous declarations).
 - **SKIPPED_NODES_CAP**: raise to `10_000` so diagnostics never silently
@@ -143,21 +143,21 @@ A-AC1. **Path emitted**: every provider/endpoint/db-entity-field/config-field/
 A-AC2. **Anchor resolves**: for ≥ 95% of provider/endpoint/db-entity-field/
        config-field nodes, `extractSnippet` returns a non-empty snippet.
 A-AC3. **fe-component coverage**: ≥ 85% of fe-component nodes return a
-       non-empty snippet on platform fixture (727 nodes).
+       non-empty snippet on project-a fixture (727 nodes).
 A-AC4. **fe-component content**: spot-check 5 fe-component snippets must
        include JSDoc (if present in source) AND at least the function
        signature. Spot-check 3 components with JSX `<Typography>...</Typography>`
        text must include that text.
 A-AC5. **Diagnostics fidelity**: `skippedNodesTruncated` must be `false`
-       on platform run (cap raised, all skips recorded).
+       on project-a run (cap raised, all skips recorded).
 A-AC6. **Existing tests**: 856/856 still pass.
 A-AC7. **New tests**: unit tests for each touched mapper (path emitted) +
        snippet.ts (per-kind resolution) + recall validator.
 A-AC8. **CLI smoke**: `arch-graph build && arch-graph semantic build` on
        all 3 projects completes; semantic stats report shows ≥ 85%
        non-empty snippet rate.
-A-AC9. **Eval shows uplift**: after rebuilding semantic index on platform,
-       insyra, beribuy2, hand-grade hit rate ≥ baseline + 5% on platform
+A-AC9. **Eval shows uplift**: after rebuilding semantic index on project-a,
+       project-b, project-c, hand-grade hit rate ≥ baseline + 5% on project-a
        AND ≥ baseline + 5% on at least one other project. (Lower bar
        than baseline-doc's +25-30% — this is just the snippet fix, not
        a model change.)
@@ -165,9 +165,9 @@ A-AC9. **Eval shows uplift**: after rebuilding semantic index on platform,
 ### Track B
 
 B-AC1. `queries.json` has 60–80 entries, with this distribution:
-       - platform: 30 (8 A, 6 B, 8 C, 8 E)
-       - insyra: 15 (8 A, 4 C, 3 E)
-       - beribuy2: 15 (10 A, 3 B, 2 C)
+       - project-a: 30 (8 A, 6 B, 8 C, 8 E)
+       - project-b: 15 (8 A, 4 C, 3 E)
+       - project-c: 15 (10 A, 3 B, 2 C)
 B-AC2. Each query has: `id`, `query`, `project`, `category`,
        `expectedKindIn` (union of plausible kinds), `expectedLabelHas`
        (optional), `minScore` ∈ [0.40, 0.60].

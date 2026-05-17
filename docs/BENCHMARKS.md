@@ -5,7 +5,7 @@ Re-runs after every shipped feature so changes can be measured.
 
 ## Eval corpus
 
-- **103 queries** across 3 NestJS-style projects (platform, insyra, beribuy2)
+- **103 queries** across 3 NestJS-style projects (project-a, project-b, project-c)
 - **6 categories**:
   - `A_find` — "where is X implemented" (looking for code)
   - `B_debug` — "why is X failing / how does X log"
@@ -48,9 +48,9 @@ Single-call mode, K=5, only 4 categories (60 queries, no docs/links):
 
 | project | hits/total | hit-rate |
 |---|---|---|
-| platform | 17/30 | 56% |
-| insyra | 9/15 | 60% |
-| beribuy2 | 6/15 | 40% |
+| project-a | 17/30 | 56% |
+| project-b | 9/15 | 60% |
+| project-c | 6/15 | 40% |
 | **all** | **32/60** | **53%** |
 
 Source: `scripts/eval/results-2026-05-17.md`.
@@ -62,9 +62,9 @@ After doc-section was added to the index, single-call mode now diluted by
 
 | project | hits/total | hit-rate |
 |---|---|---|
-| platform | 21/49 | 42% |
-| insyra | 15/29 | 51% |
-| beribuy2 | 12/25 | 48% |
+| project-a | 21/49 | 42% |
+| project-b | 15/29 | 51% |
+| project-c | 12/25 | 48% |
 | **all** | **48/103** | **47%** |
 
 Source: in-flight eval log on develop tip pre-`code-vs-docs-v1`.
@@ -77,15 +77,15 @@ difference is only LLM context richness).
 
 | project | hits/total | hit-rate |
 |---|---|---|
-| platform | 34/49 | 69% |
-| insyra | 23/29 | 79% |
-| beribuy2 | 13/25 | 52% |
+| project-a | 34/49 | 69% |
+| project-b | 23/29 | 79% |
+| project-c | 13/25 | 52% |
 | **all** | **70/103** | **68%** |
 
 Source: `scripts/eval/results-2026-05-17-both-buckets.md`.
 
-**Δ from previous**: +21pp overall. Specifically A_find platform 30→70%
-(+40pp), insyra A_find 20→70% (+50pp), E_arch 25→62% / 0→50%.
+**Δ from previous**: +21pp overall. Specifically A_find project-a 30→70%
+(+40pp), project-b A_find 20→70% (+50pp), E_arch 25→62% / 0→50%.
 
 ### 2026-05-17: `ui-uplift-v1` rebuild
 
@@ -94,9 +94,9 @@ unchanged from previous — confirmed UI bottleneck is embedder, not snippet:
 
 | project | hits/total | hit-rate |
 |---|---|---|
-| platform | 34/49 | 69% |
-| insyra | 22/29 | 75% |
-| beribuy2 | 13/25 | 52% |
+| project-a | 34/49 | 69% |
+| project-b | 22/29 | 75% |
+| project-c | 13/25 | 52% |
 | **all** | **69/103** | **67%** |
 
 **Δ**: -1pp (noise/rebuild variance). UI uplift had no measurable effect
@@ -106,9 +106,9 @@ is missing (BGE-M3 candidate).
 
 ### 2026-05-17: cumulative — `fe-i18n-multi-enum-v1` + `openapi-enrich-v1` + `*.md`-glob
 
-Combined effect of: multi-file locales (insyra benefits), enum-resolver
-(beribuy2 path resolution), OpenAPI YAML (beribuy2 description text),
-`*.md` root-glob (beribuy2 setup docs).
+Combined effect of: multi-file locales (project-b benefits), enum-resolver
+(project-c path resolution), OpenAPI YAML (project-c description text),
+`*.md` root-glob (project-c setup docs).
 
 **Numbers TBD** — eval `b0ebgp50l` running at time of writing. Results will
 land in `scripts/eval/results-2026-05-17-both-buckets.md` (overwrite).
@@ -124,18 +124,18 @@ additive — overlaps and ceiling effects matter.
 | doc-section indexing | `doc-section-v1` | D_docs, D_links | +20-30pp on doc queries |
 | Code/Docs bucket split | `code-vs-docs-v1` | A_find, B_debug, C_ui (dilution fix) | +20pp overall |
 | UI snippet/i18n extension | `ui-uplift-v1` | C_ui in projects with i18n | +0-5pp (depends on stack) |
-| OpenAPI YAML enrichment | `openapi-enrich-v1` | A_find on projects with rich YAML | +3-10pp on beribuy2 |
-| Multi-file locales | `fe-i18n-multi-enum-v1` (part 1) | C_ui on insyra-style stacks | +2-5pp |
-| Enum-resolver | `fe-i18n-multi-enum-v1` (part 2) | A_find on enum-prefixed NestJS | +10pp on beribuy2 |
+| OpenAPI YAML enrichment | `openapi-enrich-v1` | A_find on projects with rich YAML | +3-10pp on project-c |
+| Multi-file locales | `fe-i18n-multi-enum-v1` (part 1) | C_ui on project-b-style stacks | +2-5pp |
+| Enum-resolver | `fe-i18n-multi-enum-v1` (part 2) | A_find on enum-prefixed NestJS | +10pp on project-c |
 | Root `*.md` glob | (config) | D_docs on projects with non-standard docs | +1-2pp |
 
 ## Open targets
 
 Where the recall budget is still tight, with planned interventions:
 
-- **C_ui platform 33%, insyra 33%** — embedder linguistic gap RU↔EN. BGE-M3 is the next bet (~+5-10pp expected). See `docs/research/2026-05-17-css-processing-feasibility.md`.
-- **beribuy2 A_find 30%** — should rise after enum-resolver (in flight). Remaining MISSes are likely eval-corpus issues (queries about cart/payment/delivery in a promo-aggregator project). See beribuy2 diagnostic in chat archive.
-- **E_arch insyra 50% / beribuy2 0%** — needs more sample queries plus possibly architectural-overview indexing (e.g. extract module-graph summaries).
+- **C_ui project-a 33%, project-b 33%** — embedder linguistic gap RU↔EN. BGE-M3 is the next bet (~+5-10pp expected). See `docs/research/2026-05-17-css-processing-feasibility.md`.
+- **project-c A_find 30%** — should rise after enum-resolver (in flight). Remaining MISSes are likely eval-corpus issues (queries about cart/payment/delivery in a promo-aggregator project). See project-c diagnostic in chat archive.
+- **E_arch project-b 50% / project-c 0%** — needs more sample queries plus possibly architectural-overview indexing (e.g. extract module-graph summaries).
 
 ## Comparison axes for future model swaps
 

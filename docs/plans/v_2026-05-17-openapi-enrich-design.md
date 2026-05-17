@@ -3,7 +3,7 @@ Date: 2026-05-17
 
 ## Goal
 Add a post-extraction enrichment pass that reads OpenAPI YAML files and injects
-operation descriptions (often in Russian for beribuy2) into matching endpoint nodes
+operation descriptions (often in Russian for project-c) into matching endpoint nodes
 via `meta.openapiInfo`, extending `buildEmbedText` so the richer text gets
 vectorized and improves A_find recall.
 

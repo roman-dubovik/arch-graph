@@ -5,8 +5,8 @@ _Updated: 2026-05-16 — re-run after Tier 1+2+3 merge (cycle detection, filter-
 
 ## Headline (fresh run — 2026-05-16 post-Tier-1-2-3)
 
-Head-to-head on all 4 reference monorepos (Project A platform, B insyra,
-C screenia, D beribuy2). 10 auto-generated questions per project, 40
+Head-to-head on all 4 reference monorepos (Project A project-a, B project-b,
+C screenia, D project-c). 10 auto-generated questions per project, 40
 questions total. Each question is auto-derived from real nodes in
 arch-graph's own output → bilaterally fair: same compression, same
 `cl100k_base` encoder, same questions for both tools.
@@ -28,10 +28,10 @@ diagnostic in `diagnostics.cycles`.
 
 | Project | Size | Arch nodes/edges | Arch tokens | Arch recall | Graphify tokens | Graphify recall | Tokens × |
 |---|---|---|---|---|---|---|---|
-| A platform | large  | 805 / 1,517 | 62,460 | 100% | 715,430 | 50% | 11.5× |
-| B insyra†  | large  | 897 / 1,220 | 63,059 | 100% | 724,785 | 37% | 11.5× |
+| A project-a | large  | 805 / 1,517 | 62,460 | 100% | 715,430 | 50% | 11.5× |
+| B project-b†  | large  | 897 / 1,220 | 63,059 | 100% | 724,785 | 37% | 11.5× |
 | C screenia | medium | 358 / 547   | 23,552 | 100% | 302,999 |  9% | 12.9× |
-| D beribuy2†| small  | 144 / 239   | 10,046 | 100% | 536,483 | 61% | 53.4× |
+| D project-c†| small  | 144 / 239   | 10,046 | 100% | 536,483 | 61% | 53.4× |
 
 **Methodology caveat (†):** Projects B and D had graphify rebuilt fresh via the
 Claude Code skill, which ran in **AST-only mode** (LLM semantic pass was
@@ -44,10 +44,10 @@ honest comparison. Projects A and C used pre-existing graphify-out.
 
 | Project | db-relation | di-guard | di-interceptor | di-pipe | cjs-require | cycles |
 |---|---:|---:|---:|---:|---:|---:|
-| A platform |  9 | 78 |  0 | 0 | 0 | 0 |
-| B insyra   |  3 |  3 |  0 | 0 | 0 | 0 |
+| A project-a |  9 | 78 |  0 | 0 | 0 | 0 |
+| B project-b   |  3 |  3 |  0 | 0 | 0 | 0 |
 | C screenia |  1 |  3 |  0 | 0 | 0 | 0 |
-| D beribuy2 | 22 | 17 | 11 | 0 | 0 | 0 |
+| D project-c | 22 | 17 | 11 | 0 | 0 | 0 |
 | **Total**  | **35** | **101** | **11** | **0** | **0** | **0** |
 
 `cjs-require` and cycle-detection register zero on these reference projects

@@ -5,19 +5,19 @@ Worktrees: `.worktrees/feat-fe-l1` (branch `feat/fe-l1`), `.worktrees/feat-var2`
 
 ## Goal
 
-Two parallel feature tracks lifting the 26-query baseline (see `2026-05-16-coverage-baseline.md`) on platform / insyra / beribuy 2.0:
+Two parallel feature tracks lifting the 26-query baseline (see `2026-05-16-coverage-baseline.md`) on project-a / project-b / project-c:
 
 - **FE Level 1** — extract React/Next pages, components, routes, hooks → new node kinds `fe-page`, `fe-component`, `fe-route`, `fe-hook`. Closes the C-category (UI) miss class.
-- **Variant 2** — three live extractors (endpoint, db-entity-field, config-field callsites) + one placeholder (scoped-marker stub). Closes most A/E misses and lifts beribuy 2.0 from 40% → 65%+ by introducing endpoint nodes.
+- **Variant 2** — three live extractors (endpoint, db-entity-field, config-field callsites) + one placeholder (scoped-marker stub). Closes most A/E misses and lifts project-c from 40% → 65%+ by introducing endpoint nodes.
 
 ## Real-corpus signal (from Phase 1 research)
 
-The research adjusted Variant 2 scope to what platform/insyra/beribuy **actually use**:
+The research adjusted Variant 2 scope to what project-a/project-b/project-c **actually use**:
 
 | Var 2 sub-feature | Pattern | Real usage? | Decision |
 |---|---|---|---|
-| endpoint | `@Controller(...) @Get/@Post/...` | **632 usages in platform** | Full extractor (Pattern A1 in design doc) |
-| db-entity-field | `@Entity @Column` | **1312 usages in platform** | Full extractor (extends `typeorm/entity-index.ts`) |
+| endpoint | `@Controller(...) @Get/@Post/...` | **632 usages in project-a** | Full extractor (Pattern A1 in design doc) |
+| db-entity-field | `@Entity @Column` | **1312 usages in project-a** | Full extractor (extends `typeorm/entity-index.ts`) |
 | config-field (callsite) | `configService.get('KEY')`, `process.env.X` | ✅ heavily used | Full extractor — consumer-side (creates `config-field` node + `config-read-by` edge) |
 | config-field (declaration) | `@Config()` class decorator | ❌ not in any project | Skip in v1 |
 | config-field (factory) | `registerAs('ns', () => {...})` | ❌ not in any project | Skip in v1 |
@@ -157,7 +157,7 @@ Merge order: `feat/semantic` → main (deferred) → `feat/fe-l1` → main → `
 **Track A integration AC** (verified after Phase 5/6):
 - `npm test` green.
 - `npm run test:integration` green (existing).
-- Build platform — new graph has ≥ 200 FE nodes (platform has 4+ FE apps).
+- Build project-a — new graph has ≥ 200 FE nodes (project-a has 4+ FE apps).
 
 ### Track B — Variant 2
 
@@ -211,13 +211,13 @@ Merge order: `feat/semantic` → main (deferred) → `feat/fe-l1` → main → `
 
 **Track B integration AC**:
 - `npm test` green.
-- Build platform → graph has ≥ 500 endpoint nodes, ≥ 1000 db-entity-field nodes (from 632/1312 estimates).
+- Build project-a → graph has ≥ 500 endpoint nodes, ≥ 1000 db-entity-field nodes (from 632/1312 estimates).
 
 ### Track C — Verification (after both merge)
 
 **C1 — Eval script**
 - `bash scripts/run-baseline-eval.sh` runs:
-  1. Build arch-graph on platform, insyra, beribuy 2.0.
+  1. Build arch-graph on project-a, project-b, project-c.
   2. Run `semantic build` on each.
   3. Run 26 queries (5 categories: A find / B debug / C UI / E arch / cross-project) per project where applicable.
   4. For each query, parse top-5 JSON output, compare to expected golden-hit list from `scripts/eval/queries.json`.
@@ -227,17 +227,17 @@ Merge order: `feat/semantic` → main (deferred) → `feat/fe-l1` → main → `
 
 **C2 — Queries spec**
 - `scripts/eval/queries.json`: array of `{query, project, category, expectedAtLeastOne: ["nodeIdGlob", ...], minScore: 0.5}` entries.
-- 26 queries total: 9 from baseline + 6 from insyra + 5 from beribuy + 6 new ones probing new node kinds (FE + endpoint).
+- 26 queries total: 9 from baseline + 6 from project-b + 5 from project-c + 6 new ones probing new node kinds (FE + endpoint).
 
 **Final AC** (gates merge to main):
 
 | Project | Category | Baseline | Expected after | Hard threshold to pass |
 |---|---|---|---|---|
-| platform | A find | 60% | 80% | ≥ 75% |
-| platform | C UI | 30% | 75% | ≥ 65% |
-| platform | overall | 60% | 85% | ≥ 75% |
-| insyra | overall | 50% | 85% | ≥ 70% |
-| beribuy 2.0 | overall | 40% | 70% | ≥ 60% |
+| project-a | A find | 60% | 80% | ≥ 75% |
+| project-a | C UI | 30% | 75% | ≥ 65% |
+| project-a | overall | 60% | 85% | ≥ 75% |
+| project-b | overall | 50% | 85% | ≥ 70% |
+| project-c | overall | 40% | 70% | ≥ 60% |
 
 If hard threshold not met → Phase 6 fix-iterate before declaring done.
 
@@ -249,10 +249,10 @@ If hard threshold not met → Phase 6 fix-iterate before declaring done.
 
 3. **endpoint extractor + existing HTTP extractor overlap**: The existing HTTP extractor handles inter-service calls (`httpService.get('http://...')`), endpoint extractor handles route definitions. Different concerns; no overlap. Documented explicitly to prevent confusion.
 
-4. **Sidecar size growth**: 5.5 MB → ~15-18 MB on platform after both tracks. Streaming JSONL handles this fine; no perf concern for v1.
+4. **Sidecar size growth**: 5.5 MB → ~15-18 MB on project-a after both tracks. Streaming JSONL handles this fine; no perf concern for v1.
 
 5. **Eval script needs `semantic search --json` to produce stable output**: confirmed in baseline tests — output format is stable.
 
 6. **Stub `scoped-marker` confusion**: a maintainer may add an extractor in the future not realizing it's stub-by-design. Mitigated by explicit comment + design-doc reference in the stub file.
 
-7. **Build time on insyra**: graph grew 299 → 897 from `feat/semantic` already. After both tracks the count likely doubles. `npm run test:integration` will run ≤ 2-3 minutes on a fresh machine, still acceptable.
+7. **Build time on project-b**: graph grew 299 → 897 from `feat/semantic` already. After both tracks the count likely doubles. `npm run test:integration` will run ≤ 2-3 minutes on a fresh machine, still acceptable.

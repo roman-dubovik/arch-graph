@@ -32,10 +32,10 @@ TypeORM, module-imports), dep-cruiser scores 0%.
 
 | Project | Tokens | Mean recall | Status |
 |---|---:|---:|---|
-| A platform | 178,520 | 6.5% | success (after env stubs) |
-| B insyra | 50,688 | 10.2% | success (after env stubs) |
+| A project-a | 178,520 | 6.5% | success (after env stubs) |
+| B project-b | 50,688 | 10.2% | success (after env stubs) |
 | C screenia | 20,567 | 10.0% | success (with dual-@nestjs/core fix) |
-| D beribuy2 | 11,808 | 10.0% | success (with dual-@nestjs/core fix) |
+| D project-c | 11,808 | 10.0% | success (with dual-@nestjs/core fix) |
 
 **Recall by category (aggregated across 4 projects):**
 
@@ -53,7 +53,7 @@ TypeORM, module-imports), dep-cruiser scores 0%.
   bootstrap. We stubbed DB / NATS / JWT / Redis env vars to make
   every project's `getOrThrow` guards pass. In a real CI without
   those secrets, **3 of 4 projects would fail at boot**.
-- Screenia / beribuy2 hit a `TypeOrmCoreModule` DI error caused by
+- Screenia / project-c hit a `TypeOrmCoreModule` DI error caused by
   two copies of `@nestjs/core` (runner's vs project's). Fixed by
   promoting the project's `node_modules` to the front of Node's
   module resolution.
@@ -70,10 +70,10 @@ wiring matters. They answer different questions.
 
 | Project | Modules | Edges | Tokens | Mean recall |
 |---|---:|---:|---:|---:|
-| A platform | 95 | 2,163 | 29,049 | 10.0% |
-| B insyra | 62 | 1,346 | 17,620 | 10.0% |
+| A project-a | 95 | 2,163 | 29,049 | 10.0% |
+| B project-b | 62 | 1,346 | 17,620 | 10.0% |
 | C screenia | 53 | 477 | 6,093 | 12.5% |
-| D beribuy2 | 20 | 95 | 1,379 | 10.0% |
+| D project-c | 20 | 95 | 1,379 | 10.0% |
 
 **Recall by category:** 100% on `module-imports`, 0% on every other
 category — spelunker sees the `@Module()` import graph and nothing
@@ -100,10 +100,10 @@ Published without a compiled `dist/` directory — required local
 
 | Project | Modules loaded | Tokens | Mean recall | Status |
 |---|---|---:|---:|---|
-| A platform | 2/5 (partial) | 494 | 5.2% | partial |
-| B insyra | 0/4 | 0 | 0% | failed |
+| A project-a | 2/5 (partial) | 494 | 5.2% | partial |
+| B project-b | 0/4 | 0 | 0% | failed |
 | C screenia | 0/5 | 0 | 0% | failed |
-| D beribuy2 | 0/4 | 0 | 0% | failed |
+| D project-c | 0/4 | 0 | 0% | failed |
 
 **Engineering finding:** Documented as static AST, but in practice
 does runtime reflection (`require()`s the root module and reads
@@ -127,10 +127,10 @@ Version 17.4.0. Reference baseline for plain TypeScript imports.
 
 | Project | Tokens | Nominal recall | Reality |
 |---|---:|---:|---|
-| A platform | 1,211,092 | 7.7% | `broadcast` matches `caniuse-lite/broadcastchannel.js`, `audit` matches `rxjs/audit.js` |
-| B insyra | 20,422 | 60% | matches `be-insyra` in `apps/be-insyra/webpack.config.js -> path` |
+| A project-a | 1,211,092 | 7.7% | `broadcast` matches `caniuse-lite/broadcastchannel.js`, `audit` matches `rxjs/audit.js` |
+| B project-b | 20,422 | 60% | matches `be-project-b` in `apps/be-project-b/webpack.config.js -> path` |
 | C screenia | 7,092 | 45.4% | same — webpack config paths contain project name |
-| D beribuy2 | 1,402,764 | 50% | OOM-trimmed run, remaining matches are paths |
+| D project-c | 1,402,764 | 50% | OOM-trimmed run, remaining matches are paths |
 
 **Per-category recall:** 0% on every NestJS-specific category.
 The nominal recall is purely **substring noise** from incidental
@@ -140,10 +140,10 @@ file-path matches.
 - `dependency-cruiser apps libs` in directory mode walks only
   `.js / .mjs` files. TypeScript isn't parsed without explicit
   `--ts-config <path>`.
-- On larger monorepos (insyra, screenia), the full scan hit
+- On larger monorepos (project-b, screenia), the full scan hit
   Node OOM at 4GB heap. Required `--exclude "node_modules|dist|build|coverage"`.
 - Even with TypeScript parsing enabled, dep-cruiser doesn't
-  resolve `tsconfig.paths` aliases (`@platform/core` → `libs/platform/core`)
+  resolve `tsconfig.paths` aliases (`@project-a/core` → `libs/project-a/core`)
   without explicit configuration.
 
 **Honest framing:** dep-cruiser is excellent at what it's designed

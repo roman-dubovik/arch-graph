@@ -437,8 +437,8 @@ Added to `DiagnosticsReport.docs?: DocsDiagnostics`.
 `NODE_KIND_CHECK`. TypeScript exhaustiveness on `node.kind` switches across
 the codebase still compiles (no missing branches).
 
-**DS-AC2** — `arch-graph build` on three reference projects (platform /
-insyra / beribuy2) produces a non-empty doc-section bucket in `graph.json`.
+**DS-AC2** — `arch-graph build` on three reference projects (project-a /
+project-b / project-c) produces a non-empty doc-section bucket in `graph.json`.
 Every emitted node passes a shape-validator (id format, kind, path is
 relative, anchor is non-empty, meta required fields present).
 

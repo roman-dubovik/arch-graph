@@ -13,7 +13,7 @@ This is the deterministic, project-independent, single-command-verifiable metric
 
 ### Snippet recall per kind, post-fix (CLI `--strict-recall`, all 3 projects)
 
-| Kind | Platform | Insyra | Beribuy2 | Floor | Status |
+| Kind | Project-A | Project-B | Project-C2 | Floor | Status |
 |------|---------|--------|----------|-------|--------|
 | provider          | 95.4% | 96.8% | 97.6% | ≥95% | ✓ |
 | endpoint          | 100%  | 100%  | 100%  | ≥95% | ✓ |
@@ -24,7 +24,7 @@ This is the deterministic, project-independent, single-command-verifiable metric
 | module            | 92.3% | 79.7% | 57.1% | ≥85% | ⚠ deferred |
 | lib / service     | 0%    | 0%    | 0%    | ≥85% | ⚠ no source file expected |
 
-**Before this feature**: 3753 of 4184 platform nodes (~90%) embedded only
+**Before this feature**: 3753 of 4184 project-a nodes (~90%) embedded only
 `label + kind` — semantically empty. **After**: every kind with a backing
 source declaration emits a meaningful snippet (declaration text + JSDoc, plus
 JSX text content for fe-component). Verified by the `snippet-recall-validator`
@@ -45,12 +45,12 @@ per query (3 queries widened, no overfitting).
 
 | Project | A_find | B_debug | C_ui | E_arch | Overall |
 |---------|--------|---------|------|--------|---------|
-| platform | 7/10 (70%) | 3/6 (50%) | 2/6 (33%) | 5/8 (62%) | **17/30 (56%)** |
-| insyra   | 7/10 (70%) | — | 1/3 (33%) | 1/2 (50%) | **9/15 (60%)** |
-| beribuy2 | 3/10 (30%) | 2/2 (100%) | 1/2 (50%) | 0/1 (0%) | **6/15 (40%)** |
+| project-a | 7/10 (70%) | 3/6 (50%) | 2/6 (33%) | 5/8 (62%) | **17/30 (56%)** |
+| project-b   | 7/10 (70%) | — | 1/3 (33%) | 1/2 (50%) | **9/15 (60%)** |
+| project-c | 3/10 (30%) | 2/2 (100%) | 1/2 (50%) | 0/1 (0%) | **6/15 (40%)** |
 | **TOTAL** | | | | | **32/60 (53%)** |
 
-Recalibration delta: +1 insyra, +2 beribuy2 (+3 total) vs un-recalibrated.
+Recalibration delta: +1 project-b, +2 project-c (+3 total) vs un-recalibrated.
 
 ### Hand-grade validation (15 stratified queries — 5 per project)
 
@@ -59,9 +59,9 @@ stratified sample (3 mechanical-HIT + 2 mechanical-MISS per project):
 
 | Project | Mechanical HIT in sample | Hand-grade HIT | Verdict |
 |---------|--------------------------|----------------|---------|
-| platform | 3/5 | 3/5 (P5/P1/P20 strong, P10/P11 real-MISS) | ✓ correlated |
-| insyra   | 3/5 | 3/5 (I4 perfect, I5/I9 partial, I3 real-MISS, I13 filter-edge) | ✓ correlated |
-| beribuy2 | 3/5 | 3/5 (B12 recalibration win, B11 partial, B1/B15 real-MISS) | ✓ correlated |
+| project-a | 3/5 | 3/5 (P5/P1/P20 strong, P10/P11 real-MISS) | ✓ correlated |
+| project-b   | 3/5 | 3/5 (I4 perfect, I5/I9 partial, I3 real-MISS, I13 filter-edge) | ✓ correlated |
+| project-c | 3/5 | 3/5 (B12 recalibration win, B11 partial, B1/B15 real-MISS) | ✓ correlated |
 | **Total** | **9/15** | **9/15 (60%)** | **mechanical = hand-grade** |
 
 **The recalibrated mechanical hit-rate is the honest production metric.**
@@ -85,7 +85,7 @@ For the 26 queries that existed BEFORE the snippet-fix-all-kinds feature
 | **P9** | обрезать сообщение в чатах в 3 точки | 🟢 **Real win**: NEW #3 = `fe-component:ChatListItemBase` — JSDoc + JSX-text inclusion working. |
 | **B2** | промокод скидка | 🟢 **Real win**: NEW #1 = `fe-component:PromocodesRightHelper` (vs OLD #1 = random fe-component:Od). |
 | **P7** | телеграм бот уведомления | 🟡 **Filter-edge**: NEW #1 = `provider:TelegramBotRegistry` (score 0.481 < minScore 0.50). Semantically correct; mechanical loses on threshold. |
-| **B5** | пользователь регистрация | 🔴 **Real regression**: `provider:UserAuthConfig` dropped out of top-5 in favor of endpoint:GET /admin-*. Single-query outlier — endpoint-crowding is NOT systemic (verified by top-1-kind distribution across 13 platform MISSes: spread evenly across endpoint/db-entity-field/queue/service/etc., no kind dominates). |
+| **B5** | пользователь регистрация | 🔴 **Real regression**: `provider:UserAuthConfig` dropped out of top-5 in favor of endpoint:GET /admin-*. Single-query outlier — endpoint-crowding is NOT systemic (verified by top-1-kind distribution across 13 project-a MISSes: spread evenly across endpoint/db-entity-field/queue/service/etc., no kind dominates). |
 
 **Net same-26**: +3 real wins − 1 real regression = **+2 net real moves**, plus
 one filter-edge artefact (P7).
@@ -114,7 +114,7 @@ one filter-edge artefact (P7).
 
 ### Honest A-AC9 assessment
 
-The original A-AC9 target was «hand-grade ≥ baseline +5pp on platform AND on
+The original A-AC9 target was «hand-grade ≥ baseline +5pp on project-a AND on
 at least one other project». The same-26-queries mechanical delta is +4pp;
 hand-grading 3 of the 5 flipped queries showed real wins on entity-field and
 fe-component (P2, P9, B2). On the new 60-query suite the mechanical hit-rate
@@ -179,7 +179,7 @@ and could not crisply show +5pp without further query-set redesign.
 
 ## Deferred (post-merge work, none are blockers)
 
-1. **Module snippet recall** on insyra (79.7%) and beribuy2 (57.1%) below 85%
+1. **Module snippet recall** on project-b (79.7%) and project-c (57.1%) below 85%
    floor. Module is a container, not a leaf — recall validator may need a
    module-specific floor or alternate resolution. **Defer**: not blocking ship.
 2. **`lib` / `service` at 0% recall** — virtual nodes with no source file.
@@ -188,8 +188,8 @@ and could not crisply show +5pp without further query-set redesign.
    on a graph that doesn't model shopping). Need either richer extraction or
    removal of out-of-domain queries from the suite. **Defer**: out of scope.
 4. **B5 single-query regression**: `provider:UserAuthConfig` dropped out for
-   beribuy2's «пользователь регистрация авторизация». Investigated;
-   endpoint-crowding is NOT systemic (top-1-kind across 13 platform MISSes is
+   project-c's «пользователь регистрация авторизация». Investigated;
+   endpoint-crowding is NOT systemic (top-1-kind across 13 project-a MISSes is
    spread evenly across 9 kinds). Single-query outlier. **Defer**: low priority.
 
 ---

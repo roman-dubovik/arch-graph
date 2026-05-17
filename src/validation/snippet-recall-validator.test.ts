@@ -408,7 +408,7 @@ describe('isExpectedToHaveSnippet — virtual-kind and module classification', (
 
     // CT-AC2: module with path = internal → counted; module without path = external → excluded
     it('(b) module WITH path is counted (internal module)', () => {
-        expect(isExpectedToHaveSnippet({ kind: 'module', path: '/workspace/apps/platform/src/app.module.ts' })).toBe(true);
+        expect(isExpectedToHaveSnippet({ kind: 'module', path: '/workspace/apps/project-a/src/app.module.ts' })).toBe(true);
     });
 
     it('(c) module WITHOUT path is excluded (external module)', () => {

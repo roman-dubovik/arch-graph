@@ -4,8 +4,8 @@
  * Placeholder for `@Scope(REQUEST)` and `@Inject(REQUEST)` detection.
  *
  * **Important**: This extractor remains a stub intentionally. Per the design doc
- * (§ "Real-corpus signal"), scoped-marker patterns are NOT found in platform,
- * insyra, or beribuy 2.0. The NodeKind is added to the enum for future-proofing,
+ * (§ "Real-corpus signal"), scoped-marker patterns are NOT found in project-a,
+ * project-b, or project-c. The NodeKind is added to the enum for future-proofing,
  * but the extractor returns empty results in v1.
  *
  * Activate when corpus evidence indicates real usage.

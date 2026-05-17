@@ -2,7 +2,7 @@
 # scripts/run-baseline-eval.sh
 # Baseline evaluation script for arch-graph semantic search.
 #
-# Runs the 26-query suite against platform / insyra / beribuy2,
+# Runs the 26-query suite against project-a / project-b / project-c,
 # compares per-category hit-rates to documented expectations, and
 # prints a Markdown results table.
 #
@@ -56,10 +56,11 @@ DATE="$(date +%Y-%m-%d)"
 RESULTS_FILE="$SCRIPT_DIR/eval/results-${DATE}-${EVAL_MODE}.md"
 SKIP_BUILD="${SKIP_BUILD:-0}"
 
-# Project paths
-PLATFORM_DIR="/Users/romandubovik/Documents/Projects/platform"
-INSYRA_DIR="/Users/romandubovik/Documents/Projects/insyra"
-BERIBUY_DIR="/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0"
+# Project paths — replace these with your local checkout locations before running.
+# Example: PROJECT_A_DIR="/home/you/projects/project-a"
+PROJECT_A_DIR="/REPLACE-WITH/path/to/project-a"
+PROJECT_B_DIR="/REPLACE-WITH/path/to/project-b"
+PROJECT_C_DIR="/REPLACE-WITH/path/to/project-c"
 
 # ---------------------------------------------------------------------------
 # Argument parsing
@@ -392,23 +393,23 @@ log "Worktree: $WORKTREE_DIR"
 log "k=$K  mode=$EVAL_MODE  skip_build=$SKIP_BUILD"
 log ""
 
-PROJECTS="platform insyra beribuy2"
-PLATFORM_FAILED=0
-INSYRA_FAILED=0
-BERIBUY_FAILED=0
+PROJECTS="project-a project-b project-c"
+PROJECT_A_FAILED=0
+PROJECT_B_FAILED=0
+PROJECT_C_FAILED=0
 
 for proj in $PROJECTS; do
   case "$proj" in
-    platform) proj_dir="$PLATFORM_DIR" ;;
-    insyra)   proj_dir="$INSYRA_DIR" ;;
-    beribuy2) proj_dir="$BERIBUY_DIR" ;;
+    project-a) proj_dir="$PROJECT_A_DIR" ;;
+    project-b) proj_dir="$PROJECT_B_DIR" ;;
+    project-c) proj_dir="$PROJECT_C_DIR" ;;
   esac
 
   if ! build_project "$proj" "$proj_dir"; then
     case "$proj" in
-      platform) PLATFORM_FAILED=1 ;;
-      insyra)   INSYRA_FAILED=1 ;;
-      beribuy2) BERIBUY_FAILED=1 ;;
+      project-a) PROJECT_A_FAILED=1 ;;
+      project-b) PROJECT_B_FAILED=1 ;;
+      project-c) PROJECT_C_FAILED=1 ;;
     esac
     continue
   fi
@@ -478,16 +479,16 @@ aggregate_count() {
 get_threshold() {
   local proj="$1" cat="$2"
   case "${proj}:${cat}" in
-    platform:A_find)  echo 80 ;;
-    platform:B_debug) echo 100 ;;
-    platform:C_ui)    echo 65 ;;
-    platform:E_arch)  echo 85 ;;
-    platform:overall) echo 85 ;;
-    insyra:A_find)    echo 85 ;;
-    insyra:C_ui)      echo 50 ;;
-    insyra:overall)   echo 85 ;;
-    beribuy2:A_find)  echo 65 ;;
-    beribuy2:overall) echo 65 ;;
+    project-a:A_find)  echo 80 ;;
+    project-a:B_debug) echo 100 ;;
+    project-a:C_ui)    echo 65 ;;
+    project-a:E_arch)  echo 85 ;;
+    project-a:overall) echo 85 ;;
+    project-b:A_find)  echo 85 ;;
+    project-b:C_ui)    echo 50 ;;
+    project-b:overall) echo 85 ;;
+    project-c:A_find)  echo 65 ;;
+    project-c:overall) echo 65 ;;
     # D_docs: thresholds intentionally empty for the first measurement —
     # results display as "—" (informational, do not gate exit code). Tune
     # after observing actual hit-rates on real READMEs/ROADMAPs.
@@ -529,9 +530,9 @@ GLOBAL_EXIT=0
 
   for proj in $PROJECTS; do
     case "$proj" in
-      platform) failed=$PLATFORM_FAILED ;;
-      insyra)   failed=$INSYRA_FAILED ;;
-      beribuy2) failed=$BERIBUY_FAILED ;;
+      project-a) failed=$PROJECT_A_FAILED ;;
+      project-b) failed=$PROJECT_B_FAILED ;;
+      project-c) failed=$PROJECT_C_FAILED ;;
     esac
 
     if [[ "$failed" == "1" ]]; then

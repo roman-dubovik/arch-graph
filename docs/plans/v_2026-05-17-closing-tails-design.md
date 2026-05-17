@@ -7,10 +7,10 @@ Target branch: `develop` (off `develop` HEAD `329a01f`)
 
 Close two deferred items from snippet-fix-all-kinds-v1:
 
-1. **Module snippet recall** on insyra (79.7%) and beribuy2 (57.1%) below 85% floor.
+1. **Module snippet recall** on project-b (79.7%) and project-c (57.1%) below 85% floor.
    Root cause hypothesis: external modules (TypeOrmModule, ConfigModule, etc.)
    live in `node_modules` and have no extractable source. Counting them in the
-   denominator depresses the rate artificially. Platform's 92.3% is the
+   denominator depresses the rate artificially. Project-A's 92.3% is the
    already-correct ceiling for the proportion of internal modules.
 
 2. **`lib` / `service` (and `external`-module) at 0% recall** — virtual nodes
@@ -28,15 +28,15 @@ not change — only the recall-rate calculation becomes honest.
 | A — virtual-kind exclusion (lib/service) | `/Users/romandubovik/Documents/Projects/arch-graph/src/validation/snippet-recall-validator.ts` | extend `KINDS_WITHOUT_SOURCE` set to include `lib` and `service` |
 | B — internal/external module classification | `/Users/romandubovik/Documents/Projects/arch-graph/src/validation/snippet-recall-validator.ts` | per-node classification for `kind === 'module'`: if `node.path` is missing → treat as virtual (skip from denominator); else apply ≥85% floor |
 | C — tests | `/Users/romandubovik/Documents/Projects/arch-graph/src/validation/snippet-recall-validator.test.ts` | add unit tests for: (a) lib/service excluded entirely, (b) module with path counted, (c) module without path excluded, (d) mixed module set computes only-internal rate |
-| D — CLI smoke + recall verification | run `arch-graph semantic build` + check validator output | verify ≥85% on insyra and beribuy2 module recall after exclusion |
+| D — CLI smoke + recall verification | run `arch-graph semantic build` + check validator output | verify ≥85% on project-b and project-c module recall after exclusion |
 
 **No mapper changes. No snippet.ts changes. Validator-only scope.**
 
 ## Why validator-only is the right scope
 
 The Haiku research agent observed:
-- Platform: 130 module nodes, 120 with non-empty snippets = 92.3% → already at ceiling
-- All platform modules in the embeddings output lack `anchor` field (snippet works via path + label fallback in `snippet.ts`)
+- Project-A: 130 module nodes, 120 with non-empty snippets = 92.3% → already at ceiling
+- All project-a modules in the embeddings output lack `anchor` field (snippet works via path + label fallback in `snippet.ts`)
 - External modules (node_modules) have `path` unset by design (DiModuleIndex skips them)
 
 This means **path-emission already correctly distinguishes internal from external** —
@@ -111,12 +111,12 @@ CT-AC2. **Module classification**: validator computes recall for `kind: 'module'
         under a separate "virtual nodes" diagnostic, not flagged as failures.
 
 CT-AC3. **Recall floor met on all 3 projects**:
-        - platform: module ≥ 85% (currently 92.3% on the *full* denominator;
+        - project-a: module ≥ 85% (currently 92.3% on the *full* denominator;
           will be ≥95% on internal-only denominator)
-        - insyra: module ≥ 85% (currently 79.7% on full → expect ≥95% on internal)
-        - beribuy2: module ≥ 85% (currently 57.1% on full → expect ≥95% on internal)
+        - project-b: module ≥ 85% (currently 79.7% on full → expect ≥95% on internal)
+        - project-c: module ≥ 85% (currently 57.1% on full → expect ≥95% on internal)
 
-        If insyra/beribuy2 STILL fail after internal-only filter, that's a
+        If project-b/project-c STILL fail after internal-only filter, that's a
         real bug — escalate to user before merge (Phase 3.5 partial-AC
         discipline applies).
 

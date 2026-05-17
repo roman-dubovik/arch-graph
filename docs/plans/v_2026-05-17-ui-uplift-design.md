@@ -2,7 +2,7 @@
 
 ## Goal
 
-Lift C_ui hit-rate (currently 33% platform / 33% insyra / 50% beribuy2) by
+Lift C_ui hit-rate (currently 33% project-a / 33% project-b / 50% project-c) by
 making fe-component nodes more matchable for UI/visual queries like
 «выровнять колонку по правому краю», «обрезать сообщение в 3 точки»,
 «кнопка применить».
@@ -101,16 +101,16 @@ in parallel. Merge order: any, since changes are disjoint.
 ## Test verification post-merge
 
 Both tasks land → `pnpm exec vitest run` should be 1059 + new tests passing.
-Then re-run `arch-graph semantic build` on platform (the biggest C_ui pain
+Then re-run `arch-graph semantic build` on project-a (the biggest C_ui pain
 point), re-run eval with `EVAL_MODE=both-buckets`. Expected:
-- platform C_ui: 33% → ~50-55% (combined Task A + Task B uplift)
-- insyra C_ui:   33% → ~50-55%
+- project-a C_ui: 33% → ~50-55% (combined Task A + Task B uplift)
+- project-b C_ui:   33% → ~50-55%
 - Other categories unchanged (these are fe-component-only changes).
 
 ## Out of scope
 
 - BGE-M3 migration (separate larger task).
 - Hybrid BM25 retrieval (separate, follows BGE-M3).
-- beribuy2-specific extractor (separate, awaiting agent diagnosis).
+- project-c-specific extractor (separate, awaiting agent diagnosis).
 - Updating tool descriptions (not needed — the change is transparent to
   agent-side callers; only retrieval quality improves).
