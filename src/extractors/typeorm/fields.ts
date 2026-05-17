@@ -40,6 +40,12 @@ export type ColumnDecorator =
 export interface EntityFieldSite {
     /** Parent entity class name (concrete @Entity class, even for inherited fields). */
     entityClass: string;
+    /**
+     * Class that actually declares the @Column decorator.
+     * For directly-declared fields this equals `entityClass`.
+     * For inherited fields this is the base class that owns the decorator.
+     */
+    declaringClass: string;
     /** Parent table name. */
     tableName: string;
     /** Decorator used (for meta). */
@@ -283,8 +289,15 @@ export function extractEntityFields(
                     const decSf = dec.getSourceFile();
                     const pos = decSf.getLineAndColumnAtPos(dec.getStart());
 
+                    // Determine the class that actually declares this property.
+                    // For own fields, this is className. For inherited fields, the
+                    // property lives in a base class — resolve via ancestor walk.
+                    const declaringCls = prop.getFirstAncestorByKind(SyntaxKind.ClassDeclaration);
+                    const declaringClass = declaringCls?.getName() ?? className;
+
                     fields.push({
                         entityClass: className,
+                        declaringClass,
                         tableName,
                         decorator: decName,
                         fieldName: propName,
