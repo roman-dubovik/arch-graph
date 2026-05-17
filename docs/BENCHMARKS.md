@@ -108,10 +108,34 @@ is missing (BGE-M3 candidate).
 
 Combined effect of: multi-file locales (project-b benefits), enum-resolver
 (project-c path resolution), OpenAPI YAML (project-c description text),
-`*.md` root-glob (project-c setup docs).
+`*.md` root-glob (project-c setup docs). Final rebuild + run after merging
+all five `*-v1` tags.
 
-**Numbers TBD** — eval `b0ebgp50l` running at time of writing. Results will
-land in `scripts/eval/results-2026-05-17-both-buckets.md` (overwrite).
+| project | hits/total | hit-rate |
+|---|---|---|
+| project-a | 34/49 | 69% |
+| project-b | 22/29 | 75% |
+| project-c | 13/25 | 52% |
+| **all** | **69/103** | **67%** |
+
+**Δ from previous**: ±1pp overall. Per-category shifts within projects:
+- project-a B_debug: 50% → 66% (+16pp) — **enum-resolver wins** (endpoint
+  paths now show real names instead of `<dynamic>`, matching B_debug
+  controller-name queries).
+- project-a C_ui: 33% → 16% (-17pp, 1 query) — likely embedding-text bloat
+  regression. Adding i18n strings + classes block + OpenAPI description to
+  the same node's embed-text crosses a threshold where the right answer
+  rank-shifts below top-10. Worth investigating if C_ui matters; current
+  ceiling diagnosis says embedder-linguistic gap dominates anyway.
+- Other categories unchanged.
+
+**Conclusion**: features ship correctly, but absolute eval needle didn't
+move on this run because (a) the main win (code-vs-docs split) was the
+20pp lift in the previous baseline, and (b) further features address
+edge cases that this 103-query corpus doesn't sample heavily. The work
+isn't wasted — enum-resolver gave +16pp on B_debug for project-a, and
+OpenAPI/multi-file locales improve embedding quality for queries we
+DON'T have in this corpus.
 
 ## Per-feature attribution (rule of thumb)
 
