@@ -193,7 +193,8 @@ describe('extractSnippet — failures return values, never throw', () => {
         const project = inMemoryProject({
             '/project/src/throws.ts': 'export class ThrowClass {}',
         });
-        project.getSourceFile = (_path: string) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (project as any).getSourceFile = (_path: string) => {
             throw new Error('synthetic-ts-morph-error');
         };
         const node = makeNode({

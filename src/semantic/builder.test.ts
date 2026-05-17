@@ -443,8 +443,9 @@ describe('buildSemanticIndex — snippet content', () => {
 // ---------------------------------------------------------------------------
 
 describe('buildSemanticIndex — skipped nodes cap', () => {
-    it('caps skippedNodes at 50 entries from snippet failures', async () => {
-        // Create 60 nodes, all with missing paths (snippet failures)
+    it('caps skippedNodes at SKIPPED_NODES_CAP (10_000) entries from snippet failures', async () => {
+        // Create 60 nodes, all with missing paths (snippet failures).
+        // Cap is now 10_000, so 60 nodes all fit — skippedNodesTruncated should be false.
         const nodes = Array.from({ length: 60 }, (_, i) => ({
             id: `service:svc${i}`,
             kind: 'service' as const,
@@ -461,13 +462,13 @@ describe('buildSemanticIndex — skipped nodes cap', () => {
             outDir: testDir,
         });
 
-        expect(diagnostics.skippedNodes.length).toBeLessThanOrEqual(50);
-        // TG1: skippedNodesTruncated must be true when cap is exceeded
-        expect(diagnostics.skippedNodesTruncated).toBe(true);
+        // All 60 fit within the 10_000 cap.
+        expect(diagnostics.skippedNodes.length).toBe(60);
+        expect(diagnostics.skippedNodesTruncated).toBe(false);
     });
 
-    it('caps skippedNodes at 50 entries from transformer batch failures', async () => {
-        // Create 60 nodes, all failing transformer — exercises cap inside batch catch
+    it('caps skippedNodes at SKIPPED_NODES_CAP (10_000) entries from transformer batch failures', async () => {
+        // Create 60 nodes, all failing transformer — cap is 10_000 so all are recorded.
         const nodes = Array.from({ length: 60 }, (_, i) => ({
             id: `service:svc${i}`,
             kind: 'service' as const,
@@ -487,9 +488,8 @@ describe('buildSemanticIndex — skipped nodes cap', () => {
             outDir: testDir,
         });
 
-        expect(diagnostics.skippedNodes.length).toBeLessThanOrEqual(50);
-        // TG1: skippedNodesTruncated must be true when cap is exceeded
-        expect(diagnostics.skippedNodesTruncated).toBe(true);
+        expect(diagnostics.skippedNodes.length).toBe(60);
+        expect(diagnostics.skippedNodesTruncated).toBe(false);
         expect(diagnostics.counts.transformerErrors).toBe(60);
     });
 });
