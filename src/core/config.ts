@@ -131,6 +131,10 @@ export const DOCS_DEFAULT_INCLUDE: readonly string[] = [
     'packages/*/README.md',
     'CHANGELOG.md',
     'ROADMAP.md',
+    // Root-level *.md files (QUICK_START.md, SETUP.md, BACKEND_SERVICES.md, etc.)
+    // observed in real projects like beribuy2. Without this glob, project-level
+    // docs that aren't standardly named get missed.
+    '*.md',
 ];
 
 export const DOCS_DEFAULT_EXCLUDE: readonly string[] = [
