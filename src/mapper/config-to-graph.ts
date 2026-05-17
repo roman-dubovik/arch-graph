@@ -34,14 +34,19 @@ export function mapConfigToGraph(
     for (const site of sites) {
         const configNodeId = `config-field:${site.key}`;
 
-        // Create or update config-field node (one per unique key)
+        // Create or update config-field node (one per unique key).
+        // path = first-seen callsite file; anchor = key (for snippet extraction).
         if (!configNodes.has(configNodeId)) {
             configNodes.set(configNodeId, {
                 id: configNodeId,
                 kind: 'config-field',
                 label: site.key,
+                path: site.location.file,
+                anchor: site.key,
                 meta: {
                     source: site.source,
+                    firstLine: site.location.line,
+                    ...(site.consumerClass ? { consumerClass: site.consumerClass } : {}),
                 },
             });
         }

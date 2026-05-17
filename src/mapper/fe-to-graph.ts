@@ -108,6 +108,8 @@ export function mapFeToGraph(
                 id: nodeId,
                 kind: 'fe-route',
                 label: route.pattern,
+                // A6: path points at the page file so snippet can extract the component
+                path: route.pageFile,
                 meta: { pageFile: route.pageFile },
             });
         }

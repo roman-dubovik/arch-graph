@@ -47,6 +47,8 @@ export function mapEntityFieldsToGraph(
                 id: fieldNodeId,
                 kind: 'db-entity-field',
                 label: `${field.tableName}/${field.fieldName}`,
+                path: field.location.file,
+                anchor: `${field.entityClass}.${field.fieldName}`,
                 meta: {
                     entityClass: field.entityClass,
                     tableName: field.tableName,

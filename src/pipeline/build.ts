@@ -25,6 +25,7 @@ import { mapTypeOrmToGraph } from '../mapper/typeorm-to-graph.js';
 import { mapEndpointsToGraph } from '../mapper/endpoint-to-graph.js';
 import { mapConfigToGraph } from '../mapper/config-to-graph.js';
 import { mapEntityFieldsToGraph } from '../mapper/entity-fields-to-graph.js';
+import { buildClassIndex } from '../extractors/di/class-index.js';
 import { enumerateBullMqGroundTruth, buildBullMqReport } from '../validation/bullmq-validator.js';
 import { enumerateDiGroundTruth, buildDiReport } from '../validation/di-validator.js';
 import { enumerateFeGroundTruth, buildFeReport } from '../validation/fe-validator.js';
@@ -114,9 +115,10 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
     // Always include .tsx; include .jsx when the project opts in via cfg.fe?.allowJsx.
     // See: P0-NEW — .tsx/.jsx files not in ts-morph Project globs (CATASTROPHIC).
     const sourceExts = ['**/*.ts', '**/*.tsx'];
+    const libsGlob = cfg.libsGlob;
     const globs = [
         ...sourceExts.map((ext) => join(cfg.root, cfg.appsGlob, ext)),
-        ...(cfg.libsGlob ? sourceExts.map((ext) => join(cfg.root, cfg.libsGlob, ext)) : []),
+        ...(libsGlob ? sourceExts.map((ext) => join(cfg.root, libsGlob, ext)) : []),
     ];
     // cfg.excludeGlobs MUST be applied here too — otherwise extractor and validator
     // disagree on the file set, and excluded paths become phantom `extra` matches
@@ -256,7 +258,9 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
     }
 
     process.stdout.write(`mapping DI to graph...\n`);
-    const diMapped = mapDiToGraph(di.modules, di.moduleIndex, ownership, di.filterChain, di.skippedAnonymousFiles);
+    // A1: build class index so provider/module nodes get path + anchor fields.
+    const classIndex = buildClassIndex(project);
+    const diMapped = mapDiToGraph(di.modules, di.moduleIndex, ownership, di.filterChain, di.skippedAnonymousFiles, classIndex);
     process.stdout.write(
         `  nodes: ${diMapped.nodes.length}, edges: ${diMapped.edges.length}, unresolvedRefs: ${diMapped.diagnostics.unresolvedRefs.length}, unowned: ${diMapped.diagnostics.unowned.length}, guards: ${diMapped.diagnostics.counts.guards}, interceptors: ${diMapped.diagnostics.counts.interceptors}, pipes: ${diMapped.diagnostics.counts.pipes}, unresolvedFilterRefs: ${diMapped.diagnostics.counts.unresolvedFilterRefs}, truncatedFilterRefs: ${diMapped.diagnostics.counts.truncatedFilterRefs}, skippedAnonymousFiles: ${diMapped.diagnostics.skippedAnonymousFiles.length}\n`,
     );

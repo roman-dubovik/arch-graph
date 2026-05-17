@@ -41,6 +41,8 @@ export function mapEndpointsToGraph(
                 id: nodeId,
                 kind: 'endpoint',
                 label: `${site.method} ${site.pattern}`,
+                path: site.location.file,
+                anchor: `${site.controllerClass}.${site.methodName}`,
                 meta: {
                     controllerClass: site.controllerClass,
                     methodName: site.methodName,

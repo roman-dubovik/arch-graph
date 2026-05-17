@@ -11,6 +11,7 @@ import type {
 } from '../core/types.js';
 import { OwnershipRegistry } from '../core/service-registry.js';
 import { DiModuleIndex } from '../extractors/di/module-index.js';
+import type { ClassIndex } from '../extractors/di/class-index.js';
 
 export interface MapDiResult {
     nodes: GraphNode[];
@@ -43,6 +44,7 @@ export function mapDiToGraph(
     ownership: OwnershipRegistry,
     filterChain: DiFilterChainRef[] = [],
     skippedAnonymousFiles: string[] = [],
+    classIndex?: ClassIndex,
 ): MapDiResult {
     const moduleNodes = new Map<string, GraphNode>();
     const providerNodes = new Map<string, GraphNode>();
@@ -97,7 +99,7 @@ export function mapDiToGraph(
                 unresolvedRefs.push({ moduleClass: mod.className, field: 'providers', ref, location: mod.location });
                 continue;
             }
-            const providerId = ensureProviderNode(providerNodes, ref);
+            const providerId = ensureProviderNode(providerNodes, ref, classIndex);
             addEdge(edges, modNodeId, providerId, 'di-provides', mod, refMeta(ref));
         }
 
@@ -110,7 +112,7 @@ export function mapDiToGraph(
             // NestJS allows `exports: [SomeModule]` (re-export entire module). We model both as
             // `provider:<Name>` for simplicity — the same name space; a re-exported module
             // typically also appears as a `module:<Name>` node, so the consumer can join.
-            const providerId = ensureProviderNode(providerNodes, ref);
+            const providerId = ensureProviderNode(providerNodes, ref, classIndex);
             addEdge(edges, modNodeId, providerId, 'di-exports', mod, refMeta(ref));
         }
 
@@ -120,7 +122,7 @@ export function mapDiToGraph(
                 unresolvedRefs.push({ moduleClass: mod.className, field: 'controllers', ref, location: mod.location });
                 continue;
             }
-            const providerId = ensureProviderNode(providerNodes, ref);
+            const providerId = ensureProviderNode(providerNodes, ref, classIndex);
             const node = providerNodes.get(providerId)!;
             node.meta = { ...(node.meta ?? {}), isController: true };
             addEdge(edges, modNodeId, providerId, 'di-controller', mod, refMeta(ref));
@@ -264,7 +266,7 @@ function ensureModuleNode(
         id,
         kind: 'module',
         label: className,
-        ...(indexed ? { path: indexed.file } : {}),
+        ...(indexed ? { path: indexed.file, anchor: className } : {}),
         meta: { local: indexed !== undefined },
     };
     nodes.set(id, node);
@@ -274,6 +276,7 @@ function ensureModuleNode(
 function ensureProviderNode(
     nodes: Map<string, GraphNode>,
     ref: DiProviderRef | DiControllerRef,
+    classIndex?: ClassIndex,
 ): string {
     if (ref.kind === 'unresolved') {
         throw new Error('ensureProviderNode called with unresolved ref — caller must filter');
@@ -294,7 +297,15 @@ function ensureProviderNode(
         } else {
             meta.providerKind = 'class';
         }
-        nodes.set(id, { id, kind: 'provider', label: ref.name, meta });
+        // Resolve file path via class index (A1: providers must have path + anchor).
+        const resolvedPath = classIndex?.get(ref.name);
+        nodes.set(id, {
+            id,
+            kind: 'provider',
+            label: ref.name,
+            ...(resolvedPath ? { path: resolvedPath, anchor: ref.name } : {}),
+            meta,
+        });
     } else if (ref.kind === 'token') {
         // Defensive enrichment for a node created earlier from a `token-ref` in the same module.
         // In practice `fillSiteFromMetadata` processes `providers` before `exports`, so by the
