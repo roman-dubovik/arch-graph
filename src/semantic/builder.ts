@@ -248,10 +248,29 @@ export async function buildSemanticIndex(opts: BuildSemanticOpts): Promise<Build
  * Build the text fed to the embedder for a single node.
  * Nodes without a path embed `label + kind` only — still valuable for
  * "find all queues about retries" style queries.
+ *
+ * For fe-component nodes with `meta.i18nStrings`, the resolved strings are
+ * appended to the embedding text (NOT to snippet — keep snippet as visual
+ * code preview per design doc). AC-B6.
+ *
+ * Exported for unit testing.
  */
-function buildEmbedText(node: GraphNode, snippet: string): string {
+export function buildEmbedText(node: GraphNode, snippet: string): string {
     const base = `${node.label} ${node.kind}`;
-    return snippet ? `${base}\n${snippet}` : base;
+    let text = snippet ? `${base}\n${snippet}` : base;
+
+    // AC-B6: append i18n strings for fe-component nodes
+    if (
+        node.kind === 'fe-component' &&
+        node.meta &&
+        Array.isArray(node.meta['i18nStrings']) &&
+        (node.meta['i18nStrings'] as string[]).length > 0
+    ) {
+        const i18nText = (node.meta['i18nStrings'] as string[]).join(' ');
+        text = `${text}\n${i18nText}`;
+    }
+
+    return text;
 }
 
 /**
