@@ -41,6 +41,7 @@ import { validateEndpoints } from '../validation/endpoint-validator.js';
 import { validateConfig } from '../validation/config-validator.js';
 import { validateDbEntityFields } from '../validation/db-entity-fields-validator.js';
 import { buildReport as buildNatsReport } from '../validation/validator.js';
+import { validateDocs } from '../validation/docs-validator.js';
 import { countTokens } from '../semantic/tokenizer.js';
 import { detectCycles } from '../detectors/cycles.js';
 
@@ -497,6 +498,7 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         },
         docs: docs.diagnostics,
     };
+    const docsValidation = validateDocs(docs.diagnostics, graph.nodes);
     const validation: BuildValidation = {
         projectId: cfg.id,
         timestamp: new Date().toISOString(),
@@ -510,6 +512,7 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         endpoint: endpointValidation,
         config: configValidation,
         dbEntityFields: dbEntityFieldsValidation,
+        docs: docsValidation,
     };
 
     return { graph, diagnostics, validation };
