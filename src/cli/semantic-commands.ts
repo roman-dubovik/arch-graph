@@ -15,7 +15,7 @@
  *   search: 0 found, 4 empty results, 1 hard failure (sidecar missing, etc.)
  */
 import { join, resolve } from 'node:path';
-import { Project } from 'ts-morph';
+import { Project, ts } from 'ts-morph';
 
 import { loadConfig } from '../core/config.js';
 import { buildSemanticIndex } from '../semantic/builder.js';
@@ -194,16 +194,25 @@ export async function runSemanticBuild(args: SemanticArgs): Promise<void> {
 
     process.stdout.write(`  graph:  ${graph.nodes.length} nodes\n`);
 
-    // --- Build ts-morph Project (same approach as runBuild in pipeline/build.ts) ---
+    // --- Build ts-morph Project (mirrors runBuild in pipeline/build.ts) --------
+    // A9: include .tsx/.jsx so fe-component snippets can be extracted.
     const project = new Project({
         useInMemoryFileSystem: false,
         skipAddingFilesFromTsConfig: true,
-        compilerOptions: { allowJs: false, strict: false, noEmit: true },
+        compilerOptions: {
+            allowJs: false,
+            strict: false,
+            noEmit: true,
+            // Enable JSX parsing so ts-morph accepts .tsx/.jsx syntax without errors.
+            jsx: ts.JsxEmit.React,
+        },
     });
 
+    // Always include .tsx; mirror the pipeline/build.ts glob strategy.
+    const sourceExts = ['**/*.ts', '**/*.tsx'];
     const globs = [
-        join(cfg.root, cfg.appsGlob, '**/*.ts'),
-        ...(cfg.libsGlob ? [join(cfg.root, cfg.libsGlob, '**/*.ts')] : []),
+        ...sourceExts.map((ext) => join(cfg.root, cfg.appsGlob, ext)),
+        ...(cfg.libsGlob ? sourceExts.map((ext) => join(cfg.root, cfg.libsGlob!, ext)) : []),
     ];
     const extraExcludes = (cfg.excludeGlobs ?? []).map((g) => `!**${g}**`);
     for (const g of globs) {
@@ -215,6 +224,10 @@ export async function runSemanticBuild(args: SemanticArgs): Promise<void> {
             '!' + join(cfg.root, '**/.worktrees/**'),
             '!**/*.spec.ts',
             '!**/*.test.ts',
+            '!**/*.spec.tsx',
+            '!**/*.test.tsx',
+            '!**/*.spec.jsx',
+            '!**/*.test.jsx',
             '!**/*.d.ts',
             ...extraExcludes,
         ]);
