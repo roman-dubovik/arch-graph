@@ -1,8 +1,66 @@
 /**
- * Tests for the buildClassMemberAnchor factory (P1-C).
+ * Tests for the buildAnchor and buildClassMemberAnchor factories.
  */
 import { describe, expect, it } from 'vitest';
-import { buildClassMemberAnchor } from './anchor.js';
+import { buildAnchor, buildClassMemberAnchor } from './anchor.js';
+import type { Anchor } from './anchor.js';
+
+describe('buildAnchor', () => {
+    it('returns value as Anchor for a valid non-empty string', () => {
+        const result = buildAnchor('foo', 'node:1');
+        expect(result).toBe('foo');
+    });
+
+    it('works with a class name like AuthService', () => {
+        expect(buildAnchor('AuthService', 'provider:auth')).toBe('AuthService');
+    });
+
+    it('throws when value is empty string', () => {
+        expect(() => buildAnchor('', 'node:1')).toThrow('anchor: value is empty for node:1');
+    });
+
+    it('throws when value is whitespace only', () => {
+        expect(() => buildAnchor('   ', 'provider:x')).toThrow('anchor: value is empty for provider:x');
+    });
+
+    it('throws when value is <anonymous> sentinel', () => {
+        expect(() => buildAnchor('<anonymous>', 'provider:x')).toThrow(
+            "anchor: value is invalid for provider:x (got '<anonymous>')",
+        );
+    });
+
+    it('nodeId appears in error message for empty value', () => {
+        expect(() => buildAnchor('', 'endpoint:GET /some/path')).toThrow('endpoint:GET /some/path');
+    });
+
+    it('nodeId appears in error message for <anonymous> sentinel', () => {
+        expect(() => buildAnchor('<anonymous>', 'config-field:JWT_SECRET')).toThrow('config-field:JWT_SECRET');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Anchor newtype compile-time assertions
+// ---------------------------------------------------------------------------
+// Bare strings must NOT be directly assignable to Anchor (write direction).
+// The line below would be rejected by tsc if Anchor were just `string`.
+// We use a runtime-only workaround since .test-d.ts is outside the vitest
+// include pattern; the @ts-expect-error annotation proves the brand is real.
+describe('Anchor branded type', () => {
+    it('Anchor is still a string structurally (read direction)', () => {
+        const anchor = buildAnchor('MyService', 'node:1');
+        // Anchor must be readable as a plain string without casting.
+        const s: string = anchor;
+        expect(s).toBe('MyService');
+    });
+
+    it('bare string is not directly assignable to Anchor (compile-time check)', () => {
+        // @ts-expect-error — Anchor is branded; raw strings are forbidden without buildAnchor
+        const _bareStringIsNotAnchor: Anchor = 'foo';
+        // The @ts-expect-error above proves the brand blocks assignment at compile time.
+        // The void suppresses the "unused variable" lint.
+        void _bareStringIsNotAnchor;
+    });
+});
 
 describe('buildClassMemberAnchor', () => {
     it('returns "ClassName.memberName" for valid inputs', () => {

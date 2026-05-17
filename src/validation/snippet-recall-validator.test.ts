@@ -11,6 +11,7 @@ import {
     RECALL_FLOOR_HIGH_FIDELITY,
     HIGH_FIDELITY_KINDS,
     KINDS_WITHOUT_SOURCE,
+    makeSnippetStats,
     validateSnippetRecall,
     formatRecallResult,
 } from './snippet-recall-validator.js';
@@ -57,6 +58,31 @@ describe('snippet-recall-validator constants', () => {
         expect(KINDS_WITHOUT_SOURCE.has('db-table')).toBe(true);
         expect(KINDS_WITHOUT_SOURCE.has('queue')).toBe(true);
         expect(KINDS_WITHOUT_SOURCE.has('external')).toBe(true);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// makeSnippetStats — unit tests for the factory directly
+// ---------------------------------------------------------------------------
+
+describe('makeSnippetStats', () => {
+    it('aggregateFillRate is 0 (not NaN) when totalNodes is 0', () => {
+        const stats = makeSnippetStats(0, 0, []);
+        expect(stats.aggregateFillRate).toBe(0);
+        expect(Number.isNaN(stats.aggregateFillRate)).toBe(false);
+    });
+
+    it('computes aggregateFillRate correctly for non-zero totalNodes', () => {
+        const stats = makeSnippetStats(10, 8, []);
+        expect(stats.aggregateFillRate).toBeCloseTo(0.8);
+    });
+
+    it('returns provided byKind array unchanged', () => {
+        const kindStats = [
+            { kind: 'provider' as const, total: 10, filled: 10, fillRate: 1, floor: 0.95, passed: true },
+        ];
+        const stats = makeSnippetStats(10, 10, kindStats);
+        expect(stats.byKind).toBe(kindStats);
     });
 });
 
