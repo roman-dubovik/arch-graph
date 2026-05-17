@@ -3,13 +3,16 @@
  *
  * Invariant: every file in the resolved-include set (counts.filesIncluded)
  * must be EITHER processed (produced ≥1 doc-section node) OR present in
- * filesSkipped with a real reason. User-excluded reasons (gitignored,
- * excluded-by-config) are NOT counted against recall.
+ * filesSkipped with a real reason. Gitignored files are already absent from
+ * filesIncluded (extractDocs never adds them to resolvedSet), so the
+ * denominator is simply filesIncluded — no user-excluded subtraction needed.
+ *
+ * recall = (processedFiles.size + realSkipped) / filesIncluded
  */
 
 import type { DocsDiagnostics, DocsValidationReport, GraphNode } from '../core/types.js';
 
-const REAL_SKIP_REASONS = new Set(['oversized', 'non-utf8', 'empty']);
+const REAL_SKIP_REASONS = new Set(['oversized', 'non-utf8', 'empty', 'read-error']);
 
 export function validateDocs(
     diagnostics: DocsDiagnostics,
@@ -28,7 +31,8 @@ export function validateDocs(
         else userExcluded += 1;
     }
 
-    const denominator = Math.max(0, filesIncluded - userExcluded);
+    // gitignored files are already absent from filesIncluded — no subtraction needed.
+    const denominator = filesIncluded;
     const numerator = processedFiles.size + realSkipped;
     const recall = denominator === 0 ? 1 : numerator / denominator;
     const meetsFloor = denominator === 0 || recall >= 1;

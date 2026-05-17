@@ -71,4 +71,22 @@ describe('validateDocs', () => {
         expect(result.summary.meetsFloor).toBe(true);
         expect(result.summary.recall).toBe(1);
     });
+
+    it('recall is 1.0 (not >1.0) when processed files equal filesIncluded and gitignored entries are present', () => {
+        // filesIncluded=2, gitignored entry is informational only (not in resolvedSet)
+        // Previous bug: denominator was filesIncluded - userExcluded = 2 - 1 = 1,
+        // but numerator was processedFiles.size + realSkipped = 2 + 0 = 2 → recall > 1.
+        const diagnostics: DocsDiagnostics = {
+            filesScanned: 2, filesSkipped: [{ path: 'C.md', reason: 'gitignored' }],
+            frontmatterErrors: [], oversizedChunks: [],
+            counts: {
+                filesIncluded: 2, nodesEmitted: 2, headingsTotal: 2,
+                sectionsSplit: 0, filesWithFrontmatter: 0,
+            },
+        };
+        const nodes = [makeDocNode('a', 'A.md'), makeDocNode('b', 'B.md')];
+        const result = validateDocs(diagnostics, nodes);
+        expect(result.summary.recall).toBe(1);
+        expect(result.summary.meetsFloor).toBe(true);
+    });
 });
