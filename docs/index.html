@@ -352,7 +352,7 @@
       <div class="container">
         <p class="section-eyebrow">Measured</p>
         <h2 id="bench-title" class="section-title">Measured on 4 real NestJS monorepos.</h2>
-        <p class="section-lead">Head-to-head re-run via <code>arch-graph compare</code> on four private reference monorepos. 40 auto-generated questions total (10 per project) sampled from real nodes in each graph. Same compression, same <code>cl100k_base</code> encoder, same questions for both tools. Recall is a substring-presence necessary-condition heuristic, not an end-to-end LLM eval.</p>
+        <p class="section-lead">Head-to-head re-run via <code>arch-graph compare</code> on four private reference monorepos. 40 auto-generated questions total (10 per project) sampled from real nodes in each graph. Same compression, same <code>cl100k_base</code> encoder, same questions for both tools. Recall is a substring-presence necessary-condition heuristic, not an end-to-end LLM eval. <strong>This benchmark predates the semantic sidecar</strong> — it measures arch-graph's structural-only retrieval. A fresh post-semantic head-to-head on 103 fuzzy-intent queries is in <a href="https://github.com/roman-dubovik/arch-graph/blob/develop/docs/comparisons/2026-05-17-arch-graph-vs-graphify-eval.md">docs/comparisons/2026-05-17-arch-graph-vs-graphify-eval.md</a> — headline: arch-graph 67% hit-rate vs graphify 35% on the same suite.</p>
 
         <div class="bench-cards reveal">
           <div class="bench-card highlight">

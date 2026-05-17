@@ -343,7 +343,7 @@ graphify: `MssqlSyncPhaseB` and `MssqlSyncPhaseC` migration classes — code nod
 
 1. **HIT criterion:** The `expectedLabelHas` strings (e.g., "Schedule", "MssqlSync") are English code identifiers from arch-graph's node labels. When graphify returns the same English node label, it gets credit — but the eval was authored against arch-graph results, so the label vocabulary aligns with arch-graph's output format.
 
-2. **Russian query corpus:** 80%+ queries are in Russian. Graphify does keyword matching against English node labels; arch-graph uses multilingual embeddings (mxbai-embed-large). This is a structural mismatch, not a failure of graphify's design.
+2. **Russian query corpus:** 80%+ queries are in Russian. Graphify does keyword matching against English node labels; arch-graph uses multilingual embeddings (`Xenova/paraphrase-multilingual-MiniLM-L12-v2`, 384-dim). This is a structural mismatch, not a failure of graphify's design.
 
 3. **arch-graph token estimate is generous:** The 1000-token estimate for arch-graph assumes both CODE and DOCS buckets are consumed. In practice, an agent might filter to just one bucket (~500 tokens), making arch-graph cheaper than shown.
 

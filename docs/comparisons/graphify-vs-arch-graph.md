@@ -66,6 +66,24 @@ Two scenarios where running both pays off. **NestJS monorepo onboarding**: arch-
 
 ## Verdict
 
-These tools are **complementary, not competitive** — the README already frames them as "sister projects" at different ends of the precision/breadth axis. The bench numbers (14.3× token efficiency, 100% vs 39% recall) hold only for arch-graph's home turf; a bench on cross-cutting semantic or multi-media questions would tilt the other way.
+These tools are **complementary, not competitive** — the README frames them as "sister projects" at different ends of the precision/breadth axis.
 
-**arch-graph users** should know graphify for orientation queries, heterogeneous corpora, and anything outside TypeScript. **graphify users on NestJS monorepos** should try arch-graph for any question that resolves to a specific edge type (pub/sub, queue, table, module DI) — the token savings and file:line citations are material in daily agent workflows.
+**Empirical numbers (post-semantic, 2026-05-17):** A fresh head-to-head benchmark across all 103 queries × 3 projects (see [`2026-05-17-arch-graph-vs-graphify-eval.md`](./2026-05-17-arch-graph-vs-graphify-eval.md)):
+
+| | arch-graph | graphify | Δ |
+|---|---|---|---|
+| **Overall hit-rate** | **67%** | 35% | **+32pp** |
+| A_find | 71% | 38% | +33pp |
+| B_debug | 60% | 27% | +33pp |
+| C_ui | 63% | 44% | +19pp |
+| D_docs | 67% | 33% | +34pp |
+| D_links | 63% | 25% | +38pp |
+| E_arch | 60% | 30% | +30pp |
+| Tokens/query (avg) | ~1000 | ~350 | — |
+| Wins (per-query) | 37 | 4 | tie 32, both-miss 30 |
+
+**Where the gap comes from:** 80% of queries are in Russian. graphify does keyword-BFS over English code-node labels — when a Russian query has no English identifiers to match, graphify returns "No matching nodes found." arch-graph's multilingual embeddings (`Xenova/paraphrase-multilingual-MiniLM-L12-v2`) handle the language barrier. For English-identifier queries ("BaseRepository pattern", "useFormValidation hook") the two tools are roughly tied.
+
+**Older bench numbers** (14.3× token efficiency, 100% vs 39% recall) — those were measured before arch-graph had the semantic layer. They're now superseded; see [`bench/report.md`](../../bench/report.md) for that older structural-only baseline.
+
+**arch-graph users** should know graphify for orientation queries, heterogeneous corpora (PDFs, images, multi-language), and anything outside TypeScript. **graphify users on NestJS monorepos** with non-English queries should default to arch-graph; graphify retains value as a cheap pre-filter on English-identifier queries (~350 tokens vs arch-graph's ~1000) — run it first, fall back to arch-graph on MISS.

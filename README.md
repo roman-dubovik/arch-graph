@@ -344,7 +344,18 @@ Honourable mentions for narrower / different categories: [nestjs-spelunker](http
 
 ## Benchmark
 
-Quantitative comparison with graphify across 5 NestJS monorepos lives in `bench/report.md`. Key finding: arch-graph used **7.6× fewer LLM context tokens** than graphify on the run there (688k vs 5.2M tokens across the same 15 questions, same compression aggressiveness, same `cl100k_base` encoder), because it returns typed structured results instead of raw graph dumps. Mean recall under the substring-presence necessary-condition heuristic was 100% (arch-graph) vs 39% (graphify) on that suite — a permissive "did the context even contain the answer" check, not an end-to-end LLM eval. The five reference projects are anonymized as `Project A`–`E`. The yaml in `bench/questions.yaml` has since been extended to 30 questions; re-running needs the private reference monorepos and is not reflected in the numbers above. To reproduce on your own monorepos, drop one `configs/<id>.config.ts` per project and run `bash bench/run.sh` — see `bench/README.md`.
+Two benchmarks are committed, each measuring a different question.
+
+**Post-semantic (current, 2026-05-17):** 103 fuzzy-intent queries × 3 NestJS monorepos, run through both tools. Live in [`docs/comparisons/2026-05-17-arch-graph-vs-graphify-eval.md`](docs/comparisons/2026-05-17-arch-graph-vs-graphify-eval.md). Headline:
+
+- Overall hit-rate: **arch-graph 67% vs graphify 35%** (+32pp) — 80%+ of queries are in Russian; graphify does keyword-BFS over English code-node labels and returns "no matching nodes" for most non-English fuzzy queries. arch-graph's multilingual embedder (`Xenova/paraphrase-multilingual-MiniLM-L12-v2`) bridges the language gap.
+- Token cost per query: arch-graph ~1000, graphify ~350 (graphify is cheaper when it returns anything at all).
+- Per-query wins: 37 arch-graph, 4 graphify, 32 ties, 30 both-miss.
+- English-identifier queries (e.g. "BaseRepository pattern", "useFormValidation hook") are roughly tied.
+
+**Pre-semantic (historical, 2026-05-16):** 15-question structural-edge comparison on 5 NestJS monorepos lives in [`bench/report.md`](bench/report.md). Key finding from that run: arch-graph used **7.6× fewer LLM context tokens** than graphify (688k vs 5.2M, same `cl100k_base` encoder), with 100% vs 39% substring-presence recall. Those numbers reflect arch-graph's **structural-only** behavior before the semantic sidecar shipped; the post-semantic head-to-head above supersedes them for any question about retrieval quality.
+
+To reproduce on your own monorepos, drop one `configs/<id>.config.ts` per project and run `bash bench/run.sh` — see `bench/README.md`. Or use `arch-graph compare` (below) to auto-generate questions from your own graph.
 
 ## Compare on your own repo
 

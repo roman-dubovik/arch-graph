@@ -1,5 +1,12 @@
 # arch-graph vs graphify — head-to-head benchmark
 
+> **⚠ HISTORICAL — pre-semantic baseline.** This run was made BEFORE the
+> semantic sidecar (`doc-section`, `code_search` + `docs_search` MCP tools)
+> was shipped. The numbers below reflect arch-graph's **structural-only**
+> behavior. For the current post-semantic comparison on 103 queries × 3
+> projects, see
+> [`docs/comparisons/2026-05-17-arch-graph-vs-graphify-eval.md`](../docs/comparisons/2026-05-17-arch-graph-vs-graphify-eval.md).
+
 _Original run: 2026-05-15T20:47:24.567Z (15 hand-curated questions)_
 _Updated: 2026-05-16 — re-run after Tier 1+2+3 merge (cycle detection, filter-chain edges, TypeORM ER, CJS require)_
 
