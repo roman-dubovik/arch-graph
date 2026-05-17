@@ -32,6 +32,17 @@
 #                     searches unconditionally and inspects two separately
 #                     labeled top-K lists. Doubles retrieval cost but
 #                     removes any intent-routing risk.
+#   QUERIES_FILE=...        Path to a queries JSON file (default:
+#                           $SCRIPT_DIR/eval/queries.json). Useful for
+#                           running alternate query suites — e.g. the
+#                           EN-normalized re-run uses queries-en.json.
+#   RESULTS_FILE=...        Path to write the Markdown results table
+#                           (default: $SCRIPT_DIR/eval/results-${DATE}-${EVAL_MODE}.md).
+#                           Override when running multiple variants on
+#                           the same day to avoid clobbering output.
+#   PROJECT_A_DIR=...       Override path to project-a checkout.
+#   PROJECT_B_DIR=...       Override path to project-b checkout.
+#   PROJECT_C_DIR=...       Override path to project-c checkout.
 #
 # Exit code:
 #   0 — all projects meet their expected threshold
