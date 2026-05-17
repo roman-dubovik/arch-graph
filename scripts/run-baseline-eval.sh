@@ -175,8 +175,14 @@ search_and_judge() {
     json_output=$(cd "$project_dir" && "$TSX_BIN" "$CLI" semantic search "$query" --k "$K" --json 2>"$cli_stderr")
   fi
   cli_exit=$?
+  # Only surface stderr when the CLI signaled failure OR the stderr line
+  # looks error-flavoured. The embedder prints harmless "Loading model..."
+  # banners to stderr on first run; warning on every banner buries real
+  # errors in noise.
   if [[ -s "$cli_stderr" ]]; then
-    warn "[$qid] CLI stderr: $(tr '\n' ' ' < "$cli_stderr")"
+    if [[ "$cli_exit" != "0" && "$cli_exit" != "4" ]] || grep -qiE 'error|failed|warning|corrupt' "$cli_stderr"; then
+      warn "[$qid] CLI stderr: $(tr '\n' ' ' < "$cli_stderr")"
+    fi
   fi
   rm -f "$cli_stderr"
 
@@ -263,7 +269,12 @@ build_top_summary() {
 # Per-query orchestrator — dispatches according to $EVAL_MODE.
 # Writes: $TMPDIR_RESULTS/<qid>.result — "HIT" or "MISS"
 #         $TMPDIR_RESULTS/<qid>.top5   — one-line top-K summary
-#         $TMPDIR_RESULTS/<qid>.mode   — "code"|"docs"|"both"|"single"|"fallback-docs"
+#         $TMPDIR_RESULTS/<qid>.mode   — one of:
+#           "code"|"docs"|"both"   (per-category)
+#           "single"               (single)
+#           "code"|"fallback-docs"|"fallback-miss"   (fallback)
+#           "both-buckets"|"both-buckets(code-errored)"|
+#             "both-buckets(docs-errored)"|"both-buckets(partial-error)"   (both-buckets)
 # ---------------------------------------------------------------------------
 run_query() {
   local proj_name="$1"
@@ -330,15 +341,33 @@ run_query() {
       docs_verdict=$(search_and_judge "$qid" "$project_dir" "$query" "$min_score" "$kinds_csv" "$labels_csv" "--docs-only")
       docs_top5=$(build_top_summary)
 
-      # Propagate ERROR if either call failed at the infrastructure layer.
-      if [[ "$code_verdict" == "ERROR" || "$docs_verdict" == "ERROR" ]]; then
+      # Verdict union: ERROR must not override a confirmed HIT from the
+      # healthy bucket — a real LLM agent would still use that bucket's
+      # results. ERROR-only when BOTH buckets fail at the infrastructure
+      # layer. When one errors and the other yields a HIT, annotate which
+      # bucket errored so the operator can still see infrastructure signal.
+      if [[ "$code_verdict" == "ERROR" && "$docs_verdict" == "ERROR" ]]; then
         verdict="ERROR"
+        mode_tag="both-buckets"
       elif [[ "$code_verdict" == "HIT" || "$docs_verdict" == "HIT" ]]; then
         verdict="HIT"
+        if [[ "$code_verdict" == "ERROR" ]]; then
+          mode_tag="both-buckets(code-errored)"
+        elif [[ "$docs_verdict" == "ERROR" ]]; then
+          mode_tag="both-buckets(docs-errored)"
+        else
+          mode_tag="both-buckets"
+        fi
+      elif [[ "$code_verdict" == "ERROR" || "$docs_verdict" == "ERROR" ]]; then
+        # One errored, other MISSed — infrastructure problem on one side,
+        # genuine miss on the other. Surface as ERROR so the aggregator's
+        # error counter fires; otherwise the broken bucket gets hidden.
+        verdict="ERROR"
+        mode_tag="both-buckets(partial-error)"
       else
         verdict="MISS"
+        mode_tag="both-buckets"
       fi
-      mode_tag="both-buckets"
       top5="CODE: ${code_top5} ⏐ DOCS: ${docs_top5}"
       ;;
   esac
@@ -521,6 +550,10 @@ GLOBAL_EXIT=0
     if [[ "$proj_errors_all" -gt 0 ]]; then
       warn "[$proj] ${proj_errors_all} queries errored (CLI exit ≠ 0/4 or invalid JSON). " \
            "Check the [eval] WARN lines above; these were counted as failures in the hit-rate."
+      # Errored queries indicate infrastructure breakage. Unconditionally fail
+      # the eval — without this, an unthresholded category can silently absorb
+      # every ERROR and still let the script exit 0 (CI false-green).
+      GLOBAL_EXIT=1
     fi
 
     # Overall
