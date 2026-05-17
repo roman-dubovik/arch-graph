@@ -70,6 +70,89 @@ Category-level patterns clarify what drove each tool's movement:
 
 ---
 
+## Strict Apples-to-Apples Re-score (EN, graphify rescored under arch-graph criteria)
+
+This section closes the leniency caveat from the EN-Normalized Re-run above. It parses graphify's stdout into structured top-10 node lists and applies the same kind+label criterion that arch-graph's eval harness uses: HIT requires that at least one node within the top-10 ranked results satisfies (label substring-matches any `expectedLabelHas` entry, case-insensitive) AND (inferred node kind intersects `expectedKindIn`, or `expectedKindIn` is empty meaning no kind filter). This matches the arch-graph criterion exactly, modulo the `score ≥ minScore` floor (graphify does not emit per-node scores, so that sub-criterion is dropped — giving graphify a small advantage). The result is the honest apples-to-apples number that the previous section said would be needed.
+
+### Methodology
+
+**Parsing graphify stdout into top-10 nodes.** Graphify stdout contains `NODE <label> [src=<file> loc=<line> community=<n>]` lines interleaved with `EDGE` lines. The first 10 `NODE` lines in document order (BFS-ordered from the keyword seeds) were taken as the top-10 ranked list. `EDGE` lines were discarded.
+
+**Inferring node kinds from src path.** Graphify does not expose arch-graph-style typed kinds (`provider`, `endpoint`, `db-entity-field`, etc.). Kinds were inferred heuristically from `src` path and label:
+
+| Inferred kind(s) | Heuristic |
+|---|---|
+| `doc-section` | `src` ends in `.md` |
+| `fe-hook` | label starts with `use` or `.use` AND `.ts`/`.tsx` extension |
+| `fe-component` | `.tsx` extension |
+| `fe-page` | `pages/` or `/app/` in path AND `.tsx` |
+| `fe-route` | `/app/` in path AND `.tsx` |
+| `module` | `src` ends in `.module.ts` |
+| `provider` | `src` ends in `.service.ts`, `.provider.ts`, or `.controller.ts` |
+| `service` | `src` ends in `.service.ts` |
+| `endpoint` | `src` ends in `.controller.ts` AND label contains `()` |
+| `db-entity-field` + `db-table` | `entities/` or `entity.ts` in path |
+| `db-table` | `migrations/` or `migration.ts` in path |
+| `config-field` | `.env` or `config.ts` or `configuration.ts` in path |
+| `nats-subject` | `nats` in path or label |
+| `queue` | `bullmq` or `processor.ts` or `queue` in path |
+
+A single node can match multiple kinds (e.g. a method in `.controller.ts` maps to both `provider` and `endpoint`). Kind check is: `inferred_kinds ∩ expectedKindIn ≠ ∅`, or pass unconditionally if `expectedKindIn` is empty.
+
+**Scoring criterion (per node, strict).** HIT = at least one node in top-10 where label substring-matches any `expectedLabelHas` entry AND kind is eligible. No score floor (graphify advantage).
+
+**Unscored queries.** 34 of 103 queries have empty `expectedLabelHas`. Without a ground-truth label to search for in the top-10 node list, mechanical scoring is not possible. These queries are excluded from all percentage calculations. The denominator throughout this section is **69 scoreable queries**.
+
+**arch-graph baseline.** The arch-graph EN results from `scripts/eval/results-2026-05-17-both-buckets-en.md` are filtered to the same 69-query scoreable subset. The arch-graph eval already applies strict scoring; no re-scoring is needed.
+
+### Per-project strict hit-rates
+
+| Project | GF strict | AG strict | GF lenient EN (ref) | Scoreable N |
+|---------|-----------|-----------|---------------------|-------------|
+| project-a | 24/33 = **72.7%** | 21/33 = **63.6%** | 45/49 = 92% | 33 |
+| project-b | 7/18 = **38.9%** | 9/18 = **50.0%** | 27/29 = 93% | 18 |
+| project-c | 8/18 = **44.4%** | 7/18 = **38.9%** | 22/25 = 88% | 18 |
+| **Overall** | **39/69 = 56.5%** | **37/69 = 53.6%** | 94/103 = 91% | 69 |
+
+### Per-category strict hit-rates
+
+| Category | GF strict | AG strict | GF lenient EN (ref) | AG lenient EN (ref) | Scoreable N |
+|----------|-----------|-----------|---------------------|---------------------|-------------|
+| A_find | 17/30 = 57% | 17/30 = 57% | 26/30 = 87% | 17/30 = 57% | 30 |
+| B_debug | 5/8 = 62% | 8/8 = 100% | 7/8 = 88% | 8/8 = 100% | 8 |
+| C_ui | 7/10 = 70% | 2/10 = 20% | 11/11 = 100% | 2/11 = 18% | 10 |
+| E_arch | 7/11 = 64% | 5/11 = 45% | 11/11 = 100% | 5/11 = 45% | 11 |
+| D_docs | 3/10 = 30% | 5/10 = 50% | 29/33 = 88% | 27/33 = 82% | 10 |
+| D_links | — | — | 10/10 = 100% | 10/10 = 100% | 0 (all unscored) |
+
+**Note:** the lenient EN column uses the full per-category denominator (including unscored queries); the strict column uses only the scoreable subset within each category.
+
+### Lenient → strict drop: what inflated the 91% number
+
+22 queries changed from lenient-HIT to strict-MISS. The drop breaks down into two failure modes:
+
+1. **Label match outside top-10 (11 queries):** graphify returned a response containing the target label, but that label appeared at rank >10 in the BFS traversal. The lenient criterion scanned the entire ~821-token response; the strict criterion only checks the top-10 nodes. Examples: B10 (`Admitad` label present in response but only surfaced after rank 10 due to `ExternalDataRepository` community dominating the BFS), B12 (image upload nodes buried behind `tinymce.min.js` nodes that dominated the response), B15 (`Controller`/`Service` labels present but outranked by module-file nodes).
+
+2. **Label match with kind mismatch (11 queries):** The target label appeared in a top-10 node but the node's inferred kind did not satisfy `expectedKindIn`. Examples: B8 (`Delivery` matched by `DeliveryIcon()` in a `.tsx` icons file → inferred kind `fe-component`; query needed `db-table`/`endpoint`/`provider`), P5 (`Email` matched by `use-email.ts` → `fe-hook`; query needed `db-entity-field`), P24 (`Sync`/`Agent` matched by `SyncAgentController` → `provider`; query needed `fe-component`/`fe-page`).
+
+The D_docs category is the most striking example: lenient reported 29/33 = 88%, strict reports 3/10 = 30% on the scoreable subset. The lenient criterion credited graphify for returning responses that happened to contain generic words like "plan", "roadmap", or "setup" from unrelated nodes (e.g., `SuperAdminPlansService` credited for "roadmap" query; `.setupMenuButton()` credited for "local setup" query). arch-graph's D_docs nodes are actual `doc-section` graph nodes built from project documentation, and they carry the correct kind — graphify's BFS does not distinguish documentation from code nodes.
+
+### Updated takeaway: where does graphify actually stand?
+
+Under strict top-K scoring on the 69 scoreable EN queries, graphify reaches **56.5%** and arch-graph reaches **53.6%** — a near tie, with graphify ahead by a statistically narrow 3pp. The dramatic 91% vs 67% gap from the lenient EN run was almost entirely a measurement artifact: 22pp came from the looser matching criterion, the remaining 2pp from genuine ranking differences.
+
+By category, the pattern is nuanced: graphify leads meaningfully in C_ui (+50pp over arch-graph strict) and E_arch (+18pp), while arch-graph leads in B_debug (+38pp) and D_docs (+20pp). A_find is an exact tie (57% each). These patterns match the design intuitions: graphify's BFS community expansion finds UI and architecture-structure nodes well when EN keywords are exact identifiers; arch-graph's dense embeddings with doc-section nodes handle debugging and documentation questions better.
+
+### Limitations
+
+1. **Heuristic kind mapping is approximate.** Without graphify exposing arch-graph-style typed kinds, path-based inference is the best available proxy. The mapping misses nodes in non-standard paths (e.g., a service class in a `utils/` directory will not get `service` kind). This systematically under-credits graphify when a correctly ranked node has an unconventional path. The strict scores are therefore a **conservative lower bound** on graphify's true precision under this criterion.
+
+2. **No score floor.** graphify's strict hit-rate is computed without a `score ≥ minScore` filter because graphify does not emit per-node scores. arch-graph's strict hits all satisfy a minimum cosine similarity threshold; graphify's do not. Dropping the score floor gives graphify a small advantage — the true apples-to-apples number would be slightly lower for graphify if a score threshold were applied.
+
+3. **Top-10 as rank proxy.** graphify outputs BFS-ordered node lists, not score-ranked lists. "First 10 NODE lines" is a reasonable BFS-depth proxy but is not identical to a cosine-score ranking. Queries where the relevant community is large may have the target node appear at rank 11–20 even when it is semantically central.
+
+---
+
 ## 2. Setup
 
 **Eval corpus:** 103 queries across 3 projects, 6 categories.
