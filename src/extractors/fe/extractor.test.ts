@@ -9,7 +9,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, afterEach, vi } from 'vitest';
 import { Project, ts } from 'ts-morph';
 import { inMemoryProject } from '../../__fixtures__/in-memory-project.js';
 import { extractFe } from './extractor.js';
@@ -603,5 +603,151 @@ describe('i18n integration — AC-B6: buildEmbedText appends i18n strings', () =
             path: '/root/NoMeta.tsx',
         };
         expect(() => buildEmbedText(node, 'const NoMeta = () => <div/>')).not.toThrow();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Review round 1: new integration tests (tests 1–4, 6–7)
+// ---------------------------------------------------------------------------
+
+/**
+ * Helper: build in-memory Project seeded from a real fixture subdir,
+ * extractFe using the real disk path as root (so loadProjectMessages
+ * reads actual JSON files), return extracted result.
+ */
+async function buildFromFixtureSubdir(subdir: string): Promise<Awaited<ReturnType<typeof extractFe>>> {
+    const fixtureDir = resolve(__dirname, '../../__fixtures__/fe-i18n-sample', subdir);
+    const files = await collectFiles(fixtureDir);
+    const virtualRoot = `/fe-i18n-${subdir}`;
+    const project = new Project({
+        useInMemoryFileSystem: true,
+        compilerOptions: { target: 99, module: 99, moduleResolution: 100, strict: false, jsx: ts.JsxEmit.React },
+    });
+    for (const file of files) {
+        const rel = file.slice(fixtureDir.length);
+        project.createSourceFile(`${virtualRoot}${rel}`, await readFile(file, 'utf8'));
+    }
+    // Use real root so messages/ru.json (etc.) are read from disk
+    const cfg: ArchGraphConfig = { id: subdir, root: fixtureDir, appsGlob: '**' };
+    return extractFe(cfg, project);
+}
+
+// Test 1: ru preferred over en
+describe('i18n integration — test 1: ru-preferred-over-en', () => {
+    it('resolves common.apply to Russian string when both ru.json and en.json exist', async () => {
+        const extracted = await buildFromFixtureSubdir('ru-preferred');
+        const btn = extracted.components.find((c) => c.name === 'ApplyButton');
+        expect(btn).toBeDefined();
+        expect(btn!.i18nStrings).toContain('Применить');
+        expect(btn!.i18nStrings).not.toContain('Apply');
+    });
+});
+
+// Test 2: en-only fallback
+describe('i18n integration — test 2: en-only-fallback', () => {
+    it('resolves key from en.json when no ru.json exists', async () => {
+        const extracted = await buildFromFixtureSubdir('en-only');
+        const btn = extracted.components.find((c) => c.name === 'EnOnlyButton');
+        expect(btn).toBeDefined();
+        expect(btn!.i18nStrings).toContain('English only value');
+    });
+});
+
+// Test 3: locales third-tier fallback
+describe('i18n integration — test 3: locales-third-tier-fallback', () => {
+    it('resolves key from locales/ru/translation.json when no messages/ dir exists', async () => {
+        const extracted = await buildFromFixtureSubdir('locales-fallback');
+        const btn = extracted.components.find((c) => c.name === 'LocalesButton');
+        expect(btn).toBeDefined();
+        expect(btn!.i18nStrings).toContain('Применить');
+    });
+});
+
+// Test 4: no message files — graceful empty
+describe('i18n integration — test 4: no-messages-graceful-empty', () => {
+    it('returns i18nStrings=[] and does not throw when no message files exist', async () => {
+        // Use a virtual root that has no messages/ or locales/ dirs
+        const project = inMemoryProject({
+            '/empty-root/Button.tsx': `
+                import { useTranslations } from 'next-intl';
+                export const Button = () => {
+                    const t = useTranslations();
+                    return <button>{t('common.apply')}</button>;
+                };
+            `,
+        });
+        const cfg: ArchGraphConfig = { id: 'test', root: '/empty-root', appsGlob: '**' };
+        const extracted = await extractFe(cfg, project);
+        const btn = extracted.components.find((c) => c.name === 'Button');
+        expect(btn).toBeDefined();
+        expect(btn!.i18nStrings).toEqual([]);
+    });
+});
+
+// Test 6: buildEmbedText fe-page and fe-route kinds do NOT get i18n strings appended
+describe('i18n integration — test 6: buildEmbedText-fe-page-kind-gate', () => {
+    it('does NOT append i18nStrings for fe-page nodes', () => {
+        const node = {
+            id: 'fe-page:/root/pages/index.tsx#Home',
+            kind: 'fe-page' as const,
+            label: 'Home',
+            path: '/root/pages/index.tsx',
+            meta: { i18nStrings: ['foo'] },
+        };
+        const text = buildEmbedText(node, 'export default function Home() {}');
+        expect(text).not.toContain('foo');
+    });
+
+    it('does NOT append i18nStrings for fe-route nodes', () => {
+        const node = {
+            id: 'fe-route:/',
+            kind: 'fe-route' as const,
+            label: '/',
+            path: '/root/pages/index.tsx',
+            meta: { i18nStrings: ['foo'] },
+        };
+        const text = buildEmbedText(node, '');
+        expect(text).not.toContain('foo');
+    });
+});
+
+// Test 7: fe-to-graph elides empty i18nStrings from meta
+describe('i18n integration — test 7: fe-to-graph-empty-array-elision', () => {
+    it('does not include i18nStrings key in GraphNode.meta when array is empty', async () => {
+        const { nodes } = await buildI18nIntegration({
+            '/root/apps/web/Plain.tsx': `
+                import { useTranslations } from 'next-intl';
+                export const Plain = () => {
+                    const t = useTranslations();
+                    return <div>{t('nonexistent.key')}</div>;
+                };
+            `,
+        });
+        const plain = nodes.find((n) => n.label === 'Plain' && n.kind === 'fe-component');
+        expect(plain).toBeDefined();
+        // i18nStrings should not be present when empty (conditional spread in fe-to-graph)
+        expect(plain!.meta).not.toHaveProperty('i18nStrings');
+    });
+});
+
+// Test 8: aliased-t-binding-detected — integration through extractFe with real fixture
+describe('i18n integration — test 8: aliased-t-binding-detected (P1-A)', () => {
+    it('resolves strings when t is aliased (const { t: translate } = useTranslation())', async () => {
+        const project = inMemoryProject({
+            '/root/apps/web/AliasedComp.tsx': `
+                import { useTranslation } from 'react-i18next';
+                export const AliasedComp = () => {
+                    const { t: translate } = useTranslation();
+                    return <button>{translate('common.apply')}</button>;
+                };
+            `,
+        });
+        const fixtureDir = resolve(__dirname, '../../__fixtures__/fe-i18n-sample');
+        const cfg: ArchGraphConfig = { id: 'test', root: fixtureDir, appsGlob: '**' };
+        const extracted = await extractFe(cfg, project);
+        const comp = extracted.components.find((c) => c.name === 'AliasedComp');
+        expect(comp).toBeDefined();
+        // fixtureDir has messages/ru.json with common.apply = "Применить"
+        expect(comp!.i18nStrings).toContain('Применить');
     });
 });

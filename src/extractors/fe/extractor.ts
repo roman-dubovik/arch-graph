@@ -61,6 +61,10 @@ function isFESourceFile(sf: SourceFile): { include: boolean; hooksOnly: boolean 
  * Priority: messages/ru.json → messages/en.json → locales/ru/translation.json
  *           → locales/en/translation.json.
  * Returns empty object when no file is found (graceful no-op, AC-B3).
+ *
+ * P0-1: Distinguishes ENOENT (expected, try next candidate) from other read
+ * errors (e.g. EACCES, corrupt JSON) which emit a WARNING on stderr.
+ * An empty parsed `{}` is also warned (suggests corrupt/placeholder file).
  */
 async function loadProjectMessages(root: string): Promise<MessagesObject> {
     const candidates = [
@@ -70,13 +74,40 @@ async function loadProjectMessages(root: string): Promise<MessagesObject> {
         join(root, 'locales', 'en', 'translation.json'),
     ];
     for (const candidate of candidates) {
+        let raw: string;
         try {
-            const raw = await readFile(candidate, 'utf8');
-            const parsed = loadMessagesFromJson(raw);
-            if (Object.keys(parsed).length > 0) return parsed;
-        } catch {
-            // File absent or unreadable — try next candidate
+            raw = await readFile(candidate, 'utf8');
+        } catch (err) {
+            if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+                // Expected: file simply doesn't exist — try next candidate
+                continue;
+            }
+            // Unexpected read error (e.g. EACCES, directory) — warn and try next
+            const msg = err instanceof Error ? err.message : String(err);
+            process.stderr.write(
+                `[arch-graph fe-i18n] WARNING: could not read ${candidate}: ${msg}\n`,
+            );
+            continue;
         }
+
+        const result = loadMessagesFromJson(raw);
+        if (!result.ok) {
+            // P1-D: parse error — warn and try next candidate
+            process.stderr.write(
+                `[arch-graph fe-i18n] WARNING: failed to parse ${candidate}: ${result.error}\n`,
+            );
+            continue;
+        }
+
+        if (Object.keys(result.messages).length === 0) {
+            // Valid JSON but empty — suggests a placeholder or corrupt file — warn and try next
+            process.stderr.write(
+                `[arch-graph fe-i18n] WARNING: ${candidate} parsed to empty object — skipping (possible placeholder or corrupt file)\n`,
+            );
+            continue;
+        }
+
+        return result.messages;
     }
     return {};
 }
