@@ -26,6 +26,8 @@ export interface ArchGraphConfig {
     http?: HttpConfig;
     /** TS-imports extractor settings. */
     imports?: ImportsConfig;
+    /** Documentation scanning settings. */
+    docs?: DocsConfig;
     /**
      * Opt-out flags per domain. When a domain is `true` (default) the CLI gate
      * treats zero ground-truth as a hard failure (regex-typo, missing glob, etc.).
@@ -88,6 +90,58 @@ export interface HttpConfig {
      * URL doesn't match any internal-service entry become `external:<hostname>`.
      */
     internalServices?: HttpInternalService[];
+}
+
+export interface DocsConfig {
+    /** Glob patterns to include (relative to project root). */
+    include?: string[];
+    /** Glob patterns to exclude. */
+    exclude?: string[];
+    /** Whether to respect .gitignore when scanning. */
+    respectGitignore?: boolean;
+    /** Embedder-tokens per adaptive chunk (BERT-style, NOT cl100k). */
+    chunkTokens?: number;
+    /** Max file size in bytes before the file is skipped as oversized. */
+    maxFileBytes?: number;
+}
+
+export const DOCS_DEFAULT_INCLUDE: readonly string[] = [
+    'README.md',
+    'docs/**/*.md',
+    'apps/*/README.md',
+    'libs/*/README.md',
+    'packages/*/README.md',
+    'CHANGELOG.md',
+    'ROADMAP.md',
+];
+
+export const DOCS_DEFAULT_EXCLUDE: readonly string[] = [
+    '**/node_modules/**',
+    '**/dist/**',
+    '**/build/**',
+    '**/.next/**',
+    '**/coverage/**',
+    'LICENSE.md',
+    '.github/**/*.md',
+];
+
+/** All-defaults resolution of a (possibly missing) DocsConfig field. */
+export interface ResolvedDocsConfig {
+    include: string[];
+    exclude: string[];
+    respectGitignore: boolean;
+    chunkTokens: number;
+    maxFileBytes: number;
+}
+
+export function applyDocsDefaults(d: DocsConfig | undefined): ResolvedDocsConfig {
+    return {
+        include: d?.include ?? [...DOCS_DEFAULT_INCLUDE],
+        exclude: d?.exclude ?? [...DOCS_DEFAULT_EXCLUDE],
+        respectGitignore: d?.respectGitignore ?? true,
+        chunkTokens: d?.chunkTokens ?? 100,
+        maxFileBytes: d?.maxFileBytes ?? 10 * 1024 * 1024,
+    };
 }
 
 /**
