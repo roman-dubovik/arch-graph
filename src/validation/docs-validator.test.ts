@@ -56,7 +56,7 @@ describe('validateDocs', () => {
         expect(result.summary.meetsFloor).toBe(false);
     });
 
-    it('does not count gitignored/excluded-by-config against recall', () => {
+    it('does not count gitignored against recall (gitignored files are absent from filesIncluded)', () => {
         const diagnostics: DocsDiagnostics = {
             filesScanned: 1,
             filesSkipped: [{ path: 'gone.md', reason: 'gitignored' }],

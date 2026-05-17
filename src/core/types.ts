@@ -412,7 +412,6 @@ export type DocsSkipReason =
     | 'non-utf8'
     | 'empty'
     | 'gitignored'
-    | 'excluded-by-config'
     | 'read-error';
 
 export interface DocsDiagnostics {

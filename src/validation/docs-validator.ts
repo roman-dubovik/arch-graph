@@ -16,14 +16,16 @@ import type { DocsDiagnostics, DocsSkipReason, DocsValidationReport, GraphNode }
  * Exhaustive classification of every DocsSkipReason variant.
  * Adding a new DocsSkipReason to types.ts produces a compile error here,
  * forcing the author to decide how it contributes to recall.
+ *
+ * 'user-excluded' reasons (gitignored) do not count against recall since
+ * those files are already absent from filesIncluded.
  */
 const SKIP_CLASSIFICATION: Record<DocsSkipReason, 'real' | 'user-excluded'> = {
-    'oversized':          'real',
-    'non-utf8':           'real',
-    'empty':              'real',
-    'read-error':         'real',
-    'gitignored':         'user-excluded',
-    'excluded-by-config': 'user-excluded',
+    'oversized':  'real',
+    'non-utf8':   'real',
+    'empty':      'real',
+    'read-error': 'real',
+    'gitignored': 'user-excluded',
 };
 
 export function validateDocs(
