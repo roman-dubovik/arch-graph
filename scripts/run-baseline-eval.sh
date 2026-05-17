@@ -56,11 +56,28 @@ DATE="$(date +%Y-%m-%d)"
 RESULTS_FILE="$SCRIPT_DIR/eval/results-${DATE}-${EVAL_MODE}.md"
 SKIP_BUILD="${SKIP_BUILD:-0}"
 
-# Project paths — replace these with your local checkout locations before running.
-# Example: PROJECT_A_DIR="/home/you/projects/project-a"
-PROJECT_A_DIR="/REPLACE-WITH/path/to/project-a"
-PROJECT_B_DIR="/REPLACE-WITH/path/to/project-b"
-PROJECT_C_DIR="/REPLACE-WITH/path/to/project-c"
+# Project paths — replace these with your local checkout locations OR set them
+# as env vars before running (recommended so you don't have to edit the script).
+# Example: PROJECT_A_DIR=/home/you/projects/project-a bash scripts/run-baseline-eval.sh
+PROJECT_A_DIR="${PROJECT_A_DIR:-/REPLACE-WITH/path/to/project-a}"
+PROJECT_B_DIR="${PROJECT_B_DIR:-/REPLACE-WITH/path/to/project-b}"
+PROJECT_C_DIR="${PROJECT_C_DIR:-/REPLACE-WITH/path/to/project-c}"
+
+# Fail loudly if the user forgot to override the placeholders — saves debugging
+# a confusing "directory not found" or empty-results scenario.
+for _p_var in PROJECT_A_DIR PROJECT_B_DIR PROJECT_C_DIR; do
+  _p_val="${!_p_var}"
+  if [[ "$_p_val" == /REPLACE-WITH/* ]]; then
+    echo "ERROR: $_p_var is still the placeholder ($_p_val). " >&2
+    echo "       Edit scripts/run-baseline-eval.sh OR set $_p_var=/your/local/path before running." >&2
+    exit 1
+  fi
+  if [[ ! -d "$_p_val" ]]; then
+    echo "ERROR: $_p_var points at $_p_val which doesn't exist." >&2
+    exit 1
+  fi
+done
+unset _p_var _p_val
 
 # ---------------------------------------------------------------------------
 # Argument parsing
