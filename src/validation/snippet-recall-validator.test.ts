@@ -526,3 +526,9 @@ describe('formatRecallResult — CT-AC7: virtual nodes diagnostic section', () =
         expect(formatted).toContain('module (external): 1');
     });
 });
+
+describe('doc-section recall contract', () => {
+    it('is NOT in KINDS_WITHOUT_SOURCE (must contribute to recall denominator)', () => {
+        expect(KINDS_WITHOUT_SOURCE.has('doc-section' as const)).toBe(false);
+    });
+});
