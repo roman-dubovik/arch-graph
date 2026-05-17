@@ -44,6 +44,7 @@ import { buildReport as buildNatsReport } from '../validation/validator.js';
 import { validateDocs } from '../validation/docs-validator.js';
 import { countTokens } from '../semantic/tokenizer.js';
 import { detectCycles } from '../detectors/cycles.js';
+import { enrichEndpointsFromOpenApi } from '../extractors/openapi/enrich-endpoints.js';
 
 export interface BuildResult {
     graph: ArchGraph;
@@ -471,6 +472,20 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         };
     }
 
+    // ─── OpenAPI enrichment pass ───────────────────────────────────────────────
+    // Runs after graph assembly so all endpoint nodes are in graph.nodes.
+    // Mutates matched endpoint nodes in-place (adds meta.openapiInfo).
+    // Silent no-op when no YAML files match the configured globs.
+    process.stdout.write(`enriching endpoints from OpenAPI YAML...\n`);
+    const openapiEnrich = await enrichEndpointsFromOpenApi(
+        graph.nodes.filter((n) => n.kind === 'endpoint'),
+        cfg.root,
+        cfg.openapi?.globs,
+    );
+    process.stdout.write(
+        `  files: ${openapiEnrich.diagnostics.filesProcessed}, matched: ${openapiEnrich.diagnostics.endpointsMatched}, unmatched: ${openapiEnrich.diagnostics.endpointsUnmatched.length}, errors: ${openapiEnrich.diagnostics.parseErrors.length}\n`,
+    );
+
     const diagnostics: DiagnosticsReport = {
         projectId: cfg.id,
         timestamp: new Date().toISOString(),
@@ -511,6 +526,7 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
             messages: scoped.diagnostics,
         },
         docs: docsDiagnostics,
+        openapi: openapiEnrich.diagnostics,
     };
     const docsValidation = validateDocs(docsDiagnostics, graph.nodes);
     const validation: BuildValidation = {

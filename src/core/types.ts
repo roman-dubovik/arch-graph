@@ -367,6 +367,31 @@ export interface EndpointDiagnostics {
 }
 
 /**
+ * Diagnostics produced by the OpenAPI YAML enrichment pass.
+ * Reported in `DiagnosticsReport.openapi` and in the `diagnostics.json` output.
+ */
+export interface OpenApiDiagnostics {
+    /** Number of YAML files successfully parsed (excludes files that produced parse errors). */
+    filesProcessed: number;
+    /** Number of endpoint graph nodes that were successfully enriched. */
+    endpointsMatched: number;
+    /**
+     * YAML operations that had no matching endpoint graph node.
+     * The caller can use this to detect YAML drift from the actual codebase.
+     */
+    endpointsUnmatched: Array<{
+        /** `operationId` from the YAML operation, if present. */
+        operationId?: string;
+        /** HTTP method (lowercase) from the YAML path item. */
+        method: string;
+        /** Path string from the YAML `paths` object. */
+        path: string;
+    }>;
+    /** YAML files that could not be parsed. Other files continue to be processed. */
+    parseErrors: Array<{ file: string; error: string }>;
+}
+
+/**
  * Diagnostics for the Variant 2 config-field domain.
  * Merges extractor-level (non-literal key) and mapper-level (unowned file) messages.
  */
@@ -459,6 +484,8 @@ export interface DiagnosticsReport {
     scoped?: ScopedDiagnostics;
     /** Docs-domain diagnostics. */
     docs?: DocsDiagnostics;
+    /** OpenAPI YAML enrichment diagnostics — populated by the enrichment pass in `runBuild`. */
+    openapi?: OpenApiDiagnostics;
     /**
      * Populated only when `arch-graph semantic build` has been run.
      * Optional so plain `arch-graph build` keeps the same diagnostics.json
