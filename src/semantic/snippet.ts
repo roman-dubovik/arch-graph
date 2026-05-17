@@ -160,22 +160,13 @@ function extractClassPropertySnippet(sf: SourceFile, node: GraphNode): SnippetRe
             const className = anchor.slice(0, dotIdx);
             const propName = anchor.slice(dotIdx + 1);
 
-            // Primary lookup: class name as declared in anchor (concrete entity class).
-            // Fallback: scan all classes in the file for the property — handles inherited
-            // fields whose anchor uses the concrete entity class name but whose decorator
-            // lives in a base-class file (P1-10: db-entity-field recall regression).
-            let prop = sf.getClass(className)?.getProperty(propName);
-
-            if (!prop) {
-                // Walk all classes in this source file looking for the property.
-                for (const cls of sf.getClasses()) {
-                    const candidate = cls.getProperty(propName);
-                    if (candidate) {
-                        prop = candidate;
-                        break;
-                    }
-                }
-            }
+            // Primary lookup: class name as declared in anchor.
+            // For inherited fields the anchor now uses declaringClass (the base class
+            // that owns the @Column decorator), so this direct lookup is always correct.
+            // The old scan-all-classes fallback has been removed (it was semantically
+            // wrong — it would silently return the first class with a matching property
+            // even if the anchor class didn't exist).
+            const prop = sf.getClass(className)?.getProperty(propName);
 
             if (prop) {
                 // Include decorator text before the property
