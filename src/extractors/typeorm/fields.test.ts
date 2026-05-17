@@ -512,9 +512,16 @@ export class UserEntity extends BaseEntity {
         for (const f of result.fields) {
             expect(f.entityClass).toBe('UserEntity');
         }
+        // declaringClass is BaseEntity for inherited fields, UserEntity for own fields
+        const emailField = result.fields.find((f) => f.fieldName === 'email')!;
+        const idField = result.fields.find((f) => f.fieldName === 'id')!;
+        const createdByField = result.fields.find((f) => f.fieldName === 'createdBy')!;
+        expect(emailField.declaringClass).toBe('UserEntity');
+        expect(idField.declaringClass).toBe('BaseEntity');
+        expect(createdByField.declaringClass).toBe('BaseEntity');
     });
 
-    it('all inherited fields have entityClass set to concrete entity', () => {
+    it('all inherited fields have entityClass set to concrete entity, declaringClass set to base', () => {
         const project = inMemoryProject({
             '/app/base.entity.ts': `
 import { Column } from 'typeorm';
@@ -538,7 +545,12 @@ export class PostEntity extends TimestampBase {
         const inherited = result.fields.find((f) => f.fieldName === 'createdAt');
         expect(inherited).toBeDefined();
         expect(inherited!.entityClass).toBe('PostEntity');
+        expect(inherited!.declaringClass).toBe('TimestampBase');
         expect(inherited!.tableName).toBe('posts');
+        // directly-declared field has declaringClass === entityClass
+        const own = result.fields.find((f) => f.fieldName === 'title');
+        expect(own).toBeDefined();
+        expect(own!.declaringClass).toBe('PostEntity');
     });
 
     it('emits diagnostic for @Entity class not in entity index', () => {

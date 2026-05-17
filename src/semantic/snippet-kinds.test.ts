@@ -228,10 +228,9 @@ export class User {
         expect(result.reason?.kind).toBe('label-not-located');
     });
 
-    it('P1-10: extracts inherited field from base class when concrete class does not declare it', () => {
-        // The anchor uses the concrete class name (ai_admin_users → AiAdminUser),
-        // but the property is declared on BaseEntity in the same file.
-        // The base-class file fallback (scan all classes) should find it.
+    it('P1-10: extracts inherited field using declaringClass anchor (primary lookup, no fallback)', () => {
+        // The anchor now uses the declaring class (BaseEntity), not the concrete entity class.
+        // The primary lookup sf.getClass('BaseEntity').getProperty('created_at') works directly.
         const project = inMemoryProject({
             '/libs/nest-shared/src/db/entities/base-entity.ts': `
 import { Column, CreateDateColumn, PrimaryGeneratedColumn } from 'typeorm';
@@ -248,16 +247,44 @@ export abstract class BaseEntity {
             id: 'db-entity-field:ai_admin_users/created_at',
             kind: 'db-entity-field',
             label: 'ai_admin_users/created_at',
-            // path points to the base-entity file (as emitted by fields extractor for inherited props)
+            // path points to the base-entity file (where the declaring class lives)
             path: '/libs/nest-shared/src/db/entities/base-entity.ts',
-            // anchor uses the concrete entity class name — not in this file
-            anchor: 'AiAdminUser.created_at',
+            // anchor uses declaringClass — the class that actually owns @CreateDateColumn
+            anchor: 'BaseEntity.created_at',
         });
         const result = extractSnippet(project, node);
-        // Should find created_at via the base-class fallback scan
+        // Primary lookup succeeds — no fallback needed
         expect(result.reason).toBeUndefined();
         expect(result.snippet).toContain('created_at');
         expect(result.snippet).toContain('@CreateDateColumn');
+    });
+
+    it('returns label-not-located when anchor class does not exist (no silent first-match fallback)', () => {
+        // Negative test: anchor references a class that is not in the file.
+        // Under the old kludge, this would silently return a snippet from the first
+        // class that happened to have a matching property name.
+        // With the fallback removed, it must return label-not-located.
+        const project = inMemoryProject({
+            '/libs/db/src/real.entity.ts': `
+import { Column } from 'typeorm';
+export class Real {
+  @Column()
+  foo: string;
+}
+`,
+        });
+        const node = makeNode({
+            id: 'db-entity-field:table/foo',
+            kind: 'db-entity-field',
+            label: 'table/foo',
+            path: '/libs/db/src/real.entity.ts',
+            // NonExistent is not in the file — only Real is
+            anchor: 'NonExistent.foo',
+        });
+        const result = extractSnippet(project, node);
+        // Must not silently return Real.foo
+        expect(result.snippet).toBe('');
+        expect(result.reason?.kind).toBe('label-not-located');
     });
 });
 

@@ -9,9 +9,11 @@ function field(
     fieldType = 'varchar',
     nullable = false,
     decorator: ColumnDecorator = 'Column',
+    declaringClass?: string,
 ): EntityFieldSite {
     return {
         entityClass,
+        declaringClass: declaringClass ?? entityClass,
         tableName,
         fieldName,
         fieldType,
@@ -95,6 +97,28 @@ describe('mapEntityFieldsToGraph', () => {
         expect(fieldNodes).toHaveLength(1);
         // Should emit a diagnostic for the duplicate
         expect(result.diagnostics.length).toBeGreaterThan(0);
+    });
+
+    it('anchor uses declaringClass for directly-declared field (entityClass === declaringClass)', () => {
+        const f = field('UserEntity', 'users', 'email');
+        const result = mapEntityFieldsToGraph([f]);
+        const node = result.nodes.find((n) => n.kind === 'db-entity-field')!;
+        expect(node.anchor).toBe('UserEntity.email');
+    });
+
+    it('anchor uses declaringClass (base class) for inherited field', () => {
+        const f = field('Users', 'users', 'createdAt', 'timestamp', false, 'CreateDateColumn', 'BaseEntity');
+        const result = mapEntityFieldsToGraph([f]);
+        const node = result.nodes.find((n) => n.kind === 'db-entity-field')!;
+        expect(node.anchor).toBe('BaseEntity.createdAt');
+    });
+
+    it('meta includes both entityClass and declaringClass', () => {
+        const f = field('Users', 'users', 'createdAt', 'timestamp', false, 'CreateDateColumn', 'BaseEntity');
+        const result = mapEntityFieldsToGraph([f]);
+        const node = result.nodes.find((n) => n.kind === 'db-entity-field')!;
+        expect(node.meta?.entityClass).toBe('Users');
+        expect(node.meta?.declaringClass).toBe('BaseEntity');
     });
 
     it('stores field metadata in node meta', () => {

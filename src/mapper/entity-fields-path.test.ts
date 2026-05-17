@@ -9,6 +9,7 @@ import { mapEntityFieldsToGraph } from './entity-fields-to-graph.js';
 function makeSite(overrides: Partial<EntityFieldSite> = {}): EntityFieldSite {
     return {
         entityClass: 'User',
+        declaringClass: 'User',
         tableName: 'users',
         decorator: 'Column',
         fieldName: 'email',
@@ -44,15 +45,21 @@ describe('mapEntityFieldsToGraph — path + anchor (A4)', () => {
         expect(nameNode!.anchor).toBe('User.name');
     });
 
-    it('emits the entity file path for inherited fields (entityClass is the concrete class)', () => {
+    it('emits the base-class file path and declaring-class anchor for inherited fields', () => {
         const site = makeSite({
-            entityClass: 'AdminUser', // concrete class (inheritance resolved by extractor)
+            entityClass: 'AdminUser',       // concrete class
+            declaringClass: 'BaseEntity',   // base class that owns the @Column decorator
             fieldName: 'createdAt',
             decorator: 'CreateDateColumn',
-            location: { file: '/apps/db/src/admin-user.entity.ts', line: 5, column: 1 },
+            // path points to the base-class file where the decorator lives
+            location: { file: '/apps/db/src/base.entity.ts', line: 5, column: 1 },
         });
         const { nodes } = mapEntityFieldsToGraph([site]);
-        expect(nodes[0]!.path).toBe('/apps/db/src/admin-user.entity.ts');
-        expect(nodes[0]!.anchor).toBe('AdminUser.createdAt');
+        expect(nodes[0]!.path).toBe('/apps/db/src/base.entity.ts');
+        // anchor uses declaringClass so snippet extraction hits the right class directly
+        expect(nodes[0]!.anchor).toBe('BaseEntity.createdAt');
+        // meta preserves both concrete and declaring class
+        expect(nodes[0]!.meta?.entityClass).toBe('AdminUser');
+        expect(nodes[0]!.meta?.declaringClass).toBe('BaseEntity');
     });
 });
