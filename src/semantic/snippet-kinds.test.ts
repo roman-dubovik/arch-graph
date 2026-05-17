@@ -227,6 +227,38 @@ export class User {
         expect(result.snippet).toBe('');
         expect(result.reason?.kind).toBe('label-not-located');
     });
+
+    it('P1-10: extracts inherited field from base class when concrete class does not declare it', () => {
+        // The anchor uses the concrete class name (ai_admin_users → AiAdminUser),
+        // but the property is declared on BaseEntity in the same file.
+        // The base-class file fallback (scan all classes) should find it.
+        const project = inMemoryProject({
+            '/libs/nest-shared/src/db/entities/base-entity.ts': `
+import { Column, CreateDateColumn, PrimaryGeneratedColumn } from 'typeorm';
+export abstract class BaseEntity {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @CreateDateColumn()
+  created_at: Date;
+}
+`,
+        });
+        const node = makeNode({
+            id: 'db-entity-field:ai_admin_users/created_at',
+            kind: 'db-entity-field',
+            label: 'ai_admin_users/created_at',
+            // path points to the base-entity file (as emitted by fields extractor for inherited props)
+            path: '/libs/nest-shared/src/db/entities/base-entity.ts',
+            // anchor uses the concrete entity class name — not in this file
+            anchor: 'AiAdminUser.created_at',
+        });
+        const result = extractSnippet(project, node);
+        // Should find created_at via the base-class fallback scan
+        expect(result.reason).toBeUndefined();
+        expect(result.snippet).toContain('created_at');
+        expect(result.snippet).toContain('@CreateDateColumn');
+    });
 });
 
 // ---------------------------------------------------------------------------
@@ -366,6 +398,37 @@ export function Header({ title }: { title: string }) {
         const result = extractSnippet(project, node);
         expect(result.snippet).toContain('Header');
         expect(result.reason).toBeUndefined();
+    });
+
+    it('P0-1: includes JSDoc text and JSX text content in snippet', () => {
+        // This test asserts that the [jsDocText, declText, jsxText].filter(Boolean).join('\n')
+        // concatenation in snippet.ts actually produces all three parts.
+        const project = inMemoryProject({
+            '/apps/web/src/save-avatar.tsx': `
+/** Displays user avatar with a Save button. */
+export const SaveAvatar = ({ name }: { name: string }) => (
+  <div className="truncate">
+    <span>Сохранить</span>
+    <button>{name}</button>
+  </div>
+);
+`,
+        });
+        const node = makeNode({
+            id: 'fe-component:/apps/web/src/save-avatar.tsx#SaveAvatar',
+            kind: 'fe-component',
+            label: 'SaveAvatar',
+            path: '/apps/web/src/save-avatar.tsx',
+            anchor: 'SaveAvatar',
+        });
+        const result = extractSnippet(project, node);
+        expect(result.reason).toBeUndefined();
+        // JSDoc must be present
+        expect(result.snippet).toContain('Displays user avatar');
+        // JSX text content must be present
+        expect(result.snippet).toContain('Сохранить');
+        // Optional: className attribute (bonus)
+        expect(result.snippet).toContain('truncate');
     });
 });
 
