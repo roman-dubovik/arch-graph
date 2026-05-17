@@ -7,10 +7,13 @@
 // (matches legacy behaviour) without asking any questions.
 
 import { existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
 import { createInterface } from 'node:readline/promises';
 import { dirname, relative, resolve } from 'node:path';
 import { stdin as input, stdout as output } from 'node:process';
+
+import fastGlob from 'fast-glob';
 
 import { claudeInstall } from './claude.js';
 import * as hooksModule from './hooks.js';
@@ -33,6 +36,12 @@ interface WizardAnswers {
     /** Strict mode: when true, a comment is emitted and a future `strictMode` field can be toggled. */
     strictMode: boolean;
     runBuild: boolean;
+    docs?: {
+        respectGitignore: boolean;
+        chunkTokens: number;
+        userInclude: string[];
+        userExclude: string[];
+    };
 }
 
 type DomainKey = 'nats' | 'typeorm' | 'bullmq' | 'di' | 'http' | 'ts-import';
@@ -66,6 +75,40 @@ function q(s: string): string {
 /** Emit a TS array literal from user-supplied method names. */
 function methodsArray(methods: string[]): string {
     return '[' + methods.map(q).join(', ') + ']';
+}
+
+// ─── docs discovery ───────────────────────────────────────────────────────────
+
+const DEFAULT_DOC_INCLUDE = [
+    'README.md',
+    'docs/**/*.md',
+    'apps/*/README.md',
+    'libs/*/README.md',
+    'packages/*/README.md',
+    'CHANGELOG.md',
+    'ROADMAP.md',
+];
+
+async function discoverExtraMdFiles(repoRoot: string, respectGitignore: boolean): Promise<string[]> {
+    let all: string[];
+    if (respectGitignore) {
+        try {
+            const stdout = execFileSync('git', ['-C', repoRoot, 'ls-files', '--', '*.md'], {
+                encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
+            });
+            all = stdout.split('\n').filter(s => s.length > 0);
+        } catch {
+            all = await fastGlob(['**/*.md'], {
+                cwd: repoRoot, ignore: ['**/node_modules/**'], dot: false,
+            });
+        }
+    } else {
+        all = await fastGlob(['**/*.md'], {
+            cwd: repoRoot, ignore: ['**/node_modules/**'], dot: false,
+        });
+    }
+    const defaultMatches = new Set(await fastGlob(DEFAULT_DOC_INCLUDE, { cwd: repoRoot }));
+    return all.filter(f => !defaultMatches.has(f)).sort();
 }
 
 // ─── template builder ─────────────────────────────────────────────────────────
@@ -132,6 +175,18 @@ export function buildConfigTemplate(a: WizardAnswers): string {
         ? `    // strictMode: true,  // fail build if recall drops below domain floor (CI-safe)\n`
         : '';
 
+    // Docs block
+    let docsBlockStr = '';
+    if (a.docs !== undefined) {
+        const customInclude = a.docs.userInclude.length > 0
+            ? `        include: [${[...DEFAULT_DOC_INCLUDE, ...a.docs.userInclude].map(q).join(', ')}],\n`
+            : '';
+        const customExclude = a.docs.userExclude.length > 0
+            ? `        exclude: [${a.docs.userExclude.map(q).join(', ')}],\n`
+            : '';
+        docsBlockStr = `    docs: {\n${customInclude}${customExclude}        respectGitignore: ${a.docs.respectGitignore},\n        chunkTokens: ${a.docs.chunkTokens},\n    },\n`;
+    }
+
     return `// arch-graph.config.ts — no import needed, arch-graph loads this directly.
 // For editor type-hints add arch-graph as a devDependency:
 //   npm i -D arch-graph@file:~/.arch-graph
@@ -142,7 +197,7 @@ export default {
     root: ${q(a.repoRoot)},
     appsGlob: ${q(a.appsGlob)},
     libsGlob: ${q(a.libsGlob)},
-${domainsBlock}${natsBlock}${importsBlock}${strictComment}};
+${domainsBlock}${natsBlock}${importsBlock}${docsBlockStr}${strictComment}};
 `;
 }
 
@@ -250,6 +305,41 @@ async function askNatsWrapper(rl: Rl): Promise<{
     };
 }
 
+// ─── docs prompts ─────────────────────────────────────────────────────────────
+
+async function askDocs(
+    rl: ReturnType<typeof createInterface>,
+    repoRoot: string,
+): Promise<WizardAnswers['docs']> {
+    const ignoreAns = (await rl.question('Use .gitignore when scanning .md? [Y/n] '))
+        .trim().toLowerCase();
+    const respectGitignore = ignoreAns !== 'n' && ignoreAns !== 'no';
+
+    const candidates = await discoverExtraMdFiles(repoRoot, respectGitignore);
+    const userInclude: string[] = [];
+    const userExclude: string[] = [];
+
+    if (candidates.length > 0) {
+        process.stdout.write(
+            `\nFound .md files outside defaults — for each, press enter to include, type '!' to exclude, or 's' to skip:\n`,
+        );
+        for (const c of candidates) {
+            const ans = (await rl.question(`  ${c} [include/!exclude/skip]: `))
+                .trim().toLowerCase();
+            if (ans === '!' || ans === 'exclude') userExclude.push(c);
+            else if (ans === 's' || ans === 'skip') continue;
+            else userInclude.push(c);
+        }
+    }
+
+    const tokensAns = (await rl.question(
+        'Chunk tokens per section (BERT tokens, embedder context 128)? [100] ',
+    )).trim();
+    const chunkTokens = tokensAns === '' ? 100 : Math.max(1, Number.parseInt(tokensAns, 10) || 100);
+
+    return { respectGitignore, chunkTokens, userInclude, userExclude };
+}
+
 // ─── INIT_TEMPLATE (non-TTY fallback) ─────────────────────────────────────────
 
 export const INIT_TEMPLATE = `// arch-graph.config.ts — no import needed, arch-graph loads this directly.
@@ -347,6 +437,8 @@ export async function runInitWizard(target: string): Promise<void> {
 
     const shouldRunBuild = await askYesNo(rl, '\n? Run first build now?', true);
 
+    const docs = await askDocs(rl, resolve(repoRoot));
+
     rl.close();
 
     // ── Assemble answers & write config ──────────────────────────────────────
@@ -364,6 +456,7 @@ export async function runInitWizard(target: string): Promise<void> {
         hookMode,
         strictMode,
         runBuild: shouldRunBuild,
+        docs,
     };
 
     output.write('\n');
