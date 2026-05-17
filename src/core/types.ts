@@ -85,7 +85,8 @@ export type NodeKind =
     | 'config-field'
     /** STUB: extractor returns empty in v1 — see B8 in design doc */
     | 'scoped-marker'
-    | 'db-entity-field';
+    | 'db-entity-field'
+    | 'doc-section';
 
 /**
  * Exhaustiveness-gate pattern for NodeKind.
@@ -111,6 +112,7 @@ const NODE_KIND_CHECK: Record<NodeKind, null> = {
     'config-field': null,
     'scoped-marker': null,
     'db-entity-field': null,
+    'doc-section': null,
 };
 
 /** All valid NodeKind values — used for runtime validation and zod enum schemas. */
@@ -401,6 +403,41 @@ export interface ScopedDiagnostics {
     messages: Array<{ file: string; line: number; message: string }>;
 }
 
+// ============================================================================
+// Docs-domain types (v1 — nodes only, no edges)
+// ============================================================================
+
+export type DocsSkipReason =
+    | 'oversized'
+    | 'non-utf8'
+    | 'empty'
+    | 'gitignored'
+    | 'excluded-by-config';
+
+export interface DocsDiagnostics {
+    filesScanned: number;
+    filesSkipped: Array<{ path: string; reason: DocsSkipReason }>;
+    frontmatterErrors: Array<{ path: string; error: string }>;
+    oversizedChunks: Array<{ docSectionId: string; tokenCount: number }>;
+    counts: {
+        filesIncluded: number;
+        nodesEmitted: number;
+        headingsTotal: number;
+        sectionsSplit: number;
+        filesWithFrontmatter: number;
+    };
+}
+
+export interface DocsValidationReport {
+    summary: {
+        filesIncluded: number;
+        filesProcessed: number;
+        filesSkippedWithReason: number;
+        recall: number;
+        meetsFloor: boolean;
+    };
+}
+
 export interface DiagnosticsReport {
     projectId: string;
     timestamp: string;
@@ -420,6 +457,8 @@ export interface DiagnosticsReport {
     dbEntityFields?: DbEntityFieldsDiagnostics;
     /** Variant 2 — scoped-marker domain diagnostics (stub). */
     scoped?: ScopedDiagnostics;
+    /** Docs-domain diagnostics. */
+    docs?: DocsDiagnostics;
     /**
      * Populated only when `arch-graph semantic build` has been run.
      * Optional so plain `arch-graph build` keeps the same diagnostics.json
@@ -569,6 +608,8 @@ export interface BuildValidation {
     config?: import('../validation/config-validator.js').ConfigValidationResult;
     /** Variant 2 — db-entity-field validation report. */
     dbEntityFields?: DbEntityFieldsValidationResult;
+    /** Docs-domain validation report. */
+    docs?: DocsValidationReport;
 }
 
 // ============================================================================

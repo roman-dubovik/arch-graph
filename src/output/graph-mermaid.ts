@@ -155,6 +155,7 @@ const NODE_KIND_META: Record<NodeKind, NodeKindMeta> = {
     'fe-component': { subgraphId: 'fe_components', subgraphLabel: 'FE components', cssClass: 'fe', order: 15 },
     'fe-route': { subgraphId: 'fe_routes', subgraphLabel: 'FE routes', cssClass: 'fe', order: 16 },
     'fe-hook': { subgraphId: 'fe_hooks', subgraphLabel: 'FE hooks', cssClass: 'fe', order: 17 },
+    'doc-section': { subgraphId: 'docs', subgraphLabel: 'Docs', cssClass: 'docs', order: 18 },
 };
 
 const SUBGRAPH_ORDER: NodeKind[] = (Object.keys(NODE_KIND_META) as NodeKind[]).sort(
