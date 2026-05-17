@@ -277,6 +277,7 @@ describe('runSemanticBuild — validateSnippetRecall wiring (P1-3)', () => {
                 totalNodes: 10,
                 totalFilled: 10,
                 aggregateFillRate: 1.0,
+                virtualNodes: { lib: 0, service: 0, moduleExternal: 0, natsSubject: 0, dbTable: 0, queue: 0, external: 0 },
             },
         });
 
@@ -366,6 +367,7 @@ describe('runSemanticBuild — --strict-recall flag (P1-A)', () => {
                 totalNodes: 100,
                 totalFilled: 80,
                 aggregateFillRate: 0.8,
+                virtualNodes: { lib: 0, service: 0, moduleExternal: 0, natsSubject: 0, dbTable: 0, queue: 0, external: 0 },
             },
         });
 
@@ -410,6 +412,7 @@ describe('runSemanticBuild — --strict-recall flag (P1-A)', () => {
                 totalNodes: 100,
                 totalFilled: 80,
                 aggregateFillRate: 0.8,
+                virtualNodes: { lib: 0, service: 0, moduleExternal: 0, natsSubject: 0, dbTable: 0, queue: 0, external: 0 },
             },
         });
 
@@ -477,6 +480,7 @@ describe('runSemanticBuild — --strict-recall flag (P1-A)', () => {
                 totalNodes: 10,
                 totalFilled: 10,
                 aggregateFillRate: 1.0,
+                virtualNodes: { lib: 0, service: 0, moduleExternal: 0, natsSubject: 0, dbTable: 0, queue: 0, external: 0 },
             },
         });
 

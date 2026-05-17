@@ -48,6 +48,8 @@ export const KINDS_WITHOUT_SOURCE: ReadonlySet<NodeKind> = new Set<NodeKind>([
     'db-table',
     'queue',
     'external',
+    'lib',      // virtual: no source file — monorepo lib marker
+    'service',  // virtual: monorepo service marker
 ]);
 
 // ---------------------------------------------------------------------------
@@ -64,6 +66,21 @@ export interface KindStats {
 }
 
 /**
+ * Counts of virtual nodes (no source expected) per kind.
+ * These are excluded from the recall denominator; reported separately
+ * so the output is more honest, not less informative (CT-AC7).
+ */
+export interface VirtualNodeCounts {
+    lib: number;
+    service: number;
+    moduleExternal: number;  // module nodes without a path field
+    natsSubject: number;
+    dbTable: number;
+    queue: number;
+    external: number;
+}
+
+/**
  * Aggregate fill-rate statistics for all source-backed node kinds.
  */
 export interface SnippetStats {
@@ -75,6 +92,11 @@ export interface SnippetStats {
     aggregateFillRate: number;
     /** Per-kind breakdown, sorted by fill rate ascending (worst first). */
     byKind: KindStats[];
+    /**
+     * Counts of virtual nodes that were excluded from the recall denominator.
+     * Reported for transparency (CT-AC7); not used in pass/fail evaluation.
+     */
+    virtualNodes: VirtualNodeCounts;
 }
 
 /**
@@ -128,9 +150,38 @@ function toNonEmpty<T>(arr: T[]): [T, ...T[]] {
     return arr as [T, ...T[]];
 }
 
+/**
+ * Return true when a node is expected to have a non-empty snippet and should
+ * therefore be counted in the recall denominator.
+ *
+ * - Any kind in KINDS_WITHOUT_SOURCE → false (virtual, no source file).
+ * - `module` nodes without a `path` field → false (external module from
+ *   node_modules; DiModuleIndex skips path emission for them by design).
+ * - All other nodes → true.
+ */
+export function isExpectedToHaveSnippet(node: { kind: NodeKind; path?: string }): boolean {
+    if (KINDS_WITHOUT_SOURCE.has(node.kind)) return false;
+    // External modules have no path; internal modules do.
+    if (node.kind === 'module' && !node.path) return false;
+    return true;
+}
+
 // ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
+
+/** Zero-value for VirtualNodeCounts — convenience for callers. */
+export function makeEmptyVirtualNodeCounts(): VirtualNodeCounts {
+    return {
+        lib: 0,
+        service: 0,
+        moduleExternal: 0,
+        natsSubject: 0,
+        dbTable: 0,
+        queue: 0,
+        external: 0,
+    };
+}
 
 /**
  * Build a SnippetStats object, computing aggregateFillRate from totals.
@@ -141,12 +192,14 @@ export function makeSnippetStats(
     totalNodes: number,
     totalFilled: number,
     byKind: KindStats[],
+    virtualNodes?: VirtualNodeCounts,
 ): SnippetStats {
     return {
         totalNodes,
         totalFilled,
         aggregateFillRate: totalNodes > 0 ? totalFilled / totalNodes : 0,
         byKind,
+        virtualNodes: virtualNodes ?? makeEmptyVirtualNodeCounts(),
     };
 }
 
@@ -164,6 +217,7 @@ export async function validateSnippetRecall(semanticDir: string): Promise<Snippe
     const embeddingsPath = join(semanticDir, 'embeddings.jsonl');
 
     const countsByKind = new Map<NodeKind, { total: number; filled: number }>();
+    const virtualCounts = makeEmptyVirtualNodeCounts();
     let malformedLines = 0;
     let totalLines = 0;
 
@@ -179,10 +233,25 @@ export async function validateSnippetRecall(semanticDir: string): Promise<Snippe
             if (!trimmed) return;
             totalLines++;
             try {
-                const record = JSON.parse(trimmed) as { kind: NodeKind; snippet: string };
+                const record = JSON.parse(trimmed) as {
+                    kind: NodeKind;
+                    snippet: string;
+                    path?: string;
+                };
                 const kind = record.kind;
-                // Skip kinds that legitimately have no source.
-                if (KINDS_WITHOUT_SOURCE.has(kind)) return;
+
+                // Check whether the node is expected to have a snippet.
+                if (!isExpectedToHaveSnippet(record)) {
+                    // Count into the virtual-nodes diagnostic bucket (CT-AC7).
+                    if (kind === 'lib') virtualCounts.lib++;
+                    else if (kind === 'service') virtualCounts.service++;
+                    else if (kind === 'module') virtualCounts.moduleExternal++;
+                    else if (kind === 'nats-subject') virtualCounts.natsSubject++;
+                    else if (kind === 'db-table') virtualCounts.dbTable++;
+                    else if (kind === 'queue') virtualCounts.queue++;
+                    else if (kind === 'external') virtualCounts.external++;
+                    return;
+                }
 
                 const entry = countsByKind.get(kind) ?? { total: 0, filled: 0 };
                 entry.total++;
@@ -234,7 +303,7 @@ export async function validateSnippetRecall(semanticDir: string): Promise<Snippe
         return { kind: 'empty' };
     }
 
-    const stats = makeSnippetStats(totalNodes, totalFilled, byKind);
+    const stats = makeSnippetStats(totalNodes, totalFilled, byKind, virtualCounts);
 
     const failures = byKind.filter((k) => !k.passed);
     if (failures.length > 0) {
@@ -279,5 +348,21 @@ export function formatRecallResult(result: SnippetRecallResult): string {
         lines.push('');
         lines.push(`FAILED kinds: ${result.failures.map((f) => f.kind).join(', ')}`);
     }
+
+    // CT-AC7: virtual nodes diagnostic — counts of nodes excluded from denominator.
+    const vn = stats.virtualNodes;
+    const virtualEntries: string[] = [];
+    if (vn.lib > 0) virtualEntries.push(`lib: ${vn.lib}`);
+    if (vn.service > 0) virtualEntries.push(`service: ${vn.service}`);
+    if (vn.moduleExternal > 0) virtualEntries.push(`module (external): ${vn.moduleExternal}`);
+    if (vn.natsSubject > 0) virtualEntries.push(`nats-subject: ${vn.natsSubject}`);
+    if (vn.dbTable > 0) virtualEntries.push(`db-table: ${vn.dbTable}`);
+    if (vn.queue > 0) virtualEntries.push(`queue: ${vn.queue}`);
+    if (vn.external > 0) virtualEntries.push(`external: ${vn.external}`);
+    if (virtualEntries.length > 0) {
+        lines.push('');
+        lines.push(`Virtual nodes (no source expected, excluded from denominator): ${virtualEntries.join(', ')}`);
+    }
+
     return lines.join('\n');
 }

@@ -14,6 +14,7 @@ import {
     makeSnippetStats,
     validateSnippetRecall,
     formatRecallResult,
+    isExpectedToHaveSnippet,
 } from './snippet-recall-validator.js';
 
 // ---------------------------------------------------------------------------
@@ -26,7 +27,7 @@ function makeTmpDir(): string {
     return dir;
 }
 
-type RecordLike = { kind: string; snippet: string; nodeId?: string; label?: string };
+type RecordLike = { kind: string; snippet: string; nodeId?: string; label?: string; path?: string };
 
 function writeEmbeddingsJsonl(tmpDir: string, records: RecordLike[]): void {
     const lines = records.map((r) => JSON.stringify(r)).join('\n');
@@ -53,11 +54,14 @@ describe('snippet-recall-validator constants', () => {
         expect(HIGH_FIDELITY_KINDS.has('config-field')).toBe(true);
     });
 
-    it('KINDS_WITHOUT_SOURCE includes nats-subject, db-table, queue, external', () => {
+    it('KINDS_WITHOUT_SOURCE includes nats-subject, db-table, queue, external, lib, service', () => {
         expect(KINDS_WITHOUT_SOURCE.has('nats-subject')).toBe(true);
         expect(KINDS_WITHOUT_SOURCE.has('db-table')).toBe(true);
         expect(KINDS_WITHOUT_SOURCE.has('queue')).toBe(true);
         expect(KINDS_WITHOUT_SOURCE.has('external')).toBe(true);
+        // CT-AC1: lib and service are virtual — excluded from recall denominator
+        expect(KINDS_WITHOUT_SOURCE.has('lib')).toBe(true);
+        expect(KINDS_WITHOUT_SOURCE.has('service')).toBe(true);
     });
 });
 
@@ -383,5 +387,138 @@ describe('formatRecallResult', () => {
     it('formats empty result', () => {
         const formatted = formatRecallResult({ kind: 'empty' });
         expect(formatted).toContain('empty');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// CT-AC1/2/4: lib/service exclusion + module path-based classification
+// ---------------------------------------------------------------------------
+
+describe('isExpectedToHaveSnippet — virtual-kind and module classification', () => {
+    // CT-AC1: lib and service are excluded (virtual, no source file)
+    it('(a) lib node is excluded from denominator', () => {
+        expect(isExpectedToHaveSnippet({ kind: 'lib' })).toBe(false);
+        expect(isExpectedToHaveSnippet({ kind: 'lib', path: '/some/path' })).toBe(false);
+    });
+
+    it('(a) service node is excluded from denominator', () => {
+        expect(isExpectedToHaveSnippet({ kind: 'service' })).toBe(false);
+        expect(isExpectedToHaveSnippet({ kind: 'service', path: '/some/path' })).toBe(false);
+    });
+
+    // CT-AC2: module with path = internal → counted; module without path = external → excluded
+    it('(b) module WITH path is counted (internal module)', () => {
+        expect(isExpectedToHaveSnippet({ kind: 'module', path: '/workspace/apps/platform/src/app.module.ts' })).toBe(true);
+    });
+
+    it('(c) module WITHOUT path is excluded (external module)', () => {
+        expect(isExpectedToHaveSnippet({ kind: 'module' })).toBe(false);
+        expect(isExpectedToHaveSnippet({ kind: 'module', path: undefined })).toBe(false);
+    });
+});
+
+describe('validateSnippetRecall — CT-AC2/4: mixed module set computes internal-only rate', () => {
+    let tmpDir: string;
+
+    beforeEach(() => { tmpDir = makeTmpDir(); });
+    afterEach(() => { rmSync(tmpDir, { recursive: true, force: true }); });
+
+    // (d) mixed module set: internal modules have path, external do not;
+    //     recall rate should be computed only across internal modules.
+    it('(d) computes recall rate from internal modules only, excludes external modules', async () => {
+        const records: RecordLike[] = [
+            // 10 internal modules (path present) — 9 with snippet, 1 without
+            ...Array.from({ length: 9 }, (_, i) => ({
+                kind: 'module',
+                snippet: `@Module({}) export class AppModule${i} {}`,
+                path: `/workspace/apps/svc/src/module${i}.ts`,
+            })),
+            { kind: 'module', snippet: '', path: '/workspace/apps/svc/src/broken.ts' },
+            // 5 external modules (no path) — all without snippet (should not affect rate)
+            ...Array.from({ length: 5 }, (_, i) => ({
+                kind: 'module',
+                snippet: '',
+                // no path field
+            })),
+            // Unrelated lib and service nodes (should also be excluded)
+            { kind: 'lib', snippet: '' },
+            { kind: 'service', snippet: '' },
+        ];
+        writeEmbeddingsJsonl(tmpDir, records);
+
+        const result = await validateSnippetRecall(join(tmpDir, 'semantic'));
+        // 9/10 internal modules = 90%, which is ≥ 85% floor → ok
+        expect(result.kind).toBe('ok');
+        if (result.kind !== 'ok') return;
+
+        const moduleStats = result.stats.byKind.find((k) => k.kind === 'module');
+        expect(moduleStats).toBeDefined();
+        // Only 10 internal modules counted, not 15 (5 external excluded)
+        expect(moduleStats!.total).toBe(10);
+        expect(moduleStats!.filled).toBe(9);
+        expect(moduleStats!.fillRate).toBeCloseTo(0.9);
+
+        // Virtual nodes diagnostic reports the excluded counts (CT-AC7)
+        expect(result.stats.virtualNodes.moduleExternal).toBe(5);
+        expect(result.stats.virtualNodes.lib).toBe(1);
+        expect(result.stats.virtualNodes.service).toBe(1);
+    });
+
+    it('lib-and-service-only index yields kind=empty (excluded from denominator)', async () => {
+        const records: RecordLike[] = [
+            ...Array.from({ length: 4 }, (_, i) => ({ kind: 'lib', snippet: '' })),
+            ...Array.from({ length: 3 }, (_, i) => ({ kind: 'service', snippet: '' })),
+        ];
+        writeEmbeddingsJsonl(tmpDir, records);
+        const result = await validateSnippetRecall(join(tmpDir, 'semantic'));
+        expect(result.kind).toBe('empty');
+    });
+
+    it('internal modules below 85% correctly fail (regression regression guard)', async () => {
+        // Future PR might drop path from internal modules → recall collapses.
+        // 7/10 internal modules with snippets = 70% → below 85% floor.
+        const records: RecordLike[] = [
+            ...Array.from({ length: 7 }, (_, i) => ({
+                kind: 'module',
+                snippet: `@Module({}) export class M${i} {}`,
+                path: `/workspace/apps/svc/src/m${i}.ts`,
+            })),
+            ...Array.from({ length: 3 }, (_, i) => ({
+                kind: 'module',
+                snippet: '',
+                path: `/workspace/apps/svc/src/missing${i}.ts`,
+            })),
+        ];
+        writeEmbeddingsJsonl(tmpDir, records);
+        const result = await validateSnippetRecall(join(tmpDir, 'semantic'));
+        expect(result.kind).toBe('below-floor');
+        if (result.kind !== 'below-floor') return;
+        expect(result.failures.map((f) => f.kind)).toContain('module');
+    });
+});
+
+describe('formatRecallResult — CT-AC7: virtual nodes diagnostic section', () => {
+    let tmpDir: string;
+
+    beforeEach(() => { tmpDir = makeTmpDir(); });
+    afterEach(() => { rmSync(tmpDir, { recursive: true, force: true }); });
+
+    it('reports lib, service, and external module counts in formatted output', async () => {
+        const records: RecordLike[] = [
+            // Internal module — counts toward recall
+            { kind: 'module', snippet: '@Module({}) export class App {}', path: '/ws/app.ts' },
+            // Excluded virtual nodes
+            { kind: 'lib', snippet: '' },
+            { kind: 'service', snippet: '' },
+            { kind: 'module', snippet: '' }, // external (no path)
+        ];
+        writeEmbeddingsJsonl(tmpDir, records);
+        const result = await validateSnippetRecall(join(tmpDir, 'semantic'));
+        expect(result.kind).toBe('ok');
+        const formatted = formatRecallResult(result);
+        expect(formatted).toContain('Virtual nodes');
+        expect(formatted).toContain('lib: 1');
+        expect(formatted).toContain('service: 1');
+        expect(formatted).toContain('module (external): 1');
     });
 });
