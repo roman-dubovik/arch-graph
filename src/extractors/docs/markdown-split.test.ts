@@ -82,6 +82,18 @@ describe('splitMarkdown', () => {
         expect(out[0].headingLevel).toBe(2);
     });
 
+    it('emits oversized single-paragraph section as one wasSplit=false site', async () => {
+        // One paragraph with many words; chunkTokens=5 → packIntoChunks returns 1 chunk
+        // (single paragraph cannot be split further). Site should have wasSplit=false but
+        // tokenCount > chunkTokens.
+        const md = '## Big\nthis paragraph has many many many many many many many many many words here';
+        const out = await splitMarkdown(md, { chunkTokens: 5, countTokens: stubCount });
+        const big = out.find(s => s.headingChain.at(-1) === 'Big');
+        expect(big).toBeDefined();
+        expect(big!.wasSplit).toBe(false);
+        expect(big!.tokenCount).toBeGreaterThan(5);
+    });
+
     it('does not drop content lines preceding a setext heading', async () => {
         // Input line 1: 'intro line', line 2: 'My Title', line 3: '========', line 4: '', line 5: 'body'
         // The setext branch must NOT pop 'intro line' from currentBody.

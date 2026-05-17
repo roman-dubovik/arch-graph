@@ -95,6 +95,26 @@ describe('extractDocs', () => {
         expect(skipped?.reason).toBe('oversized');
     });
 
+    it('populates oversizedChunks when a chunk exceeds chunkTokens', async () => {
+        // Use a very tight chunkTokens (1 word) so README.md's single-paragraph
+        // sections that cannot be split further show up in oversizedChunks.
+        const result = await extractDocs({
+            projectRoot: FIXTURES,
+            include: ['README.md'],
+            exclude: [],
+            respectGitignore: false,
+            chunkTokens: 1,
+            maxFileBytes: 10_000_000,
+            countTokens: stubCountTokens,
+        });
+        // With chunkTokens=1, multi-word single paragraphs that can't be split further
+        // become oversized chunks.
+        expect(result.diagnostics.oversizedChunks.length).toBeGreaterThan(0);
+        const first = result.diagnostics.oversizedChunks[0];
+        expect(first.docSectionId).toMatch(/^doc-section:/);
+        expect(first.tokenCount).toBeGreaterThan(1);
+    });
+
     it('parses frontmatter even when file ends without trailing newline', async () => {
         const result = await extractDocs({
             projectRoot: FIXTURES,

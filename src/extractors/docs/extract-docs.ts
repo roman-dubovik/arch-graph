@@ -203,6 +203,11 @@ export async function extractDocs(opts: ExtractDocsOptions): Promise<ExtractDocs
                 diagnostics.counts.nodesEmitted += 1;
                 if (d.headingChain.length > 0) diagnostics.counts.headingsTotal += 1;
                 if (d.wasSplit) diagnostics.counts.sectionsSplit += 1;
+                // Oversized non-split chunk: single paragraph too large to split further.
+                if (!d.wasSplit && d.tokenCount > chunkTokens) {
+                    const docSectionId = `doc-section:${relPath}#${d.slug}`;
+                    diagnostics.oversizedChunks.push({ docSectionId, tokenCount: d.tokenCount });
+                }
             });
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
