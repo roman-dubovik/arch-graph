@@ -150,6 +150,7 @@ export async function extractDocs(opts: ExtractDocsOptions): Promise<ExtractDocs
                 }
             }
         } else {
+            process.stderr.write(`  docs: git ls-files unavailable; falling back to unfiltered glob (.gitignore not applied)\n`);
             resolvedSet = new Set(matched);
         }
     } else {

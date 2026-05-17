@@ -15,17 +15,17 @@ import { AutoTokenizer } from '@xenova/transformers';
 import { SEMANTIC_MODEL } from './types.js';
 
 type Tokenizer = Awaited<ReturnType<typeof AutoTokenizer.from_pretrained>>;
-let cached: Tokenizer | null = null;
+let pending: Promise<Tokenizer> | null = null;
 
 export function _resetTokenizerForTesting(): void {
-    cached = null;
+    pending = null;
 }
 
-async function getTokenizer(): Promise<Tokenizer> {
-    if (cached === null) {
-        cached = await AutoTokenizer.from_pretrained(SEMANTIC_MODEL);
+function getTokenizer(): Promise<Tokenizer> {
+    if (pending === null) {
+        pending = AutoTokenizer.from_pretrained(SEMANTIC_MODEL);
     }
-    return cached;
+    return pending;
 }
 
 export async function countTokens(text: string): Promise<number> {
