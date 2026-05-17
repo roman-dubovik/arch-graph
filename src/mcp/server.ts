@@ -426,8 +426,11 @@ export async function startMcpServer(opts: { out: string }): Promise<void> {
         {
             description:
                 'Semantic kNN search restricted to CODE nodes (everything except doc-section). ' +
-                'Prefer this when looking for "where is X implemented" — top-K is not diluted by Markdown sections. ' +
-                'If you need explanations, plans, or design rationale, call `docs_search` instead.',
+                'Use for "where is X implemented" — top-K is not diluted by Markdown sections. ' +
+                'RECOMMENDED USAGE: call code_search and docs_search in parallel for every retrieval — ' +
+                'the LLM then sees two labeled top-K lists and picks the more useful one (both-buckets pattern). ' +
+                'Projects that want to halve retrieval cost can override to fallback-only in their CLAUDE.md ' +
+                '("first code_search; only call docs_search if nothing relevant").',
             inputSchema: codeSearchInputShape,
         },
         makeSemanticSearchHandler({ outDir: opts.out, baseExcludeKinds: ['doc-section'] }),
@@ -438,8 +441,10 @@ export async function startMcpServer(opts: { out: string }): Promise<void> {
         {
             description:
                 'Semantic kNN search restricted to DOC nodes (Markdown `doc-section` only). ' +
-                'Use this for design rationale, plans, README/ADR content, or natural-language explanations. ' +
-                'Note: docs may contain stale plans or speculative content — prefer `code_search` when the question is "what does the code actually do".',
+                'Use for design rationale, plans, README/ADR content, natural-language explanations. ' +
+                'Docs may contain stale plans or speculative content — pair with code_search when the question is ' +
+                '"what does the code actually do" (the code is authoritative). ' +
+                'RECOMMENDED USAGE: call together with code_search in parallel — see code_search description.',
             inputSchema: docsSearchInputShape,
         },
         makeSemanticSearchHandler({ outDir: opts.out, lockedKinds: ['doc-section'] }),

@@ -256,7 +256,24 @@ The semantic layer is independent and opt-in: arch-graph works identically well 
   ```
 - **First build**: the model downloads ~135 MB on first run and is cached under `~/.cache/transformers/` (or via `HF_HOME` env var), so subsequent `semantic build` and `semantic search` run much faster.
 - **Sidecar layout**: `arch-graph-out/<repo>/semantic/{manifest.json, embeddings.jsonl}` — one JSON record per line, streamable for large graphs.
-- **MCP tool**: when the MCP server is running (`arch-graph mcp`), the tool `semantic_search` becomes available with the same query semantics. See `INTEGRATION-2BRAIN.md` for the federation contract (2-brain Phase 3 will optionally use this).
+- **MCP tools**: when the MCP server is running (`arch-graph mcp`), three semantic tools become available:
+  - `semantic_search` — mixed bucket (code + docs together)
+  - `code_search` — code nodes only (excludes `doc-section`)
+  - `docs_search` — doc-section only (Markdown sections)
+
+  Splitting into two buckets removes the dilution effect: when docs are in the same index as code, doc-section nodes can crowd out the relevant code nodes for "find X" queries (measured: A_find recall dropped 80% → 30% on platform; restored to 70% with `code_search`).
+
+  **Recommended agent pattern (default): `both-buckets`** — call `code_search` and `docs_search` in parallel for every retrieval. The LLM gets two labeled top-K lists and picks what's useful. Doubles retrieval cost (~$0.005/query on Sonnet, ~$0.025/query on Opus) but eliminates intent-routing risk.
+
+  **Override per-project**: write in the project's `CLAUDE.md`:
+
+  ```markdown
+  ## arch-graph search strategy
+
+  Use the **fallback** strategy: call `code_search` first. Only call `docs_search` if the code results don't answer the question. Halves retrieval cost; same hit-rate; agent gets less context.
+  ```
+
+  Measured hit-rate (3 projects, 103 queries): overall 47% → 67% with split tools, identical for `both-buckets` and `fallback`. See `INTEGRATION-2BRAIN.md` for the federation contract (2-brain Phase 3 will optionally use this).
 
 ## MCP server
 
@@ -266,7 +283,7 @@ Optional — for editors with an MCP client configured:
 arch-graph mcp   # starts the stdio MCP server backed by arch-graph-out/graph.json
 ```
 
-Exposes 12 tools: `subject_publishers`, `subject_subscribers`, `queue_producers`, `queue_consumers`, `service_dependencies`, `service_dependents`, `module_imports`, `table_users`, `path`, `explain`, `query`, `stats`. For unresolved / dynamic call-sites, read `arch-graph-out/diagnostics.json` directly — there is no MCP tool for it.
+Exposes 15 tools — 12 structural + 3 semantic. Structural: `subject_publishers`, `subject_subscribers`, `queue_producers`, `queue_consumers`, `service_dependencies`, `service_dependents`, `module_imports`, `table_users`, `path`, `explain`, `query`, `stats`. Semantic (when the sidecar index is built): `semantic_search`, `code_search`, `docs_search` — see [Semantic search](#semantic-search-optional). For unresolved / dynamic call-sites, read `arch-graph-out/diagnostics.json` directly — there is no MCP tool for it.
 
 The CLI query subcommands are preferred over MCP when both are available (no stdio overhead, no server lifecycle).
 
