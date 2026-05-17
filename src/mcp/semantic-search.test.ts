@@ -368,3 +368,112 @@ describe('semantic_search handler — kinds filter: doc-section', () => {
         expect(returnedIds).not.toContain('nats-subject:orders');
     });
 });
+
+// ---------------------------------------------------------------------------
+// Case 10: excludeKinds in handler input — code-vs-docs split
+// ---------------------------------------------------------------------------
+
+describe('semantic_search handler — excludeKinds filter', () => {
+    it('drops doc-section results when excludeKinds: ["doc-section"] is passed', async () => {
+        const graphHash = await writeGraphJson('{"nodes":[]}');
+        const records = [
+            makeRecord('doc-section:readme#install', 'doc-section', unitVec(0)),
+            makeRecord('service:api', 'service', unitVec(0)),
+            makeRecord('nats-subject:orders', 'nats-subject', unitVec(0)),
+        ];
+        await writeSidecar(records, graphHash);
+
+        const handler = makeSemanticSearchHandler({ outDir: testDir, embedder: fakeEmbedder });
+        const result = await handler({
+            query: 'q',
+            topK: 10,
+            excludeKinds: ['doc-section'],
+            includeVectors: false,
+        });
+
+        const output = JSON.parse(result.content[0]!.text);
+        for (const res of output.results as Array<{ kind: string }>) {
+            expect(res.kind).not.toBe('doc-section');
+        }
+        expect(output.results).toHaveLength(2);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Case 11: Factory presets — code_search / docs_search wiring
+// ---------------------------------------------------------------------------
+
+describe('makeSemanticSearchHandler — factory presets', () => {
+    async function setupMixedSidecar(): Promise<void> {
+        const graphHash = await writeGraphJson('{"nodes":[]}');
+        await writeSidecar(
+            [
+                makeRecord('doc-section:readme#install', 'doc-section', unitVec(0)),
+                makeRecord('doc-section:readme#usage', 'doc-section', unitVec(0)),
+                makeRecord('service:api', 'service', unitVec(0)),
+                makeRecord('nats-subject:orders', 'nats-subject', unitVec(0)),
+            ],
+            graphHash,
+        );
+    }
+
+    it('preset excludeKinds (code_search style) strips doc-section even when caller omits it', async () => {
+        await setupMixedSidecar();
+
+        const handler = makeSemanticSearchHandler({
+            outDir: testDir,
+            embedder: fakeEmbedder,
+            excludeKinds: ['doc-section'],
+        });
+        const result = await handler({ query: 'q', topK: 10, includeVectors: false });
+
+        const output = JSON.parse(result.content[0]!.text);
+        expect(output.results.length).toBe(2);
+        for (const res of output.results as Array<{ kind: string }>) {
+            expect(res.kind).not.toBe('doc-section');
+        }
+    });
+
+    it('preset kinds (docs_search style) restricts to doc-section regardless of caller', async () => {
+        await setupMixedSidecar();
+
+        const handler = makeSemanticSearchHandler({
+            outDir: testDir,
+            embedder: fakeEmbedder,
+            kinds: ['doc-section'],
+        });
+        // Caller tries to widen — preset still wins.
+        const result = await handler({
+            query: 'q',
+            topK: 10,
+            kinds: ['service', 'nats-subject'],
+            includeVectors: false,
+        });
+
+        const output = JSON.parse(result.content[0]!.text);
+        expect(output.results.length).toBe(2);
+        for (const res of output.results as Array<{ kind: string }>) {
+            expect(res.kind).toBe('doc-section');
+        }
+    });
+
+    it('preset excludeKinds merges with caller excludeKinds (additive)', async () => {
+        await setupMixedSidecar();
+
+        const handler = makeSemanticSearchHandler({
+            outDir: testDir,
+            embedder: fakeEmbedder,
+            excludeKinds: ['doc-section'],
+        });
+        const result = await handler({
+            query: 'q',
+            topK: 10,
+            excludeKinds: ['nats-subject'],
+            includeVectors: false,
+        });
+
+        const output = JSON.parse(result.content[0]!.text);
+        const kinds = (output.results as Array<{ kind: string }>).map((r) => r.kind);
+        expect(kinds).toEqual(['service']);
+    });
+});
