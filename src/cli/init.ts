@@ -8,9 +8,9 @@
 
 import { existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { writeFile } from 'node:fs/promises';
+import { appendFile, readFile, writeFile } from 'node:fs/promises';
 import { createInterface } from 'node:readline/promises';
-import { dirname, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { stdin as input, stdout as output } from 'node:process';
 
 import fastGlob from 'fast-glob';
@@ -21,6 +21,12 @@ import * as hooksModule from './hooks.js';
 import { registerProject } from './project-registry.js';
 
 // ─── types ───────────────────────────────────────────────────────────────────
+
+/** Agent-side semantic search strategy stored in the project CLAUDE.md snippet. */
+export type SemanticStrategy = 'both-buckets' | 'fallback';
+
+/** Where to write the semantic strategy snippet. */
+export type SnippetTarget = 'append' | 'separate';
 
 interface WizardAnswers {
     projectId: string;
@@ -43,6 +49,8 @@ interface WizardAnswers {
         userInclude: string[];
         userExclude: string[];
     };
+    semanticStrategy: SemanticStrategy;
+    snippetTarget: SnippetTarget;
 }
 
 type DomainKey = 'nats' | 'typeorm' | 'bullmq' | 'di' | 'http' | 'ts-import';
@@ -333,6 +341,96 @@ async function askDocs(
     return { respectGitignore, chunkTokens, userInclude, userExclude };
 }
 
+// ─── semantic strategy prompt ─────────────────────────────────────────────────
+
+/**
+ * Ask the user which agent-side semantic search strategy to use.
+ *
+ * Exported for unit testing (pass a fake rl with a stubbed `.question()`).
+ */
+export async function askSemanticStrategy(rl: Rl): Promise<SemanticStrategy> {
+    output.write('\n? Semantic search strategy\n');
+    output.write('  code_search   — searches the code graph (functions, classes, edges).\n');
+    output.write('  docs_search   — searches the embedded docs/markdown chunks.\n');
+    output.write('\n');
+    output.write('  1. both-buckets  (default, recommended)\n');
+    output.write('     Two parallel calls per retrieval — richer LLM context.\n');
+    output.write('     Cost: ~$0.005 / query on Sonnet · ~$0.025 / query on Opus.\n');
+    output.write('\n');
+    output.write('  2. fallback\n');
+    output.write('     code_search first; docs_search only on miss.\n');
+    output.write('     Cost: ~$0.003 / query on Sonnet · ~$0.012 / query on Opus.\n');
+    output.write('     Halves cost for cost-sensitive projects.\n');
+    output.write('\n');
+    output.write('  Recall is identical for both modes. Difference is answer quality + cost.\n');
+
+    const answer = await rl.question('  Choice [1]: ');
+    const trimmed = answer.trim();
+    if (trimmed === '2') return 'fallback';
+    return 'both-buckets'; // default
+}
+
+/**
+ * When a pre-existing CLAUDE.md is detected, ask whether to append to it or
+ * write a separate snippet file.
+ *
+ * Exported for unit testing.
+ */
+export async function askSnippetTarget(rl: Rl): Promise<SnippetTarget> {
+    output.write('\n⚠  CLAUDE.md already exists in this directory.\n');
+    output.write('  The arch-graph semantic strategy snippet can be:\n');
+    output.write('  1. Appended to CLAUDE.md\n');
+    output.write('  2. Written to a separate file: CLAUDE.md.arch-graph-snippet.md (default)\n');
+
+    const answer = await rl.question('  Choice [2]: ');
+    const trimmed = answer.trim();
+    if (trimmed === '1') return 'append';
+    return 'separate'; // default
+}
+
+// ─── snippet writer ───────────────────────────────────────────────────────────
+
+const STRATEGY_EXPLANATIONS: Record<SemanticStrategy, string> = {
+    'both-buckets':
+        'Both `code_search` and `docs_search` are called in parallel for every retrieval. ' +
+        'This provides the richest context to the LLM (~$0.005/query on Sonnet, ~$0.025/query on Opus).',
+    'fallback':
+        '`code_search` is called first; `docs_search` is only called when code_search returns no results. ' +
+        'This halves the cost for cost-sensitive projects (~$0.003/query on Sonnet, ~$0.012/query on Opus).',
+};
+
+/**
+ * Build the markdown snippet string for the chosen strategy.
+ *
+ * Exported for unit testing.
+ */
+export function buildStrategySnippet(strategy: SemanticStrategy): string {
+    return `\n## arch-graph semantic search strategy\n\nThis project uses **${strategy}** for arch-graph semantic retrieval.\n\n${STRATEGY_EXPLANATIONS[strategy]}\n\nTo change: edit this file or re-run \`arch-graph init\`.\n`;
+}
+
+/**
+ * Write the strategy snippet — either append to CLAUDE.md or create a
+ * separate `CLAUDE.md.arch-graph-snippet.md` file.
+ *
+ * Exported for unit testing.
+ */
+export async function writeStrategySnippet(
+    strategy: SemanticStrategy,
+    target: SnippetTarget,
+    dir: string,
+): Promise<string> {
+    const snippet = buildStrategySnippet(strategy);
+    if (target === 'append') {
+        const claudeMdPath = join(dir, 'CLAUDE.md');
+        await appendFile(claudeMdPath, snippet, 'utf8');
+        return claudeMdPath;
+    } else {
+        const snippetPath = join(dir, 'CLAUDE.md.arch-graph-snippet.md');
+        await writeFile(snippetPath, snippet.trimStart(), 'utf8');
+        return snippetPath;
+    }
+}
+
 // ─── INIT_TEMPLATE (non-TTY fallback) ─────────────────────────────────────────
 
 export const INIT_TEMPLATE = `// arch-graph.config.ts — no import needed, arch-graph loads this directly.
@@ -371,8 +469,15 @@ export async function runInitWizard(target: string): Promise<void> {
         await writeFile(targetPath, INIT_TEMPLATE, 'utf8');
         await registerProject(dirname(targetPath));
         process.stdout.write(`wrote ${targetPath}\n`);
+        // Non-interactive: default to both-buckets, separate snippet file.
+        const snippetPath = await writeStrategySnippet('both-buckets', 'separate', dirname(targetPath));
+        process.stdout.write(`wrote ${snippetPath}\n`);
         return;
     }
+
+    // ── CLAUDE.md pre-existence check (must be before claudeInstall runs) ─────
+    const claudeMdPath = resolve('./CLAUDE.md');
+    const claudeMdPreExists = existsSync(claudeMdPath);
 
     // ── Re-run detection ──────────────────────────────────────────────────────
     const rl = createInterface({ input, output, terminal: true });
@@ -432,6 +537,14 @@ export async function runInitWizard(target: string): Promise<void> {
 
     const docs = await askDocs(rl, resolve(repoRoot));
 
+    // ── Semantic strategy ─────────────────────────────────────────────────────
+    const semanticStrategy = await askSemanticStrategy(rl);
+
+    // ── Snippet target (only ask when CLAUDE.md already exists) ──────────────
+    const snippetTarget: SnippetTarget = claudeMdPreExists
+        ? await askSnippetTarget(rl)
+        : 'separate';
+
     rl.close();
 
     // ── Assemble answers & write config ──────────────────────────────────────
@@ -450,6 +563,8 @@ export async function runInitWizard(target: string): Promise<void> {
         strictMode,
         runBuild: shouldRunBuild,
         docs,
+        semanticStrategy,
+        snippetTarget,
     };
 
     output.write('\n');
@@ -463,6 +578,20 @@ export async function runInitWizard(target: string): Promise<void> {
     if (installClaude) {
         await claudeInstall({ target: resolve('./CLAUDE.md'), installSkill: true });
     }
+
+    // ── Semantic strategy snippet ─────────────────────────────────────────────
+    // Determine effective snippet target: if installClaude just wrote CLAUDE.md
+    // and there was no pre-existing one, we still write a separate file so we
+    // don't clobber the fresh arch-graph block. Only append when the user
+    // explicitly chose 'append' (meaning CLAUDE.md pre-existed).
+    const effectiveSnippetTarget: SnippetTarget =
+        answers.snippetTarget === 'append' ? 'append' : 'separate';
+    const writtenSnippetPath = await writeStrategySnippet(
+        answers.semanticStrategy,
+        effectiveSnippetTarget,
+        resolve('.'),
+    );
+    output.write(`✓ wrote ${writtenSnippetPath}\n`);
 
     // ── Git hook ──────────────────────────────────────────────────────────────
     if (hookMode !== 'none') {
@@ -498,7 +627,9 @@ export async function runInitWizard(target: string): Promise<void> {
     output.write('\nNext steps:\n');
     const configRel = relative(process.cwd(), targetPath) || targetPath;
     const claudePart = installClaude ? ' CLAUDE.md' : '';
-    output.write(`  • Commit the config: git add ${configRel}${claudePart} && git commit\n`);
+    const snippetRel = relative(process.cwd(), writtenSnippetPath) || writtenSnippetPath;
+    const snippetPart = effectiveSnippetTarget === 'separate' ? ` ${snippetRel}` : '';
+    output.write(`  • Commit the config: git add ${configRel}${claudePart}${snippetPart} && git commit\n`);
 
     if (hookMode !== 'none') {
         output.write(

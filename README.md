@@ -201,6 +201,15 @@ arch-graph claude uninstall   # remove the section
 arch-graph install-skill      # install the skill file separately, any time
 ```
 
+### Semantic search strategy
+
+During `arch-graph init`, the wizard asks you to choose an agent-side semantic search strategy:
+
+- **both-buckets** (default, recommended) — `code_search` and `docs_search` are called in parallel on every retrieval, giving the LLM the richest context (~$0.005/query on Sonnet, ~$0.025/query on Opus).
+- **fallback** — `code_search` runs first; `docs_search` is only called on a miss. Halves cost for cost-sensitive projects (~$0.003/query on Sonnet, ~$0.012/query on Opus). Recall is identical to `both-buckets`.
+
+The choice is persisted as a `## arch-graph semantic search strategy` section. If no `CLAUDE.md` exists (or the user declines to append), it is written to `CLAUDE.md.arch-graph-snippet.md` in the project root. If a `CLAUDE.md` is already present, the wizard asks whether to append to it or create the separate file. To change the strategy later, edit that file or re-run `arch-graph init`.
+
 ## Git hook
 
 The pre-commit hook (default) rebuilds the graph before each commit that touches `.ts` files and **auto-stages** the output artifacts (`graph.json`, `diagnostics.json`, `validation.json`, `graph.mermaid`) so the graph is always coherent with the code in history.

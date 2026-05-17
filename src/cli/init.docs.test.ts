@@ -23,6 +23,8 @@ function makeAnswers(overrides: Partial<{
         hookMode: 'none' as const,
         strictMode: false,
         runBuild: false,
+        semanticStrategy: 'both-buckets' as const,
+        snippetTarget: 'separate' as const,
         ...overrides,
     };
 }
