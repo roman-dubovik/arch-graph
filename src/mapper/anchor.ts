@@ -17,8 +17,8 @@
  * @param memberName  Name of the method or property (e.g. "findOne").
  * @param nodeId      Node ID used in the error message for traceability.
  * @returns           "className.memberName" anchor string.
- * @throws            If className is empty, memberName is empty, or
- *                    memberName is the sentinel value `<anonymous>`.
+ * @throws            If className is empty or whitespace-only; if memberName is empty,
+ *                    whitespace-only, or the sentinel string `<anonymous>`.
  */
 export function buildClassMemberAnchor(
     className: string,

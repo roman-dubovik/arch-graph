@@ -46,8 +46,8 @@ export interface SemanticArgs {
     kinds?: NodeKind[];
     /**
      * build: when true, exit 1 if recall is below floor for any kind, or if
-     * the index is corrupt or empty. Without this flag only index corruption
-     * causes a non-zero exit; below-floor is informational.
+     * the index is empty. Has no effect on corrupt indexes, which always exit 1
+     * regardless of this flag.
      */
     strictRecall?: boolean;
 }
