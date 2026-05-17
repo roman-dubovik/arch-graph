@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -136,25 +136,29 @@ describe('extractDocs', () => {
 
     it('respects gitignore when respectGitignore=true', async () => {
         const tmpRoot = mkdtempSync(join(tmpdir(), 'arch-graph-docs-test-'));
-        execFileSync('git', ['-C', tmpRoot, 'init', '-q'], { stdio: 'ignore' });
-        writeFileSync(join(tmpRoot, 'README.md'), '# Tracked\n\nbody\n');
-        writeFileSync(join(tmpRoot, 'IGNORED.md'), '# Ignored\n\nbody\n');
-        writeFileSync(join(tmpRoot, '.gitignore'), 'IGNORED.md\n');
-        execFileSync('git', ['-C', tmpRoot, 'add', 'README.md', '.gitignore'], { stdio: 'ignore' });
-        execFileSync('git', ['-C', tmpRoot, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '-m', 'init'], { stdio: 'ignore' });
+        try {
+            execFileSync('git', ['-C', tmpRoot, 'init', '-q'], { stdio: 'ignore' });
+            writeFileSync(join(tmpRoot, 'README.md'), '# Tracked\n\nbody\n');
+            writeFileSync(join(tmpRoot, 'IGNORED.md'), '# Ignored\n\nbody\n');
+            writeFileSync(join(tmpRoot, '.gitignore'), 'IGNORED.md\n');
+            execFileSync('git', ['-C', tmpRoot, 'add', 'README.md', '.gitignore'], { stdio: 'ignore' });
+            execFileSync('git', ['-C', tmpRoot, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '-m', 'init'], { stdio: 'ignore' });
 
-        const result = await extractDocs({
-            projectRoot: tmpRoot,
-            include: ['README.md', 'IGNORED.md'],
-            exclude: [], respectGitignore: true,
-            chunkTokens: 100, maxFileBytes: 10_000_000,
-            countTokens: stubCountTokens,
-        });
+            const result = await extractDocs({
+                projectRoot: tmpRoot,
+                include: ['README.md', 'IGNORED.md'],
+                exclude: [], respectGitignore: true,
+                chunkTokens: 100, maxFileBytes: 10_000_000,
+                countTokens: stubCountTokens,
+            });
 
-        expect(result.sites.some(s => s.filePath.endsWith('README.md'))).toBe(true);
-        expect(result.sites.some(s => s.filePath.endsWith('IGNORED.md'))).toBe(false);
-        expect(result.diagnostics.filesSkipped.some(
-            s => s.path.endsWith('IGNORED.md') && s.reason === 'gitignored',
-        )).toBe(true);
+            expect(result.sites.some(s => s.filePath.endsWith('README.md'))).toBe(true);
+            expect(result.sites.some(s => s.filePath.endsWith('IGNORED.md'))).toBe(false);
+            expect(result.diagnostics.filesSkipped.some(
+                s => s.path.endsWith('IGNORED.md') && s.reason === 'gitignored',
+            )).toBe(true);
+        } finally {
+            rmSync(tmpRoot, { recursive: true, force: true });
+        }
     });
 });
