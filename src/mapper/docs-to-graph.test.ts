@@ -27,7 +27,7 @@ describe('mapDocsToGraph', () => {
         expect(n.kind).toBe('doc-section');
         expect(n.id).toBe('doc-section:README.md#installation');
         expect(n.label).toBe('Installation');
-        expect(n.path).toBe('README.md');
+        expect(n.path).toBe('/Users/me/proj/README.md');   // absolute path
         expect(n.anchor).toBe('installation');
         expect(n.meta).toMatchObject({
             headingChain: ['Installation'],
@@ -74,10 +74,11 @@ describe('mapDocsToGraph', () => {
         expect(nodes[1].meta?.frontmatter).toBeUndefined();
     });
 
-    it('uses path relative to projectRoot', () => {
+    it('stores absolute path in node.path', () => {
         const nodes = mapDocsToGraph([makeSite({
             filePath: '/Users/me/proj/apps/api/README.md',
         })], PROJECT_ROOT);
-        expect(nodes[0].path).toBe('apps/api/README.md');
+        expect(nodes[0].path).toBe('/Users/me/proj/apps/api/README.md');
+        expect(nodes[0].id).toBe('doc-section:apps/api/README.md#installation'); // id stays relative
     });
 });

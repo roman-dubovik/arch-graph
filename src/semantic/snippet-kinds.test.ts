@@ -682,4 +682,14 @@ describe('extractSnippet — doc-section', () => {
         const result = extractSnippet(project, node);
         expect(result.snippet.startsWith('# README')).toBe(true);
     });
+
+    it('returns reason=label-not-located when meta.startLine is missing', () => {
+        const project = new Project({ useInMemoryFileSystem: false });
+        const node = makeDocNode({
+            meta: { headingChain: [], headingLevel: 0, charCount: 0, tokenCount: 0, wasSplit: false } as unknown as GraphNode['meta'],
+        });
+        const result = extractSnippet(project, node);
+        expect(result.snippet).toBe('');
+        expect(result.reason?.kind).toBe('label-not-located');
+    });
 });

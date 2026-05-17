@@ -45,7 +45,7 @@ export function mapDocsToGraph(sites: ExtractedDocSite[], projectRoot: string): 
             id,
             kind: 'doc-section',
             label,
-            path: relPath,
+            path: site.filePath,    // absolute (already absolute from extractDocs)
             anchor: buildAnchor(site.slug, id),
             meta,
         };
