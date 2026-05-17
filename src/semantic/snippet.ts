@@ -378,8 +378,14 @@ function extractDocSectionSnippet(node: GraphNode): SnippetResult {
     let raw: string;
     try {
         raw = readFileSync(node.path, 'utf8');
-    } catch {
-        return { snippet: '', reason: { kind: 'file-not-found', path: node.path } };
+    } catch (err) {
+        const code = (err as NodeJS.ErrnoException).code;
+        return {
+            snippet: '',
+            reason: code === 'ENOENT'
+                ? { kind: 'file-not-found', path: node.path }
+                : { kind: 'ts-morph-error', message: (err as Error).message },
+        };
     }
 
     const lines = raw.replace(/\r\n/g, '\n').split('\n');

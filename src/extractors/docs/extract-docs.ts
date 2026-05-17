@@ -163,46 +163,52 @@ export async function extractDocs(opts: ExtractDocsOptions): Promise<ExtractDocs
         diagnostics.filesScanned += 1;
         const relPath = relative(projectRoot, filePath);
 
-        const st = await stat(filePath);
-        if (st.size > maxFileBytes) {
-            diagnostics.filesSkipped.push({ path: relPath, reason: 'oversized' });
-            continue;
-        }
+        try {
+            const st = await stat(filePath);
+            if (st.size > maxFileBytes) {
+                diagnostics.filesSkipped.push({ path: relPath, reason: 'oversized' });
+                continue;
+            }
 
-        const buf = await readFile(filePath);
-        const { text, valid } = normalize(buf);
-        if (!valid) {
-            diagnostics.filesSkipped.push({ path: relPath, reason: 'non-utf8' });
-            continue;
-        }
-        if (text.trim() === '') {
-            diagnostics.filesSkipped.push({ path: relPath, reason: 'empty' });
-            continue;
-        }
+            const buf = await readFile(filePath);
+            const { text, valid } = normalize(buf);
+            if (!valid) {
+                diagnostics.filesSkipped.push({ path: relPath, reason: 'non-utf8' });
+                continue;
+            }
+            if (text.trim() === '') {
+                diagnostics.filesSkipped.push({ path: relPath, reason: 'empty' });
+                continue;
+            }
 
-        const parsed = parseFrontmatter(text);
-        if (parsed.frontmatterError !== undefined) {
-            diagnostics.frontmatterErrors.push({ path: relPath, error: parsed.frontmatterError });
+            const parsed = parseFrontmatter(text);
+            if (parsed.frontmatterError !== undefined) {
+                diagnostics.frontmatterErrors.push({ path: relPath, error: parsed.frontmatterError });
+            }
+            const hasFrontmatter = parsed.frontmatter !== undefined;
+            if (hasFrontmatter) diagnostics.counts.filesWithFrontmatter += 1;
+
+            const docs = await splitMarkdown(parsed.body, { chunkTokens, countTokens });
+            const offset = parsed.bodyStartLine - 1;
+
+            docs.forEach((d, idx) => {
+                const site: ExtractedDocSite = {
+                    ...d,
+                    startLine: d.startLine + offset,
+                    endLine: d.endLine + offset,
+                    filePath,
+                    ...(idx === 0 && hasFrontmatter ? { frontmatter: parsed.frontmatter } : {}),
+                };
+                sites.push(site);
+                diagnostics.counts.nodesEmitted += 1;
+                if (d.headingChain.length > 0) diagnostics.counts.headingsTotal += 1;
+                if (d.wasSplit) diagnostics.counts.sectionsSplit += 1;
+            });
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            diagnostics.filesSkipped.push({ path: relPath, reason: 'read-error' });
+            diagnostics.frontmatterErrors.push({ path: relPath, error: `read-error: ${message}` });
         }
-        const hasFrontmatter = parsed.frontmatter !== undefined;
-        if (hasFrontmatter) diagnostics.counts.filesWithFrontmatter += 1;
-
-        const docs = await splitMarkdown(parsed.body, { chunkTokens, countTokens });
-        const offset = parsed.bodyStartLine - 1;
-
-        docs.forEach((d, idx) => {
-            const site: ExtractedDocSite = {
-                ...d,
-                startLine: d.startLine + offset,
-                endLine: d.endLine + offset,
-                filePath,
-                ...(idx === 0 && hasFrontmatter ? { frontmatter: parsed.frontmatter } : {}),
-            };
-            sites.push(site);
-            diagnostics.counts.nodesEmitted += 1;
-            if (d.headingChain.length > 0) diagnostics.counts.headingsTotal += 1;
-            if (d.wasSplit) diagnostics.counts.sectionsSplit += 1;
-        });
     }
 
     return { sites, diagnostics };

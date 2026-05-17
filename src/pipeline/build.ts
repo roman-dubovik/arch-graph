@@ -445,17 +445,31 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
 
     // ─── docs pass ────────────────────────────────────────────────────────────
     const docsConfig = applyDocsDefaults(cfg.docs);
-    const docs = await extractDocs({
-        projectRoot: cfg.root,
-        include: docsConfig.include,
-        exclude: docsConfig.exclude,
-        respectGitignore: docsConfig.respectGitignore,
-        chunkTokens: docsConfig.chunkTokens,
-        maxFileBytes: docsConfig.maxFileBytes,
-        countTokens,
-    });
-    const docNodes = mapDocsToGraph(docs.sites, cfg.root);
-    graph.nodes.push(...docNodes);
+    let docsDiagnostics: import('../core/types.js').DocsDiagnostics;
+    try {
+        const docs = await extractDocs({
+            projectRoot: cfg.root,
+            include: docsConfig.include,
+            exclude: docsConfig.exclude,
+            respectGitignore: docsConfig.respectGitignore,
+            chunkTokens: docsConfig.chunkTokens,
+            maxFileBytes: docsConfig.maxFileBytes,
+            countTokens,
+        });
+        const docNodes = mapDocsToGraph(docs.sites, cfg.root);
+        graph.nodes.push(...docNodes);
+        docsDiagnostics = docs.diagnostics;
+    } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        process.stderr.write(`  docs: pass skipped due to error — ${message}\n`);
+        docsDiagnostics = {
+            filesScanned: 0,
+            filesSkipped: [],
+            frontmatterErrors: [{ path: '<docs-pass>', error: message }],
+            oversizedChunks: [],
+            counts: { filesIncluded: 0, nodesEmitted: 0, headingsTotal: 0, sectionsSplit: 0, filesWithFrontmatter: 0 },
+        };
+    }
 
     const diagnostics: DiagnosticsReport = {
         projectId: cfg.id,
@@ -496,9 +510,9 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
             markerCount: scoped.markers.length,
             messages: scoped.diagnostics,
         },
-        docs: docs.diagnostics,
+        docs: docsDiagnostics,
     };
-    const docsValidation = validateDocs(docs.diagnostics, graph.nodes);
+    const docsValidation = validateDocs(docsDiagnostics, graph.nodes);
     const validation: BuildValidation = {
         projectId: cfg.id,
         timestamp: new Date().toISOString(),
