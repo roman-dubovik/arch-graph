@@ -508,6 +508,50 @@ describe('runSemanticBuild — --strict-recall flag (P1-A)', () => {
         recallSpy.mockRestore();
     });
 
+    it('emits Virtual nodes diagnostic line for below-floor result with virtual nodes (CT-AC7 below-floor path)', async () => {
+        const { configSpy, buildSpy } = await setupBuildMocks(testDir);
+
+        const validatorModule = await import('../validation/snippet-recall-validator.js');
+        const recallSpy = vi.spyOn(validatorModule, 'validateSnippetRecall').mockResolvedValue({
+            kind: 'below-floor',
+            failures: [{ kind: 'provider', total: 100, filled: 70, fillRate: 0.7, floor: 0.95, passed: false }],
+            stats: {
+                byKind: [{ kind: 'provider', total: 100, filled: 70, fillRate: 0.7, floor: 0.95, passed: false }],
+                totalNodes: 100,
+                totalFilled: 70,
+                aggregateFillRate: 0.7,
+                virtualNodes: { lib: 3, service: 0, moduleExternal: 7, natsSubject: 0, dbTable: 0, queue: 0, external: 0 },
+            },
+        });
+
+        const stdoutLines: string[] = [];
+        vi.spyOn(process.stdout, 'write').mockImplementation((s) => {
+            stdoutLines.push(String(s));
+            return true;
+        });
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        await runSemanticBuild({
+            sub: 'build',
+            config: join(testDir, 'arch-graph.config.ts'),
+            out: testDir,
+            format: 'json',
+            strictRecall: false,
+        });
+
+        const stdoutOutput = stdoutLines.join('');
+        expect(stdoutOutput).toContain('Virtual nodes');
+        expect(stdoutOutput).toContain('lib: 3');
+        expect(stdoutOutput).toContain('module (external): 7');
+
+        configSpy.mockRestore();
+        buildSpy.mockRestore();
+        recallSpy.mockRestore();
+    });
+
     it('does NOT exit 1 when kind=ok and --strict-recall is set', async () => {
         const { configSpy, buildSpy } = await setupBuildMocks(testDir);
 

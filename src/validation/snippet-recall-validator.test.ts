@@ -415,6 +415,10 @@ describe('isExpectedToHaveSnippet — virtual-kind and module classification', (
         expect(isExpectedToHaveSnippet({ kind: 'module' })).toBe(false);
         expect(isExpectedToHaveSnippet({ kind: 'module', path: undefined })).toBe(false);
     });
+
+    it('module with empty-string path is treated as virtual (excluded)', () => {
+        expect(isExpectedToHaveSnippet({ kind: 'module', path: '' })).toBe(false);
+    });
 });
 
 describe('validateSnippetRecall — CT-AC2/4: mixed module set computes internal-only rate', () => {

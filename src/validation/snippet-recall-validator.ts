@@ -162,7 +162,8 @@ function toNonEmpty<T>(arr: T[]): [T, ...T[]] {
 export function isExpectedToHaveSnippet(node: { kind: NodeKind; path?: string }): boolean {
     if (KINDS_WITHOUT_SOURCE.has(node.kind)) return false;
     // External modules have no path; internal modules do.
-    if (node.kind === 'module' && !node.path) return false;
+    // Empty string is treated as no-path (virtual), same as undefined.
+    if (node.kind === 'module' && (node.path === undefined || node.path === '')) return false;
     return true;
 }
 
@@ -238,6 +239,14 @@ export async function validateSnippetRecall(semanticDir: string): Promise<Snippe
                     snippet: string;
                     path?: string;
                 };
+
+                // Non-string path (e.g. path: 42 or path: null) is malformed — skip.
+                // Empty string is valid (treated as virtual by isExpectedToHaveSnippet).
+                if (record.path !== undefined && typeof record.path !== 'string') {
+                    malformedLines++;
+                    return;
+                }
+
                 const kind = record.kind;
 
                 // Check whether the node is expected to have a snippet.
@@ -250,6 +259,15 @@ export async function validateSnippetRecall(semanticDir: string): Promise<Snippe
                     else if (kind === 'db-table') virtualCounts.dbTable++;
                     else if (kind === 'queue') virtualCounts.queue++;
                     else if (kind === 'external') virtualCounts.external++;
+                    else {
+                        // Exhaustiveness check: if a new kind is added to KINDS_WITHOUT_SOURCE
+                        // (or to the module-without-path branch) without updating this dispatch,
+                        // it would silently drop from diagnostics. Surface immediately.
+                        throw new Error(
+                            `snippet-recall-validator: unrecognized virtual node kind '${kind}' — ` +
+                            `update the dispatch table in isExpectedToHaveSnippet caller.`,
+                        );
+                    }
                     return;
                 }
 
@@ -259,9 +277,13 @@ export async function validateSnippetRecall(semanticDir: string): Promise<Snippe
                     entry.filled++;
                 }
                 countsByKind.set(kind, entry);
-            } catch {
-                // Malformed line — track count for corruption detection.
-                malformedLines++;
+            } catch (e) {
+                if (e instanceof SyntaxError) {
+                    // Malformed line — track count for corruption detection.
+                    malformedLines++;
+                } else {
+                    throw e;
+                }
             }
         });
 
