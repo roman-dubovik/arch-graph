@@ -14,7 +14,7 @@ import { inMemoryProject } from '../__fixtures__/in-memory-project.js';
 import { buildSemanticIndex } from './builder.js';
 import { semanticSearch } from './search.js';
 import type { SemanticDiagnostics } from './types.js';
-import { SEMANTIC_DIM, SEMANTIC_MODEL, SEMANTIC_SCHEMA_VERSION } from './types.js';
+import { SEMANTIC_DIM, SEMANTIC_MODEL, SEMANTIC_SCHEMA_VERSION, SKIPPED_NODES_CAP } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -758,5 +758,43 @@ describe('buildSemanticIndex + semanticSearch — round-trip (PT-P1-3)', () => {
 
         // Invariant: every node is either indexed or skipped, never lost
         expect(diagnostics.counts.indexed + diagnostics.counts.skipped).toBe(graph.nodes.length);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// P1-6 — SKIPPED_NODES_CAP truncation branch
+// ---------------------------------------------------------------------------
+
+describe('buildSemanticIndex — skippedNodes cap truncation (P1-6)', () => {
+    it('sets skippedNodesTruncated=true and caps list at the cap when exceeded', async () => {
+        // Use _testOnlySkippedNodesCap=3 so we can exceed the cap with a small node count
+        const CAP = 3;
+        // Create CAP+2 nodes all with missing paths → snippet fails → each would be skipped
+        const nodes = Array.from({ length: CAP + 2 }, (_, i) => ({
+            id: `service:svc${i}`,
+            kind: 'service' as const,
+            label: `Svc${i}`,
+            path: `/no/such/file${i}.ts`,
+        }));
+        const graph = makeGraph({ nodes });
+        await writeGraphJson(graph);
+
+        const { diagnostics } = await buildSemanticIndex({
+            graph,
+            project: inMemoryProject({}),
+            embedder: fakeEmbedder,
+            outDir: testDir,
+            _testOnlySkippedNodesCap: CAP,
+        });
+
+        // The list is capped at CAP entries
+        expect(diagnostics.skippedNodes.length).toBe(CAP);
+        // The truncation flag is set
+        expect(diagnostics.skippedNodesTruncated).toBe(true);
+    });
+
+    it('SKIPPED_NODES_CAP constant is 10_000', () => {
+        // Ensure the production cap value is not accidentally changed.
+        expect(SKIPPED_NODES_CAP).toBe(10_000);
     });
 });

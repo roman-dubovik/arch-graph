@@ -48,6 +48,11 @@ export interface BuildSemanticOpts {
     outDir: string;
     /** Optional ISO timestamp override for deterministic tests. */
     now?: () => string;
+    /**
+     * TEST-ONLY: override the skipped-nodes cap to a smaller value for unit tests.
+     * Do NOT set in production code — use SKIPPED_NODES_CAP.
+     */
+    _testOnlySkippedNodesCap?: number;
 }
 
 export interface BuildSemanticResult {
@@ -69,7 +74,8 @@ export interface BuildSemanticResult {
  * @returns manifest + diagnostics for the caller (CLI) to report.
  */
 export async function buildSemanticIndex(opts: BuildSemanticOpts): Promise<BuildSemanticResult> {
-    const { graph, project, embedder, outDir, now = () => new Date().toISOString() } = opts;
+    const { graph, project, embedder, outDir, now = () => new Date().toISOString(), _testOnlySkippedNodesCap } = opts;
+    const effectiveCap = _testOnlySkippedNodesCap ?? SKIPPED_NODES_CAP;
 
     // --- Compute graphHash (SHA-256 of graph.json on disk) ------------------
     const graphJsonPath = join(outDir, 'graph.json');
@@ -91,11 +97,11 @@ export async function buildSemanticIndex(opts: BuildSemanticOpts): Promise<Build
     /** Push to skippedNodeMap if below cap; record truncation flag when cap is first hit. */
     function recordSkip(node: GraphNode, reason: SkipReason): void {
         if (skippedNodeMap.has(node.id)) return; // already recorded (snippet phase)
-        if (skippedNodeMap.size >= SKIPPED_NODES_CAP) {
+        if (skippedNodeMap.size >= effectiveCap) {
             if (!skippedNodesTruncated) {
                 skippedNodesTruncated = true;
                 process.stderr.write(
-                    `[arch-graph semantic] WARNING: skippedNodes cap (${SKIPPED_NODES_CAP}) reached — further skips omitted from diagnostics.\n`,
+                    `[arch-graph semantic] WARNING: skippedNodes cap (${effectiveCap}) reached — further skips omitted from diagnostics.\n`,
                 );
             }
             return;
