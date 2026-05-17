@@ -1,5 +1,17 @@
 # arch-graph
 
+## What's new (May 2026)
+
+Five features shipped on the `develop` branch in May 2026:
+
+- **`doc-section-v1`** — Markdown files are now indexed as first-class `doc-section` graph nodes alongside code, enabling semantic search over your project's documentation.
+- **`code-vs-docs-v1`** — Semantic search splits into `code_search` and `docs_search` MCP tools, eliminating the dilution effect where docs crowded out code results (measured: A_find recall 80% → 30% → 70% on platform project).
+- **`ui-uplift-v1`** — fe-component snippet now includes a `classes: <Tailwind tokens>` block and i18n strings appended to embed-text, improving UI-component retrieval accuracy.
+- **`openapi-enrich-v1`** — OpenAPI YAML enrichment for endpoint nodes; route descriptions and parameter summaries are folded into the semantic embedding.
+- **`fe-i18n-multi-enum-v1`** — Multi-file locale support (`locales/<lang>/<feature>.json`) and TS enum-member resolution in `@Controller` path templates.
+
+---
+
 **Static architecture graph for NestJS monorepos.** Extracts NATS pub/sub, BullMQ queues, TypeORM (`@InjectRepository` → `@Entity` and `@ManyToOne` / `@OneToMany` / `@ManyToMany` / `@OneToOne` → `db-relation`), NestJS module DI (modules / providers / exports / controllers + `@UseGuards` / `@UseInterceptors` / `@UsePipes`), HTTP inter-service calls, and TypeScript imports (static + dynamic + CommonJS `require`) into a single typed graph at `arch-graph-out/graph.json`. Plus an import-cycle diagnostic across `ts-import` / `lib-usage` / `di-import` edges in `diagnostics.cycles`. Designed so an LLM agent can answer "who publishes on this subject?", "what guards run on this endpoint?", or "what tables relate to entity X?" without grepping or guessing.
 
 Sister project: **[graphify](https://github.com/safishamsi/graphify)** is a generic semantic-graph tool (papers, docs, code, mixed media). arch-graph is the opposite end of the trade-off — it knows nothing about general semantics, but it knows NestJS / NATS / BullMQ / TypeORM directly. The edges it produces are deterministic, and the per-build recall gate enforces ≥ 95% recall (≥ 80% for TS imports) against ground truth derived from your own code; any regression below those floors fails `arch-graph build --strict`. Use graphify for "what is this codebase about", arch-graph for "what calls what".
@@ -247,7 +259,7 @@ The above commands answer **deterministic structural questions** — "who publis
 The semantic layer is independent and opt-in: arch-graph works identically well without it. If you enable it, the CLI and MCP server gain new tools:
 
 - **Model**: `Xenova/paraphrase-multilingual-MiniLM-L12-v2` (384-dimensional, multilingual, cross-comparable with sister project 2-brain).
-- **How it works**: each GraphNode (service, module, table, queue) gets a dense vector computed from `label + kind + AST snippet`, persisted in a sidecar at `arch-graph-out/<repo>/semantic/`.
+- **How it works**: each GraphNode (service, module, table, queue, **doc-section**) gets a dense vector computed from `label + kind + AST snippet` (or Markdown section text for doc-section nodes), persisted in a sidecar at `arch-graph-out/<repo>/semantic/`. Markdown files matching the `docs` include globs (including root-level `*.md` by default) are indexed automatically.
 - **Quick start**: 
   ```sh
   arch-graph semantic build              # one-time: downloads model (~135 MB, cached), extracts snippets, embeds
@@ -273,7 +285,7 @@ The semantic layer is independent and opt-in: arch-graph works identically well 
   Use the **fallback** strategy: call `code_search` first. Only call `docs_search` if the code results don't answer the question. Halves retrieval cost; same hit-rate; agent gets less context.
   ```
 
-  Measured hit-rate (3 projects, 103 queries): overall 47% → 67% with split tools, identical for `both-buckets` and `fallback`. See `INTEGRATION-2BRAIN.md` for the federation contract (2-brain Phase 3 will optionally use this).
+  Measured hit-rate (3 projects, 103 queries): overall 47% → 67% with split tools (both-buckets and fallback are identical on that suite). Final number from ongoing eval: `<TBD: final>`. See `INTEGRATION-2BRAIN.md` for the federation contract (2-brain Phase 3 will optionally use this).
 
 ## MCP server
 
@@ -283,7 +295,16 @@ Optional — for editors with an MCP client configured:
 arch-graph mcp   # starts the stdio MCP server backed by arch-graph-out/graph.json
 ```
 
-Exposes 15 tools — 12 structural + 3 semantic. Structural: `subject_publishers`, `subject_subscribers`, `queue_producers`, `queue_consumers`, `service_dependencies`, `service_dependents`, `module_imports`, `table_users`, `path`, `explain`, `query`, `stats`. Semantic (when the sidecar index is built): `semantic_search`, `code_search`, `docs_search` — see [Semantic search](#semantic-search-optional). For unresolved / dynamic call-sites, read `arch-graph-out/diagnostics.json` directly — there is no MCP tool for it.
+Exposes 15 tools — 12 structural + 3 semantic.
+
+**Structural (12):** `subject_publishers`, `subject_subscribers`, `queue_producers`, `queue_consumers`, `service_dependencies`, `service_dependents`, `module_imports`, `table_users`, `path`, `explain`, `query`, `stats`.
+
+**Semantic (3, requires sidecar index):**
+- `code_search` — vector search over code nodes only (services, modules, tables, queues, endpoints, fe-components). Use for "find code that does X".
+- `docs_search` — vector search over `doc-section` nodes only (Markdown sections). Use for "find documentation about Y".
+- `semantic_search` — mixed bucket (code + docs together). Useful as a fallback when you don't know which bucket the answer lives in, but expect lower precision on mixed corpora.
+
+See [Semantic search](#semantic-search-optional) for setup and the recommended `both-buckets` agent pattern. For unresolved / dynamic call-sites, read `arch-graph-out/diagnostics.json` directly — there is no MCP tool for it.
 
 The CLI query subcommands are preferred over MCP when both are available (no stdio overhead, no server lifecycle).
 
@@ -297,6 +318,8 @@ This is a **static** extractor. It does not see runtime configuration, container
 - **D4** — Runtime DI overrides (`{ provide: TOKEN, useFactory }` that resolves at runtime). Static analysis sees the factory call, not its output.
 - **D5** — Decorator metadata from external libs that doesn't follow the NestJS conventions encoded here.
 - **D6** — Inferred type-only edges. Type-level uses are not graph edges; only value-level usages are.
+
+**Semantic search limitations**: the current embedding model (`Xenova/paraphrase-multilingual-MiniLM-L12-v2`) has a known ceiling on UI-component retrieval (`C_ui` hit-rate: 33–50%) because Tailwind class tokens and i18n key strings are poor semantic signals for this model. The `ui-uplift-v1` improvement (appending class names + i18n strings to embed-text) brings partial improvement but doesn't fully close the gap. Planned: evaluate BGE-M3 as a replacement model; its code-aware training may perform better on component-level queries.
 
 To extend coverage, add an extractor under `src/extractors/<domain>/` and wire it into `src/pipeline/build.ts` and a `mapper/` that emits typed edges. The validation harness in `src/validation/` is the contract — every extractor must produce a ground-truth comparison that gates `arch-graph build` at the configured recall floor.
 

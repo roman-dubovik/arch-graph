@@ -576,6 +576,22 @@
                   <td><span class="cell ok">✓</span></td>
                   <td><span class="cell ok">✓</span></td>
                 </tr>
+                <tr>
+                  <th scope="row">Semantic search (opt-in)</th>
+                  <td><span class="cell ok">✓ 3 tools</span></td>
+                  <td><span class="cell ok">✓</span></td>
+                  <td><span class="cell no">✗</span></td>
+                  <td><span class="cell no">✗</span></td>
+                  <td><span class="cell no">✗</span></td>
+                </tr>
+                <tr>
+                  <th scope="row">Markdown docs indexed</th>
+                  <td><span class="cell ok">✓ doc-section</span></td>
+                  <td><span class="cell ok">✓</span></td>
+                  <td><span class="cell no">✗</span></td>
+                  <td><span class="cell no">✗</span></td>
+                  <td><span class="cell no">✗</span></td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -799,6 +815,36 @@ arch-graph build --strict      # CI: exit 3 if recall drops below floor</code></
       </div>
     </section>
 
+    <!-- ──────────────────────────────────── RECENT UPDATES ────────────── -->
+    <section class="section section-limits" id="recent" aria-labelledby="recent-title">
+      <div class="container">
+        <p class="section-eyebrow">May 2026</p>
+        <h2 id="recent-title" class="section-title">5 features shipped.</h2>
+        <ul class="limits-list">
+          <li class="reveal">
+            <h3><code>doc-section-v1</code></h3>
+            <p>Markdown files are now indexed as first-class graph nodes alongside code. Semantic search covers your documentation as well as your source.</p>
+          </li>
+          <li class="reveal">
+            <h3><code>code-vs-docs-v1</code></h3>
+            <p>Semantic search splits into <code>code_search</code> and <code>docs_search</code> MCP tools. Eliminates the dilution effect where doc-section nodes crowd out code results (A_find recall: 80% → 30% with mixed bucket → 70% restored with split). Baseline hit-rate across 103 eval queries: 47% → 67%.</p>
+          </li>
+          <li class="reveal">
+            <h3><code>ui-uplift-v1</code></h3>
+            <p>fe-component embed-text now includes a <code>classes:</code> block of Tailwind tokens and appended i18n strings, improving component-level retrieval accuracy.</p>
+          </li>
+          <li class="reveal">
+            <h3><code>openapi-enrich-v1</code></h3>
+            <p>OpenAPI YAML route descriptions and parameter summaries are folded into endpoint node embeddings.</p>
+          </li>
+          <li class="reveal">
+            <h3><code>fe-i18n-multi-enum-v1</code></h3>
+            <p>Multi-file locale support (<code>locales/&lt;lang&gt;/&lt;feature&gt;.json</code>) and TS enum-member resolution in <code>@Controller</code> path templates.</p>
+          </li>
+        </ul>
+      </div>
+    </section>
+
     <!-- ──────────────────────────────────── THREE WAYS TO QUERY ───────── -->
     <section class="section section-cli" id="queries" aria-labelledby="cli-title">
       <div class="container">
@@ -823,7 +869,7 @@ arch-graph stats</code></pre>
           <article class="cli-card reveal">
             <p class="three-ways-sub">For MCP-aware clients</p>
             <h3 class="mono">MCP server</h3>
-            <p>Stdio MCP server exposing 12 typed tools (<code>subject_publishers</code>, <code>queue_consumers</code>, <code>table_users</code>, <code>path</code>, …). Wire it into any MCP host.</p>
+            <p>Stdio MCP server exposing 15 tools — 12 structural (<code>subject_publishers</code>, <code>queue_consumers</code>, <code>table_users</code>, <code>path</code>, …) and 3 semantic: <code>code_search</code>, <code>docs_search</code>, <code>semantic_search</code>. Wire it into any MCP host.</p>
             <div class="code-block">
               <button class="copy-btn" type="button" aria-label="Copy MCP config">Copy</button>
               <pre><code class="lang-json">// ~/.claude/.mcp.json
