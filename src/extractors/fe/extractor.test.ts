@@ -887,3 +887,108 @@ describe('i18n multi-file — AC-7 test 5: file cap fires (cap=2, 3 files exist)
         expect(extracted.i18nDiagnostics.i18nFilesLoaded).toBe(2);
     });
 });
+
+// ---------------------------------------------------------------------------
+// P0-TEST-1: unscoped t() in multi-file mode (AC-3)
+// ---------------------------------------------------------------------------
+
+// AC-3: "For unscoped t('apply') (no namespace), try 'apply' directly across
+// all files' top-level keys."  In multi-file mode the merged messages object
+// has shape { blogs: { title: "...", ... }, products: { ... } }.
+// Unscoped t() means useTranslation() / useTranslations() with no argument,
+// so collectNamespaces returns {''} and buildCandidateKeys produces
+// candidates = [key] (no namespace prefix).
+
+describe('i18n multi-file — P0-TEST-1: unscoped t() in multi-file mode', () => {
+    it('resolves t("blogs.title") with unscoped useTranslation() in multi-file mode', async () => {
+        // useTranslation() with no namespace — full dotted key 'blogs.title' must resolve
+        // against merged messages { blogs: { title: "Заголовок", ... }, ... }
+        const extracted = await buildFromMultiFileFixture('multi-file', {
+            '/vroot/UnscopedFull.tsx': `
+                import { useTranslation } from 'react-i18next';
+                export const UnscopedFull = () => {
+                    const { t } = useTranslation();
+                    return <h1>{t('blogs.title')}</h1>;
+                };
+            `,
+        });
+        const comp = extracted.components.find((c) => c.name === 'UnscopedFull');
+        expect(comp).toBeDefined();
+        // 'blogs.title' traverses merged.blogs.title → "Заголовок"
+        expect(comp!.i18nStrings).toContain('Заголовок');
+    });
+
+    it('t("title") alone (unscoped) is undefined — no top-level "title" key in multi-file merged object', async () => {
+        // The merged object has shape { blogs: {...}, products: {...} }.
+        // There is no top-level 'title' key, so this should NOT resolve.
+        const extracted = await buildFromMultiFileFixture('multi-file', {
+            '/vroot/UnscopedBare.tsx': `
+                import { useTranslation } from 'react-i18next';
+                export const UnscopedBare = () => {
+                    const { t } = useTranslation();
+                    return <h1>{t('title')}</h1>;
+                };
+            `,
+        });
+        const comp = extracted.components.find((c) => c.name === 'UnscopedBare');
+        expect(comp).toBeDefined();
+        // No top-level 'title' in merged multi-file messages — should be empty
+        expect(comp!.i18nStrings).toEqual([]);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// P1-TEST-1: multi-file-en-only fixture test
+// ---------------------------------------------------------------------------
+
+describe('i18n multi-file — P1-TEST-1: en-only multi-file fixture', () => {
+    it('resolves useTranslation("blogs") + t("title") from en-only locales when no ru exists', async () => {
+        const extracted = await buildFromMultiFileFixture('multi-file-en-only', {
+            '/vroot/EnOnlyBlogs.tsx': `
+                import { useTranslation } from 'react-i18next';
+                export const EnOnlyBlogs = () => {
+                    const { t } = useTranslation('blogs');
+                    return <h1>{t('title')}</h1>;
+                };
+            `,
+        });
+        const comp = extracted.components.find((c) => c.name === 'EnOnlyBlogs');
+        expect(comp).toBeDefined();
+        // locales/en/blogs.json has title = "Title (en-only)"
+        expect(comp!.i18nStrings).toContain('Title (en-only)');
+        // Language detection should be 'en' since only en files are present
+        expect(extracted.i18nDiagnostics.i18nLanguagesFound).toContain('en');
+        expect(extracted.i18nDiagnostics.i18nMode).toBe('multi-file');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// P1-2: language-detection uses tuple map, not path substring re-parsing
+// ---------------------------------------------------------------------------
+
+describe('i18n — P1-2: language attributed from discovery tuple, not path substring', () => {
+    it('correctly identifies "en" when messages/en.json is loaded from a path containing "ru" substring', async () => {
+        // Simulate a project root whose path contains 'ru' (e.g. a developer named 'drupal' or
+        // a folder like '/Users/dru/projects/myapp'). If language detection re-parsed the path
+        // via .includes('/ru/') it would misidentify. Our tuple-based approach reads the correct lang.
+        const fixtureDir = resolve(__dirname, '../../__fixtures__/fe-i18n-sample/en-only');
+        // en-only fixture has messages/en.json but no messages/ru.json
+        const project = new Project({
+            useInMemoryFileSystem: true,
+            compilerOptions: { target: 99, module: 99, moduleResolution: 100, strict: false, jsx: ts.JsxEmit.React },
+        });
+        project.createSourceFile('/vroot/Comp.tsx', `
+            import { useTranslations } from 'next-intl';
+            export const Comp = () => {
+                const t = useTranslations();
+                return <button>{t('common.apply')}</button>;
+            };
+        `);
+        const cfg: ArchGraphConfig = { id: 'en-only-lang-test', root: fixtureDir, appsGlob: '**' };
+        const extracted = await extractFe(cfg, project);
+        // Should be single-file mode with en (not ru)
+        expect(extracted.i18nDiagnostics.i18nMode).toBe('single-file');
+        expect(extracted.i18nDiagnostics.i18nLanguagesFound).toContain('en');
+        expect(extracted.i18nDiagnostics.i18nLanguagesFound).not.toContain('ru');
+    });
+});

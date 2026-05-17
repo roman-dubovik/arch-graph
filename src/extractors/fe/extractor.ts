@@ -255,25 +255,27 @@ async function loadProjectMessages(
 ): Promise<LoadProjectMessagesResult> {
     // -----------------------------------------------------------------------
     // Single-file candidates (existing behaviour, priority 1)
+    // Language is stored in the tuple so it is determined by which glob bucket
+    // the file came from, not by re-parsing the path at use time.
     // -----------------------------------------------------------------------
-    const singleFileCandidates = [
-        join(root, 'messages', 'ru.json'),
-        join(root, 'messages', 'en.json'),
-        join(root, 'locales', 'ru', 'translation.json'),
-        join(root, 'locales', 'en', 'translation.json'),
+    const singleFileCandidates: { path: string; lang: 'ru' | 'en' }[] = [
+        { path: join(root, 'messages', 'ru.json'), lang: 'ru' },
+        { path: join(root, 'messages', 'en.json'), lang: 'en' },
+        { path: join(root, 'locales', 'ru', 'translation.json'), lang: 'ru' },
+        { path: join(root, 'locales', 'en', 'translation.json'), lang: 'en' },
     ];
 
     for (const candidate of singleFileCandidates) {
         let raw: string;
         try {
-            raw = await readFile(candidate, 'utf8');
+            raw = await readFile(candidate.path, 'utf8');
         } catch (err) {
             if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
                 continue;
             }
             const msg = err instanceof Error ? err.message : String(err);
             process.stderr.write(
-                `[arch-graph fe-i18n] WARNING: could not read ${candidate}: ${msg}\n`,
+                `[arch-graph fe-i18n] WARNING: could not read ${candidate.path}: ${msg}\n`,
             );
             continue;
         }
@@ -281,14 +283,14 @@ async function loadProjectMessages(
         const result = loadMessagesFromJson(raw);
         if (!result.ok) {
             process.stderr.write(
-                `[arch-graph fe-i18n] WARNING: failed to parse ${candidate}: ${result.error}\n`,
+                `[arch-graph fe-i18n] WARNING: failed to parse ${candidate.path}: ${result.error}\n`,
             );
             continue;
         }
 
         if (Object.keys(result.messages).length === 0) {
             process.stderr.write(
-                `[arch-graph fe-i18n] WARNING: ${candidate} parsed to empty object — skipping (possible placeholder or corrupt file)\n`,
+                `[arch-graph fe-i18n] WARNING: ${candidate.path} parsed to empty object — skipping (possible placeholder or corrupt file)\n`,
             );
             continue;
         }
@@ -298,7 +300,7 @@ async function loadProjectMessages(
             diagnostics: {
                 i18nMode: 'single-file',
                 i18nFilesLoaded: 1,
-                i18nLanguagesFound: [candidate.includes('/ru/') || candidate.includes('ru.json') ? 'ru' : 'en'],
+                i18nLanguagesFound: [candidate.lang],
             },
         };
     }
@@ -338,18 +340,18 @@ async function loadProjectMessages(
  * Extract FE components, hooks, pages, routes, renders, and imports
  * from all .tsx/.jsx files (and hooks from .ts files) in the ts-morph project.
  *
- * @param _capOverride  Internal: override the multi-file locale cap (for testing AC-7 cap).
+ * @param capOverride  Internal: override the multi-file locale cap (for testing AC-7 cap).
  */
 export async function extractFe(
     cfg: ArchGraphConfig,
     project: Project,
-    _capOverride?: number,
+    capOverride?: number,
 ): Promise<FeExtractResult & { i18nDiagnostics: I18nDiagnostics }> {
     const root = resolve(cfg.root);
 
     // Load i18n messages once per extractFe call (shared across all files).
     const { messages: projectMessages, diagnostics: i18nDiagnostics } =
-        await loadProjectMessages(root, _capOverride);
+        await loadProjectMessages(root, capOverride);
 
     const allComponents: FeComponent[] = [];
     const allHooks: FeHook[] = [];
