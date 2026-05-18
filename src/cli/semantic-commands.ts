@@ -228,19 +228,17 @@ export function parseSemanticArgs(argv: string[]): SemanticArgs {
 // ---------------------------------------------------------------------------
 
 /**
- * Run `semantic build` against a single arch-graph project.
+ * Build the semantic index without doing any `process.exit` calls.
  *
- * The `outDir` layout is flat (mirrors `arch-graph build`):
- *   <outDir>/graph.json
- *   <outDir>/semantic/manifest.json
- *   <outDir>/semantic/embeddings.jsonl
- *   <outDir>/diagnostics.json   ← merged in-place
+ * Throws on hard failure (bad config, missing graph.json, fatal embed error)
+ * so callers can decide what to do. The CLI entry `runSemanticBuild` translates
+ * throws to `process.exit(1)`; `arch-graph init` catches them and continues so
+ * the wizard's "next steps" block still prints.
  *
- * Multi-repo configs: each project has its own config file; the `--repo` flag
- * is intended for use when multiple configs share an output directory. It is
- * accepted but not currently required — single-config runs work without it.
+ * Returns the `outDir` so callers know where artifacts landed (helpful for
+ * downstream operations like recall validation).
  */
-export async function runSemanticBuild(args: SemanticArgs): Promise<void> {
+export async function buildSemanticIndexFromArgs(args: SemanticArgs): Promise<{ outDir: string }> {
     const configPath = resolve(args.config);
     const outDir = resolve(args.out);
 
@@ -249,11 +247,10 @@ export async function runSemanticBuild(args: SemanticArgs): Promise<void> {
     try {
         cfg = await loadConfig(configPath);
     } catch (err) {
-        process.stderr.write(
+        throw new Error(
             `arch-graph semantic build: failed to load config '${configPath}': ${(err as Error).message}\n` +
-            `  Run 'arch-graph init' to create a starter config.\n`,
+            `  Run 'arch-graph init' to create a starter config.`,
         );
-        process.exit(1);
     }
 
     process.stdout.write(`[arch-graph semantic] building index for '${cfg.id}'...\n`);
@@ -267,11 +264,10 @@ export async function runSemanticBuild(args: SemanticArgs): Promise<void> {
         const raw = await readFileGraph(graphJsonPath, 'utf8');
         graph = JSON.parse(raw) as ArchGraph;
     } catch (err) {
-        process.stderr.write(
+        throw new Error(
             `arch-graph semantic build: cannot read graph.json at '${graphJsonPath}': ${(err as Error).message}\n` +
-            `  Run 'arch-graph build' first to generate the graph.\n`,
+            `  Run 'arch-graph build' first to generate the graph.`,
         );
-        process.exit(1);
     }
 
     process.stdout.write(`  graph:  ${graph.nodes.length} nodes\n`);
@@ -327,10 +323,9 @@ export async function runSemanticBuild(args: SemanticArgs): Promise<void> {
             outDir,
         });
     } catch (err) {
-        process.stderr.write(
-            `arch-graph semantic build: fatal error: ${(err as Error).message}\n`,
+        throw new Error(
+            `arch-graph semantic build: fatal error: ${(err as Error).message}`,
         );
-        process.exit(1);
     }
 
     const { manifest, diagnostics } = result;
@@ -361,6 +356,35 @@ export async function runSemanticBuild(args: SemanticArgs): Promise<void> {
         process.stderr.write(
             `\nWARNING: ${d.labelErrors} node(s) indexed with empty snippet (label not located — check anchor/label alignment).\n`,
         );
+    }
+
+    return { outDir };
+}
+
+/**
+ * Run `semantic build` against a single arch-graph project.
+ *
+ * The `outDir` layout is flat (mirrors `arch-graph build`):
+ *   <outDir>/graph.json
+ *   <outDir>/semantic/manifest.json
+ *   <outDir>/semantic/embeddings.jsonl
+ *   <outDir>/diagnostics.json   ← merged in-place
+ *
+ * Multi-repo configs: each project has its own config file; the `--repo` flag
+ * is intended for use when multiple configs share an output directory. It is
+ * accepted but not currently required — single-config runs work without it.
+ *
+ * For programmatic callers (e.g. `arch-graph init`), prefer
+ * `buildSemanticIndexFromArgs` directly — it throws on failure instead of
+ * calling `process.exit`, so the caller can recover gracefully.
+ */
+export async function runSemanticBuild(args: SemanticArgs): Promise<void> {
+    let outDir: string;
+    try {
+        ({ outDir } = await buildSemanticIndexFromArgs(args));
+    } catch (err) {
+        process.stderr.write(`${(err as Error).message}\n`);
+        process.exit(1);
     }
 
     // --- Snippet recall validation ------------------------------------------
