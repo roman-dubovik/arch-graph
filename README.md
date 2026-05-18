@@ -1,3 +1,30 @@
+<p align="center">
+  <a href="https://roman-dubovik.github.io/arch-graph/">
+    <img src="docs/assets/arch-graph-social-card.png" alt="arch-graph — Architecture graph + local multilingual semantic search for NestJS monorepos. Deterministic. Zero LLM tokens on build AND query." width="820">
+  </a>
+</p>
+
+<p align="center">
+  <strong>🌐&nbsp;<a href="https://roman-dubovik.github.io/arch-graph/">roman-dubovik.github.io/arch-graph</a></strong>
+  &nbsp;·&nbsp;
+  <a href="#install">Install</a>
+  &nbsp;·&nbsp;
+  <a href="#whats-new-may-2026">What's new</a>
+  &nbsp;·&nbsp;
+  <a href="docs/comparisons/2026-05-17-arch-graph-vs-graphify-eval.md">Benchmarks</a>
+  &nbsp;·&nbsp;
+  <a href="bench/REPRODUCE.md">Reproduce</a>
+  &nbsp;·&nbsp;
+  <a href="bench/self-build/README.md">Self-build mini-bench</a>
+</p>
+
+<p align="center">
+  <em>Static architecture graph + local multilingual semantic search for NestJS monorepos.<br>
+  Deterministic. Benchmarked. Zero LLM tokens on build AND query.</em>
+</p>
+
+---
+
 # arch-graph
 
 ## What's new (May 2026)
