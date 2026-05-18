@@ -1,0 +1,98 @@
+[
+  {
+    "id": "SB1",
+    "query": "where is the semantic builder",
+    "category": "A_find",
+    "expectedKindIn": ["doc-section", "config-field"],
+    "expectedLabelHas": ["Semantic search", "semantic", "builder"],
+    "minScore": 0.40
+  },
+  {
+    "id": "SB2",
+    "query": "where is the doc-section extractor source file",
+    "category": "A_find",
+    "expectedKindIn": ["doc-section"],
+    "expectedLabelHas": ["extract-docs", "Extractor", "doc-section"],
+    "minScore": 0.45
+  },
+  {
+    "id": "SB3",
+    "query": "where is the OpenAPI enricher",
+    "category": "A_find",
+    "expectedKindIn": ["doc-section", "config-field"],
+    "expectedLabelHas": ["openapi", "OpenAPI", "enrich"],
+    "minScore": 0.35
+  },
+  {
+    "id": "SB4",
+    "query": "why might semantic search return zero results",
+    "category": "B_debug",
+    "expectedKindIn": ["doc-section"],
+    "expectedLabelHas": ["semantic", "Semantic", "search"],
+    "minScore": 0.35
+  },
+  {
+    "id": "SB5",
+    "query": "what handles empty markdown files during doc extraction",
+    "category": "B_debug",
+    "expectedKindIn": ["doc-section"],
+    "expectedLabelHas": ["empty", "markdown", "Extractor", "docs"],
+    "minScore": 0.35
+  },
+  {
+    "id": "SB6",
+    "query": "where is the score floor applied in semantic search",
+    "category": "B_debug",
+    "expectedKindIn": ["doc-section"],
+    "expectedLabelHas": ["strict", "floor", "Semantic", "recall"],
+    "minScore": 0.35
+  },
+  {
+    "id": "SB7",
+    "query": "what does --strict mode do",
+    "category": "D_docs",
+    "expectedKindIn": ["doc-section"],
+    "expectedLabelHas": ["strict", "Strict"],
+    "minScore": 0.40
+  },
+  {
+    "id": "SB8",
+    "query": "how does code_search differ from docs_search",
+    "category": "D_docs",
+    "expectedKindIn": ["doc-section"],
+    "expectedLabelHas": ["Semantic search", "semantic", "search", "MCP"],
+    "minScore": 0.35
+  },
+  {
+    "id": "SB9",
+    "query": "what is in the semantic manifest file",
+    "category": "D_docs",
+    "expectedKindIn": ["doc-section"],
+    "expectedLabelHas": ["manifest", "Manifest"],
+    "minScore": 0.35
+  },
+  {
+    "id": "SB10",
+    "query": "how is the build pipeline structured",
+    "category": "E_arch",
+    "expectedKindIn": ["doc-section"],
+    "expectedLabelHas": ["pipeline", "build", "Build"],
+    "minScore": 0.40
+  },
+  {
+    "id": "SB11",
+    "query": "what is the MCP server architecture",
+    "category": "E_arch",
+    "expectedKindIn": ["doc-section"],
+    "expectedLabelHas": ["MCP server", "MCP"],
+    "minScore": 0.40
+  },
+  {
+    "id": "SB12",
+    "query": "what extractors are wired together in the build",
+    "category": "E_arch",
+    "expectedKindIn": ["doc-section"],
+    "expectedLabelHas": ["pipeline", "extractor", "Extractor", "build"],
+    "minScore": 0.35
+  }
+]
