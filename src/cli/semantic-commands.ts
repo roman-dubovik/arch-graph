@@ -67,6 +67,17 @@ export interface SemanticArgs {
      * When absent, `runSemanticSearch` resolves via `resolveMinScore`.
      */
     minScore?: number;
+    /**
+     * build: when true, skip incremental cache and re-embed every node from scratch.
+     * Default: false (incremental mode — reuse unchanged nodes from the prior index).
+     */
+    full?: boolean;
+    /**
+     * build: when true, suppress informational stdout output.
+     * Errors and warnings still go to stderr.
+     * Used by the pre-commit hook so commits stay clean.
+     */
+    quiet?: boolean;
 }
 
 /**
@@ -267,8 +278,10 @@ export function parseSemanticArgs(argv: string[]): SemanticArgs {
         query = positionals[0];
     }
 
-    // Parse --strict-recall anywhere in the arg list
+    // Parse boolean flags anywhere in the arg list
     const strictRecall = rest.includes('--strict-recall');
+    const full = rest.includes('--full');
+    const quiet = rest.includes('--quiet');
 
     return {
         sub: sub ?? '',
@@ -283,6 +296,8 @@ export function parseSemanticArgs(argv: string[]): SemanticArgs {
         model,
         strictRecall,
         minScore,
+        full,
+        quiet,
     };
 }
 
@@ -316,9 +331,11 @@ export async function buildSemanticIndexFromArgs(args: SemanticArgs): Promise<{ 
         );
     }
 
-    process.stdout.write(`[arch-graph semantic] building index for '${cfg.id}'...\n`);
-    process.stdout.write(`  config: ${configPath}\n`);
-    process.stdout.write(`  out:    ${outDir}\n`);
+    if (!args.quiet) {
+        process.stdout.write(`[arch-graph semantic] building index for '${cfg.id}'...\n`);
+        process.stdout.write(`  config: ${configPath}\n`);
+        process.stdout.write(`  out:    ${outDir}\n`);
+    }
 
     // --- Load graph.json ----------------------------------------------------
     const graphJsonPath = join(outDir, 'graph.json');
@@ -333,7 +350,9 @@ export async function buildSemanticIndexFromArgs(args: SemanticArgs): Promise<{ 
         );
     }
 
-    process.stdout.write(`  graph:  ${graph.nodes.length} nodes\n`);
+    if (!args.quiet) {
+        process.stdout.write(`  graph:  ${graph.nodes.length} nodes\n`);
+    }
 
     // --- Build ts-morph Project (mirrors runBuild in pipeline/build.ts) --------
     // A9: include .tsx/.jsx so fe-component snippets can be extracted.
@@ -374,7 +393,9 @@ export async function buildSemanticIndexFromArgs(args: SemanticArgs): Promise<{ 
         ]);
     }
 
-    process.stdout.write(`  source files: ${project.getSourceFiles().length}\n`);
+    if (!args.quiet) {
+        process.stdout.write(`  source files: ${project.getSourceFiles().length}\n`);
+    }
 
     // --- Resolve model alias (CLI flag wins over config) --------------------
     const { model: configModelAlias } = applySemanticDefaults(cfg.semantic);
@@ -393,6 +414,7 @@ export async function buildSemanticIndexFromArgs(args: SemanticArgs): Promise<{ 
             embedder,
             outDir,
             modelAlias,
+            full: args.full,
         });
     } catch (err) {
         throw new Error(
@@ -403,16 +425,20 @@ export async function buildSemanticIndexFromArgs(args: SemanticArgs): Promise<{ 
     const { manifest, diagnostics } = result;
     const d = diagnostics.counts;
 
-    process.stdout.write(`\n✓ semantic/manifest.json:    ${outDir}/semantic/manifest.json\n`);
-    process.stdout.write(`✓ semantic/embeddings.jsonl: ${outDir}/semantic/embeddings.jsonl\n`);
-    process.stdout.write(`\n`);
-    process.stdout.write(`  model:      ${manifest.model}\n`);
-    process.stdout.write(`  dim:        ${manifest.dim}\n`);
-    process.stdout.write(`  builtAt:    ${manifest.builtAt}\n`);
-    process.stdout.write(`  graphHash:  ${manifest.graphHash.slice(0, 16)}...\n`);
-    process.stdout.write(`  indexed:    ${d.indexed}\n`);
-    process.stdout.write(`  skipped:    ${d.skipped}\n`);
-    process.stdout.write(`  indexSize:  ${(diagnostics.indexSizeBytes / 1024).toFixed(1)} KB\n`);
+    if (!args.quiet) {
+        process.stdout.write(`\n✓ semantic/manifest.json:    ${outDir}/semantic/manifest.json\n`);
+        process.stdout.write(`✓ semantic/embeddings.jsonl: ${outDir}/semantic/embeddings.jsonl\n`);
+        process.stdout.write(`\n`);
+        process.stdout.write(`  model:      ${manifest.model}\n`);
+        process.stdout.write(`  dim:        ${manifest.dim}\n`);
+        process.stdout.write(`  builtAt:    ${manifest.builtAt}\n`);
+        process.stdout.write(`  graphHash:  ${manifest.graphHash.slice(0, 16)}...\n`);
+        process.stdout.write(`  indexed:    ${d.indexed}\n`);
+        process.stdout.write(`  reused:     ${d.reused}\n`);
+        process.stdout.write(`  recomputed: ${d.recomputed}\n`);
+        process.stdout.write(`  skipped:    ${d.skipped}\n`);
+        process.stdout.write(`  indexSize:  ${(diagnostics.indexSizeBytes / 1024).toFixed(1)} KB\n`);
+    }
 
     if (d.skipped > 0) {
         process.stderr.write(
