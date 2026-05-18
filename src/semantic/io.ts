@@ -155,7 +155,10 @@ export async function fileSizeBytes(filePath: string): Promise<number> {
     try {
         const s = await stat(filePath);
         return s.size;
-    } catch {
-        return 0;
+    } catch (err) {
+        // Silently return 0 only when the file is absent (ENOENT).
+        // Any other error (permissions, I/O, …) is re-thrown so it surfaces.
+        if ((err as NodeJS.ErrnoException).code === 'ENOENT') return 0;
+        throw err;
     }
 }

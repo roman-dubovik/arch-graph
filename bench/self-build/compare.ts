@@ -17,6 +17,8 @@ import { readFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import type { NodeKind } from '../../src/core/types.js';
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -24,7 +26,7 @@ import { fileURLToPath } from 'node:url';
 export interface BenchResultRow {
     queryId: string;
     nodeId: string;
-    kind: string;
+    kind: NodeKind;
     label: string;
     score: number;
     path?: string;
@@ -35,7 +37,7 @@ export interface QuerySpec {
     id: string;
     query: string;
     category: string;
-    expectedKindIn: string[];
+    expectedKindIn: NodeKind[];
     expectedLabelHas: string[];
     minScore: number;
 }
@@ -99,6 +101,8 @@ export function buildComparison(
     minilmRows: BenchResultRow[],
     bgeRows: BenchResultRow[],
     specs: QuerySpec[],
+    /** Output sink for infrastructure warnings. Defaults to process.stderr. */
+    warnFn: (msg: string) => void = (m) => process.stderr.write(m),
 ): QueryComparison[] {
     const groupBy = (rows: BenchResultRow[]) => {
         const m = new Map<string, BenchResultRow[]>();
@@ -111,6 +115,24 @@ export function buildComparison(
 
     const minilmByQuery = groupBy(minilmRows);
     const bgeByQuery = groupBy(bgeRows);
+
+    // P1-1: Warn when a spec's queryId is absent from a result file.
+    // Silent empty rows would make a model look weak when the real cause is
+    // an infrastructure failure (e.g. embedError silently produced no rows).
+    for (const spec of specs) {
+        if (!minilmByQuery.has(spec.id)) {
+            warnFn(
+                `[compare] WARNING: queryId "${spec.id}" has no rows in the MiniLM result file — ` +
+                `treating as all-miss. Check for infrastructure failures in the MiniLM bench run.\n`,
+            );
+        }
+        if (!bgeByQuery.has(spec.id)) {
+            warnFn(
+                `[compare] WARNING: queryId "${spec.id}" has no rows in the BGE-M3 result file — ` +
+                `treating as all-miss. Check for infrastructure failures in the BGE-M3 bench run.\n`,
+            );
+        }
+    }
 
     return specs.map((spec) => {
         const ml = minilmByQuery.get(spec.id) ?? [];
@@ -145,8 +167,10 @@ function delta(a: number | null, b: number | null): string {
 
 function rankDelta(a: number | null, b: number | null): string {
     if (a === null && b === null) return 'n/a';
-    if (a === null) return `+${b}`;
-    if (b === null) return `-${a}`;
+    // b is null: BGE dropped the expected node out of top-K entirely.
+    if (b === null) return 'DROPPED';
+    // a is null: MiniLM missed; BGE found it at rank b — 'new entry at rank b'.
+    if (a === null) return `NEW@${b}`;
     const d = b - a;
     return (d <= 0 ? '' : '+') + String(d);
 }

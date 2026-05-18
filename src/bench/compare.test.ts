@@ -141,6 +141,23 @@ describe('rankOfFirstExpected', () => {
     it('returns null for empty list', () => {
         expect(rankOfFirstExpected([], SPEC_A)).toBeNull();
     });
+
+    // P1-8: when two rows share the same score, the sort is stable with respect
+    // to the insertion order (Array.sort in V8 is stable since Node 12).  The
+    // expected node appears second in the input but scores equally — after
+    // descending-score sort it should remain at rank 2, not bubble up to 1.
+    it('P1-8: equal scores — expected node rank respects stable sort order', () => {
+        const rowUnrelated: BenchResultRow = {
+            queryId: 'Q1', nodeId: 'x', kind: 'service', label: 'Unrelated', score: 0.70, snippet: '',
+        };
+        const rowExpectedSameScore: BenchResultRow = {
+            queryId: 'Q1', nodeId: 'y', kind: 'doc-section', label: 'Semantic search overview', score: 0.70, snippet: '',
+        };
+        // Both at score 0.70; unrelated first in input array.
+        // Stable sort: unrelated stays at position 0 (rank 1), expected at position 1 (rank 2).
+        const rank = rankOfFirstExpected([rowUnrelated, rowExpectedSameScore], SPEC_A);
+        expect(rank).toBe(2);
+    });
 });
 
 // ── buildComparison ───────────────────────────────────────────────────────
@@ -182,6 +199,53 @@ describe('buildComparison', () => {
         expect(result[0]!.bgeHit).toBe(false);
         expect(result[0]!.minilmScore1).toBeNull();
         expect(result[0]!.bgeScore1).toBeNull();
+    });
+
+    // P1-1: When a spec's queryId is absent from a result file, buildComparison
+    // must emit a stderr warning (via the injectable warnFn) so the caller knows
+    // the all-miss result is an infrastructure artefact, not model quality.
+    it('P1-1: emits warnFn for queryIds absent from either result file', () => {
+        const warnings: string[] = [];
+        const warnFn = (msg: string) => warnings.push(msg);
+
+        // MiniLM has no Q1 rows; BGE has no Q2 rows.
+        buildComparison(
+            [],  // no MiniLM rows at all
+            [{ queryId: 'Q1', nodeId: 'n', kind: 'doc-section', label: 'x', score: 0.5, snippet: '' }],
+            [SPEC_A, SPEC_B],
+            warnFn,
+        );
+
+        // Expect a warning for Q1 (missing from MiniLM) and Q2 (missing from both).
+        expect(warnings.some((w) => w.includes('"Q1"') && w.includes('MiniLM'))).toBe(true);
+        expect(warnings.some((w) => w.includes('"Q2"') && w.includes('BGE-M3'))).toBe(true);
+        expect(warnings.some((w) => w.includes('"Q2"') && w.includes('MiniLM'))).toBe(true);
+    });
+
+    // P1-7: result files may cover different query ID sets (e.g. one run had an
+    // error for Q2). buildComparison must still produce an entry for every spec,
+    // treating missing queryIds as empty rows (all-miss) without throwing.
+    it('P1-7: mismatched queryId sets — spec IDs absent from one result file produce all-miss entries', () => {
+        // minilmRows only covers Q1; bgeRows only covers Q2.
+        const onlyQ1Rows: BenchResultRow[] = [ROW_HIT];
+        const onlyQ2Rows: BenchResultRow[] = [
+            { queryId: 'Q2', nodeId: 'n-q2', kind: 'doc-section', label: 'Strict mode behavior', score: 0.50, snippet: '' },
+        ];
+
+        const result = buildComparison(onlyQ1Rows, onlyQ2Rows, [SPEC_A, SPEC_B]);
+        expect(result).toHaveLength(2);
+
+        const q1 = result.find((c) => c.queryId === 'Q1')!;
+        // MiniLM has Q1 → should HIT; BGE has no Q1 rows → miss
+        expect(q1.minilmHit).toBe(true);
+        expect(q1.bgeHit).toBe(false);
+        expect(q1.bgeScore1).toBeNull();
+
+        const q2 = result.find((c) => c.queryId === 'Q2')!;
+        // MiniLM has no Q2 rows → miss; BGE has Q2 → HIT (score 0.50 > minScore 0.40)
+        expect(q2.minilmHit).toBe(false);
+        expect(q2.bgeHit).toBe(true);
+        expect(q2.minilmScore1).toBeNull();
     });
 });
 
@@ -258,12 +322,13 @@ describe('renderMarkdown', () => {
         expect(md).toContain('+0.050');
     });
 
-    it('shows n/a for null rank (BGE rank on Q1)', () => {
+    it('shows n/a for null BGE rank and DROPPED for null rank-delta (BGE rank on Q1)', () => {
         const md = renderMarkdown(comparisons, specs);
-        // Q1 BGE rank is null → n/a
+        // Q1: BGE rank is null → "n/a" in Rank BGE-M3 column; rank delta → DROPPED
         const q1Line = md.split('\n').find((l) => l.startsWith('| Q1 |'));
         expect(q1Line).toBeDefined();
-        expect(q1Line).toContain('n/a');
+        expect(q1Line).toContain('n/a');    // Rank BGE-M3 column
+        expect(q1Line).toContain('DROPPED'); // Rank delta column
     });
 
     it('exact sentinel: full markdown output matches byte-for-byte (AC2.6)', () => {
@@ -278,8 +343,8 @@ describe('renderMarkdown', () => {
             'Score@1 MiniLM | Score@1 BGE-M3 | Score delta | Rank MiniLM | Rank BGE-M3 | Rank delta |\n' +
             '|----|----------|-------|-----------|-----------|--------|' +
             '---------------|---------------|-------------|------------|------------|------------|\n' +
-            '| Q1 | A_find | where is the semantic builder | HIT | MISS | MISS<-HIT | 0.550 | 0.600 | +0.050 | 1 | n/a | -1 |\n' +
-            '| Q2 | D_docs | what does strict mode do | MISS | HIT | MISS->HIT | 0.300 | 0.500 | +0.200 | n/a | 1 | +1 |\n' +
+            '| Q1 | A_find | where is the semantic builder | HIT | MISS | MISS<-HIT | 0.550 | 0.600 | +0.050 | 1 | n/a | DROPPED |\n' +
+            '| Q2 | D_docs | what does strict mode do | MISS | HIT | MISS->HIT | 0.300 | 0.500 | +0.200 | n/a | 1 | NEW@1 |\n' +
             '\n' +
             '## Per-category hit-rate\n' +
             '\n' +

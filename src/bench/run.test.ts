@@ -20,13 +20,44 @@
  *   - makeEmbedder is mocked to return a fixed zero-vector so no model loads
  *   - semanticSearch is mocked to return predictable stub results
  */
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { BenchResultRow, QuerySpec } from '../../bench/self-build/compare.js';
 import { runBench } from '../../bench/self-build/run.js';
+import { SEMANTIC_MODELS } from '../semantic/types.js';
+
+// ---------------------------------------------------------------------------
+// Model-cache detection helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns true when the local Hugging Face cache contains at least the root
+ * directory for the given model hub ID.  We test only for directory existence
+ * (not file completeness) because a partial download is still "not cached"
+ * but the download would resume from where it left off, not time out.
+ *
+ * Cache path: $HF_HOME/hub/models--<org>--<model>  or
+ *             ~/.cache/huggingface/hub/models--<org>--<model>
+ */
+async function isModelCached(hubId: string): Promise<boolean> {
+    const base = process.env['HF_HOME']
+        ? join(process.env['HF_HOME'], 'hub')
+        : join(homedir(), '.cache', 'huggingface', 'hub');
+    // hub directory uses '--' as separator: 'Xenova/bge-m3' → 'models--Xenova--bge-m3'
+    const dirName = 'models--' + hubId.replace('/', '--');
+    try {
+        await access(join(base, dirName));
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+const miniLmCached = await isModelCached(SEMANTIC_MODELS.minilm.hubId);
 
 // ---------------------------------------------------------------------------
 // Test directory lifecycle
@@ -193,7 +224,7 @@ describe('runBench — mocked pipeline (unit test)', () => {
 // Skip condition: the MiniLM model must be cached in ~/.cache/huggingface/
 // (or $HF_HOME). In CI, no model is cached and the download would time out.
 // To run locally: pnpm test src/bench/run.test.ts --reporter=verbose
-describe.skip('runBench — real MiniLM build (integration, requires cached model)', () => {
+describe.skipIf(!miniLmCached)('runBench — real MiniLM build (integration, requires cached model)', () => {
     it('builds a real index and returns scored rows', async () => {
         const outPath = join(testDir, 'minilm-results.json');
         const queriesPath = new URL('../../bench/self-build/queries-self-build.json', import.meta.url);
