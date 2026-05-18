@@ -26,7 +26,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
 import type { SemanticManifest, SemanticRecord } from '../semantic/types.js';
-import { SEMANTIC_DIM, SEMANTIC_MODEL, SEMANTIC_SCHEMA_VERSION, SEMANTIC_MODELS } from '../semantic/types.js';
+import { SEMANTIC_DIM, SEMANTIC_MODEL, SEMANTIC_SCHEMA_VERSION, SEMANTIC_MODELS, defaultModelAlias } from '../semantic/types.js';
 import { MAX_TOP_K } from '../semantic/search.js';
 import { writeEmbeddingsJsonl, writeManifest } from '../semantic/io.js';
 import { makeSemanticSearchHandler, semanticSearchInputShape } from './server.js';
@@ -574,9 +574,8 @@ describe('makeSemanticSearchHandler — e5-base alias (P1-K)', () => {
         expect(output.dim).toBe(e5Dim);
     });
 
-    it('defaults to minilm when no modelAlias is passed (documented default behaviour per SemanticSearchHandlerOpts JSDoc)', async () => {
-        // The JSDoc on SemanticSearchHandlerOpts.modelAlias documents the default as 'minilm'.
-        // This test pins that contract so silent changes to the default are caught.
+    it('defaults to e5-base (defaultModelAlias) when no modelAlias is passed', async () => {
+        // This test pins that the default is 'e5-base', not 'minilm'.
         const graphHash = await writeGraphJson('{"nodes":[]}');
         await writeSidecar([makeRecord('svc:x', 'service', unitVec(0))], graphHash);
 
@@ -589,6 +588,28 @@ describe('makeSemanticSearchHandler — e5-base alias (P1-K)', () => {
         expect(output.error).toBeUndefined();
         expect(output.model).toBe(SEMANTIC_MODEL);
         expect(output.dim).toBe(SEMANTIC_DIM);
+    });
+
+    it('when no modelAlias passed, makeEmbedder is called with defaultModelAlias ("e5-base")', async () => {
+        // Spy on makeEmbedder to assert it receives 'e5-base' when no explicit alias is given.
+        // Return a fake embedder so no real model download occurs.
+        const fakeEmb = {
+            embed: async () => [unitVec(0)],
+            embedOne: async () => unitVec(0),
+        };
+        const makeEmbedderSpy = vi.spyOn(embedderModule, 'makeEmbedder').mockReturnValue(fakeEmb);
+
+        const graphHash = await writeGraphJson('{"nodes":[]}');
+        await writeSidecar([makeRecord('svc:x', 'service', unitVec(0))], graphHash);
+
+        // No embedder supplied → handler constructs its own via makeEmbedder(modelAlias).
+        const handler = makeSemanticSearchHandler({ outDir: testDir });
+        await handler({ query: 'test', includeVectors: false });
+
+        // makeEmbedder must have been called with the defaultModelAlias, not 'minilm'.
+        expect(makeEmbedderSpy).toHaveBeenCalledWith('e5-base');
+        const calls = makeEmbedderSpy.mock.calls.map((c) => c[0]);
+        expect(calls).not.toContain('minilm');
     });
 });
 

@@ -1022,6 +1022,38 @@ describe('parseSemanticArgs — --model flag (AC2.1/AC2.2)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// parseSemanticArgs — --full and --quiet build flags
+// ---------------------------------------------------------------------------
+
+describe('parseSemanticArgs — --full and --quiet flags', () => {
+    it('parseSemanticArgs(["build","--full"]) returns {full: true}', () => {
+        const args = parseSemanticArgs(['build', '--full']);
+        expect(args.full).toBe(true);
+    });
+
+    it('parseSemanticArgs(["build","--quiet"]) returns {quiet: true}', () => {
+        const args = parseSemanticArgs(['build', '--quiet']);
+        expect(args.quiet).toBe(true);
+    });
+
+    it('both --full and --quiet together are parsed correctly', () => {
+        const args = parseSemanticArgs(['build', '--full', '--quiet']);
+        expect(args.full).toBe(true);
+        expect(args.quiet).toBe(true);
+    });
+
+    it('--full defaults to false/undefined when omitted', () => {
+        const args = parseSemanticArgs(['build']);
+        expect(args.full).toBeFalsy();
+    });
+
+    it('--quiet defaults to false/undefined when omitted', () => {
+        const args = parseSemanticArgs(['build']);
+        expect(args.quiet).toBeFalsy();
+    });
+});
+
 // AC2.1 — --model CLI flag overrides config model in build
 // ---------------------------------------------------------------------------
 
