@@ -14,6 +14,13 @@
 #
 # Environment overrides:
 #   SKIP_BUILD=1            Same as --skip-build (env var form).
+#   MODEL=minilm            Semantic embedder alias: minilm (default) | bge-m3.
+#                           Switches both `semantic build` and `semantic search`
+#                           CLI calls. With bge-m3 the index is rebuilt under
+#                           the 1024-dim model; you can keep both indexes
+#                           side-by-side via separate --out dirs (currently
+#                           CLI rebuilds in place — set SKIP_BUILD=0 the first
+#                           time per model).
 #   EVAL_K=10               Number of top results to inspect (default: 10).
 #   EVAL_MODE=per-category  Search routing strategy. One of:
 #     single        — single search call, no kind-bucket filter (legacy
@@ -64,7 +71,16 @@ case "$EVAL_MODE" in
   *) echo "ERROR: invalid EVAL_MODE='$EVAL_MODE'. Use single|per-category|fallback|both-buckets." >&2; exit 1 ;;
 esac
 DATE="$(date +%Y-%m-%d)"
-RESULTS_FILE="${RESULTS_FILE:-$SCRIPT_DIR/eval/results-${DATE}-${EVAL_MODE}.md}"
+MODEL="${MODEL:-minilm}"
+case "$MODEL" in
+  minilm|bge-m3) ;;
+  *) echo "ERROR: invalid MODEL='$MODEL'. Use minilm|bge-m3." >&2; exit 1 ;;
+esac
+_MODEL_SUFFIX=""
+if [[ "$MODEL" != "minilm" ]]; then
+  _MODEL_SUFFIX="-${MODEL}"
+fi
+RESULTS_FILE="${RESULTS_FILE:-$SCRIPT_DIR/eval/results-${DATE}-${EVAL_MODE}${_MODEL_SUFFIX}.md}"
 SKIP_BUILD="${SKIP_BUILD:-0}"
 
 # Project paths — replace these with your local checkout locations OR set them
@@ -137,8 +153,8 @@ build_project() {
     return 1
   fi
 
-  log "[$proj_name] Building semantic sidecar ..."
-  if ! (cd "$project_dir" && "$TSX_BIN" "$CLI" semantic build 2>&1); then
+  log "[$proj_name] Building semantic sidecar (model=$MODEL) ..."
+  if ! (cd "$project_dir" && "$TSX_BIN" "$CLI" semantic build --model "$MODEL" 2>&1); then
     warn "[$proj_name] semantic build failed"
     return 1
   fi
@@ -199,9 +215,9 @@ search_and_judge() {
   local cli_stderr cli_exit json_output verdict result_count
   cli_stderr=$(mktemp)
   if [[ -n "$filter_flag" ]]; then
-    json_output=$(cd "$project_dir" && "$TSX_BIN" "$CLI" semantic search "$query" --k "$K" "$filter_flag" --json 2>"$cli_stderr")
+    json_output=$(cd "$project_dir" && "$TSX_BIN" "$CLI" semantic search "$query" --model "$MODEL" --k "$K" "$filter_flag" --json 2>"$cli_stderr")
   else
-    json_output=$(cd "$project_dir" && "$TSX_BIN" "$CLI" semantic search "$query" --k "$K" --json 2>"$cli_stderr")
+    json_output=$(cd "$project_dir" && "$TSX_BIN" "$CLI" semantic search "$query" --model "$MODEL" --k "$K" --json 2>"$cli_stderr")
   fi
   cli_exit=$?
   # Surface stderr unless every line matches a known-harmless banner.
@@ -418,7 +434,7 @@ run_query() {
 # ---------------------------------------------------------------------------
 log "arch-graph baseline eval — $(date)"
 log "Worktree: $WORKTREE_DIR"
-log "k=$K  mode=$EVAL_MODE  skip_build=$SKIP_BUILD"
+log "k=$K  mode=$EVAL_MODE  model=$MODEL  skip_build=$SKIP_BUILD"
 log ""
 
 PROJECTS="project-a project-b project-c"
@@ -542,6 +558,7 @@ GLOBAL_EXIT=0
   echo "**CLI**: \`$CLI\`  "
   echo "**k**: $K  "
   echo "**mode**: \`$EVAL_MODE\`  "
+  echo "**model**: \`$MODEL\`  "
   echo "**skip_build**: $SKIP_BUILD  "
   echo "**Run at**: $(date)"
   echo ""
