@@ -8,6 +8,50 @@ and verify these numbers.
 
 ---
 
+## Model comparison (MiniLM vs BGE-M3)
+
+Two scripts let you benchmark a different embedding model and compare results:
+
+### Run the bench for a given model
+
+```bash
+# Build graph + semantic index, run all 12 queries, write results JSON
+pnpm tsx bench/self-build/run.ts --model minilm --out bench/self-build/results/minilm.json
+pnpm tsx bench/self-build/run.ts --model bge-m3 --out bench/self-build/results/bge-m3.json
+```
+
+`--model` accepts any alias from the SEMANTIC_MODELS registry (`minilm`, `bge-m3`).
+`--out` is the path for the flat JSON result array.
+First run for BGE-M3 downloads ~500 MB; subsequent runs use the local cache.
+
+### Compare two result files
+
+```bash
+# Emit markdown side-by-side comparison to stdout
+pnpm tsx bench/self-build/compare.ts \
+  bench/self-build/results/minilm.json \
+  bench/self-build/results/bge-m3.json
+```
+
+The output has three sections:
+- **Per-query**: score@1 delta, rank delta of expected node, hit/miss change
+- **Per-category**: hit-rate change for A_find / B_debug / D_docs / E_arch
+- **Overall summary**: total queries, total hits, hit-rate delta
+
+### Full example invocation chain
+
+```bash
+# 1. Build both models
+pnpm tsx bench/self-build/run.ts --model minilm --out /tmp/minilm.json
+pnpm tsx bench/self-build/run.ts --model bge-m3 --out /tmp/bge-m3.json
+
+# 2. Compare and save report
+pnpm tsx bench/self-build/compare.ts /tmp/minilm.json /tmp/bge-m3.json \
+  > docs/plans/bge-m3-migration-report.md
+```
+
+---
+
 ## Reproduction
 
 All commands run from the repo root.

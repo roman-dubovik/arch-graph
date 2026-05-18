@@ -445,6 +445,140 @@ describe('runSemanticSearch — excludeKinds wiring (parse → search)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// D3: runSemanticSearch — model alias precedence (D3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Shared helper: set up a minimal sidecar in testDir and spy on semanticSearch
+ * to capture the resolved modelAlias passed through.
+ */
+async function setupSearchSidecarsAndSpy(dir: string) {
+    const { SEMANTIC_MODEL, SEMANTIC_DIM, SEMANTIC_SCHEMA_VERSION } = await import(
+        '../semantic/types.js'
+    );
+    await writeFile(
+        join(dir, 'semantic', 'manifest.json'),
+        JSON.stringify({
+            schemaVersion: SEMANTIC_SCHEMA_VERSION,
+            model: SEMANTIC_MODEL,
+            dim: SEMANTIC_DIM,
+            builtAt: '2026-05-16T00:00:00.000Z',
+            graphHash: 'a'.repeat(64),
+            nodeCount: 0,
+        }),
+        'utf8',
+    );
+    await writeFile(join(dir, 'semantic', 'embeddings.jsonl'), '', 'utf8');
+    await writeFile(join(dir, 'graph.json'), '{}', 'utf8');
+
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    vi.spyOn(process, 'exit').mockImplementation((() => {
+        throw new Error('process.exit');
+    }) as never);
+
+    const searchModule = await import('../semantic/search.js');
+    const searchSpy = vi.spyOn(searchModule, 'semanticSearch').mockResolvedValue({
+        output: {
+            query: 'q',
+            results: [],
+            model: SEMANTIC_MODEL,
+            dim: SEMANTIC_DIM,
+            indexBuiltAt: '2026-05-16T00:00:00.000Z',
+            graphHashMatches: true,
+        },
+        exitCode: 4,
+        stderrWarning: undefined,
+    });
+    return searchSpy;
+}
+
+describe('runSemanticSearch — model alias precedence (D3)', () => {
+    it('CLI --model flag wins over config semantic.model', async () => {
+        const searchSpy = await setupSearchSidecarsAndSpy(testDir);
+
+        // Mock config to return bge-m3, but CLI passes minilm — CLI wins.
+        const configModule = await import('../core/config.js');
+        const configSpy = vi.spyOn(configModule, 'loadConfig').mockResolvedValue({
+            id: 'repo',
+            root: '.',
+            appsGlob: 'apps/*',
+            semantic: { model: 'bge-m3' },
+        } as never);
+
+        const args = parseSemanticArgs(['search', 'q', '--model', 'minilm']);
+        try {
+            await runSemanticSearch({ ...args, out: testDir });
+        } catch { /* process.exit */ }
+
+        expect(searchSpy).toHaveBeenCalledTimes(1);
+        expect(searchSpy.mock.calls[0]![0].modelAlias).toBe('minilm');
+
+        configSpy.mockRestore();
+    });
+
+    it('config semantic.model wins over the hardcoded minilm default when no CLI flag', async () => {
+        const searchSpy = await setupSearchSidecarsAndSpy(testDir);
+
+        // Mock config to return bge-m3; no --model flag passed.
+        const configModule = await import('../core/config.js');
+        const configSpy = vi.spyOn(configModule, 'loadConfig').mockResolvedValue({
+            id: 'repo',
+            root: '.',
+            appsGlob: 'apps/*',
+            semantic: { model: 'bge-m3' },
+        } as never);
+
+        const args = parseSemanticArgs(['search', 'q']);
+        try {
+            await runSemanticSearch({ ...args, out: testDir });
+        } catch { /* process.exit */ }
+
+        expect(searchSpy).toHaveBeenCalledTimes(1);
+        expect(searchSpy.mock.calls[0]![0].modelAlias).toBe('bge-m3');
+
+        configSpy.mockRestore();
+    });
+
+    it('falls back to minilm when config is absent ("config not found:" prefix)', async () => {
+        const searchSpy = await setupSearchSidecarsAndSpy(testDir);
+
+        // Mock config to throw the "config not found:" prefix that loadConfig uses for absent files.
+        // The predicate no longer matches ENOENT directly — only the loadConfig message prefix is trusted.
+        const configModule = await import('../core/config.js');
+        const notFoundErr = new Error('config not found: ./arch-graph.config.ts');
+        const configSpy = vi.spyOn(configModule, 'loadConfig').mockRejectedValue(notFoundErr);
+
+        const args = parseSemanticArgs(['search', 'q']);
+        try {
+            await runSemanticSearch({ ...args, out: testDir });
+        } catch { /* process.exit */ }
+
+        expect(searchSpy).toHaveBeenCalledTimes(1);
+        expect(searchSpy.mock.calls[0]![0].modelAlias).toBe('minilm');
+
+        configSpy.mockRestore();
+    });
+
+    it('rethrows when loadConfig throws an error that is NOT "config not found:" (P1-L)', async () => {
+        // Ensure searchSpy is set up so makeEmbedder / semanticSearch calls don't fail unexpectedly
+        await setupSearchSidecarsAndSpy(testDir);
+
+        // Mock loadConfig to throw a SyntaxError — not a "config not found:" prefix
+        const configModule = await import('../core/config.js');
+        const syntaxErr = new Error('SyntaxError: Unexpected token in arch-graph.config.ts');
+        const configSpy = vi.spyOn(configModule, 'loadConfig').mockRejectedValue(syntaxErr);
+
+        const args = parseSemanticArgs(['search', 'q']);
+        await expect(
+            runSemanticSearch({ ...args, out: testDir }),
+        ).rejects.toThrow('SyntaxError: Unexpected token');
+
+        configSpy.mockRestore();
+    });
+});
+
+// ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
 // Shared build-mock helper
 // ---------------------------------------------------------------------------
@@ -813,6 +947,88 @@ describe('runSemanticBuild — --strict-recall flag (P1-A)', () => {
         });
 
         expect(exitSpy).not.toHaveBeenCalledWith(1);
+
+        configSpy.mockRestore();
+        buildSpy.mockRestore();
+        recallSpy.mockRestore();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// AC2.1/AC2.2 — --model flag parsing
+// ---------------------------------------------------------------------------
+
+describe('parseSemanticArgs — --model flag (AC2.1/AC2.2)', () => {
+    it('parses --model bge-m3 on build subcommand', () => {
+        const args = parseSemanticArgs(['build', '--model', 'bge-m3']);
+        expect(args.model).toBe('bge-m3');
+    });
+
+    it('parses --model minilm on search subcommand', () => {
+        const args = parseSemanticArgs(['search', 'my query', '--model', 'minilm']);
+        expect(args.model).toBe('minilm');
+    });
+
+    it('parses --model=bge-m3 (equals-sign form)', () => {
+        const args = parseSemanticArgs(['build', '--model=bge-m3']);
+        expect(args.model).toBe('bge-m3');
+    });
+
+    it('defaults model to undefined when --model is omitted', () => {
+        const args = parseSemanticArgs(['build']);
+        expect(args.model).toBeUndefined();
+    });
+
+    it('exits 1 for unknown --model alias', () => {
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        expect(() => parseSemanticArgs(['build', '--model', 'unknown-model'])).toThrow('process.exit');
+        expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('exits 1 for trailing --model with no value', () => {
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        expect(() => parseSemanticArgs(['build', '--model'])).toThrow('process.exit');
+        expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// AC2.1 — --model CLI flag overrides config model in build
+// ---------------------------------------------------------------------------
+
+describe('buildSemanticIndexFromArgs — --model flag overrides config (AC2.1)', () => {
+    it('passes args.model to buildSemanticIndex when --model is set', async () => {
+        const { configSpy, buildSpy } = await setupBuildMocks(testDir);
+        // Config returns no semantic field (defaults to minilm)
+        // but CLI passes --model bge-m3
+
+        const validatorModule = await import('../validation/snippet-recall-validator.js');
+        const recallSpy = vi.spyOn(validatorModule, 'validateSnippetRecall').mockResolvedValue({
+            kind: 'empty',
+        });
+        vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+        await runSemanticBuild({
+            sub: 'build',
+            config: join(testDir, 'arch-graph.config.ts'),
+            out: testDir,
+            format: 'json',
+            model: 'bge-m3',
+        });
+
+        // buildSemanticIndex should have been called with modelAlias 'bge-m3'
+        expect(buildSpy).toHaveBeenCalledTimes(1);
+        const callArg = buildSpy.mock.calls[0]![0];
+        expect(callArg.modelAlias).toBe('bge-m3');
 
         configSpy.mockRestore();
         buildSpy.mockRestore();
