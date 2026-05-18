@@ -10,7 +10,7 @@ Add `doc-section` as a new `NodeKind` so Markdown sections (README, CHANGELOG,
 ADRs, `docs/**/*.md`) become first-class graph nodes with embeddings, making
 them retrievable via the existing `semanticSearch` MCP tool.
 
-**Why:** the dominant user (Claude Code / 2-brain agent) currently has no way
+**Why:** the dominant user (a coding agent such as Claude Code) currently has no way
 to recall project documentation while working on the code. Hand-grepping docs
 burns tokens; full README dumps blow context budgets. A graph node per
 adaptively-sized section, embedded with the same model as code snippets, lets
@@ -37,22 +37,22 @@ mechanism that arch-graph already provides for code.
 
 | Task | Files (absolute paths) | Touches |
 |------|------------------------|---------|
-| T1 — NodeKind | `/Users/romandubovik/Documents/Projects/arch-graph/src/core/types.ts` | add `'doc-section'` to `NodeKind` union, `NODE_KIND_CHECK`, `DocsDiagnostics` interface, `DocsValidationReport` interface, extend `DiagnosticsReport.docs?` and `BuildValidation.docs?` |
-| T2 — anchor constructor | `/Users/romandubovik/Documents/Projects/arch-graph/src/mapper/anchor.ts`, `/Users/romandubovik/Documents/Projects/arch-graph/src/mapper/anchor.test.ts` | add `buildDocAnchor(slug)` (or extend `buildAnchor` to accept doc-style input) — no `as Anchor` casts in doc code |
-| T3 — slugify helper | `/Users/romandubovik/Documents/Projects/arch-graph/src/extractors/docs/slugify.ts`, `.test.ts` (new) | GitHub-compatible slug + per-file collision counter |
-| T4 — markdown splitter | `/Users/romandubovik/Documents/Projects/arch-graph/src/extractors/docs/markdown-split.ts`, `.test.ts` (new) | pure function `splitMarkdown(text, { chunkTokens, countTokens }) => DocSite[]` — no I/O, fully testable |
-| T5 — tokenizer wrapper | `/Users/romandubovik/Documents/Projects/arch-graph/src/semantic/tokenizer.ts`, `.test.ts` (new) | lazy `AutoTokenizer.from_pretrained(SEMANTIC_MODEL)` singleton, exposes `countTokens(text): Promise<number>` |
-| T6 — file walker / extractor | `/Users/romandubovik/Documents/Projects/arch-graph/src/extractors/docs/extract-docs.ts`, `.test.ts` (new) | resolve include/exclude → file list (gitignore-aware), read + normalize + parse frontmatter + call `splitMarkdown` → `DocSite[]` + diagnostics |
-| T7 — mapper | `/Users/romandubovik/Documents/Projects/arch-graph/src/mapper/docs-to-graph.ts`, `.test.ts` (new) | `DocSite[] × projectRoot → GraphNode[]` — produces ids, relative paths, doc-anchors |
-| T8 — snippet renderer | `/Users/romandubovik/Documents/Projects/arch-graph/src/semantic/snippet.ts`, `snippet.test.ts` and/or `snippet-kinds.test.ts` | new `case 'doc-section':` — re-read file by `[startLine, endLine]`, prepend heading-chain prefix `# A > B > C\n\n`, return for embedding |
-| T9 — pipeline wiring | `/Users/romandubovik/Documents/Projects/arch-graph/src/pipeline/build.ts`, `build.test.ts` | call `extractDocs` → `mapDocsToGraph` → merge nodes; pass `DocsDiagnostics` into `DiagnosticsReport.docs` |
-| T10 — validator | `/Users/romandubovik/Documents/Projects/arch-graph/src/validation/docs-validator.ts`, `.test.ts` (new) | file-coverage gate (every resolved-included file is processed or in `filesSkipped`) |
-| T11 — snippet-recall integration | `/Users/romandubovik/Documents/Projects/arch-graph/src/validation/snippet-recall-validator.ts`, existing tests | `doc-section` is NOT added to `KINDS_WITHOUT_SOURCE`. Existing 85% floor applies; trivially met by construction |
-| T12 — config schema | `/Users/romandubovik/Documents/Projects/arch-graph/src/cli/project-registry.ts` (or co-located config zod) | add `docs?: DocsConfig` with `include`, `exclude`, `respectGitignore`, `chunkTokens` |
-| T13 — interactive init | `/Users/romandubovik/Documents/Projects/arch-graph/src/cli/init.ts`, existing tests | extend `arch-graph init` with docs-discovery TUI: `respectGitignore?` → propose found-outside-defaults `.md` files → write `docs.include` |
-| T14 — semantic build integration | `/Users/romandubovik/Documents/Projects/arch-graph/src/semantic/builder.ts`, tests | confirm `kind === 'doc-section'` flows through `buildSnippet` and produces a non-empty embedding entry; add to existing snippet-kinds test suite |
-| T15 — MCP exposure | `/Users/romandubovik/Documents/Projects/arch-graph/src/mcp/server.ts`, schemas | `NODE_KIND_VALUES` already drives the `kinds` filter zod-enum; once T1 lands, MCP picks up `'doc-section'` automatically. Verify with one new test |
-| T16 — js-yaml prod-dep | `/Users/romandubovik/Documents/Projects/arch-graph/package.json` | move `js-yaml` from `devDependencies` to `dependencies` (used at runtime for frontmatter) |
+| T1 — NodeKind | `<arch-graph-root>/src/core/types.ts` | add `'doc-section'` to `NodeKind` union, `NODE_KIND_CHECK`, `DocsDiagnostics` interface, `DocsValidationReport` interface, extend `DiagnosticsReport.docs?` and `BuildValidation.docs?` |
+| T2 — anchor constructor | `<arch-graph-root>/src/mapper/anchor.ts`, `<arch-graph-root>/src/mapper/anchor.test.ts` | add `buildDocAnchor(slug)` (or extend `buildAnchor` to accept doc-style input) — no `as Anchor` casts in doc code |
+| T3 — slugify helper | `<arch-graph-root>/src/extractors/docs/slugify.ts`, `.test.ts` (new) | GitHub-compatible slug + per-file collision counter |
+| T4 — markdown splitter | `<arch-graph-root>/src/extractors/docs/markdown-split.ts`, `.test.ts` (new) | pure function `splitMarkdown(text, { chunkTokens, countTokens }) => DocSite[]` — no I/O, fully testable |
+| T5 — tokenizer wrapper | `<arch-graph-root>/src/semantic/tokenizer.ts`, `.test.ts` (new) | lazy `AutoTokenizer.from_pretrained(SEMANTIC_MODEL)` singleton, exposes `countTokens(text): Promise<number>` |
+| T6 — file walker / extractor | `<arch-graph-root>/src/extractors/docs/extract-docs.ts`, `.test.ts` (new) | resolve include/exclude → file list (gitignore-aware), read + normalize + parse frontmatter + call `splitMarkdown` → `DocSite[]` + diagnostics |
+| T7 — mapper | `<arch-graph-root>/src/mapper/docs-to-graph.ts`, `.test.ts` (new) | `DocSite[] × projectRoot → GraphNode[]` — produces ids, relative paths, doc-anchors |
+| T8 — snippet renderer | `<arch-graph-root>/src/semantic/snippet.ts`, `snippet.test.ts` and/or `snippet-kinds.test.ts` | new `case 'doc-section':` — re-read file by `[startLine, endLine]`, prepend heading-chain prefix `# A > B > C\n\n`, return for embedding |
+| T9 — pipeline wiring | `<arch-graph-root>/src/pipeline/build.ts`, `build.test.ts` | call `extractDocs` → `mapDocsToGraph` → merge nodes; pass `DocsDiagnostics` into `DiagnosticsReport.docs` |
+| T10 — validator | `<arch-graph-root>/src/validation/docs-validator.ts`, `.test.ts` (new) | file-coverage gate (every resolved-included file is processed or in `filesSkipped`) |
+| T11 — snippet-recall integration | `<arch-graph-root>/src/validation/snippet-recall-validator.ts`, existing tests | `doc-section` is NOT added to `KINDS_WITHOUT_SOURCE`. Existing 85% floor applies; trivially met by construction |
+| T12 — config schema | `<arch-graph-root>/src/cli/project-registry.ts` (or co-located config zod) | add `docs?: DocsConfig` with `include`, `exclude`, `respectGitignore`, `chunkTokens` |
+| T13 — interactive init | `<arch-graph-root>/src/cli/init.ts`, existing tests | extend `arch-graph init` with docs-discovery TUI: `respectGitignore?` → propose found-outside-defaults `.md` files → write `docs.include` |
+| T14 — semantic build integration | `<arch-graph-root>/src/semantic/builder.ts`, tests | confirm `kind === 'doc-section'` flows through `buildSnippet` and produces a non-empty embedding entry; add to existing snippet-kinds test suite |
+| T15 — MCP exposure | `<arch-graph-root>/src/mcp/server.ts`, schemas | `NODE_KIND_VALUES` already drives the `kinds` filter zod-enum; once T1 lands, MCP picks up `'doc-section'` automatically. Verify with one new test |
+| T16 — js-yaml prod-dep | `<arch-graph-root>/package.json` | move `js-yaml` from `devDependencies` to `dependencies` (used at runtime for frontmatter) |
 
 **T1 must land first** (everything else depends on the `NodeKind` literal).
 T3, T4, T5 are pure-logic and can run in parallel after T1. T6 depends on T3+T4+T5.

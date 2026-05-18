@@ -301,7 +301,7 @@ The above commands answer **deterministic structural questions** — "who publis
 
 The semantic layer is independent and opt-in: arch-graph works identically well without it. If you enable it, the CLI and MCP server gain new tools:
 
-- **Model**: `Xenova/paraphrase-multilingual-MiniLM-L12-v2` (384-dimensional, multilingual, cross-comparable with sister project 2-brain).
+- **Model**: `Xenova/paraphrase-multilingual-MiniLM-L12-v2` (384-dimensional, multilingual). The model name is recorded in `manifest.json` so any external consumer (a second tool, a future agent, a federated index) can verify vector compatibility before mixing results.
 - **How it works**: each GraphNode (service, module, table, queue, **doc-section**) gets a dense vector computed from `label + kind + AST snippet` (or Markdown section text for doc-section nodes), persisted in a sidecar at `arch-graph-out/<repo>/semantic/`. Markdown files matching the `docs` include globs (including root-level `*.md` by default) are indexed automatically.
 - **Quick start**: 
   ```sh
@@ -328,7 +328,7 @@ The semantic layer is independent and opt-in: arch-graph works identically well 
   Use the **fallback** strategy: call `code_search` first. Only call `docs_search` if the code results don't answer the question. Halves retrieval cost; same hit-rate; agent gets less context.
   ```
 
-  Measured hit-rate (3 projects, 103 queries): overall **47% → 67%** with split tools (both-buckets and fallback are identical on that suite). Final post-semantic head-to-head numbers vs graphify: RU **67% vs 35%** (+32pp arch-graph), EN-keyword strict **53.6% vs 56.5%** (near tie). See [`docs/comparisons/2026-05-17-arch-graph-vs-graphify-eval.md`](docs/comparisons/2026-05-17-arch-graph-vs-graphify-eval.md) for the full memo and [`INTEGRATION-2BRAIN.md`](INTEGRATION-2BRAIN.md) for the federation contract (2-brain Phase 3 will optionally use this).
+  Measured hit-rate (3 projects, 103 queries): overall **47% → 67%** with split tools (both-buckets and fallback are identical on that suite). Final post-semantic head-to-head numbers vs graphify: RU **67% vs 35%** (+32pp arch-graph), EN-keyword strict **53.6% vs 56.5%** (near tie). See [`docs/comparisons/2026-05-17-arch-graph-vs-graphify-eval.md`](docs/comparisons/2026-05-17-arch-graph-vs-graphify-eval.md) for the full memo.
 
 ## MCP server
 

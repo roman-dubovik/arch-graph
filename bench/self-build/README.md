@@ -226,7 +226,7 @@ graphify (HIT):
 arch-graph (HIT):
 1. [doc-section] `MCP server` — README.md (score=0.685)
 2. [doc-section] `MCP server` — README.md (score=0.654)
-3. [doc-section] `MCP contract — locked for federation` — INTEGRATION-2BRAIN.md (score=0.638)
+3. [doc-section] `MCP contract (Task 4) — locked for federation` — docs/plans/v_2026-05-16-semantic-sidecar-design.md (score=0.638)
 
 graphify (HIT):
 1. `graph-queries.ts` (src/mcp/graph-queries.ts)

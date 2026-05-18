@@ -3,7 +3,7 @@
  * singleton pipeline. The model is never downloaded until the first call to
  * `embed()` or `embedOne()` — callers that never invoke embedding pay zero cost.
  *
- * Model contract (locked for 2-brain federation):
+ * Model contract (locked for cross-tool federation):
  *   Xenova/paraphrase-multilingual-MiniLM-L12-v2 — 384-dim, multilingual ONNX.
  *
  * Batch size guidance: 32 (safe default). Profile on larger graphs if needed.

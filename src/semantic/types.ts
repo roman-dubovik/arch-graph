@@ -3,9 +3,10 @@ import type { NodeKind } from '../core/types.js';
 // ============================================================================
 // Semantic sidecar — type contracts
 //
-// Model contract (locked for 2-brain federation):
+// Model contract (locked for cross-tool federation):
 //   Xenova/paraphrase-multilingual-MiniLM-L12-v2 — 384-dim, multilingual ONNX.
-//   This matches 2-brain's model so vectors are cross-comparable.
+//   The model name is recorded in `manifest.json` so any external consumer
+//   can verify vector compatibility before mixing results.
 // ============================================================================
 
 /** The fixed embedding model used by the semantic layer. */
@@ -20,7 +21,7 @@ export const SEMANTIC_SCHEMA_VERSION = 1 as const;
 /**
  * Written to `arch-graph-out/<repo>/semantic/manifest.json`.
  * Contains enough metadata to detect index staleness and cross-check
- * model compatibility with 2-brain federation consumers.
+ * model compatibility with federation consumers.
  */
 export interface SemanticManifest {
     /** Schema version — must equal {@link SEMANTIC_SCHEMA_VERSION}. */

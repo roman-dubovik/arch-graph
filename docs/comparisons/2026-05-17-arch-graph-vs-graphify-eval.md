@@ -161,9 +161,9 @@ By category, the pattern is nuanced: graphify leads meaningfully in C_ui (+50pp 
 
 | Project | Graph source |
 |---------|-------------|
-| project-a | `/Users/romandubovik/Documents/Projects/project-a/graphify-out/` |
-| project-b | `/Users/romandubovik/Documents/Projects/project-b/graphify-out/` |
-| project-c | `/Users/romandubovik/Documents/Projects/project-c/graphify-out/` |
+| project-a | `<project-a-root>/graphify-out/` |
+| project-b | `<project-b-root>/graphify-out/` |
+| project-c | `<project-c-root>/graphify-out/` |
 
 **arch-graph eval:** Results taken directly from `scripts/eval/results-2026-05-17-both-buckets.md` (mode: `both-buckets`, k=10). HIT = top-10 contains a result satisfying score ≥ minScore AND kind in expectedKindIn AND label matches expectedLabelHas.
 

@@ -1,7 +1,7 @@
 # arch-graph Baseline Eval — 2026-05-17
 
-**Worktree**: `/Users/romandubovik/Documents/Projects/arch-graph`  
-**CLI**: `/Users/romandubovik/Documents/Projects/arch-graph/src/cli/index.ts`  
+**Worktree**: `<arch-graph-root>`  
+**CLI**: `<arch-graph-root>/src/cli/index.ts`  
 **k**: 10  
 **mode**: `both-buckets`  
 **skip_build**: 1  

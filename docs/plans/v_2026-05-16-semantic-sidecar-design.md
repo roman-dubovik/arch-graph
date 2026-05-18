@@ -7,11 +7,11 @@ Worktree: `.worktrees/feat-semantic`
 
 Add an optional, self-contained semantic-search layer to arch-graph as a new subcommand `arch-graph semantic build|search` plus a new MCP tool `semantic_search`. The layer is built on top of the existing deterministic graph: each `GraphNode` gets a dense vector embedding produced from `label + kind + AST snippet`, persisted in a sidecar at `arch-graph-out/<repo>/semantic/`.
 
-The sidecar is independent of any other product — `arch-graph` continues to work standalone. The design also fixes the **MCP contract shape** so the sister project **2-brain** (Phase 3 — `memory.code_context`) can later federate over it.
+The sidecar is independent of any other product — `arch-graph` continues to work standalone. The design also fixes the **MCP contract shape** so a future federation consumer (another retrieval tool, an agent's memory layer) can later combine results over the same vector space.
 
 ## Non-goals
 
-- Hybrid (dense + BM25) search — 2-brain already does this on its side; arch-graph stays pure-dense.
+- Hybrid (dense + BM25) search — out of scope for v1; arch-graph stays pure-dense, and a downstream consumer can layer BM25 on its side if needed.
 - Reindexing on graph regeneration — `semantic build` is explicit and always full-rebuild for v1.
 - LLM-based summarisation of nodes (Variant 2 territory).
 - Replacing the deterministic graph or any existing query subcommand.
@@ -24,7 +24,7 @@ The sidecar is independent of any other product — `arch-graph` continues to wo
 | 2 — `semantic build` CLI | `src/semantic/builder.ts`, `src/semantic/builder.test.ts`, `src/cli/semantic-commands.ts`, `src/cli/index.ts` (registration only — lines ~700–760), `src/core/types.ts` (extend `DiagnosticsReport` with optional `semantic` field) | new builder pass: read graph + ts-morph project, extract snippet per node, embed, write sidecar, populate diagnostics |
 | 3 — `semantic search` CLI | `src/semantic/search.ts`, `src/semantic/search.test.ts`, `src/cli/semantic-commands.ts` (extend), `src/cli/index.ts` (registration only) | kNN cosine search, CLI output (`--json` / `--table`) |
 | 4 — MCP `semantic_search` tool | `src/mcp/server.ts` (registration only — near `explain` around line 322), `src/mcp/server.test.ts` (or a new sibling test) | register tool, zod input schema, handler reusing `src/semantic/search.ts` |
-| 5 — Docs | `INTEGRATION-2BRAIN.md` (new, repo root), `README.md` (1–2 paragraphs + usage block), `claude-md.template.md` (note that `semantic_search` exists as fallback when query subcommands don't fit), `ROADMAP.md` (mark Shipped) | docs only, no code |
+| 5 — Docs | `README.md` (1–2 paragraphs + usage block), `claude-md.template.md` (note that `semantic_search` exists as fallback when query subcommands don't fit), `ROADMAP.md` (mark Shipped) | docs only, no code |
 
 **Sequential**: Tasks 1 → 2 → 3 → 4 → 5. Task 2 depends on Task 1's `embedder.ts` + `snippet.ts`. Task 3 depends on Task 2's index format. Task 4 depends on Task 3's search function. Task 5 depends on the rest landing first so it documents real behaviour, not guesses.
 
@@ -43,7 +43,7 @@ The sidecar is independent of any other product — `arch-graph` continues to wo
 ## External constraints
 
 - **TypeScript-only**, Node ≥ 20, ESM modules (`"type": "module"` in package.json).
-- **Embedding model is fixed by design**: `Xenova/paraphrase-multilingual-MiniLM-L12-v2` (384-dim, multilingual). This matches 2-brain's ONNX model so vectors are cross-comparable for future federation. Document this choice as a contract, not an implementation detail.
+- **Embedding model is fixed by design**: `Xenova/paraphrase-multilingual-MiniLM-L12-v2` (384-dim, multilingual). The model name is recorded in `manifest.json` so any external consumer can verify vector compatibility before mixing or federating results. Document this choice as a contract, not an implementation detail.
 - **Model loads lazily** — only when `semantic build` or `semantic search` runs. The MCP server must not preload the model on startup; lazy on first `semantic_search` call.
 - **Determinism**: graph extraction stays deterministic. Semantic layer is explicitly probabilistic and is reported as such in diagnostics.
 - **No new runtime dependencies** beyond `@xenova/transformers`.
@@ -67,7 +67,7 @@ arch-graph-out/<repo>/
 - `graphHash` is a SHA-256 of `graph.json` at build time — `semantic search` warns if hash drifted (graph rebuilt after semantic, so the index is stale).
 - One line per node keeps the file streamable for very large graphs (project-a: ~300; project-b: ~5k).
 
-## MCP contract (Task 4) — locked for 2-brain federation
+## MCP contract (Task 4) — locked for federation
 
 Tool name: `semantic_search`
 
@@ -99,7 +99,7 @@ Tool name: `semantic_search`
 }
 ```
 
-This is the shape 2-brain Phase 3 (`memory.code_context`) will rely on. **Do not break it post-merge** without a coordinated bump.
+This is the shape any external consumer (a federated memory layer, a second retrieval tool) is expected to rely on. **Do not break it post-merge** without a coordinated version bump in `manifest.json`.
 
 ## Acceptance Criteria
 
@@ -146,11 +146,10 @@ This is the shape 2-brain Phase 3 (`memory.code_context`) will rely on. **Do not
 
 ### Task 5 — Docs
 
-1. `INTEGRATION-2BRAIN.md` exists at repo root. Documents: the model contract, the MCP tool shape, how 2-brain Phase 3 `memory.code_context` is expected to consume it, the federation diagram.
-2. `README.md` gains a new section "Semantic search (optional)" with: model name, install/build/search examples, sidecar layout, a note that arch-graph works standalone without it.
-3. `claude-md.template.md` gains a 3-line note in the "fallbacks" section: "If a question is fuzzy (`how does X work`, `find code about Y`) and no structured query fits — use MCP tool `semantic_search`. Run `arch-graph semantic build` first if the sidecar isn't built."
-4. `ROADMAP.md` marks "Semantic sidecar" as Shipped (2026-05-16) with one-paragraph summary mirroring the existing Shipped section style.
-5. **No claims about 2-brain that aren't true today** — the doc says "2-brain Phase 3 *will* consume this", not "is consuming". Honesty.
+1. `README.md` gains a new section "Semantic search (optional)" with: model name, install/build/search examples, sidecar layout, a note that arch-graph works standalone without it, and that the `manifest.model` field exists so external consumers can verify vector compatibility before federating.
+2. `claude-md.template.md` gains a 3-line note in the "fallbacks" section: "If a question is fuzzy (`how does X work`, `find code about Y`) and no structured query fits — use MCP tool `semantic_search`. Run `arch-graph semantic build` first if the sidecar isn't built."
+3. `ROADMAP.md` marks "Semantic sidecar" as Shipped (2026-05-16) with one-paragraph summary mirroring the existing Shipped section style.
+4. **No forward-looking claims about hypothetical consumers** — public-facing copy describes only what ships today; "may federate" stays in the design-doc layer.
 
 ## Quality gate (every task)
 

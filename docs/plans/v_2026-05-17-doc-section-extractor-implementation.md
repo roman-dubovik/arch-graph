@@ -2252,7 +2252,7 @@ Expected: PASS (2/2), 0 type errors.
 
 ```bash
 mkdir -p /tmp/init-smoke && cd /tmp/init-smoke && git init -q && echo "# foo" > README.md && echo "# extra" > NOTES.md
-pnpm --dir /Users/romandubovik/Documents/Projects/arch-graph exec tsx /Users/romandubovik/Documents/Projects/arch-graph/src/cli/index.ts init
+pnpm --dir <arch-graph-root> exec tsx <arch-graph-root>/src/cli/index.ts init
 ```
 
 Walk through prompts; verify generated config has the `docs:` block with your selections.
@@ -2367,7 +2367,7 @@ git commit -m "test(arch-graph): semantic builder + MCP filter coverage for doc-
 - [ ] **Step 1: Build arch-graph itself**
 
 ```bash
-cd /Users/romandubovik/Documents/Projects/arch-graph
+cd <arch-graph-root>
 pnpm exec tsx src/cli/index.ts build
 ```
 
@@ -2401,7 +2401,7 @@ pnpm exec tsx -e "
 import { semanticSearch } from './src/mcp/semantic-search.js';
 const r = await semanticSearch(
     { query: 'installation', kinds: ['doc-section'] },
-    '/Users/romandubovik/Documents/Projects/arch-graph',
+    '<arch-graph-root>',
 );
 console.log(JSON.stringify(r.slice(0, 3), null, 2));
 " || echo "Adjust the import path or call signature to match the real export."

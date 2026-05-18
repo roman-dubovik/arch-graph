@@ -50,9 +50,9 @@ Re-run **both** tools on EN-normalized (keyword-only) versions of the same 103 q
 
 ## Project paths
 
-- project-a: `/Users/romandubovik/Documents/Projects/project-a`
-- project-b: `/Users/romandubovik/Documents/Projects/project-b`
-- project-c: `/Users/romandubovik/Documents/Projects/project-c`
+- project-a: `<project-a-root>`
+- project-b: `<project-b-root>`
+- project-c: `<project-c-root>`
 
 (These are the real local paths; in the public docs the projects are anonymized.)
 
