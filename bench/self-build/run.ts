@@ -28,6 +28,9 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 
+import { loadConfig } from '../../src/core/config.js';
+import { runBuild } from '../../src/pipeline/build.js';
+import { writeGraphJson } from '../../src/output/graph-json.js';
 import { makeEmbedder } from '../../src/semantic/embedder.js';
 import { semanticSearch } from '../../src/semantic/search.js';
 import { buildSemanticIndexFromArgs } from '../../src/cli/semantic-commands.js';
@@ -93,8 +96,13 @@ export async function runBench(opts: {
     process.stderr.write(`[bench] work dir: ${workDir}\n`);
 
     try {
-        // Delegate to the existing production builder.
-        // It writes graph.json + semantic/ into workDir.
+        // Step 1: build structural graph (required before semantic index).
+        const cfg = await loadConfig(configPath);
+        const buildResult = await runBuild(cfg);
+        await writeGraphJson(buildResult.graph, join(workDir, 'graph.json'));
+        process.stderr.write(`[bench] graph: ${buildResult.graph.nodes.length} nodes\n`);
+
+        // Step 2: build semantic index (reads graph.json written above).
         await buildSemanticIndexFromArgs({
             sub: 'build',
             config: configPath,
