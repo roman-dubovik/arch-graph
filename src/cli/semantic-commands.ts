@@ -28,6 +28,8 @@ import { NODE_KIND_VALUES } from '../core/types.js';
 import { semanticSearch } from '../semantic/search.js';
 import type { SearchResult } from '../semantic/search.js';
 import { validateSnippetRecall } from '../validation/snippet-recall-validator.js';
+import type { SemanticModelAlias } from '../semantic/types.js';
+import { SEMANTIC_MODELS } from '../semantic/types.js';
 
 // ---------------------------------------------------------------------------
 // Arg parsing
@@ -48,6 +50,11 @@ export interface SemanticArgs {
     kinds?: NodeKind[];
     /** search: node kinds blacklist (validated against NODE_KIND_VALUES) */
     excludeKinds?: NodeKind[];
+    /**
+     * build + search: override the embedding model alias. CLI wins over config.
+     * When undefined, the resolved config value (or default 'minilm') is used.
+     */
+    model?: SemanticModelAlias;
     /**
      * build: when true, exit 1 if recall is below floor for any kind, or if
      * the index is empty. Has no effect on corrupt indexes, which always exit 1
@@ -71,6 +78,7 @@ export function parseSemanticArgs(argv: string[]): SemanticArgs {
     let format: 'json' | 'table' = 'json';
     let kinds: NodeKind[] | undefined;
     let excludeKinds: NodeKind[] | undefined;
+    let model: SemanticModelAlias | undefined;
     /** Track which preset / explicit filter flag was used so we can reject mixes. */
     let kindFilterSource: '--kinds' | '--exclude-kinds' | '--code-only' | '--docs-only' | null = null;
 
@@ -152,6 +160,22 @@ export function parseSemanticArgs(argv: string[]): SemanticArgs {
         return value;
     }
 
+    /**
+     * Validate a --model alias value against the SEMANTIC_MODELS registry.
+     * Exits with 1 and writes to stderr on invalid alias.
+     */
+    function parseModelAlias(raw: string): SemanticModelAlias {
+        const validAliases = Object.keys(SEMANTIC_MODELS) as SemanticModelAlias[];
+        if (!validAliases.includes(raw as SemanticModelAlias)) {
+            process.stderr.write(
+                `arch-graph semantic: invalid --model alias '${raw}'. ` +
+                `Valid aliases: ${validAliases.join(', ')}.\n`,
+            );
+            process.exit(1);
+        }
+        return raw as SemanticModelAlias;
+    }
+
     // For 'search', the first non-flag argument after the subcommand is the query.
     // We collect it separately.
     const positionals: string[] = [];
@@ -196,6 +220,11 @@ export function parseSemanticArgs(argv: string[]): SemanticArgs {
         } else if (a === '--docs-only') {
             claimFilterSource('--docs-only');
             kinds = ['doc-section'];
+        } else if (a === '--model') {
+            const raw = requireValue('--model', rest[++i]);
+            model = parseModelAlias(raw);
+        } else if (a.startsWith('--model=')) {
+            model = parseModelAlias(a.slice('--model='.length));
         } else if (!a.startsWith('-')) {
             positionals.push(a);
         }
@@ -219,6 +248,7 @@ export function parseSemanticArgs(argv: string[]): SemanticArgs {
         format,
         kinds,
         excludeKinds,
+        model,
         strictRecall,
     };
 }
@@ -313,8 +343,9 @@ export async function buildSemanticIndexFromArgs(args: SemanticArgs): Promise<{ 
 
     process.stdout.write(`  source files: ${project.getSourceFiles().length}\n`);
 
-    // --- Resolve model alias from config ------------------------------------
-    const { model: modelAlias } = applySemanticDefaults(cfg.semantic);
+    // --- Resolve model alias (CLI flag wins over config) --------------------
+    const { model: configModelAlias } = applySemanticDefaults(cfg.semantic);
+    const modelAlias = args.model ?? configModelAlias;
     const embedder = makeEmbedder(modelAlias);
 
     // --- Run builder --------------------------------------------------------
@@ -557,13 +588,15 @@ export async function runSemanticSearch(args: SemanticArgs): Promise<void> {
     const outDir = resolve(args.out);
     const isJson = args.format !== 'table';
 
-    // Resolve model alias from config (best-effort — fall back to minilm on error).
-    let modelAlias: import('../semantic/types.js').SemanticModelAlias = 'minilm';
-    try {
-        const cfg = await loadConfig(resolve(args.config));
-        modelAlias = applySemanticDefaults(cfg.semantic).model;
-    } catch {
-        // Config load failure is non-fatal for search — model defaults to minilm.
+    // Resolve model alias: CLI flag wins over config, config wins over default.
+    let modelAlias: SemanticModelAlias = args.model ?? 'minilm';
+    if (!args.model) {
+        try {
+            const cfg = await loadConfig(resolve(args.config));
+            modelAlias = applySemanticDefaults(cfg.semantic).model;
+        } catch {
+            // Config load failure is non-fatal for search — model defaults to minilm.
+        }
     }
 
     // Build a single-text embedder bound to the resolved alias.
