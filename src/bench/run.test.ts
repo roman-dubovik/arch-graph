@@ -186,8 +186,8 @@ describe('runBench — mocked pipeline (unit test)', () => {
 
         const embedderModule = await import('../../src/semantic/embedder.js');
         vi.spyOn(embedderModule, 'makeEmbedder').mockReturnValue({
-            embed: async (_texts: string[]) => _texts.map(() => Array(1024).fill(0) as number[]),
-            embedOne: async (_text: string) => Array(1024).fill(0) as number[],
+            embed: async (_texts: string[]) => _texts.map(() => Array(768).fill(0) as number[]),
+            embedOne: async (_text: string) => Array(768).fill(0) as number[],
         });
 
         const searchModule = await import('../../src/semantic/search.js');
@@ -195,8 +195,8 @@ describe('runBench — mocked pipeline (unit test)', () => {
             output: {
                 query: '',
                 results: [],
-                model: 'Xenova/bge-m3',
-                dim: 1024,
+                model: SEMANTIC_MODELS['e5-base'].hubId,
+                dim: 768,
                 indexBuiltAt: '2026-05-18T00:00:00.000Z',
                 graphHashMatches: true,
             },
@@ -205,14 +205,14 @@ describe('runBench — mocked pipeline (unit test)', () => {
         });
 
         await runBench({
-            modelAlias: 'bge-m3',
+            modelAlias: 'e5-base',
             outResultPath: join(testDir, 'r.json'),
             configPath: './arch-graph.config.ts',
             queries: STUB_QUERIES,
         });
 
         expect(buildSpy).toHaveBeenCalledWith(
-            expect.objectContaining({ model: 'bge-m3' }),
+            expect.objectContaining({ model: 'e5-base' }),
         );
 
         buildSpy.mockRestore();
@@ -333,7 +333,7 @@ describe('parseModelAlias — rejects inherited Object.prototype keys', () => {
 
     it('accepts valid aliases', () => {
         expect(parseModelAlias('minilm')).toBe('minilm');
-        expect(parseModelAlias('bge-m3')).toBe('bge-m3');
+        expect(parseModelAlias('e5-base')).toBe('e5-base');
     });
 
     it('rejects invalid non-prototype aliases', () => {

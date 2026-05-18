@@ -31,6 +31,7 @@ import type { NodeKind } from '../core/types.js';
 import { readEmbeddingsJsonl, readManifest } from './io.js';
 import type { SemanticManifest, SemanticModelAlias } from './types.js';
 import { SEMANTIC_MODELS } from './types.js';
+export { resolveMinScore, DEFAULT_MIN_SCORE_FALLBACK } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -148,6 +149,16 @@ export interface SemanticSearchOpts {
      * queries, which is the canonical code-only search pattern.
      */
     excludeKinds?: NodeKind[];
+    /**
+     * Minimum cosine similarity threshold.  Results with a score strictly below
+     * this value are dropped before top-K selection.
+     *
+     * When `undefined` (the default), no minimum-score filter is applied so
+     * the function remains a pure library that callers can test with hand-crafted
+     * vectors of any magnitude.  Production callers (CLI and MCP) resolve the
+     * threshold via {@link resolveMinScore} and pass it explicitly.
+     */
+    minScore?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -331,9 +342,11 @@ export async function semanticSearch(opts: SemanticSearchOpts): Promise<SearchRe
     // file-level JSDoc.
     const excludeSet =
         excludeKinds && excludeKinds.length > 0 ? new Set(excludeKinds) : null;
+    const { minScore } = opts;
     const filtered = scored.filter((s) => {
         if (kinds && kinds.length > 0 && !kinds.includes(s.result.kind)) return false;
         if (excludeSet && excludeSet.has(s.result.kind)) return false;
+        if (minScore !== undefined && s.score < minScore) return false;
         return true;
     });
 

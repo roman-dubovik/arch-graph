@@ -9,12 +9,17 @@ import type { NodeKind } from '../core/types.js';
 //
 // Current supported aliases:
 //   minilm   — Xenova/paraphrase-multilingual-MiniLM-L12-v2, 384-dim, mean pooling
-//   bge-m3   — Xenova/bge-m3, 1024-dim, CLS pooling
 //   e5-base  — Xenova/multilingual-e5-base, 768-dim, mean pooling, REQUIRES PREFIX
-//   arctic-m — Snowflake/snowflake-arctic-embed-m-v2.0, 768-dim, CLS pooling,
-//              query-prefix only ('query: '); loads fp32 (no quantized variant
-//              with the standard model_quantized.onnx name in the upstream repo
-//              as of transformers.js@2.17 expectations)
+//
+// Historical aliases removed from this registry (explored but not adopted):
+//   bge-m3   — Xenova/bge-m3, 1024-dim, CLS pooling
+//              Deferred: build cost ×6 on 30K-node repos (>2h40m; unshippable as default).
+//              See docs/comparisons/2026-05-18-embedder-evaluation.md §"Why Not BGE-M3".
+//   arctic-m — Snowflake/snowflake-arctic-embed-m-v2.0, 768-dim, CLS pooling
+//              Blocked: @xenova/transformers@2.17 falls back to generic BERT
+//              layers (20% hit-rate vs 56% MiniLM); requires transformers.js v3
+//              migration. See docs/comparisons/2026-05-18-embedder-evaluation.md
+//              §"Why Not arctic-m Yet".
 //
 // The model name and dim are recorded in `manifest.json` so any external
 // consumer can verify vector compatibility before mixing results.
@@ -32,7 +37,42 @@ export interface EmbedPrefix {
 }
 
 /** Short alias for a supported embedding model. */
-export type SemanticModelAlias = 'minilm' | 'bge-m3' | 'e5-base' | 'arctic-m';
+export type SemanticModelAlias = 'minilm' | 'e5-base';
+
+/**
+ * Fallback `minScore` threshold used when the index manifest's model alias is
+ * absent from {@link SEMANTIC_MODELS} (i.e. unknown alias at runtime).
+ *
+ * This is the step-3 fallback in the three-step resolution:
+ *   1. User-supplied value (CLI `--min-score` / MCP `minScore`) — always wins.
+ *   2. `SEMANTIC_MODELS[alias].recommendedMinScore` — per-model calibration.
+ *   3. `DEFAULT_MIN_SCORE_FALLBACK` — when alias is missing or unrecognised.
+ */
+export const DEFAULT_MIN_SCORE_FALLBACK = 0.30 as const;
+
+/**
+ * Resolve the effective `minScore` threshold for a search call using the
+ * three-step priority chain:
+ *
+ *   1. `userValue` — if provided (not undefined), it always wins.
+ *   2. `SEMANTIC_MODELS[alias].recommendedMinScore` — per-model calibration.
+ *   3. {@link DEFAULT_MIN_SCORE_FALLBACK} (0.30) — unknown / missing alias.
+ *
+ * @param alias      The model alias resolved from config or manifest.
+ * @param userValue  The caller-supplied override, or `undefined` when absent.
+ */
+export function resolveMinScore(alias: string, userValue?: number): number {
+    if (userValue !== undefined) return userValue;
+    const entry = (SEMANTIC_MODELS as Record<string, { recommendedMinScore?: number } | undefined>)[alias];
+    if (!entry) {
+        process.stderr.write(
+            `[arch-graph semantic] WARNING: model alias "${alias}" is not in the registry; ` +
+            `using default minScore=${DEFAULT_MIN_SCORE_FALLBACK}. ` +
+            `If your index was built with a removed model, run \`arch-graph semantic build\` to rebuild.\n`,
+        );
+    }
+    return entry?.recommendedMinScore ?? DEFAULT_MIN_SCORE_FALLBACK;
+}
 
 /** Registry of all supported embedding models. */
 export const SEMANTIC_MODELS = {
@@ -43,14 +83,12 @@ export const SEMANTIC_MODELS = {
         normalize: true,
         prefix: undefined,
         quantized: undefined,
-    },
-    'bge-m3': {
-        hubId: 'Xenova/bge-m3',
-        dim: 1024,
-        pooling: 'cls' as const,
-        normalize: true,
-        prefix: undefined,
-        quantized: undefined,
+        /**
+         * Cosine similarity floor for search results.
+         * 0.30 matches the historical default — no behaviour change for MiniLM
+         * deployments. MiniLM scores are typically 0.30–0.60 for relevant matches.
+         */
+        recommendedMinScore: 0.30,
     },
     'e5-base': {
         hubId: 'Xenova/multilingual-e5-base',
@@ -59,20 +97,27 @@ export const SEMANTIC_MODELS = {
         normalize: true,
         prefix: { passage: 'passage: ', query: 'query: ' } satisfies EmbedPrefix,
         quantized: undefined,
+        /**
+         * E5-base prefix normalisation yields scores 0.78–0.86 for relevant
+         * matches in the typical case.  The 0.55 floor is intentionally below
+         * that distribution to retain borderline cross-lingual hits, which often
+         * score in the 0.55–0.78 band — filtering them at 0.78 would discard valid
+         * results on multilingual codebases.
+         */
+        recommendedMinScore: 0.55,
     },
-    // Arctic v2.0 has only model.onnx (no model_quantized.onnx) in the upstream
-    // repo, so we force fp32 loading via { quantized: false }.  The 'gte' model
-    // type is unknown to @xenova/transformers@2.17 — falls back to the
-    // encoder-only base class.  Empirically loads and produces 768-dim output.
-    'arctic-m': {
-        hubId: 'Snowflake/snowflake-arctic-embed-m-v2.0',
-        dim: 768,
-        pooling: 'cls' as const,
-        normalize: true,
-        prefix: { passage: '', query: 'query: ' } satisfies EmbedPrefix,
-        quantized: false as const,
-    },
-} as const satisfies Record<SemanticModelAlias, { hubId: string; dim: number; pooling: string; normalize: boolean; prefix?: EmbedPrefix; quantized?: boolean }>;
+} as const satisfies Record<SemanticModelAlias, { hubId: string; dim: number; pooling: string; normalize: boolean; prefix?: EmbedPrefix; quantized?: boolean; recommendedMinScore: number }>;
+
+// ---------------------------------------------------------------------------
+// Default alias — single source of truth for the fallback model.
+// ---------------------------------------------------------------------------
+
+/**
+ * The model alias used when the user's config omits `semantic.model`.
+ * Switched from `'minilm'` to `'e5-base'` on 2026-05-18; e5-base delivers
+ * +6pp aggregate recall (75% vs 69%) and lifts C_ui from 36% → 82%.
+ */
+export const defaultModelAlias: SemanticModelAlias = 'e5-base';
 
 // ---------------------------------------------------------------------------
 // Backward-compat aliases — existing code referencing SEMANTIC_MODEL /
@@ -82,14 +127,20 @@ export const SEMANTIC_MODELS = {
 /** Embedding mode: passage (build) or query (search). */
 export type EmbedMode = 'passage' | 'query';
 
-/** @deprecated Use `SEMANTIC_MODELS.minilm.hubId` or resolve from config. */
-export const SEMANTIC_MODEL = SEMANTIC_MODELS.minilm.hubId;
+/**
+ * @deprecated Use `SEMANTIC_MODELS['e5-base'].hubId` or resolve from config.
+ * Previously pointed at MiniLM; now points at the new default (e5-base).
+ */
+export const SEMANTIC_MODEL = SEMANTIC_MODELS['e5-base'].hubId;
 
-/** @deprecated Use `SEMANTIC_MODELS.minilm.dim` or resolve from config. */
-export const SEMANTIC_DIM = SEMANTIC_MODELS.minilm.dim;
+/**
+ * @deprecated Use `SEMANTIC_MODELS['e5-base'].dim` or resolve from config.
+ * Previously pointed at MiniLM (384); now points at the new default (e5-base, 768).
+ */
+export const SEMANTIC_DIM = SEMANTIC_MODELS['e5-base'].dim;
 
 /** Schema version for the manifest. Bump when the sidecar format changes. */
-export const SEMANTIC_SCHEMA_VERSION = 1 as const;
+export const SEMANTIC_SCHEMA_VERSION = 2 as const;
 
 /**
  * Written to `arch-graph-out/<repo>/semantic/manifest.json`.
@@ -127,6 +178,12 @@ export interface SemanticRecord {
      * cases `label + kind` alone forms the embedding input.
      */
     snippet: string;
+    /**
+     * SHA-256 hex digest of `kind|label|snippet|modelAlias` (all lowercased).
+     * Used by incremental builds to detect which nodes changed since the last
+     * index was written. Added in schemaVersion 2.
+     */
+    contentHash: string;
     /** Dense embedding vector (float32 cast to JSON numbers). Length matches the model's dim. */
     vector: number[];
 }
@@ -169,6 +226,10 @@ export interface SemanticDiagnostics {
         transformerErrors: number;
         /** Nodes whose label could not be located in the source file. */
         labelErrors: number;
+        /** Nodes whose vector was reused from the prior index (incremental build). */
+        reused: number;
+        /** Nodes that were re-embedded in this run (incremental or full build). */
+        recomputed: number;
     };
     /** Capped at {@link SKIPPED_NODES_CAP} entries to keep diagnostics.json small. */
     skippedNodes: SkippedNode[];

@@ -15,6 +15,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { parseSemanticArgs, runSemanticSearch, runSemanticBuild } from './semantic-commands.js';
+import * as embedderModule from '../semantic/embedder.js';
 
 // ---------------------------------------------------------------------------
 // Test directory lifecycle (for runSemanticSearch integration tests)
@@ -497,13 +498,13 @@ describe('runSemanticSearch — model alias precedence (D3)', () => {
     it('CLI --model flag wins over config semantic.model', async () => {
         const searchSpy = await setupSearchSidecarsAndSpy(testDir);
 
-        // Mock config to return bge-m3, but CLI passes minilm — CLI wins.
+        // Mock config to return e5-base, but CLI passes minilm — CLI wins.
         const configModule = await import('../core/config.js');
         const configSpy = vi.spyOn(configModule, 'loadConfig').mockResolvedValue({
             id: 'repo',
             root: '.',
             appsGlob: 'apps/*',
-            semantic: { model: 'bge-m3' },
+            semantic: { model: 'e5-base' },
         } as never);
 
         const args = parseSemanticArgs(['search', 'q', '--model', 'minilm']);
@@ -520,13 +521,13 @@ describe('runSemanticSearch — model alias precedence (D3)', () => {
     it('config semantic.model wins over the hardcoded minilm default when no CLI flag', async () => {
         const searchSpy = await setupSearchSidecarsAndSpy(testDir);
 
-        // Mock config to return bge-m3; no --model flag passed.
+        // Mock config to return e5-base; no --model flag passed.
         const configModule = await import('../core/config.js');
         const configSpy = vi.spyOn(configModule, 'loadConfig').mockResolvedValue({
             id: 'repo',
             root: '.',
             appsGlob: 'apps/*',
-            semantic: { model: 'bge-m3' },
+            semantic: { model: 'e5-base' },
         } as never);
 
         const args = parseSemanticArgs(['search', 'q']);
@@ -535,12 +536,12 @@ describe('runSemanticSearch — model alias precedence (D3)', () => {
         } catch { /* process.exit */ }
 
         expect(searchSpy).toHaveBeenCalledTimes(1);
-        expect(searchSpy.mock.calls[0]![0].modelAlias).toBe('bge-m3');
+        expect(searchSpy.mock.calls[0]![0].modelAlias).toBe('e5-base');
 
         configSpy.mockRestore();
     });
 
-    it('falls back to minilm when config is absent ("config not found:" prefix)', async () => {
+    it('falls back to defaultModelAlias (e5-base) when config is absent ("config not found:" prefix)', async () => {
         const searchSpy = await setupSearchSidecarsAndSpy(testDir);
 
         // Mock config to throw the "config not found:" prefix that loadConfig uses for absent files.
@@ -555,7 +556,7 @@ describe('runSemanticSearch — model alias precedence (D3)', () => {
         } catch { /* process.exit */ }
 
         expect(searchSpy).toHaveBeenCalledTimes(1);
-        expect(searchSpy.mock.calls[0]![0].modelAlias).toBe('minilm');
+        expect(searchSpy.mock.calls[0]![0].modelAlias).toBe('e5-base');
 
         configSpy.mockRestore();
     });
@@ -959,9 +960,9 @@ describe('runSemanticBuild — --strict-recall flag (P1-A)', () => {
 // ---------------------------------------------------------------------------
 
 describe('parseSemanticArgs — --model flag (AC2.1/AC2.2)', () => {
-    it('parses --model bge-m3 on build subcommand', () => {
-        const args = parseSemanticArgs(['build', '--model', 'bge-m3']);
-        expect(args.model).toBe('bge-m3');
+    it('parses --model e5-base on build subcommand', () => {
+        const args = parseSemanticArgs(['build', '--model', 'e5-base']);
+        expect(args.model).toBe('e5-base');
     });
 
     it('parses --model minilm on search subcommand', () => {
@@ -969,9 +970,9 @@ describe('parseSemanticArgs — --model flag (AC2.1/AC2.2)', () => {
         expect(args.model).toBe('minilm');
     });
 
-    it('parses --model=bge-m3 (equals-sign form)', () => {
-        const args = parseSemanticArgs(['build', '--model=bge-m3']);
-        expect(args.model).toBe('bge-m3');
+    it('parses --model=e5-base (equals-sign form)', () => {
+        const args = parseSemanticArgs(['build', '--model=e5-base']);
+        expect(args.model).toBe('e5-base');
     });
 
     it('defaults model to undefined when --model is omitted', () => {
@@ -989,6 +990,26 @@ describe('parseSemanticArgs — --model flag (AC2.1/AC2.2)', () => {
         expect(exitSpy).toHaveBeenCalledWith(1);
     });
 
+    it('exits 1 for bge-m3 (removed alias)', () => {
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        expect(() => parseSemanticArgs(['build', '--model', 'bge-m3'])).toThrow('process.exit');
+        expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('exits 1 for arctic-m (removed alias)', () => {
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        expect(() => parseSemanticArgs(['build', '--model', 'arctic-m'])).toThrow('process.exit');
+        expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
     it('exits 1 for trailing --model with no value', () => {
         vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
         const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
@@ -1001,6 +1022,38 @@ describe('parseSemanticArgs — --model flag (AC2.1/AC2.2)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// parseSemanticArgs — --full and --quiet build flags
+// ---------------------------------------------------------------------------
+
+describe('parseSemanticArgs — --full and --quiet flags', () => {
+    it('parseSemanticArgs(["build","--full"]) returns {full: true}', () => {
+        const args = parseSemanticArgs(['build', '--full']);
+        expect(args.full).toBe(true);
+    });
+
+    it('parseSemanticArgs(["build","--quiet"]) returns {quiet: true}', () => {
+        const args = parseSemanticArgs(['build', '--quiet']);
+        expect(args.quiet).toBe(true);
+    });
+
+    it('both --full and --quiet together are parsed correctly', () => {
+        const args = parseSemanticArgs(['build', '--full', '--quiet']);
+        expect(args.full).toBe(true);
+        expect(args.quiet).toBe(true);
+    });
+
+    it('--full defaults to false/undefined when omitted', () => {
+        const args = parseSemanticArgs(['build']);
+        expect(args.full).toBeFalsy();
+    });
+
+    it('--quiet defaults to false/undefined when omitted', () => {
+        const args = parseSemanticArgs(['build']);
+        expect(args.quiet).toBeFalsy();
+    });
+});
+
 // AC2.1 — --model CLI flag overrides config model in build
 // ---------------------------------------------------------------------------
 
@@ -1008,7 +1061,7 @@ describe('buildSemanticIndexFromArgs — --model flag overrides config (AC2.1)',
     it('passes args.model to buildSemanticIndex when --model is set', async () => {
         const { configSpy, buildSpy } = await setupBuildMocks(testDir);
         // Config returns no semantic field (defaults to minilm)
-        // but CLI passes --model bge-m3
+        // but CLI passes --model e5-base
 
         const validatorModule = await import('../validation/snippet-recall-validator.js');
         const recallSpy = vi.spyOn(validatorModule, 'validateSnippetRecall').mockResolvedValue({
@@ -1022,16 +1075,313 @@ describe('buildSemanticIndexFromArgs — --model flag overrides config (AC2.1)',
             config: join(testDir, 'arch-graph.config.ts'),
             out: testDir,
             format: 'json',
-            model: 'bge-m3',
+            model: 'e5-base',
         });
 
-        // buildSemanticIndex should have been called with modelAlias 'bge-m3'
+        // buildSemanticIndex should have been called with modelAlias 'e5-base'
         expect(buildSpy).toHaveBeenCalledTimes(1);
         const callArg = buildSpy.mock.calls[0]![0];
-        expect(callArg.modelAlias).toBe('bge-m3');
+        expect(callArg.modelAlias).toBe('e5-base');
 
         configSpy.mockRestore();
         buildSpy.mockRestore();
         recallSpy.mockRestore();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// E5-T2: Build wiring — embedder closure uses 'passage' mode
+// ---------------------------------------------------------------------------
+
+describe('buildSemanticIndexFromArgs — embedder closure uses passage mode (E5-T2)', () => {
+    it('the embedder closure passed to buildSemanticIndex calls embed(texts, "passage")', async () => {
+        const makeEmbedderSpy = vi.spyOn(embedderModule, 'makeEmbedder');
+
+        // Track calls to embed on the returned embedder object
+        const embedCalls: Array<{ texts: string[]; mode: string | undefined }> = [];
+        makeEmbedderSpy.mockReturnValue({
+            embed: async (texts: string[], mode?: string) => {
+                embedCalls.push({ texts, mode });
+                return texts.map(() => []);
+            },
+            embedOne: async (_text: string, _mode?: string) => [],
+        } as unknown as ReturnType<typeof embedderModule.makeEmbedder>);
+
+        const { configSpy, buildSpy } = await setupBuildMocks(testDir);
+        const validatorModule = await import('../validation/snippet-recall-validator.js');
+        const recallSpy = vi.spyOn(validatorModule, 'validateSnippetRecall').mockResolvedValue({
+            kind: 'empty',
+        });
+        vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+        await runSemanticBuild({
+            sub: 'build',
+            config: join(testDir, 'arch-graph.config.ts'),
+            out: testDir,
+            format: 'json',
+            model: 'minilm',
+        });
+
+        // Extract the embedder closure that was passed to buildSemanticIndex
+        expect(buildSpy).toHaveBeenCalledTimes(1);
+        const buildCallArg = buildSpy.mock.calls[0]![0];
+        const capturedEmbedder = buildCallArg.embedder as (texts: string[]) => Promise<number[][]>;
+
+        // Invoke the captured closure and verify it routes to embed(..., 'passage')
+        await capturedEmbedder(['test text']);
+        expect(embedCalls).toHaveLength(1);
+        expect(embedCalls[0]!.mode).toBe('passage');
+        expect(embedCalls[0]!.texts).toEqual(['test text']);
+
+        makeEmbedderSpy.mockRestore();
+        configSpy.mockRestore();
+        buildSpy.mockRestore();
+        recallSpy.mockRestore();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// E5-T2: Search wiring — embedOne closure uses 'query' mode
+// ---------------------------------------------------------------------------
+
+describe('runSemanticSearch — embedOne closure uses query mode (E5-T2)', () => {
+    it('the embedOne closure passed to semanticSearch calls embedOne(text, "query")', async () => {
+        const makeEmbedderSpy = vi.spyOn(embedderModule, 'makeEmbedder');
+
+        const embedOneCalls: Array<{ text: string; mode: string | undefined }> = [];
+        makeEmbedderSpy.mockReturnValue({
+            embed: async (texts: string[], _mode?: string) => texts.map(() => []),
+            embedOne: async (text: string, mode?: string) => {
+                embedOneCalls.push({ text, mode });
+                return [];
+            },
+        } as unknown as ReturnType<typeof embedderModule.makeEmbedder>);
+
+        const searchSpy = await setupSearchSidecarsAndSpy(testDir);
+
+        const args = parseSemanticArgs(['search', 'find auth flow', '--model', 'minilm']);
+        try {
+            await runSemanticSearch({ ...args, out: testDir });
+        } catch { /* process.exit */ }
+
+        // Extract the embedder closure that was passed to semanticSearch
+        // (semanticSearch uses opts.embedder — a single-text (string) => number[] fn)
+        expect(searchSpy).toHaveBeenCalledTimes(1);
+        const searchCallArg = searchSpy.mock.calls[0]![0];
+        const capturedEmbedder = searchCallArg.embedder as (text: string) => Promise<number[]>;
+
+        // Invoke the captured closure and verify it routes to embedOne(..., 'query')
+        await capturedEmbedder('find auth flow');
+        expect(embedOneCalls).toHaveLength(1);
+        expect(embedOneCalls[0]!.mode).toBe('query');
+        expect(embedOneCalls[0]!.text).toBe('find auth flow');
+
+        makeEmbedderSpy.mockRestore();
+        searchSpy.mockRestore();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Task 3: Per-model minScore calibration — CLI path
+// ---------------------------------------------------------------------------
+
+describe('parseSemanticArgs — --min-score flag (Task 3)', () => {
+    it('parses --min-score 0.55 as number', () => {
+        const args = parseSemanticArgs(['search', 'q', '--min-score', '0.55']);
+        expect(args.minScore).toBe(0.55);
+    });
+
+    it('parses --min-score=0.40 (equals-sign form)', () => {
+        const args = parseSemanticArgs(['search', 'q', '--min-score=0.40']);
+        expect(args.minScore).toBe(0.40);
+    });
+
+    it('parses --min-score 0.0 (falsy float)', () => {
+        const args = parseSemanticArgs(['search', 'q', '--min-score', '0.0']);
+        expect(args.minScore).toBe(0.0);
+    });
+
+    it('parses --min-score -1 (lower bound)', () => {
+        const args = parseSemanticArgs(['search', 'q', '--min-score', '-1']);
+        expect(args.minScore).toBe(-1);
+    });
+
+    it('parses --min-score 1 (upper bound)', () => {
+        const args = parseSemanticArgs(['search', 'q', '--min-score', '1']);
+        expect(args.minScore).toBe(1);
+    });
+
+    it('defaults minScore to undefined when --min-score is omitted', () => {
+        const args = parseSemanticArgs(['search', 'q']);
+        expect(args.minScore).toBeUndefined();
+    });
+
+    it('exits 1 for non-numeric --min-score value', () => {
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        expect(() => parseSemanticArgs(['search', 'q', '--min-score', 'abc'])).toThrow('process.exit');
+        expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('exits 1 for --min-score value > 1', () => {
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        expect(() => parseSemanticArgs(['search', 'q', '--min-score', '1.5'])).toThrow('process.exit');
+        expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('exits 1 for --min-score value < -1', () => {
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        expect(() => parseSemanticArgs(['search', 'q', '--min-score', '-2'])).toThrow('process.exit');
+        expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('exits 1 for trailing --min-score with no value', () => {
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        expect(() => parseSemanticArgs(['search', 'q', '--min-score'])).toThrow('process.exit');
+        expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('exits 1 for --min-score with trailing junk (e.g. "0.55e")', () => {
+        // parseFloat('0.55e') silently returns 0.55; strict parsing rejects it.
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        expect(() => parseSemanticArgs(['search', 'q', '--min-score', '0.55e'])).toThrow('process.exit');
+        expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('exits 1 for --min-score with whitespace-only value', () => {
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        expect(() => parseSemanticArgs(['search', 'q', '--min-score', '   '])).toThrow('process.exit');
+        expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('accepts scientific notation (e.g. "5e-1" = 0.5)', () => {
+        const args = parseSemanticArgs(['search', 'q', '--min-score', '5e-1']);
+        expect(args.minScore).toBeCloseTo(0.5);
+    });
+});
+
+describe('runSemanticSearch — minScore resolution passed to semanticSearch (Task 3)', () => {
+    it('resolves minScore from modelAlias when no --min-score flag (minilm → 0.30)', async () => {
+        const searchSpy = await setupSearchSidecarsAndSpy(testDir);
+
+        const configModule = await import('../core/config.js');
+        const configSpy = vi.spyOn(configModule, 'loadConfig').mockRejectedValue(
+            new Error('config not found: ./arch-graph.config.ts'),
+        );
+
+        const args = parseSemanticArgs(['search', 'q', '--model', 'minilm']);
+        try {
+            await runSemanticSearch({ ...args, out: testDir });
+        } catch { /* process.exit */ }
+
+        expect(searchSpy).toHaveBeenCalledTimes(1);
+        // minilm recommendedMinScore = 0.30
+        expect(searchSpy.mock.calls[0]![0].minScore).toBe(0.30);
+
+        configSpy.mockRestore();
+    });
+
+    it('resolves minScore from modelAlias when no --min-score flag (e5-base → 0.55)', async () => {
+        const searchSpy = await setupSearchSidecarsAndSpy(testDir);
+
+        const configModule = await import('../core/config.js');
+        const configSpy = vi.spyOn(configModule, 'loadConfig').mockRejectedValue(
+            new Error('config not found: ./arch-graph.config.ts'),
+        );
+
+        const args = parseSemanticArgs(['search', 'q', '--model', 'e5-base']);
+        try {
+            await runSemanticSearch({ ...args, out: testDir });
+        } catch { /* process.exit */ }
+
+        expect(searchSpy).toHaveBeenCalledTimes(1);
+        // e5-base recommendedMinScore = 0.55
+        expect(searchSpy.mock.calls[0]![0].minScore).toBe(0.55);
+
+        configSpy.mockRestore();
+    });
+
+    it('user --min-score flag always wins over recommendedMinScore', async () => {
+        const searchSpy = await setupSearchSidecarsAndSpy(testDir);
+
+        const configModule = await import('../core/config.js');
+        const configSpy = vi.spyOn(configModule, 'loadConfig').mockRejectedValue(
+            new Error('config not found: ./arch-graph.config.ts'),
+        );
+
+        // e5-base recommended is 0.55; user passes 0.70
+        const args = parseSemanticArgs(['search', 'q', '--model', 'e5-base', '--min-score', '0.70']);
+        try {
+            await runSemanticSearch({ ...args, out: testDir });
+        } catch { /* process.exit */ }
+
+        expect(searchSpy).toHaveBeenCalledTimes(1);
+        expect(searchSpy.mock.calls[0]![0].minScore).toBe(0.70);
+
+        configSpy.mockRestore();
+    });
+
+    it('user --min-score 0.0 wins (not silently dropped as falsy)', async () => {
+        const searchSpy = await setupSearchSidecarsAndSpy(testDir);
+
+        const configModule = await import('../core/config.js');
+        const configSpy = vi.spyOn(configModule, 'loadConfig').mockRejectedValue(
+            new Error('config not found: ./arch-graph.config.ts'),
+        );
+
+        const args = parseSemanticArgs(['search', 'q', '--model', 'minilm', '--min-score', '0.0']);
+        try {
+            await runSemanticSearch({ ...args, out: testDir });
+        } catch { /* process.exit */ }
+
+        expect(searchSpy).toHaveBeenCalledTimes(1);
+        expect(searchSpy.mock.calls[0]![0].minScore).toBe(0.0);
+
+        configSpy.mockRestore();
+    });
+
+    it('uses e5-base recommendedMinScore (0.55) when config is absent (defaultModelAlias)', async () => {
+        const searchSpy = await setupSearchSidecarsAndSpy(testDir);
+
+        const configModule = await import('../core/config.js');
+        const configSpy = vi.spyOn(configModule, 'loadConfig').mockRejectedValue(
+            new Error('config not found: ./arch-graph.config.ts'),
+        );
+
+        // No --model flag → resolves to defaultModelAlias ('e5-base') → recommendedMinScore = 0.55
+        const args = parseSemanticArgs(['search', 'q']);
+        try {
+            await runSemanticSearch({ ...args, out: testDir });
+        } catch { /* process.exit */ }
+
+        expect(searchSpy).toHaveBeenCalledTimes(1);
+        expect(searchSpy.mock.calls[0]![0].modelAlias).toBe('e5-base');
+        expect(searchSpy.mock.calls[0]![0].minScore).toBe(0.55);
+
+        configSpy.mockRestore();
     });
 });

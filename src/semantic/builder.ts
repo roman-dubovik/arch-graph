@@ -10,7 +10,8 @@
  * clobbering any existing fields (nats, typeorm, bullmq, di, http, imports,
  * cycles). This is the anti-clobber contract: read → merge → write back.
  *
- * Injectable embedder: pass a fake in tests, the real `embed` in production.
+ * Injectable embedder: pass a fake in tests,
+ * `makeEmbedder(alias).embed(texts, 'passage')` in production.
  * This keeps the test suite free of network calls and model downloads.
  */
 import { createHash } from 'node:crypto';
@@ -19,10 +20,10 @@ import { join } from 'node:path';
 import type { Project } from 'ts-morph';
 
 import type { ArchGraph, GraphNode } from '../core/types.js';
-import { fileSizeBytes, writeEmbeddingsJsonl, writeManifest } from './io.js';
+import { fileSizeBytes, readEmbeddingsJsonl, writeEmbeddingsJsonl, writeManifest } from './io.js';
 import { extractSnippet } from './snippet.js';
 import type { SemanticDiagnostics, SemanticManifest, SemanticModelAlias, SemanticRecord, SkipReason, SkippedNode } from './types.js';
-import { SEMANTIC_MODELS, SEMANTIC_SCHEMA_VERSION, SKIPPED_NODES_CAP } from './types.js';
+import { SEMANTIC_MODELS, SEMANTIC_SCHEMA_VERSION, SKIPPED_NODES_CAP, defaultModelAlias } from './types.js';
 import type { OpenApiInfo } from '../extractors/openapi/enrich-endpoints.js';
 
 /** Default batch size for the embedder. Safe for typical RAM budgets. */
@@ -48,8 +49,8 @@ export interface BuildSemanticOpts {
     /** Directory where arch-graph-out lives (where graph.json is). */
     outDir: string;
     /**
-     * Model alias to use for this build.  Defaults to `'minilm'` when omitted
-     * for backward compatibility with existing callers that don't specify a model.
+     * Model alias to use for this build.  Defaults to `defaultModelAlias`
+     * (`'e5-base'`) when omitted.
      */
     modelAlias?: SemanticModelAlias;
     /** Optional ISO timestamp override for deterministic tests. */
@@ -59,11 +60,52 @@ export interface BuildSemanticOpts {
      * Do NOT set in production code — use SKIPPED_NODES_CAP.
      */
     _testOnlySkippedNodesCap?: number;
+    /**
+     * When true, skip the incremental cache entirely and re-embed every node.
+     * Default: false (incremental mode — load prior index if compatible).
+     */
+    full?: boolean;
 }
 
 export interface BuildSemanticResult {
     manifest: SemanticManifest;
     diagnostics: SemanticDiagnostics;
+}
+
+// ---------------------------------------------------------------------------
+// Hash helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Compute a SHA-256 content hash for a node's embedding inputs.
+ *
+ * Strings are hashed exactly as the embedder will see them — no casing
+ * normalisation. e5-base uses an XLM-RoBERTa SentencePiece tokenizer that is
+ * case-sensitive; `UserService` and `userservice` produce different vectors and
+ * therefore must produce different hashes.
+ *
+ * The `snippet` field must be the **full embed text** returned by
+ * `buildEmbedText(node, rawSnippet)` — i.e. the text actually fed to the
+ * embedder, including any appended i18n strings or OpenAPI metadata — not the
+ * raw snippet alone.  Passing the raw snippet causes cache hits when metadata
+ * changes but the snippet does not, leaving stale vectors in the index.
+ *
+ * @param record - The four inputs that determine a node's embedding vector.
+ * @returns Lowercase hex SHA-256 digest.
+ */
+export function computeContentHash(record: {
+    kind: string;
+    label: string;
+    snippet: string;
+    modelAlias: string;
+}): string {
+    const input = [
+        record.kind,
+        record.label,
+        record.snippet,
+        record.modelAlias,
+    ].join('|');
+    return createHash('sha256').update(input).digest('hex');
 }
 
 // ---------------------------------------------------------------------------
@@ -83,8 +125,8 @@ export async function buildSemanticIndex(opts: BuildSemanticOpts): Promise<Build
     const { graph, project, embedder, outDir, now = () => new Date().toISOString(), _testOnlySkippedNodesCap } = opts;
     const effectiveCap = _testOnlySkippedNodesCap ?? SKIPPED_NODES_CAP;
 
-    // Resolve model metadata from registry.  Default to 'minilm' for backward compat.
-    const alias: SemanticModelAlias = opts.modelAlias ?? 'minilm';
+    // Resolve model metadata from registry.  Default to defaultModelAlias ('e5-base').
+    const alias: SemanticModelAlias = opts.modelAlias ?? defaultModelAlias;
     const modelEntry = SEMANTIC_MODELS[alias];
 
     // --- Compute graphHash (SHA-256 of graph.json on disk) ------------------
@@ -94,6 +136,75 @@ export async function buildSemanticIndex(opts: BuildSemanticOpts): Promise<Build
 
     // --- Sort nodes by id for stable JSONL order (idempotency AC) -----------
     const sortedNodes = [...graph.nodes].sort((a, b) => a.id.localeCompare(b.id));
+
+    // --- Load prior index for incremental mode ------------------------------
+    // priorCache: Map<nodeId, { contentHash, vector }>
+    const priorCache = new Map<string, { contentHash: string; vector: number[] }>();
+
+    if (!opts.full) {
+        const semanticDir = join(outDir, 'semantic');
+        const priorManifestPath = join(semanticDir, 'manifest.json');
+        const priorEmbeddingsPath = join(semanticDir, 'embeddings.jsonl');
+
+        try {
+            const rawManifest = await readFile(priorManifestPath, 'utf8');
+            const priorManifest = JSON.parse(rawManifest) as {
+                schemaVersion?: number;
+                model?: string;
+                dim?: number;
+            };
+
+            const schemaOk = priorManifest.schemaVersion === SEMANTIC_SCHEMA_VERSION;
+            const modelOk = priorManifest.model === modelEntry.hubId;
+            const dimOk = priorManifest.dim === modelEntry.dim;
+
+            if (schemaOk && modelOk && dimOk) {
+                // Compatible — load the prior embeddings.
+                let lineNum = 0;
+                try {
+                    for await (const rec of readEmbeddingsJsonl(priorEmbeddingsPath, modelEntry.dim)) {
+                        lineNum++;
+                        priorCache.set(rec.nodeId, {
+                            contentHash: rec.contentHash ?? '',
+                            vector: rec.vector,
+                        });
+                    }
+                } catch (readErr) {
+                    // Corrupt JSONL (bad JSON or dim mismatch) — fall back to full rebuild.
+                    const msg = readErr instanceof Error ? readErr.message : String(readErr);
+                    process.stderr.write(
+                        `[arch-graph semantic] WARNING: embeddings.jsonl corrupt at line ${lineNum + 1} (${msg}); forcing full rebuild.\n`,
+                    );
+                    priorCache.clear();
+                }
+            } else {
+                // Compatibility check failed — log which check and force full rebuild.
+                if (!schemaOk) {
+                    process.stderr.write(
+                        `[arch-graph semantic] WARNING: prior index is schemaVersion=${priorManifest.schemaVersion} (expected ${SEMANTIC_SCHEMA_VERSION}); forcing full rebuild.\n`,
+                    );
+                } else if (!modelOk) {
+                    process.stderr.write(
+                        `[arch-graph semantic] WARNING: prior index model="${priorManifest.model}" differs from current "${modelEntry.hubId}"; forcing full rebuild.\n`,
+                    );
+                } else {
+                    process.stderr.write(
+                        `[arch-graph semantic] WARNING: prior index dim=${priorManifest.dim} differs from current ${modelEntry.dim}; forcing full rebuild.\n`,
+                    );
+                }
+                // priorCache stays empty → full rebuild proceeds below.
+            }
+        } catch (manifestErr) {
+            // ENOENT → first build, no warning. Any other error → warn + full rebuild.
+            if ((manifestErr as NodeJS.ErrnoException).code !== 'ENOENT') {
+                const msg = manifestErr instanceof Error ? manifestErr.message : String(manifestErr);
+                process.stderr.write(
+                    `[arch-graph semantic] WARNING: could not read prior manifest (${msg}); forcing full rebuild.\n`,
+                );
+            }
+            // priorCache stays empty → full rebuild proceeds.
+        }
+    }
 
     // --- Extract snippets + build embedding input texts ---------------------
     const snippetMap = new Map<string, string>();
@@ -158,15 +269,43 @@ export async function buildSemanticIndex(opts: BuildSemanticOpts): Promise<Build
         }
     }
 
+    // --- Incremental diff: split nodes into reused vs toEmbed ---------------
+    const reusedRecords: SemanticRecord[] = [];
+    const toEmbed: Array<{ node: GraphNode; snippet: string; hash: string }> = [];
+
+    for (const node of sortedNodes) {
+        const snippet = snippetMap.get(node.id)!;
+        // Hash the full embed text (including any appended i18n/OpenAPI metadata),
+        // not just the raw snippet. This ensures metadata-only changes bust the cache.
+        const hash = computeContentHash({ kind: node.kind, label: node.label, snippet: textMap.get(node.id)!, modelAlias: alias });
+        const cached = priorCache.get(node.id);
+
+        if (cached && cached.contentHash === hash) {
+            reusedRecords.push({
+                nodeId: node.id,
+                kind: node.kind,
+                label: node.label,
+                path: node.path,
+                snippet,
+                contentHash: hash,
+                vector: cached.vector,
+            });
+        } else {
+            toEmbed.push({ node, snippet, hash });
+        }
+    }
+
+    // Deleted nodes (in priorCache but not in sortedNodes) are simply omitted —
+    // the output is built from sortedNodes only.
+
     // --- Embed in batches ---------------------------------------------------
-    const records: SemanticRecord[] = [];
+    const embeddedRecords: SemanticRecord[] = [];
     let transformerErrors = 0;
-    const indexed: string[] = [];
     const failedEmbed: string[] = [];
 
-    for (let i = 0; i < sortedNodes.length; i += EMBED_BATCH_SIZE) {
-        const batch = sortedNodes.slice(i, i + EMBED_BATCH_SIZE);
-        const texts = batch.map((n) => textMap.get(n.id)!);
+    for (let i = 0; i < toEmbed.length; i += EMBED_BATCH_SIZE) {
+        const batch = toEmbed.slice(i, i + EMBED_BATCH_SIZE);
+        const texts = batch.map((item) => textMap.get(item.node.id)!);
 
         let vectors: number[][];
         try {
@@ -176,35 +315,39 @@ export async function buildSemanticIndex(opts: BuildSemanticOpts): Promise<Build
             const message = err instanceof Error ? err.message : String(err);
             process.stderr.write(`[arch-graph semantic] transformer error: ${message}\n`);
             transformerErrors += batch.length;
-            for (const node of batch) {
-                failedEmbed.push(node.id);
-                recordSkip(node, { kind: 'transformer-error', message });
+            for (const item of batch) {
+                failedEmbed.push(item.node.id);
+                recordSkip(item.node, { kind: 'transformer-error', message });
             }
             continue;
         }
 
         for (let j = 0; j < batch.length; j++) {
-            const node = batch[j]!;
+            const item = batch[j]!;
             const vector = vectors[j]!;
-            records.push({
-                nodeId: node.id,
-                kind: node.kind,
-                label: node.label,
-                path: node.path,
-                // snippetMap is populated for every node in sortedNodes above;
-                // the non-null assertion is safe.
-                snippet: snippetMap.get(node.id)!,
+            embeddedRecords.push({
+                nodeId: item.node.id,
+                kind: item.node.kind,
+                label: item.node.label,
+                path: item.node.path,
+                snippet: item.snippet,
+                contentHash: item.hash,
                 vector,
             });
-            indexed.push(node.id);
         }
     }
 
-    // --- Compute skipped count --------------------------------------------------
+    // --- Merge reused + newly embedded, sort by nodeId for stable order -----
+    const allRecords: SemanticRecord[] = [...reusedRecords, ...embeddedRecords];
+    allRecords.sort((a, b) => a.nodeId.localeCompare(b.nodeId));
+
+    // --- Compute counts -------------------------------------------------------
     // "skipped" means NOT indexed (embed failed). Snippet-failed nodes are still
     // embedded (fallback to label+kind), so they count as indexed.
     // Invariant: indexed + skipped === total (sortedNodes.length).
     const skippedCount = failedEmbed.length;
+    const reusedCount = reusedRecords.length;
+    const recomputedCount = embeddedRecords.length;
 
     // --- Write sidecar files ------------------------------------------------
     const semanticDir = join(outDir, 'semantic');
@@ -218,11 +361,16 @@ export async function buildSemanticIndex(opts: BuildSemanticOpts): Promise<Build
         dim: modelEntry.dim,
         builtAt,
         graphHash,
-        nodeCount: records.length,
+        nodeCount: allRecords.length,
     };
 
+    // Write JSONL first, then manifest.  If a crash occurs between the two writes,
+    // the OLD manifest survives paired with the new JSONL — the schemaVersion or
+    // model field mismatch forces a full rebuild on the next run.  Writing manifest
+    // first would leave the NEW manifest paired with a possibly-partial JSONL,
+    // which the reader might accept as valid until it hits a truncated line.
+    await writeEmbeddingsJsonl(allRecords, embeddingsPath);
     await writeManifest(manifest, manifestPath);
-    await writeEmbeddingsJsonl(records, embeddingsPath);
 
     const indexSizeBytes = await fileSizeBytes(embeddingsPath);
 
@@ -233,11 +381,13 @@ export async function buildSemanticIndex(opts: BuildSemanticOpts): Promise<Build
         dim: modelEntry.dim,
         schemaVersion: SEMANTIC_SCHEMA_VERSION,
         counts: {
-            indexed: records.length,
+            indexed: allRecords.length,
             skipped: skippedCount,
             fileReadErrors,
             transformerErrors,
             labelErrors,
+            reused: reusedCount,
+            recomputed: recomputedCount,
         },
         skippedNodes,
         skippedNodesTruncated,

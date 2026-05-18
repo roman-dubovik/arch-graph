@@ -29,7 +29,7 @@ import { semanticSearch } from '../semantic/search.js';
 import type { SearchResult } from '../semantic/search.js';
 import { validateSnippetRecall } from '../validation/snippet-recall-validator.js';
 import type { SemanticModelAlias } from '../semantic/types.js';
-import { SEMANTIC_MODELS } from '../semantic/types.js';
+import { SEMANTIC_MODELS, defaultModelAlias, resolveMinScore } from '../semantic/types.js';
 
 // ---------------------------------------------------------------------------
 // Arg parsing
@@ -61,6 +61,23 @@ export interface SemanticArgs {
      * regardless of this flag.
      */
     strictRecall?: boolean;
+    /**
+     * search: caller-supplied minimum cosine similarity threshold.
+     * When provided, overrides the per-model `recommendedMinScore`.
+     * When absent, `runSemanticSearch` resolves via `resolveMinScore`.
+     */
+    minScore?: number;
+    /**
+     * build: when true, skip incremental cache and re-embed every node from scratch.
+     * Default: false (incremental mode — reuse unchanged nodes from the prior index).
+     */
+    full?: boolean;
+    /**
+     * build: when true, suppress informational stdout output.
+     * Errors and warnings still go to stderr.
+     * Used by the pre-commit hook so commits stay clean.
+     */
+    quiet?: boolean;
 }
 
 /**
@@ -79,6 +96,7 @@ export function parseSemanticArgs(argv: string[]): SemanticArgs {
     let kinds: NodeKind[] | undefined;
     let excludeKinds: NodeKind[] | undefined;
     let model: SemanticModelAlias | undefined;
+    let minScore: number | undefined;
     /** Track which preset / explicit filter flag was used so we can reject mixes. */
     let kindFilterSource: '--kinds' | '--exclude-kinds' | '--code-only' | '--docs-only' | null = null;
 
@@ -176,6 +194,39 @@ export function parseSemanticArgs(argv: string[]): SemanticArgs {
         return raw as SemanticModelAlias;
     }
 
+    /**
+     * Validate and parse a --min-score value string.
+     * Returns the parsed number on success. Writes to stderr and exits on invalid input.
+     *
+     * Uses strict parsing: the entire string must be a valid finite number.
+     * `parseFloat('0.55e')` silently returns 0.55 — this function rejects it.
+     */
+    function parseMinScore(raw: string): number {
+        // Reject whitespace-only, empty string, and trailing junk (e.g. '0.55e').
+        // Number('0.55e') → NaN; Number('') → 0 (false positive) — use regex first.
+        const trimmed = raw.trim();
+        if (!/^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(trimmed)) {
+            process.stderr.write(
+                `arch-graph semantic search: invalid --min-score value '${raw}': must be a number between -1 and 1.\n`,
+            );
+            process.exit(1);
+        }
+        const parsed = Number(trimmed);
+        if (!Number.isFinite(parsed)) {
+            process.stderr.write(
+                `arch-graph semantic search: invalid --min-score value '${raw}': must be a number between -1 and 1.\n`,
+            );
+            process.exit(1);
+        }
+        if (parsed < -1 || parsed > 1) {
+            process.stderr.write(
+                `arch-graph semantic search: invalid --min-score value '${raw}': must be between -1 and 1.\n`,
+            );
+            process.exit(1);
+        }
+        return parsed;
+    }
+
     // For 'search', the first non-flag argument after the subcommand is the query.
     // We collect it separately.
     const positionals: string[] = [];
@@ -225,6 +276,10 @@ export function parseSemanticArgs(argv: string[]): SemanticArgs {
             model = parseModelAlias(raw);
         } else if (a.startsWith('--model=')) {
             model = parseModelAlias(a.slice('--model='.length));
+        } else if (a === '--min-score') {
+            minScore = parseMinScore(requireValue('--min-score', rest[++i]));
+        } else if (a.startsWith('--min-score=')) {
+            minScore = parseMinScore(a.slice('--min-score='.length));
         } else if (!a.startsWith('-')) {
             positionals.push(a);
         }
@@ -235,8 +290,10 @@ export function parseSemanticArgs(argv: string[]): SemanticArgs {
         query = positionals[0];
     }
 
-    // Parse --strict-recall anywhere in the arg list
+    // Parse boolean flags anywhere in the arg list
     const strictRecall = rest.includes('--strict-recall');
+    const full = rest.includes('--full');
+    const quiet = rest.includes('--quiet');
 
     return {
         sub: sub ?? '',
@@ -250,6 +307,9 @@ export function parseSemanticArgs(argv: string[]): SemanticArgs {
         excludeKinds,
         model,
         strictRecall,
+        minScore,
+        full,
+        quiet,
     };
 }
 
@@ -283,9 +343,11 @@ export async function buildSemanticIndexFromArgs(args: SemanticArgs): Promise<{ 
         );
     }
 
-    process.stdout.write(`[arch-graph semantic] building index for '${cfg.id}'...\n`);
-    process.stdout.write(`  config: ${configPath}\n`);
-    process.stdout.write(`  out:    ${outDir}\n`);
+    if (!args.quiet) {
+        process.stdout.write(`[arch-graph semantic] building index for '${cfg.id}'...\n`);
+        process.stdout.write(`  config: ${configPath}\n`);
+        process.stdout.write(`  out:    ${outDir}\n`);
+    }
 
     // --- Load graph.json ----------------------------------------------------
     const graphJsonPath = join(outDir, 'graph.json');
@@ -300,7 +362,9 @@ export async function buildSemanticIndexFromArgs(args: SemanticArgs): Promise<{ 
         );
     }
 
-    process.stdout.write(`  graph:  ${graph.nodes.length} nodes\n`);
+    if (!args.quiet) {
+        process.stdout.write(`  graph:  ${graph.nodes.length} nodes\n`);
+    }
 
     // --- Build ts-morph Project (mirrors runBuild in pipeline/build.ts) --------
     // A9: include .tsx/.jsx so fe-component snippets can be extracted.
@@ -341,7 +405,9 @@ export async function buildSemanticIndexFromArgs(args: SemanticArgs): Promise<{ 
         ]);
     }
 
-    process.stdout.write(`  source files: ${project.getSourceFiles().length}\n`);
+    if (!args.quiet) {
+        process.stdout.write(`  source files: ${project.getSourceFiles().length}\n`);
+    }
 
     // --- Resolve model alias (CLI flag wins over config) --------------------
     const { model: configModelAlias } = applySemanticDefaults(cfg.semantic);
@@ -360,6 +426,7 @@ export async function buildSemanticIndexFromArgs(args: SemanticArgs): Promise<{ 
             embedder,
             outDir,
             modelAlias,
+            full: args.full,
         });
     } catch (err) {
         throw new Error(
@@ -370,16 +437,20 @@ export async function buildSemanticIndexFromArgs(args: SemanticArgs): Promise<{ 
     const { manifest, diagnostics } = result;
     const d = diagnostics.counts;
 
-    process.stdout.write(`\n✓ semantic/manifest.json:    ${outDir}/semantic/manifest.json\n`);
-    process.stdout.write(`✓ semantic/embeddings.jsonl: ${outDir}/semantic/embeddings.jsonl\n`);
-    process.stdout.write(`\n`);
-    process.stdout.write(`  model:      ${manifest.model}\n`);
-    process.stdout.write(`  dim:        ${manifest.dim}\n`);
-    process.stdout.write(`  builtAt:    ${manifest.builtAt}\n`);
-    process.stdout.write(`  graphHash:  ${manifest.graphHash.slice(0, 16)}...\n`);
-    process.stdout.write(`  indexed:    ${d.indexed}\n`);
-    process.stdout.write(`  skipped:    ${d.skipped}\n`);
-    process.stdout.write(`  indexSize:  ${(diagnostics.indexSizeBytes / 1024).toFixed(1)} KB\n`);
+    if (!args.quiet) {
+        process.stdout.write(`\n✓ semantic/manifest.json:    ${outDir}/semantic/manifest.json\n`);
+        process.stdout.write(`✓ semantic/embeddings.jsonl: ${outDir}/semantic/embeddings.jsonl\n`);
+        process.stdout.write(`\n`);
+        process.stdout.write(`  model:      ${manifest.model}\n`);
+        process.stdout.write(`  dim:        ${manifest.dim}\n`);
+        process.stdout.write(`  builtAt:    ${manifest.builtAt}\n`);
+        process.stdout.write(`  graphHash:  ${manifest.graphHash.slice(0, 16)}...\n`);
+        process.stdout.write(`  indexed:    ${d.indexed}\n`);
+        process.stdout.write(`  reused:     ${d.reused}\n`);
+        process.stdout.write(`  recomputed: ${d.recomputed}\n`);
+        process.stdout.write(`  skipped:    ${d.skipped}\n`);
+        process.stdout.write(`  indexSize:  ${(diagnostics.indexSizeBytes / 1024).toFixed(1)} KB\n`);
+    }
 
     if (d.skipped > 0) {
         process.stderr.write(
@@ -592,19 +663,19 @@ export async function runSemanticSearch(args: SemanticArgs): Promise<void> {
     const isJson = args.format !== 'table';
 
     // Resolve model alias: CLI flag wins over config, config wins over default.
-    let modelAlias: SemanticModelAlias = args.model ?? 'minilm';
+    let modelAlias: SemanticModelAlias = args.model ?? defaultModelAlias;
     if (!args.model) {
         try {
             const cfg = await loadConfig(resolve(args.config));
             modelAlias = applySemanticDefaults(cfg.semantic).model;
         } catch (err) {
-            // Silently default to 'minilm' ONLY when the config file is absent.
+            // Silently default to defaultModelAlias ONLY when the config file is absent.
             // Any other error (syntax, invalid alias) must surface so the user
             // knows their config is broken, not the index.
             const isConfigMissing =
                 err instanceof Error && err.message.startsWith('config not found:');
             if (!isConfigMissing) throw err;
-            // Config absent → silent minilm default is acceptable.
+            // Config absent → defaultModelAlias is the correct assumption.
         }
     }
 
@@ -614,6 +685,9 @@ export async function runSemanticSearch(args: SemanticArgs): Promise<void> {
     const embedOneFn = async (text: string): Promise<number[]> =>
         embedderObj2.embedOne(text, 'query');
 
+    // Resolve minScore: user-supplied value wins; else per-model recommended; else 0.30 fallback.
+    const effectiveMinScore = resolveMinScore(modelAlias, args.minScore);
+
     const { output, exitCode, stderrWarning } = await semanticSearch({
         query: args.query,
         outDir,
@@ -622,6 +696,7 @@ export async function runSemanticSearch(args: SemanticArgs): Promise<void> {
         topK: args.k,
         kinds: args.kinds,
         excludeKinds: args.excludeKinds,
+        minScore: effectiveMinScore,
     });
 
     // Emit hash-drift or other warnings to stderr

@@ -35,6 +35,7 @@ import { semanticSearch, MAX_TOP_K } from '../semantic/search.js';
 import { makeEmbedder } from '../semantic/embedder.js';
 import { readEmbeddingsJsonl } from '../semantic/io.js';
 import type { SemanticModelAlias } from '../semantic/types.js';
+import { defaultModelAlias, resolveMinScore } from '../semantic/types.js';
 import { applySemanticDefaults, loadConfig } from '../core/config.js';
 
 const SERVER_NAME = 'arch-graph';
@@ -114,6 +115,15 @@ export const semanticSearchInputShape = {
         .optional()
         .default(false)
         .describe('If true, include the embedding vector for each result.'),
+    minScore: z
+        .number()
+        .min(-1)
+        .max(1)
+        .optional()
+        .describe(
+            'Minimum cosine similarity threshold. Results below this value are dropped. ' +
+            'When omitted, the per-model recommended threshold is used (e.g. 0.30 for minilm, 0.55 for e5-base).',
+        ),
 } as const;
 
 /**
@@ -305,14 +315,14 @@ export async function startMcpServer(opts: { out: string; config?: string }): Pr
     await loadGraphFn();
 
     // Resolve the embedding model alias from the config file (if supplied), falling back to
-    // the 'minilm' default so behaviour is identical to pre-bge-m3 deployments.
-    let resolvedModelAlias: SemanticModelAlias = 'minilm';
+    // the defaultModelAlias ('e5-base') when no config is present.
+    let resolvedModelAlias: SemanticModelAlias = defaultModelAlias;
     if (opts.config) {
         try {
             const cfg = await loadConfig(resolve(opts.config));
             resolvedModelAlias = applySemanticDefaults(cfg.semantic).model;
         } catch (err) {
-            // Silently keep the 'minilm' default ONLY when the config file is
+            // Silently keep the defaultModelAlias ONLY when the config file is
             // absent.  Any other error (syntax error, invalid alias such as
             // 'bge-m4') must surface immediately so the operator knows their
             // config is broken rather than silently running on the wrong model.
@@ -551,11 +561,11 @@ export interface SemanticSearchHandlerOpts {
      * Injectable single-text embedder.  In production this is derived from
      * `makeEmbedder(modelAlias)`.  Tests supply a fake here to avoid real model
      * downloads.  When omitted, the factory builds a default embedder bound to
-     * `modelAlias` (defaults to `'minilm'`).
+     * `modelAlias` (defaults to `defaultModelAlias`, currently `'e5-base'`).
      *
      * **Coupling invariant**: `embedder` must produce vectors whose dimensionality
      * matches the alias registered in `SEMANTIC_MODELS[modelAlias].dim`.  Passing
-     * a bge-m3 embedder (1024-dim) with `modelAlias: 'minilm'` (384-dim) will
+     * a mismatched embedder (wrong dim) with a different `modelAlias` will
      * cause every search to return `semantic-index-corrupt`.  Always set both
      * fields together or omit both (production wires them from the same config
      * lookup; tests use a matching fake).
@@ -564,12 +574,11 @@ export interface SemanticSearchHandlerOpts {
     /**
      * Model alias that was used to build the index.  Passed to `semanticSearch`
      * so it can validate the manifest's model/dim against the expected values.
-     * Defaults to `'minilm'` when omitted — only acceptable for MiniLM deployments.
+     * Defaults to `defaultModelAlias` (`'e5-base'`) when omitted.
      *
      * **Must be set together with `embedder`** when overriding either (see
      * `embedder` coupling invariant above).  Production callers resolve this
-     * from config via `applySemanticDefaults`; the `'minilm'` default is safe
-     * only when the index was built with the MiniLM model.
+     * from config via `applySemanticDefaults`.
      */
     modelAlias?: SemanticModelAlias;
     /**
@@ -606,6 +615,13 @@ export interface SemanticSearchHandlerInput {
      */
     excludeKinds?: NodeKind[];
     includeVectors?: boolean;
+    /**
+     * Caller-supplied minimum cosine similarity threshold.
+     * When provided, overrides the per-model `recommendedMinScore`.
+     * When absent, the handler resolves via {@link resolveMinScore}
+     * using the factory-bound `modelAlias`.
+     */
+    minScore?: number;
 }
 
 /**
@@ -620,7 +636,7 @@ export function makeSemanticSearchHandler(handlerOpts: SemanticSearchHandlerOpts
     const {
         outDir,
         embedder: embedderFn,
-        modelAlias = 'minilm',
+        modelAlias = defaultModelAlias,
         lockedKinds,
         baseExcludeKinds,
     } = handlerOpts;
@@ -637,7 +653,7 @@ export function makeSemanticSearchHandler(handlerOpts: SemanticSearchHandlerOpts
         })();
 
     return async (input: SemanticSearchHandlerInput) => {
-        const { query, topK = 10, kinds, excludeKinds, includeVectors = false } = input;
+        const { query, topK = 10, kinds, excludeKinds, includeVectors = false, minScore: userMinScore } = input;
 
         // Factory `lockedKinds` is authoritative. If the caller tries to pass
         // `kinds`, that would be a silent contract violation in production —
@@ -659,6 +675,9 @@ export function makeSemanticSearchHandler(handlerOpts: SemanticSearchHandlerOpts
                 ? [...baseExcludeKinds, ...excludeKinds]
                 : (baseExcludeKinds ?? excludeKinds);
 
+        // Resolve minScore: user value wins; else per-model recommended; else 0.30 fallback.
+        const effectiveMinScore = resolveMinScore(modelAlias, userMinScore);
+
         const searchRes = await semanticSearch({
             query,
             outDir,
@@ -667,6 +686,7 @@ export function makeSemanticSearchHandler(handlerOpts: SemanticSearchHandlerOpts
             topK,
             kinds: effectiveKinds,
             excludeKinds: effectiveExclude,
+            minScore: effectiveMinScore,
         });
 
         const output = searchRes.output;

@@ -6,7 +6,6 @@
  *
  * Supported models (via SEMANTIC_MODELS registry in types.ts):
  *   minilm  — Xenova/paraphrase-multilingual-MiniLM-L12-v2, 384-dim, mean pooling
- *   bge-m3  — Xenova/bge-m3, 1024-dim, CLS pooling
  *   e5-base — Xenova/multilingual-e5-base, 768-dim, mean pooling, requires prefix
  *
  * For e5-base (and any future prefix-requiring model), the `mode` parameter
@@ -14,7 +13,7 @@
  *   'passage' (default) — prepends `entry.prefix.passage` to each text (for build)
  *   'query'             — prepends `entry.prefix.query` to each text (for search)
  *
- * For minilm/bge-m3, `mode` is a no-op (no prefix required).
+ * For minilm, `mode` is a no-op (no prefix required).
  *
  * Batch size guidance: 32 (safe default). Profile on larger graphs if needed.
  */
@@ -27,9 +26,15 @@ import { SEMANTIC_MODELS } from './types.js';
 // No global state leaks outside this module.
 const pipelineCache = new Map<SemanticModelAlias, Awaited<ReturnType<typeof pipeline>>>();
 
+// In-flight promise map: prevents concurrent callers from each triggering a
+// model download.  Without this guard, two simultaneous calls to getPipeline
+// before the first await resolves both enter the body and issue two downloads.
+const pipelineInFlight = new Map<SemanticModelAlias, Promise<Awaited<ReturnType<typeof pipeline>>>>();
+
 /** @internal — exposed for testing only; do not call in production code. */
 export function _resetPipelineForTesting(): void {
     pipelineCache.clear();
+    pipelineInFlight.clear();
 }
 
 async function getPipeline(
@@ -38,22 +43,23 @@ async function getPipeline(
     const cached = pipelineCache.get(alias);
     if (cached !== undefined) return cached;
 
-    const entry = SEMANTIC_MODELS[alias];
-    // Downloads on first run; cached to ~/.cache/huggingface/... or $HF_HOME if set.
-    // Subsequent calls are instant.
-    console.error(
-        `[arch-graph semantic] Loading model ${entry.hubId} (one-time download, will cache)...`,
-    );
-    // Models that ship without the standard `model_quantized.onnx` file (e.g.
-    // Arctic v2 has model.onnx + model_int8.onnx + model_q4.onnx etc but no
-    // `_quantized`) must explicitly opt out of the default quantized lookup.
-    // For models that DON'T need the opt-out, pass the 2-arg form so existing
-    // pipeline-call assertions (toHaveBeenCalledWith(...)) keep matching.
-    const instance = entry.quantized === false
-        ? await pipeline('feature-extraction', entry.hubId, { quantized: false })
-        : await pipeline('feature-extraction', entry.hubId);
-    pipelineCache.set(alias, instance);
-    return instance;
+    let p = pipelineInFlight.get(alias);
+    if (!p) {
+        const entry = SEMANTIC_MODELS[alias];
+        // Downloads on first run; cached to ~/.cache/huggingface/... or $HF_HOME if set.
+        // Subsequent calls are instant.
+        console.error(
+            `[arch-graph semantic] Loading model ${entry.hubId} (one-time download, will cache)...`,
+        );
+        p = pipeline('feature-extraction', entry.hubId).then((inst) => {
+            pipelineCache.set(alias, inst);
+            return inst;
+        }).finally(() => {
+            pipelineInFlight.delete(alias);
+        });
+        pipelineInFlight.set(alias, p);
+    }
+    return p;
 }
 
 /** Signature of the batch embedder expected by `BuildSemanticOpts.embedder`. */
@@ -65,7 +71,7 @@ export type EmbedFn = (texts: string[]) => Promise<number[][]>;
  * - `embed(texts, mode?)` — embed a batch of texts; `mode` defaults to `'passage'`.
  * - `embedOne(text, mode?)` — embed a single text; `mode` defaults to `'passage'`.
  *
- * For models without a prefix (minilm, bge-m3), `mode` is accepted but has no
+ * For models without a prefix (minilm), `mode` is accepted but has no
  * effect — prefix is undefined and no prepend is performed.
  */
 export interface Embedder {

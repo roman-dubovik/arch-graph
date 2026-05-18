@@ -38,6 +38,19 @@ A deterministic TypeScript architecture-graph builder for NestJS monorepos with 
 - **Independent revalidation** — 5/6 numbers reproduce at 0.0pp; one re-rank delta documented as a strict-mode sensitivity limitation.
 - **Public release** on `main` with anonymized history (single squash commit, no PII / proprietary names leaked).
 
+### e5-base as default embedder (2026-05-18) — `e5-base-default-v1`
+
+`Xenova/multilingual-e5-base` (768-dim, passage/query prefixes) replaces MiniLM-L12 (384-dim) as the default embedder. Aggregate recall 69% → 75% (+6pp); C_ui 36% → 82% (+46pp). Incremental re-embed lands in the same migration set — hook default-on. BGE-M3 and arctic-m aliases removed from the registry; users who need 1024-dim multilingual must fork.
+
+| What | Detail |
+|---|---|
+| Recall | 69% → 75% aggregate (+6pp, 103 queries, 3 projects) |
+| C_ui | 36% → 82% (+46pp) — embedder was the bottleneck |
+| Build cost | ~41 min on 30K nodes (×1.6 vs MiniLM 25 min); incremental brings typical commit to ~1-2 s |
+| Disk | ~280 MB model download (was ~135 MB) |
+
+See [`docs/comparisons/2026-05-18-embedder-evaluation.md`](./docs/comparisons/2026-05-18-embedder-evaluation.md) for the full evaluation memo.
+
 ## Recall trajectory (103-query bench, 3 NestJS monorepos)
 
 | Run | Mode | Model | Recall |
@@ -52,46 +65,21 @@ The RU lead is multilingual handling (MiniLM is multilingual; graphify keyword-B
 
 ## Strategic options — what's next
 
-### 🟢 1. e5-base as new default embedder (priority 1) — _evaluated 2026-05-18_
+### ~~1. e5-base as new default embedder~~ — SHIPPED (`e5-base-default-v1`, 2026-05-18)
 
-Replace MiniLM-L12 (384-dim) with `Xenova/multilingual-e5-base` (768-dim, requires `passage:`/`query:` prefix). Already shipped on `feat/bge-m3-migration` as the `e5-base` opt-in alias. Benched against 3 reference monorepos:
+See "Shipped" section above.
 
-| Project | MiniLM | e5-base | Δ pp | Build time (e5-base) |
-|---------|--------|---------|------|----------------------|
-| platform (29527 nodes) | 71% | **79%** | **+8** | 41 min |
-| insyra (21541 nodes) | 75% | **82%** | **+7** | 27 min |
-| beribuy (2065 nodes) | 56% | 56% | 0 | 5 min |
-| **Aggregate (103 queries)** | **69%** | **75%** | **+6** ✅ |
+### ~~2. Incremental semantic re-embed~~ — SHIPPED (2026-05-18)
 
-**C_ui hypothesis confirmed**: 36% → 82% (+46pp) — the embedder was the bottleneck, no UI uplift / CSS work needed.
+`arch-graph semantic build` is now incremental by default. Node vectors are keyed by `(nodeId, contentHash)` where `contentHash` is a SHA-256 of `kind|label|snippet|modelAlias`. A prior-compatible index is loaded on each run; unchanged nodes reuse their vectors. The git hook runs `semantic build --incremental` automatically. Typical commit cost: ~1-2 s.
 
-**Cost vs win**: ~2× build time vs MiniLM (41 min vs 25 min on 30k nodes), 2× disk (280 MB vs 135 MB). Decisive accuracy lift across the bench.
+### ~~3. Per-model `minScore` calibration~~ — SHIPPED (2026-05-18)
 
-**Open conditions before default-switch**:
-- Per-model `minScore` calibration (e5-base scores cluster at 0.79–0.86 — current 0.5 floor is a no-op).
-- Item #6 (incremental re-embed) — desirable but no longer a hard prerequisite, since 41 min is a tolerable one-time cost.
+Per-model `recommendedMinScore` added to `SEMANTIC_MODELS` registry and wired through the three-step resolution chain (user override → per-model value → fallback 0.30):
+- MiniLM: **0.30** (unchanged behaviour — no regression for existing deployments).
+- e5-base: **0.55** (below the 0.83 ± 0.02 typical distribution to retain borderline cross-lingual hits; 0.55 was chosen deliberately — see `src/semantic/types.ts` JSDoc).
 
-### 🟡 2. Incremental semantic re-embed
-
-Today every `arch-graph semantic build` is a **full re-embed of the entire graph** — there is no node-level cache. On a 30k-node monorepo that's ~20 min with MiniLM and **1–3 hours with BGE-M3**. The cost is one-time per rebuild, but the rebuild becomes painful on any codebase change loop that wants a fresh semantic index.
-
-The git hook installed by `arch-graph hook install` only re-runs the **structural** build (`arch-graph build`, seconds). Semantic re-embed is opt-in / manual. Stale indexes degrade gracefully via `graphHashMatches: false` + a warning, but the warning nudges the user toward a full rebuild — and on a large repo with BGE-M3 enabled, that nudge stops being friendly.
-
-**Approach.** Key each node's embedding by `(nodeId, content_hash)` where `content_hash` is the SHA of the text fed to the embedder (snippet + label + relevant metadata). At build time:
-1. Read prior `embeddings.jsonl` if present and compatible (same `model` + `dim`).
-2. For each node in the new graph, compute `content_hash`. If `(nodeId, content_hash)` exists in the prior file → reuse vector. Else → enqueue for re-embed.
-3. Write the merged set as the new `embeddings.jsonl`. Drop entries whose `nodeId` no longer exists in the new graph (cleanup).
-4. Manifest stores `model`, `dim`, new `graphHash` as today.
-
-**Expected impact.** Typical PR touches < 5% of nodes. On a 30k-node e5-base index that drops a 41-min rebuild to ~3 min. Removes the only remaining UX cost of switching to e5-base default.
-
-**Effort.** 2–3 days. Real test: rebuild self-build twice (no code change between runs) and verify zero embedder calls on the second build via a counter.
-
-**Recommended pairing with e5-base default switch.** Not a strict prerequisite (41-min one-time cost is tolerable), but landing both together is the right shipping unit.
-
-### 🟡 3. Per-model `minScore` calibration
-
-`queries.json` currently uses a uniform `minScore: 0.5` floor. On MiniLM, top-1 scores cluster around 0.56±0.08 — 0.5 is a meaningful filter. On e5-base, top-1 scores cluster at 0.83±0.02 — 0.5 is a no-op. For default-switch to e5-base, the user-facing `minScore` semantic ("how confident does the result have to be") needs to differ per model. Suggested e5-base floor ≈ 0.78 (mean − 3σ — matches MiniLM 0.50 in terms of "filter floor"). Schema change in `queries.json` + default in `arch-graph semantic search` opts. ~1 day.
+The previously suggested floor of 0.78 was rejected: it would have filtered valid cross-lingual results that e5-base returns with scores in the 0.55–0.78 band.
 
 ### 🟡 4. Eval corpus hygiene
 
@@ -123,11 +111,11 @@ Today `compare --share` measures structural graph size (nodes, edges, tokens) an
 
 ## Deferred / explicit non-goals
 
-### BGE-M3 — superseded by e5-base (2026-05-18)
+### BGE-M3 — explored, not adopted (2026-05-18)
 
-Originally proposed as priority-1 C_ui fix. **Outcome**: aborted at 2h40m on a 30k-node monorepo without completing the build. e5-base delivers the same C_ui win at 6× faster build cost. The `bge-m3` alias stays in the registry (`semantic.model: 'bge-m3'`) for users who specifically want 1024-dim multilingual — but it is **no longer recommended** and not a default candidate.
+Originally proposed as priority-1 C_ui fix. **Outcome**: aborted at 2h40m on a 30k-node monorepo without completing the build. e5-base delivers the same C_ui win at 6× faster build cost. **Registry alias removed as of `e5-base-default-v1`**; users who need 1024-dim multilingual must fork or add the alias locally. Historical exploration on branch `feat/bge-m3-migration`. Bench artefacts at `/tmp/bge-m3-bench/`.
 
-### Arctic Embed M v2.0 — blocked on transformers.js v3 migration (2026-05-18)
+### Arctic Embed M v2.0 — explored, not adopted (2026-05-18)
 
 Spike result: sanity bench on project-c (beribuy-2.0, 2065 nodes, mode=both-buckets) returned **20% hit-rate vs 56-60% baselines** — broken.
 
@@ -137,9 +125,7 @@ Root cause: `Snowflake/snowflake-arctic-embed-m-v2.0` is built on Alibaba GTE ba
 
 **Cost to unblock:** swap `@xenova/transformers` → `@huggingface/transformers` (different npm scope; `pipeline()` API surface, env config, ONNX backend, and cache layout all differ). ~150 LoC of mock-shape updates in the test suite. Estimated 1-2 days of focused work, separate worktree.
 
-**Why deferred:** e5-base alone closes the C_ui gap (the main reason we explored richer embedders). Arctic would gain ~+14pp density and possibly some recall, but the package swap is wide and risky; not worth it until there is a concrete arch-graph failure mode that e5-base does not cover.
-
-Bench artefacts retained at `/tmp/bge-m3-bench/results-projectc-arctic-m.md` and `run-projectc-arctic-m.log` for future revival.
+**Registry alias removed as of `e5-base-default-v1`**; e5-base alone closes the C_ui gap. Users who need GTE-family embedders must wait for the `@huggingface/transformers` v3 migration or maintain a fork. Bench artefacts at `/tmp/bge-m3-bench/results-projectc-arctic-m.md`.
 
 ### CSS / UI semantics — closed by e5-base (2026-05-18)
 
@@ -175,13 +161,11 @@ Complementary, not competing. Possible future `--otel-snapshot` mode if user dem
 - **~~C_ui recall ceiling 33–50%~~ — RESOLVED (2026-05-18)**: lifted to 82% by switching to e5-base embedder. Hypothesis (embedder, not snippets) confirmed.
 - **i18n format coverage** — supports `messages/*.json` and `locales/<lang>/<feature>.json`. Doesn't yet cover `react-intl` ICU bundles or server-side `.po` files.
 - **Eval set is three NestJS monorepos** — broader shapes (Node monoliths, GraphQL backends) not yet represented in the published numbers.
-- **No incremental semantic re-embed** — every `arch-graph semantic build` re-embeds the entire graph. ~20 min on a 30k-node repo with MiniLM, ~41 min with e5-base. The git hook only re-runs the structural build (seconds), so this doesn't bite per-commit, but a user who wants a fresh semantic index after a refactor pays the full cost each time. See Strategic option #2 — landing this together with the e5-base default switch is the right shipping unit.
 
 ## Open questions
 
-1. **e5-base default switch — when?** Three small follow-ups before flipping the default (per-model `minScore` calibration; incremental re-embed; one round of unit-test review on prefix-handling). Each ~1 day.
-2. **Eval corpus hygiene** — rewrite project-c queries to match actual domain, or preserve historical comparability across runs?
-3. **Expand eval corpus?** Add a non-NestJS shape (Node monolith, GraphQL).
+1. **Eval corpus hygiene** — rewrite project-c queries to match actual domain, or preserve historical comparability across runs?
+2. **Expand eval corpus?** Add a non-NestJS shape (Node monolith, GraphQL).
 
 ## Related artifacts
 

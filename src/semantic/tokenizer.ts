@@ -5,10 +5,10 @@
  * Used by docs chunking (`markdown-split.ts`) and any code that needs to
  * size content against the embedder's BERT-style context window.
  *
- * Per-alias cache: each supported alias ('minilm', 'bge-m3') has its own
+ * Per-alias cache: each supported alias ('minilm', 'e5-base') has its own
  * tokenizer instance because the models use different vocabularies.
- * For bge-m3, BERT-style token counts from minilm are 20-40% off on
- * Cyrillic/multilingual text — always use the matching tokenizer.
+ * For e5-base, BERT-style token counts from minilm can diverge on
+ * multilingual text — always use the matching tokenizer.
  *
  * DO NOT use `@dqbd/tiktoken` for embedder chunking — that's cl100k_base
  * (Claude's tokenizer); embedding models use XLM-RoBERTa SentencePiece /
@@ -42,8 +42,7 @@ function getTokenizer(alias: SemanticModelAlias): Promise<Tokenizer> {
  * Count tokens in `text` using the tokenizer for the given model alias.
  *
  * The alias is required: using the wrong tokenizer silently produces incorrect
- * chunk sizes (minilm counts are 20-40% off on multilingual text vs bge-m3).
- * Pass the resolved alias from the active build or search config.
+ * chunk sizes. Pass the resolved alias from the active build or search config.
  */
 export async function countTokens(text: string, alias: SemanticModelAlias): Promise<number> {
     const tk = await getTokenizer(alias);

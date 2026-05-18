@@ -120,79 +120,6 @@ describe('embedOne', () => {
     });
 });
 
-describe('makeEmbedder — bge-m3', () => {
-    beforeEach(() => {
-        _resetPipelineForTesting();
-        // bge-m3 produces 1024-dim vectors
-        vi.mocked(pipeline).mockResolvedValue(
-            fakePipeline(SEMANTIC_MODELS['bge-m3'].dim) as unknown as Awaited<ReturnType<typeof pipeline>>,
-        );
-    });
-
-    afterEach(() => {
-        _resetPipelineForTesting();
-        vi.clearAllMocks();
-    });
-
-    it('loads bge-m3 hub model', async () => {
-        const embedder = makeEmbedder('bge-m3');
-        await embedder.embed(['hello']);
-        expect(pipeline).toHaveBeenCalledWith('feature-extraction', SEMANTIC_MODELS['bge-m3'].hubId);
-    });
-
-    it('calls extractor with { pooling: "cls", normalize: true }', async () => {
-        const fakeExtractor = fakePipeline(SEMANTIC_MODELS['bge-m3'].dim);
-        vi.mocked(pipeline).mockResolvedValue(
-            fakeExtractor as unknown as Awaited<ReturnType<typeof pipeline>>,
-        );
-        const embedder = makeEmbedder('bge-m3');
-        await embedder.embed(['cls-pooling test']);
-        expect(fakeExtractor).toHaveBeenCalledWith(
-            expect.anything(),
-            { pooling: 'cls', normalize: true },
-        );
-    });
-
-    it('returns 1024-dim vectors for bge-m3', async () => {
-        const embedder = makeEmbedder('bge-m3');
-        const result = await embedder.embed(['dimension check']);
-        expect(result[0]).toHaveLength(SEMANTIC_MODELS['bge-m3'].dim);
-    });
-
-    it('caches bge-m3 pipeline separately from minilm pipeline', async () => {
-        // Set up distinct mocks for each alias call sequence
-        vi.mocked(pipeline)
-            .mockResolvedValueOnce(fakePipeline(384) as unknown as Awaited<ReturnType<typeof pipeline>>)  // minilm
-            .mockResolvedValueOnce(fakePipeline(1024) as unknown as Awaited<ReturnType<typeof pipeline>>); // bge-m3
-
-        // First call each alias once
-        await embed(['minilm text']);
-        const bgeEmbedder = makeEmbedder('bge-m3');
-        await bgeEmbedder.embed(['bge text']);
-
-        // pipeline() was called once per alias = 2 total
-        expect(pipeline).toHaveBeenCalledTimes(2);
-
-        // Second call to each alias should use cache — no new pipeline() calls
-        await embed(['minilm second']);
-        await bgeEmbedder.embed(['bge second']);
-        expect(pipeline).toHaveBeenCalledTimes(2);
-    });
-
-    it('mode is a no-op for bge-m3 (no prefix configured)', async () => {
-        const fakeExtractor = fakePipeline(SEMANTIC_MODELS['bge-m3'].dim);
-        vi.mocked(pipeline).mockResolvedValue(
-            fakeExtractor as unknown as Awaited<ReturnType<typeof pipeline>>,
-        );
-        const embedder = makeEmbedder('bge-m3');
-        await embedder.embed(['hello'], 'passage');
-        await embedder.embed(['hello'], 'query');
-        // Both modes pass the raw text unchanged — no prefix
-        const calls = fakeExtractor.mock.calls;
-        expect(calls[0][0]).toEqual(['hello']);
-        expect(calls[1][0]).toEqual(['hello']);
-    });
-});
 
 describe('makeEmbedder — e5-base (prefix required)', () => {
     beforeEach(() => {
@@ -310,24 +237,21 @@ describe('makeEmbedder — e5-base (prefix required)', () => {
         );
     });
 
-    it('caches e5-base pipeline separately from minilm and bge-m3', async () => {
+    it('caches e5-base pipeline separately from minilm', async () => {
         vi.mocked(pipeline)
             .mockResolvedValueOnce(fakePipeline(384) as unknown as Awaited<ReturnType<typeof pipeline>>)   // minilm
-            .mockResolvedValueOnce(fakePipeline(1024) as unknown as Awaited<ReturnType<typeof pipeline>>)  // bge-m3
             .mockResolvedValueOnce(fakePipeline(768) as unknown as Awaited<ReturnType<typeof pipeline>>);  // e5-base
 
         await embed(['minilm text']);
-        await makeEmbedder('bge-m3').embed(['bge text']);
         await makeEmbedder('e5-base').embed(['e5 text']);
 
-        // Each alias needs one pipeline init
-        expect(pipeline).toHaveBeenCalledTimes(3);
+        // Each alias needs one pipeline init = 2 total
+        expect(pipeline).toHaveBeenCalledTimes(2);
 
         // Second calls should all hit cache
         await embed(['minilm second']);
-        await makeEmbedder('bge-m3').embed(['bge second']);
         await makeEmbedder('e5-base').embed(['e5 second']);
-        expect(pipeline).toHaveBeenCalledTimes(3);
+        expect(pipeline).toHaveBeenCalledTimes(2);
     });
 });
 
@@ -352,8 +276,62 @@ describe('makeEmbedder — minilm mode no-op', () => {
         const embedder = makeEmbedder('minilm');
         await embedder.embed(['hello'], 'passage');
         await embedder.embed(['hello'], 'query');
+        // Also verify default mode (no mode arg) passes text unchanged
+        await embedder.embed(['hello']);
         const calls = fakeExtractor.mock.calls;
         expect(calls[0][0]).toEqual(['hello']);
         expect(calls[1][0]).toEqual(['hello']);
+        expect(calls[2][0]).toEqual(['hello']);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// getPipeline in-flight guard — concurrent calls must not double-download (P1)
+// ---------------------------------------------------------------------------
+
+describe('getPipeline — in-flight promise deduplication (P1)', () => {
+    beforeEach(() => {
+        _resetPipelineForTesting();
+        vi.clearAllMocks();
+    });
+
+    afterEach(() => {
+        _resetPipelineForTesting();
+        vi.clearAllMocks();
+    });
+
+    it('two concurrent embedOne calls share a single pipeline() factory invocation', async () => {
+        // Use a slow pipeline factory (resolves after a microtask) so both calls
+        // are in-flight simultaneously before the first one resolves.
+        let factoryCalls = 0;
+        vi.mocked(pipeline).mockImplementation(async () => {
+            factoryCalls++;
+            // Yield to the event loop so the second concurrent call can arrive.
+            await new Promise<void>((resolve) => setTimeout(resolve, 0));
+            return fakePipeline(384) as unknown as Awaited<ReturnType<typeof pipeline>>;
+        });
+
+        const embedder = makeEmbedder('minilm');
+        // Fire two concurrent calls — neither has resolved yet when the second starts.
+        await Promise.all([
+            embedder.embedOne('hello'),
+            embedder.embedOne('world'),
+        ]);
+
+        // The underlying pipeline() factory must have been called exactly once.
+        expect(factoryCalls).toBe(1);
+    });
+
+    it('clears in-flight entry on factory rejection, allowing retry', async () => {
+        vi.mocked(pipeline).mockRejectedValueOnce(new Error('network error'));
+        const embedder = makeEmbedder('minilm');
+        await expect(embedder.embedOne('first')).rejects.toThrow('network error');
+
+        // After rejection, a second call must re-invoke the factory (retry).
+        vi.mocked(pipeline).mockResolvedValue(
+            fakePipeline(384) as unknown as Awaited<ReturnType<typeof pipeline>>,
+        );
+        await expect(embedder.embedOne('retry')).resolves.toBeDefined();
+        expect(pipeline).toHaveBeenCalledTimes(2);
     });
 });

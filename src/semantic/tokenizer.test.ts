@@ -59,21 +59,21 @@ describe('tokenizer', () => {
 describe('tokenizer — per-alias dispatch and cache (P1-J)', () => {
     it('calls from_pretrained with the correct hub ID for each alias', async () => {
         await countTokens('hi', 'minilm');
-        await countTokens('hi', 'bge-m3');
+        await countTokens('hi', 'e5-base');
 
         expect(AutoTokenizer.from_pretrained).toHaveBeenCalledTimes(2);
 
         const calls = vi.mocked(AutoTokenizer.from_pretrained).mock.calls;
         const calledIds = calls.map((c) => c[0] as string);
         expect(calledIds).toContain(SEMANTIC_MODELS.minilm.hubId);
-        expect(calledIds).toContain(SEMANTIC_MODELS['bge-m3'].hubId);
+        expect(calledIds).toContain(SEMANTIC_MODELS['e5-base'].hubId);
         // The two hub IDs must be different
-        expect(SEMANTIC_MODELS.minilm.hubId).not.toBe(SEMANTIC_MODELS['bge-m3'].hubId);
+        expect(SEMANTIC_MODELS.minilm.hubId).not.toBe(SEMANTIC_MODELS['e5-base'].hubId);
     });
 
     it('uses the per-alias cache: third call to same alias does not call from_pretrained again', async () => {
         await countTokens('hi', 'minilm');
-        await countTokens('hi', 'bge-m3');
+        await countTokens('hi', 'e5-base');
         // Cache hit — from_pretrained must NOT be called a third time
         await countTokens('hi', 'minilm');
 
