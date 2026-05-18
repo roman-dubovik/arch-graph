@@ -559,6 +559,23 @@ describe('runSemanticSearch — model alias precedence (D3)', () => {
 
         configSpy.mockRestore();
     });
+
+    it('rethrows when loadConfig throws an error that is NOT "config not found:" (P1-L)', async () => {
+        // Ensure searchSpy is set up so makeEmbedder / semanticSearch calls don't fail unexpectedly
+        await setupSearchSidecarsAndSpy(testDir);
+
+        // Mock loadConfig to throw a SyntaxError — not a "config not found:" prefix
+        const configModule = await import('../core/config.js');
+        const syntaxErr = new Error('SyntaxError: Unexpected token in arch-graph.config.ts');
+        const configSpy = vi.spyOn(configModule, 'loadConfig').mockRejectedValue(syntaxErr);
+
+        const args = parseSemanticArgs(['search', 'q']);
+        await expect(
+            runSemanticSearch({ ...args, out: testDir }),
+        ).rejects.toThrow('SyntaxError: Unexpected token');
+
+        configSpy.mockRestore();
+    });
 });
 
 // ---------------------------------------------------------------------------
