@@ -205,3 +205,50 @@ Tests:
 - **Hook auto-trigger of semantic build** — Task 5 design includes `--include-semantic` flag for the hook. Default off. Decide post-design whether to flip default on after migration (depends on whether incremental cost is genuinely <2s for typical commits, measured in Task 5).
 - **Old indexes on user machines** — schema bump from 1 → 2 forces one full rebuild for existing users. Migration note in README.md or first-run warning?
 - **`recommendedMinScore` for arctic-m** — value is provisional (model not validated on arch-graph workload). Documented as such in the field's JSDoc.
+
+---
+
+## UPDATE — 2026-05-18 evening: scope expanded per user direction (auto-mode)
+
+### Scope adjustments
+
+1. **Cleanup is broader than originally planned.** User confirmed both `bge-m3` AND `arctic-m` aliases are to be removed from the registry. Final registry: `minilm` (legacy default) + `e5-base` (new default) only. ROADMAP's "BGE-M3 — superseded by e5-base" section is rewritten to "BGE-M3 — explored, not adopted" (won't ship status).
+2. **Hook default flipped:** Task 5's `--include-semantic` flag on `arch-graph hook install` becomes **on by default**, with `--no-include-semantic` opt-out. Rationale: incremental re-embed makes per-commit cost ~1-2s for typical commits; user explicitly chose default-on.
+3. **Post-merge bench:** after Tasks 2-7 land on main, run the full 103-query bench on project-a/b/c with e5-base as the new default, plus the 12-query arch-graph self-build mini-bench. Numbers attached to Phase 9 summary.
+4. **No push to origin:** all work stays local. User pushes after morning review.
+
+### Acceptance Criteria — updates
+
+#### Task 5 — hook default flipped to include-semantic
+
+`arch-graph hook install` (no flag) now installs a hook that runs BOTH structural build AND `semantic build --incremental --quiet`. `--no-include-semantic` opt-out flag preserves the legacy structural-only behavior. Tests cover both modes.
+
+#### Task 6 — cleanup: remove arctic-m AND bge-m3
+
+- `SemanticModelAlias` union narrowed to `'minilm' | 'e5-base'`.
+- `SEMANTIC_MODELS` registry has only these two entries.
+- `embedder.ts`: conditional `quantized: false` branch is removed (only minilm and e5-base support quantized=true).
+- `scripts/run-baseline-eval.sh`: MODEL case updated to `minilm|e5-base` only.
+- Tests referencing `bge-m3` or `arctic-m` aliases removed or refactored.
+- ROADMAP: BGE-M3 section moved from "Deferred" to "Explored — not adopted" (with `feat/bge-m3-migration` branch reference for historical record). Arctic-m section likewise.
+- README mentions of bge-m3/arctic-m aliases removed.
+- Tests for `bge-m3` and `arctic-m` cases in `*.test.ts` files removed cleanly (no orphan imports/refs).
+
+Tests: full vitest suite passes; no compile errors from dangling references.
+
+#### Task 8 (new) — Post-merge bench
+
+After Task 7 commits land on main:
+
+1. **Self-build mini-bench:** `pnpm tsx bench/self-build/run.ts` with new default (e5-base). Numbers stored at `bench/self-build/results/e5-base.json`. Compare against historical MiniLM numbers.
+2. **Full 103-query bench on 3 projects (project-a, project-b, project-c):**
+   - `MODEL=e5-base EVAL_MODE=both-buckets bash scripts/run-baseline-eval.sh`
+   - Use existing project paths (PROJECT_A_DIR=/Users/romandubovik/Documents/Projects/platform, PROJECT_B_DIR=/Users/romandubovik/Documents/Projects/insyra, PROJECT_C_DIR=/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0)
+   - Results files go to `/tmp/bge-m3-bench/` so they don't enter the repo (anonymization rule). Per-project aggregate hit-rates extracted to a single anonymized summary in Phase 9 report.
+3. **Incremental perf measurement:**
+   - On project-c: time `arch-graph semantic build --full` vs `arch-graph semantic build` (no-op, after first run).
+   - On project-c: edit one node's snippet, then time `arch-graph semantic build` again.
+   - Record: full time, no-op time, single-node-change time.
+
+Tests N/A — this is empirical measurement. Numbers attached to Phase 9 summary.
+
