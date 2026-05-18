@@ -53,8 +53,9 @@ async function getPipeline(
         );
         p = pipeline('feature-extraction', entry.hubId).then((inst) => {
             pipelineCache.set(alias, inst);
-            pipelineInFlight.delete(alias);
             return inst;
+        }).finally(() => {
+            pipelineInFlight.delete(alias);
         });
         pipelineInFlight.set(alias, p);
     }

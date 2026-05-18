@@ -321,4 +321,17 @@ describe('getPipeline — in-flight promise deduplication (P1)', () => {
         // The underlying pipeline() factory must have been called exactly once.
         expect(factoryCalls).toBe(1);
     });
+
+    it('clears in-flight entry on factory rejection, allowing retry', async () => {
+        vi.mocked(pipeline).mockRejectedValueOnce(new Error('network error'));
+        const embedder = makeEmbedder('minilm');
+        await expect(embedder.embedOne('first')).rejects.toThrow('network error');
+
+        // After rejection, a second call must re-invoke the factory (retry).
+        vi.mocked(pipeline).mockResolvedValue(
+            fakePipeline(384) as unknown as Awaited<ReturnType<typeof pipeline>>,
+        );
+        await expect(embedder.embedOne('retry')).resolves.toBeDefined();
+        expect(pipeline).toHaveBeenCalledTimes(2);
+    });
 });
