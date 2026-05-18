@@ -660,13 +660,30 @@ arch-graph docs-search "how to set up MSSQL agent" # docs bucket only</code></pr
           </div>
           <div class="contribute-body">
             <p class="contribute-eyebrow">Open invitation</p>
-            <h2 id="contribute-title" class="contribute-title">Help us build a multi-repo benchmark.</h2>
+            <h2 id="contribute-title" class="contribute-title">Help us widen the benchmark.</h2>
             <p class="contribute-lead">
-              Run <code>arch-graph compare --share</code> on your NestJS repo. We collect <strong>anonymous numbers only</strong> — no code, no subject names, no service IDs. Just counts and ratios. The preview shows you the exact payload before anything leaves your machine. All contributions land in a public Discussion.
+              Three ways to contribute, from one command to a full evaluator suite. The published numbers come from three NestJS monorepos — every additional data point narrows the confidence interval, especially on non-NestJS shapes (Node monoliths, GraphQL backends, mixed-language teams).
             </p>
+            <div class="contribute-routes">
+              <div class="contribute-route">
+                <p class="contribute-route-label"><span class="contribute-route-num">1</span> One-shot: anonymous numbers</p>
+                <p>Run <code>arch-graph compare --share</code> on your repo. Counts and ratios only — no code, no service IDs. Preview shows the exact payload before anything leaves your machine.</p>
+                <a class="link" href="https://github.com/roman-dubovik/arch-graph/blob/main/src/cli/compare-command.ts" rel="noopener" target="_blank">See what's sent →</a>
+              </div>
+              <div class="contribute-route">
+                <p class="contribute-route-label"><span class="contribute-route-num">2</span> Custom evaluator suite</p>
+                <p>Bring your own <code>queries.json</code> (RU / EN / mixed), run the standard eval harness, submit per-category hit-rates. Schema and step-by-step in <a class="link" href="https://github.com/roman-dubovik/arch-graph/blob/main/CONTRIBUTING.md#2-custom-evaluator-suites" rel="noopener" target="_blank">CONTRIBUTING.md</a>.</p>
+                <a class="link" href="https://github.com/roman-dubovik/arch-graph/blob/main/scripts/eval/queries.json" rel="noopener" target="_blank">Example query set →</a>
+              </div>
+              <div class="contribute-route">
+                <p class="contribute-route-label"><span class="contribute-route-num">3</span> Code, fixes, new extractors</p>
+                <p>Branch off <code>main</code>, follow conventional commits, add vitest tests. New extractor? Read <code>src/extractors/docs/</code> first — it's the cleanest shape reference.</p>
+                <a class="link" href="https://github.com/roman-dubovik/arch-graph/blob/main/CONTRIBUTING.md#3-code-contributions" rel="noopener" target="_blank">PR workflow →</a>
+              </div>
+            </div>
             <div class="contribute-ctas">
-              <a class="btn btn-primary" href="#install">Install arch-graph<span class="btn-arrow" aria-hidden="true">→</span></a>
-              <a class="btn btn-ghost" href="https://github.com/roman-dubovik/arch-graph/blob/main/src/cli/compare-command.ts" rel="noopener" target="_blank">See what's sent</a>
+              <a class="btn btn-primary" href="https://github.com/roman-dubovik/arch-graph/blob/main/CONTRIBUTING.md" rel="noopener" target="_blank">Read CONTRIBUTING.md<span class="btn-arrow" aria-hidden="true">→</span></a>
+              <a class="btn btn-ghost" href="#install">Install arch-graph</a>
             </div>
           </div>
         </div>
