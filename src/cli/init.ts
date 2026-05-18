@@ -699,6 +699,16 @@ export async function runInitWizard(target: string): Promise<void> {
     // the prompt on build failure prevents a follow-up error that would just
     // tell the user to run `arch-graph build` first — they already know.
     if (structuralBuildOk) {
+        // Warn early if the config already selects the large BGE-M3 model.
+        try {
+            const { loadConfig, applySemanticDefaults } = await import('../core/config.js');
+            const resolvedCfg = await loadConfig(targetPath);
+            if (applySemanticDefaults(resolvedCfg.semantic).model === 'bge-m3') {
+                output.write('Note: bge-m3 model is ~500 MB on first download.\n');
+            }
+        } catch {
+            // Non-fatal: config may not be loadable yet.
+        }
         const buildSemantic = await askBuildSemantic(rl, (s) => output.write(s));
         if (buildSemantic) {
             const { buildSemanticIndexFromArgs } = await import('./semantic-commands.js');
