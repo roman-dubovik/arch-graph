@@ -29,8 +29,8 @@ import { join } from 'node:path';
 
 import type { NodeKind } from '../core/types.js';
 import { readEmbeddingsJsonl, readManifest } from './io.js';
-import type { SemanticManifest } from './types.js';
-import { SEMANTIC_DIM, SEMANTIC_MODEL } from './types.js';
+import type { SemanticManifest, SemanticModelAlias } from './types.js';
+import { SEMANTIC_MODELS } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -64,8 +64,10 @@ export interface SearchResult {
 export interface SearchOutput {
     query: string;
     results: SearchResult[];
-    model: typeof SEMANTIC_MODEL;
-    dim: typeof SEMANTIC_DIM;
+    /** Hub ID of the model that built this index. */
+    model: string;
+    /** Embedding dimensionality of the model that built this index. */
+    dim: number;
     indexBuiltAt: string;
     graphHashMatches: boolean;
     /**
@@ -125,6 +127,12 @@ export interface SemanticSearchOpts {
     outDir: string;
     /** Single-text embedder — injectable for testability. */
     embedder: EmbedOneFn;
+    /**
+     * Model alias used when building the index.  The search function uses this
+     * to validate the manifest's model/dim against the expected values.
+     * Defaults to `'minilm'` when omitted for backward compatibility.
+     */
+    modelAlias?: SemanticModelAlias;
     /** Number of results to return.  Defaults to {@link DEFAULT_TOP_K}.  Capped at {@link MAX_TOP_K}. */
     topK?: number;
     /** Optional NodeKind whitelist.  Filter applied after scoring, before top-K. */
@@ -184,13 +192,18 @@ export async function semanticSearch(opts: SemanticSearchOpts): Promise<SearchRe
     const { query, outDir, embedder, kinds, excludeKinds } = opts;
     const topK = Math.min(opts.topK ?? DEFAULT_TOP_K, MAX_TOP_K);
 
+    // Resolve model entry — defaults to minilm for backward compat.
+    const alias: SemanticModelAlias = opts.modelAlias ?? 'minilm';
+    const modelEntry = SEMANTIC_MODELS[alias];
+    const expectedModel = { model: modelEntry.hubId, dim: modelEntry.dim };
+
     const manifestPath = join(outDir, 'semantic', 'manifest.json');
     const embeddingsPath = join(outDir, 'semantic', 'embeddings.jsonl');
 
     // --- Load manifest -------------------------------------------------------
     let manifest: SemanticManifest;
     try {
-        manifest = await readManifest(manifestPath);
+        manifest = await readManifest(manifestPath, expectedModel);
     } catch (manifestErr) {
         const isEnoent = (manifestErr as NodeJS.ErrnoException).code === 'ENOENT';
         if (!isEnoent) {
@@ -199,8 +212,8 @@ export async function semanticSearch(opts: SemanticSearchOpts): Promise<SearchRe
             const output: SearchOutput = {
                 query,
                 results: [],
-                model: SEMANTIC_MODEL,
-                dim: SEMANTIC_DIM,
+                model: modelEntry.hubId,
+                dim: modelEntry.dim,
                 indexBuiltAt: '',
                 graphHashMatches: false,
                 error: 'semantic-index-corrupt',
@@ -211,8 +224,8 @@ export async function semanticSearch(opts: SemanticSearchOpts): Promise<SearchRe
         const output: SearchOutput = {
             query,
             results: [],
-            model: SEMANTIC_MODEL,
-            dim: SEMANTIC_DIM,
+            model: modelEntry.hubId,
+            dim: modelEntry.dim,
             indexBuiltAt: '',
             graphHashMatches: false,
             error: 'semantic-index-missing',
@@ -265,7 +278,7 @@ export async function semanticSearch(opts: SemanticSearchOpts): Promise<SearchRe
     // --- Score all records ---------------------------------------------------
     const scored: Array<{ result: SearchResult; score: number }> = [];
     try {
-        for await (const record of readEmbeddingsJsonl(embeddingsPath)) {
+        for await (const record of readEmbeddingsJsonl(embeddingsPath, manifest.dim)) {
             const score = cosineSimilarity(queryVector, record.vector);
             const result: SearchResult = {
                 nodeId: record.nodeId,
