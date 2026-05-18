@@ -346,12 +346,12 @@ Honourable mentions for narrower / different categories: [nestjs-spelunker](http
 
 Two benchmarks are committed, each measuring a different question.
 
-**Post-semantic (current, 2026-05-17):** 103 fuzzy-intent queries × 3 NestJS monorepos, run through both tools. Live in [`docs/comparisons/2026-05-17-arch-graph-vs-graphify-eval.md`](docs/comparisons/2026-05-17-arch-graph-vs-graphify-eval.md). Headline:
+**Post-semantic (current, 2026-05-17):** 103 fuzzy-intent queries × 3 NestJS monorepos, run through both tools. Live in [`docs/comparisons/2026-05-17-arch-graph-vs-graphify-eval.md`](docs/comparisons/2026-05-17-arch-graph-vs-graphify-eval.md). Two ways to read the numbers, both honest:
 
-- Overall hit-rate: **arch-graph 67% vs graphify 35%** (+32pp) — 80%+ of queries are in Russian; graphify does keyword-BFS over English code-node labels and returns "no matching nodes" for most non-English fuzzy queries. arch-graph's multilingual embedder (`Xenova/paraphrase-multilingual-MiniLM-L12-v2`) bridges the language gap.
-- Token cost per query: arch-graph ~1000, graphify ~350 (graphify is cheaper when it returns anything at all).
-- Per-query wins: 37 arch-graph, 4 graphify, 32 ties, 30 both-miss.
-- English-identifier queries (e.g. "BaseRepository pattern", "useFormValidation hook") are roughly tied.
+- **As a Russian-speaking team would experience it (RU queries):** arch-graph **67%** vs graphify **35%** (+32pp). 80%+ of the queries are in Russian; graphify does keyword-BFS over English code-node labels and returns "no matching nodes" for most non-English fuzzy queries. arch-graph's multilingual embedder (`Xenova/paraphrase-multilingual-MiniLM-L12-v2`) bridges the language gap.
+- **As an LLM-agent pipeline would experience it (EN-keyword queries, apples-to-apples strict scoring on 69 scoreable queries):** arch-graph **53.6%** vs graphify **56.5%** — a near tie (graphify +3pp). The 32-point RU gap is almost entirely multilingual-handling, not retrieval-quality. By category under strict EN: arch-graph leads in B_debug (+38pp) and D_docs (+20pp); graphify leads in C_ui (+50pp) and E_arch (+18pp); A_find is exact tie.
+- Token cost per query: arch-graph ~1000, graphify ~350. **arch-graph uses zero LLM tokens on both build and query.** graphify uses LLM subagents at build time for semantic extraction.
+- Per-query wins on the RU bench: 37 arch-graph, 4 graphify, 32 ties, 30 both-miss.
 
 **Pre-semantic (historical, 2026-05-16):** 15-question structural-edge comparison on 5 NestJS monorepos lives in [`bench/report.md`](bench/report.md). Key finding from that run: arch-graph used **7.6× fewer LLM context tokens** than graphify (688k vs 5.2M, same `cl100k_base` encoder), with 100% vs 39% substring-presence recall. Those numbers reflect arch-graph's **structural-only** behavior before the semantic sidecar shipped; the post-semantic head-to-head above supersedes them for any question about retrieval quality.
 
