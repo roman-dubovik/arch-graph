@@ -53,8 +53,8 @@ trap 'on_exit $?' EXIT
 
 PASS_COUNT=0
 # Steps: install, init, build, stats, queries, integrations, filter-chain edges,
-# semantic build (smoke), uninstall --project --yes
-TOTAL_STEPS=9
+# semantic build (smoke), uninstall --project --yes, install.sh PTY prompt (N path)
+TOTAL_STEPS=10
 
 step_start() {
     local num=$1 label=$2
@@ -643,6 +643,79 @@ fi
     || fail "uninstall --project: arch-graph-out/ still present"
 
 step_ok
+
+# ---------------------------------------------------------------------------
+# Step 10: install.sh interactive PTY prompt — "N" path
+# ---------------------------------------------------------------------------
+# The Y-path chains into `arch-graph init` (a separate interactive wizard
+# already exercised at step 2's non-TTY level + the askBuildSemantic /
+# runSemanticBuildStep vitest suite); driving it through end-to-end here
+# would multiply prompts without adding signal. The N-path is what we
+# could not cover otherwise: did the new prompt actually fire under a real
+# TTY, and did it correctly print the hint without auto-running init?
+#
+# Requires /usr/bin/expect (bundled on macOS, `apt-get install expect` on
+# Linux). Gracefully skipped on hosts without it.
+
+step_start 10 "install.sh PTY prompt (N path)"
+
+# Skip guard: needs expect AND a working PTY. Both can fail independently:
+# expect isn't on every Linux base image, and some sandboxed/container
+# environments have no free PTYs even when expect is installed (we hit this
+# inside an agent shell). Probe both before committing to the test.
+if ! command -v expect >/dev/null 2>&1; then
+    printf " SKIP (expect not installed)\n"
+    (( PASS_COUNT++ )) || true
+elif ! /usr/bin/expect -c 'if {[catch {spawn -noecho true} err]} { exit 1 }; expect eof; exit 0' >/dev/null 2>&1; then
+    # Note: bare `spawn` failure does NOT make expect exit nonzero — it
+    # writes the error to stdout/stderr and continues, returning 0. Wrap
+    # in `catch` so allocation failure actually surfaces as exit 1.
+    printf " SKIP (no usable PTY in this environment)\n"
+    (( PASS_COUNT++ )) || true
+else
+    # Use a scratch directory with no package.json so install.sh's
+    # "looks-like-a-project" heuristic defaults to N — both proves the
+    # heuristic works AND makes the test deterministic (we can answer
+    # empty / Enter and the default N fires).
+    PTY_DIR="$WORK/pty-scratch"
+    mkdir -p "$PTY_DIR"
+    PTY_LOG="$WORK/pty-step10.log"
+
+    # Bypass the long re-run cost: the install dir already exists from step 1,
+    # so install.sh hits the `git pull` branch (fast). Use `--frozen-lockfile`
+    # via the existing pnpm-lock, no re-clone.
+    if ! /usr/bin/expect <<EXPECT_EOF > "$PTY_LOG" 2>&1
+set timeout 30
+cd "$PTY_DIR"
+spawn bash "$INSTALL_SCRIPT"
+expect {
+    -re "Initialise arch-graph in .* \\\[y/N\\\]" {
+        send "n\r"
+    }
+    timeout { exit 1 }
+    eof { exit 2 }
+}
+expect {
+    -re "To initialise arch-graph in a project later" {}
+    timeout { exit 3 }
+}
+expect eof
+catch wait result
+exit [lindex \$result 3]
+EXPECT_EOF
+    then
+        echo ""
+        echo "expect run output:"
+        cat "$PTY_LOG"
+        fail "install.sh PTY prompt: expect script failed"
+    fi
+
+    # Verify the N-path didn't auto-run init (no config written into PTY_DIR).
+    [ ! -f "$PTY_DIR/arch-graph.config.ts" ] \
+        || fail "install.sh PTY prompt: N answer should NOT have run init, but config exists"
+
+    step_ok
+fi
 
 # ---------------------------------------------------------------------------
 # Summary
