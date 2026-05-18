@@ -365,7 +365,7 @@
           <div class="bench-card">
             <p class="bench-card-label">How it works</p>
             <p class="bench-card-row"><span class="bench-card-tool">Embedder</span><span class="bench-card-num mono" style="font-size:0.85em;">MiniLM-L12-v2</span></p>
-            <p class="bench-card-row dim"><span class="bench-card-tool">Dim · Index</span><span class="bench-card-num">384 · cosine</span></p>
+            <p class="bench-card-row dim"><span class="bench-card-tool">Dim · Index</span><span class="bench-card-num mono" style="font-size:0.85em;white-space:nowrap;">384 · cosine</span></p>
             <p class="bench-card-foot"><code>Xenova/paraphrase-multilingual-MiniLM-L12-v2</code> via <code>transformers.js</code>. Deterministic given the same graph. Embeddings persist as <code>arch-graph-out/semantic/embeddings.jsonl</code> with a <code>manifest.json</code> tracking <code>graphHash</code> for stale detection.</p>
           </div>
           <div class="bench-card">
@@ -376,8 +376,8 @@
           </div>
           <div class="bench-card">
             <p class="bench-card-label">vs graphify on the same suite</p>
-            <p class="bench-card-row"><span class="bench-card-tool">RU queries</span><span class="bench-card-num">67% · 35%</span></p>
-            <p class="bench-card-row dim"><span class="bench-card-tool">EN strict</span><span class="bench-card-num">53.6% · 56.5%</span></p>
+            <p class="bench-card-row"><span class="bench-card-tool" style="white-space:nowrap;">RU queries</span><span class="bench-card-num" style="font-size:16px;white-space:nowrap;">67% · 35%</span></p>
+            <p class="bench-card-row dim"><span class="bench-card-tool" style="white-space:nowrap;">EN strict</span><span class="bench-card-num" style="font-size:16px;white-space:nowrap;">53.6% · 56.5%</span></p>
             <p class="bench-card-foot">Both are local-first graph tools. graphify uses LLM subagents at build time for semantic extraction; arch-graph uses zero LLM tokens at both build and query. On Russian queries arch-graph leads by +32pp (multilingual handling); on EN-keyword queries the two are within 3pp under apples-to-apples scoring. <a href="https://github.com/roman-dubovik/arch-graph/blob/main/docs/comparisons/2026-05-17-arch-graph-vs-graphify-eval.md">Full 103-query memo →</a></p>
           </div>
         </div>
