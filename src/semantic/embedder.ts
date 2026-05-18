@@ -6,7 +6,6 @@
  *
  * Supported models (via SEMANTIC_MODELS registry in types.ts):
  *   minilm  — Xenova/paraphrase-multilingual-MiniLM-L12-v2, 384-dim, mean pooling
- *   bge-m3  — Xenova/bge-m3, 1024-dim, CLS pooling
  *   e5-base — Xenova/multilingual-e5-base, 768-dim, mean pooling, requires prefix
  *
  * For e5-base (and any future prefix-requiring model), the `mode` parameter
@@ -14,7 +13,7 @@
  *   'passage' (default) — prepends `entry.prefix.passage` to each text (for build)
  *   'query'             — prepends `entry.prefix.query` to each text (for search)
  *
- * For minilm/bge-m3, `mode` is a no-op (no prefix required).
+ * For minilm, `mode` is a no-op (no prefix required).
  *
  * Batch size guidance: 32 (safe default). Profile on larger graphs if needed.
  */
@@ -44,14 +43,7 @@ async function getPipeline(
     console.error(
         `[arch-graph semantic] Loading model ${entry.hubId} (one-time download, will cache)...`,
     );
-    // Models that ship without the standard `model_quantized.onnx` file (e.g.
-    // Arctic v2 has model.onnx + model_int8.onnx + model_q4.onnx etc but no
-    // `_quantized`) must explicitly opt out of the default quantized lookup.
-    // For models that DON'T need the opt-out, pass the 2-arg form so existing
-    // pipeline-call assertions (toHaveBeenCalledWith(...)) keep matching.
-    const instance = entry.quantized === false
-        ? await pipeline('feature-extraction', entry.hubId, { quantized: false })
-        : await pipeline('feature-extraction', entry.hubId);
+    const instance = await pipeline('feature-extraction', entry.hubId);
     pipelineCache.set(alias, instance);
     return instance;
 }
@@ -65,7 +57,7 @@ export type EmbedFn = (texts: string[]) => Promise<number[][]>;
  * - `embed(texts, mode?)` — embed a batch of texts; `mode` defaults to `'passage'`.
  * - `embedOne(text, mode?)` — embed a single text; `mode` defaults to `'passage'`.
  *
- * For models without a prefix (minilm, bge-m3), `mode` is accepted but has no
+ * For models without a prefix (minilm), `mode` is accepted but has no
  * effect — prefix is undefined and no prepend is performed.
  */
 export interface Embedder {

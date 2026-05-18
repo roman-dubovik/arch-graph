@@ -9,12 +9,17 @@ import type { NodeKind } from '../core/types.js';
 //
 // Current supported aliases:
 //   minilm   — Xenova/paraphrase-multilingual-MiniLM-L12-v2, 384-dim, mean pooling
-//   bge-m3   — Xenova/bge-m3, 1024-dim, CLS pooling
 //   e5-base  — Xenova/multilingual-e5-base, 768-dim, mean pooling, REQUIRES PREFIX
-//   arctic-m — Snowflake/snowflake-arctic-embed-m-v2.0, 768-dim, CLS pooling,
-//              query-prefix only ('query: '); loads fp32 (no quantized variant
-//              with the standard model_quantized.onnx name in the upstream repo
-//              as of transformers.js@2.17 expectations)
+//
+// Historical aliases removed from this registry (explored but not adopted):
+//   bge-m3   — Xenova/bge-m3, 1024-dim, CLS pooling
+//              Deferred: build cost ×6 on 30K-node repos (>2h40m; unshippable as default).
+//              See docs/comparisons/2026-05-18-embedder-evaluation.md §"Why Not BGE-M3".
+//   arctic-m — Snowflake/snowflake-arctic-embed-m-v2.0, 768-dim, CLS pooling
+//              Blocked: @xenova/transformers@2.17 falls back to generic BERT
+//              layers (20% hit-rate vs 56% MiniLM); requires transformers.js v3
+//              migration. See docs/comparisons/2026-05-18-embedder-evaluation.md
+//              §"Why Not arctic-m Yet".
 //
 // The model name and dim are recorded in `manifest.json` so any external
 // consumer can verify vector compatibility before mixing results.
@@ -32,7 +37,7 @@ export interface EmbedPrefix {
 }
 
 /** Short alias for a supported embedding model. */
-export type SemanticModelAlias = 'minilm' | 'bge-m3' | 'e5-base' | 'arctic-m';
+export type SemanticModelAlias = 'minilm' | 'e5-base';
 
 /**
  * Fallback `minScore` threshold used when the index manifest's model alias is
@@ -78,19 +83,6 @@ export const SEMANTIC_MODELS = {
          */
         recommendedMinScore: 0.30,
     },
-    'bge-m3': {
-        hubId: 'Xenova/bge-m3',
-        dim: 1024,
-        pooling: 'cls' as const,
-        normalize: true,
-        prefix: undefined,
-        quantized: undefined,
-        /**
-         * BGE-M3 scores are typically 0.65–0.80 for relevant matches;
-         * a 0.55 floor removes noise while retaining useful results.
-         */
-        recommendedMinScore: 0.55,
-    },
     'e5-base': {
         hubId: 'Xenova/multilingual-e5-base',
         dim: 768,
@@ -104,24 +96,6 @@ export const SEMANTIC_MODELS = {
          * relevant cross-lingual hits.
          */
         recommendedMinScore: 0.55,
-    },
-    // Arctic v2.0 has only model.onnx (no model_quantized.onnx) in the upstream
-    // repo, so we force fp32 loading via { quantized: false }.  The 'gte' model
-    // type is unknown to @xenova/transformers@2.17 — falls back to the
-    // encoder-only base class.  Empirically loads and produces 768-dim output.
-    'arctic-m': {
-        hubId: 'Snowflake/snowflake-arctic-embed-m-v2.0',
-        dim: 768,
-        pooling: 'cls' as const,
-        normalize: true,
-        prefix: { passage: '', query: 'query: ' } satisfies EmbedPrefix,
-        quantized: false as const,
-        /**
-         * Provisional value — arctic-m has not been validated on arch-graph
-         * workloads as of 2026-05-18 (transformers.js v3 migration pending).
-         * Value is intentionally conservative to avoid over-filtering.
-         */
-        recommendedMinScore: 0.40,
     },
 } as const satisfies Record<SemanticModelAlias, { hubId: string; dim: number; pooling: string; normalize: boolean; prefix?: EmbedPrefix; quantized?: boolean; recommendedMinScore: number }>;
 

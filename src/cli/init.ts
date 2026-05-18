@@ -244,38 +244,6 @@ export async function askBuildSemantic(
     return askYesNo(rl, '  build now?', true);
 }
 
-/**
- * Prints a one-line size warning when the resolved model is 'bge-m3'.
- *
- * Exported so tests can exercise this path without spinning up the full wizard.
- * Accepts an injectable config loader so tests can supply a fake without needing
- * vi.mock() hoisting.
- *
- * @param configPath - path to arch-graph.config.ts
- * @param write      - output sink (defaults to stdout)
- * @param _loadConfig - injectable; defaults to the production loadConfig
- */
-export async function checkBgeSizeWarning(
-    configPath: string,
-    write: (s: string) => void,
-    _loadConfig?: (p: string) => Promise<{ semantic?: Record<string, unknown> }>,
-): Promise<void> {
-    try {
-        const { loadConfig, applySemanticDefaults } =
-            await import('../core/config.js');
-        const loader = _loadConfig ?? loadConfig;
-        const resolvedCfg = await loader(configPath);
-        if (applySemanticDefaults(resolvedCfg.semantic).model === 'bge-m3') {
-            write('Note: bge-m3 model is ~500 MB on first download.\n');
-        }
-    } catch (err) {
-        // Silently ignore only when config is absent (init wizard runs before
-        // the config is written).  Rethrow programmer errors so they surface.
-        const isConfigMissing =
-            err instanceof Error && err.message.startsWith('config not found:');
-        if (!isConfigMissing) throw err;
-    }
-}
 
 /** Injectable build runner — production passes the real `buildSemanticIndexFromArgs`. */
 export type SemanticBuildRunner = (args: {
@@ -732,8 +700,6 @@ export async function runInitWizard(target: string): Promise<void> {
     // the prompt on build failure prevents a follow-up error that would just
     // tell the user to run `arch-graph build` first — they already know.
     if (structuralBuildOk) {
-        // Warn early if the config already selects the large BGE-M3 model.
-        await checkBgeSizeWarning(targetPath, (s) => output.write(s));
         const buildSemantic = await askBuildSemantic(rl, (s) => output.write(s));
         if (buildSemantic) {
             const { buildSemanticIndexFromArgs } = await import('./semantic-commands.js');

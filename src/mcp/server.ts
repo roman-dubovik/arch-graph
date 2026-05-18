@@ -315,7 +315,7 @@ export async function startMcpServer(opts: { out: string; config?: string }): Pr
     await loadGraphFn();
 
     // Resolve the embedding model alias from the config file (if supplied), falling back to
-    // the 'minilm' default so behaviour is identical to pre-bge-m3 deployments.
+    // the 'minilm' default when no config is present.
     let resolvedModelAlias: SemanticModelAlias = 'minilm';
     if (opts.config) {
         try {
