@@ -403,9 +403,11 @@ arch-graph compare --graphify graphify-out/          # see side-by-side
 
 `arch-graph compare` auto-generates 10 questions from real nodes in your graph (NATS subjects, queues, DB tables, services, modules), counts `cl100k_base` tokens for each tool's compact context, and writes a markdown report at `arch-graph-out/compare-report.md`. Without `--graphify` we auto-detect `./graphify-out/`; if nothing's found you get a graph-size-only summary plus a friendly install hint.
 
-**Contribute your numbers.** Run `arch-graph compare --share` to generate an **anonymized** snippet (counts only — no project / subject / queue / service names) and open a pre-filled GitHub Discussion under `benchmark-contributions`. The preview is shown before anything leaves your machine. All contributions land in the [public Discussions](https://github.com/roman-dubovik/arch-graph/discussions) — they're how the multi-repo benchmark grows beyond our 5 reference monorepos.
+**Contribute your numbers.** Run `arch-graph compare --share` to generate an **anonymized** snippet (counts only — no project / subject / queue / service names) and open a pre-filled GitHub Discussion under `benchmark-contributions`. The preview is shown before anything leaves your machine. All contributions land in the [public Discussions](https://github.com/roman-dubovik/arch-graph/discussions) — they're how the multi-repo benchmark grows beyond our reference monorepos.
 
 See `arch-graph compare --help` for flags (`--questions`, `--report`, `--quiet`, `--share`).
+
+For deeper contributions — bringing your own evaluator suite, adding extractors, filing failure-mode issues — see [`CONTRIBUTING.md`](CONTRIBUTING.md). The custom-evaluator section walks through the `queries.json` schema, scoring criteria, and how to submit per-category hit-rates on a codebase shape we don't yet cover.
 
 ## Development
 
