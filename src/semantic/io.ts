@@ -15,7 +15,7 @@ import { createInterface } from 'node:readline';
 import { dirname } from 'node:path';
 
 import type { SemanticManifest, SemanticRecord } from './types.js';
-import { SEMANTIC_DIM, SEMANTIC_MODEL, SEMANTIC_SCHEMA_VERSION } from './types.js';
+import { SEMANTIC_SCHEMA_VERSION } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -42,32 +42,46 @@ export async function writeManifest(
 
 /**
  * Read and parse the sidecar manifest from `outPath`.
- * Throws if the file is missing, cannot be parsed, or contains incompatible
- * model/dim/schemaVersion values — callers should treat this as
- * "semantic-index-corrupt" or "semantic-index-missing" depending on context.
+ *
+ * @param outPath - Path to `manifest.json`.
+ * @param expected - Optional model/dim values to validate against.  When
+ *   supplied, throws if the manifest's model or dim does not match.  When
+ *   omitted, only the schemaVersion is checked (backward-compat path for
+ *   callers that don't know which model they're searching with yet).
+ *
+ * Throws if the file is missing, cannot be parsed, or fails any validation.
+ * Callers should treat the error as "semantic-index-corrupt" or
+ * "semantic-index-missing" depending on whether ENOENT is set.
  */
-export async function readManifest(outPath: string): Promise<SemanticManifest> {
+export async function readManifest(
+    outPath: string,
+    expected?: { model: string; dim: number },
+): Promise<SemanticManifest> {
     const raw = await readFile(outPath, 'utf8');
     const parsed = JSON.parse(raw) as SemanticManifest;
 
-    // Validate key contract fields (hand-rolled — no Zod dep needed here).
+    // Always validate schemaVersion.
     if (parsed.schemaVersion !== SEMANTIC_SCHEMA_VERSION) {
         throw new Error(
             `manifest from incompatible build: schemaVersion=${parsed.schemaVersion} (expected ${SEMANTIC_SCHEMA_VERSION}). ` +
             `run: arch-graph semantic build`,
         );
     }
-    if (parsed.model !== SEMANTIC_MODEL) {
-        throw new Error(
-            `manifest from incompatible build: model="${parsed.model}" (expected "${SEMANTIC_MODEL}"). ` +
-            `run: arch-graph semantic build`,
-        );
-    }
-    if (parsed.dim !== SEMANTIC_DIM) {
-        throw new Error(
-            `manifest from incompatible build: dim=${parsed.dim} (expected ${SEMANTIC_DIM}). ` +
-            `run: arch-graph semantic build`,
-        );
+
+    // Validate model and dim only when the caller supplies expected values.
+    if (expected !== undefined) {
+        if (parsed.model !== expected.model) {
+            throw new Error(
+                `manifest from incompatible build: model="${parsed.model}" (expected "${expected.model}"). ` +
+                `run: arch-graph semantic build`,
+            );
+        }
+        if (parsed.dim !== expected.dim) {
+            throw new Error(
+                `manifest from incompatible build: dim=${parsed.dim} (expected ${expected.dim}). ` +
+                `run: arch-graph semantic build`,
+            );
+        }
     }
 
     return parsed;
@@ -93,11 +107,18 @@ export async function writeEmbeddingsJsonl(
 /**
  * Stream-read `embeddings.jsonl`, yielding one {@link SemanticRecord} per line.
  *
+ * @param outPath - Path to `embeddings.jsonl`.
+ * @param expectedDim - Expected vector dimensionality.  Each record's vector
+ *   length is compared against this value; a mismatch throws so the caller can
+ *   surface a `semantic-index-corrupt` error rather than silently returning
+ *   wrong-length vectors.
+ *
  * Malformed lines throw so the caller can decide how to handle corruption.
  * The generator yields nothing for an empty file.
  */
 export async function* readEmbeddingsJsonl(
     outPath: string,
+    expectedDim: number,
 ): AsyncGenerator<SemanticRecord> {
     // Check if file exists and is non-empty before streaming.
     const stats = await stat(outPath);
@@ -113,10 +134,10 @@ export async function* readEmbeddingsJsonl(
         const record = JSON.parse(line) as SemanticRecord;
         // Contract enforcement: dim mismatch means the index was built with a
         // different model — fail fast rather than silently returning wrong vectors.
-        if (record.vector.length !== SEMANTIC_DIM) {
+        if (record.vector.length !== expectedDim) {
             throw new Error(
                 `embeddings.jsonl: nodeId="${record.nodeId}" has vector length ${record.vector.length} ` +
-                `(expected ${SEMANTIC_DIM}). run: arch-graph semantic build`,
+                `(expected ${expectedDim}). run: arch-graph semantic build`,
             );
         }
         yield record;
