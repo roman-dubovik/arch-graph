@@ -8,9 +8,13 @@ import type { NodeKind } from '../core/types.js';
 // vectors are L2-normalised before storage.
 //
 // Current supported aliases:
-//   minilm  — Xenova/paraphrase-multilingual-MiniLM-L12-v2, 384-dim, mean pooling
-//   bge-m3  — Xenova/bge-m3, 1024-dim, CLS pooling
-//   e5-base — Xenova/multilingual-e5-base, 768-dim, mean pooling, REQUIRES PREFIX
+//   minilm   — Xenova/paraphrase-multilingual-MiniLM-L12-v2, 384-dim, mean pooling
+//   bge-m3   — Xenova/bge-m3, 1024-dim, CLS pooling
+//   e5-base  — Xenova/multilingual-e5-base, 768-dim, mean pooling, REQUIRES PREFIX
+//   arctic-m — Snowflake/snowflake-arctic-embed-m-v2.0, 768-dim, CLS pooling,
+//              query-prefix only ('query: '); loads fp32 (no quantized variant
+//              with the standard model_quantized.onnx name in the upstream repo
+//              as of transformers.js@2.17 expectations)
 //
 // The model name and dim are recorded in `manifest.json` so any external
 // consumer can verify vector compatibility before mixing results.
@@ -28,7 +32,7 @@ export interface EmbedPrefix {
 }
 
 /** Short alias for a supported embedding model. */
-export type SemanticModelAlias = 'minilm' | 'bge-m3' | 'e5-base';
+export type SemanticModelAlias = 'minilm' | 'bge-m3' | 'e5-base' | 'arctic-m';
 
 /** Registry of all supported embedding models. */
 export const SEMANTIC_MODELS = {
@@ -38,6 +42,7 @@ export const SEMANTIC_MODELS = {
         pooling: 'mean' as const,
         normalize: true,
         prefix: undefined,
+        quantized: undefined,
     },
     'bge-m3': {
         hubId: 'Xenova/bge-m3',
@@ -45,6 +50,7 @@ export const SEMANTIC_MODELS = {
         pooling: 'cls' as const,
         normalize: true,
         prefix: undefined,
+        quantized: undefined,
     },
     'e5-base': {
         hubId: 'Xenova/multilingual-e5-base',
@@ -52,8 +58,21 @@ export const SEMANTIC_MODELS = {
         pooling: 'mean' as const,
         normalize: true,
         prefix: { passage: 'passage: ', query: 'query: ' } satisfies EmbedPrefix,
+        quantized: undefined,
     },
-} as const satisfies Record<SemanticModelAlias, { hubId: string; dim: number; pooling: string; normalize: boolean; prefix?: EmbedPrefix }>;
+    // Arctic v2.0 has only model.onnx (no model_quantized.onnx) in the upstream
+    // repo, so we force fp32 loading via { quantized: false }.  The 'gte' model
+    // type is unknown to @xenova/transformers@2.17 — falls back to the
+    // encoder-only base class.  Empirically loads and produces 768-dim output.
+    'arctic-m': {
+        hubId: 'Snowflake/snowflake-arctic-embed-m-v2.0',
+        dim: 768,
+        pooling: 'cls' as const,
+        normalize: true,
+        prefix: { passage: '', query: 'query: ' } satisfies EmbedPrefix,
+        quantized: false as const,
+    },
+} as const satisfies Record<SemanticModelAlias, { hubId: string; dim: number; pooling: string; normalize: boolean; prefix?: EmbedPrefix; quantized?: boolean }>;
 
 // ---------------------------------------------------------------------------
 // Backward-compat aliases — existing code referencing SEMANTIC_MODEL /

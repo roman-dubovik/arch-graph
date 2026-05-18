@@ -44,7 +44,14 @@ async function getPipeline(
     console.error(
         `[arch-graph semantic] Loading model ${entry.hubId} (one-time download, will cache)...`,
     );
-    const instance = await pipeline('feature-extraction', entry.hubId);
+    // Models that ship without the standard `model_quantized.onnx` file (e.g.
+    // Arctic v2 has model.onnx + model_int8.onnx + model_q4.onnx etc but no
+    // `_quantized`) must explicitly opt out of the default quantized lookup.
+    // For models that DON'T need the opt-out, pass the 2-arg form so existing
+    // pipeline-call assertions (toHaveBeenCalledWith(...)) keep matching.
+    const instance = entry.quantized === false
+        ? await pipeline('feature-extraction', entry.hubId, { quantized: false })
+        : await pipeline('feature-extraction', entry.hubId);
     pipelineCache.set(alias, instance);
     return instance;
 }
