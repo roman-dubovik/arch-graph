@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { applyDocsDefaults, DOCS_DEFAULT_INCLUDE, DOCS_DEFAULT_EXCLUDE } from './config.js';
+import {
+    applyDocsDefaults,
+    applySemanticDefaults,
+    validateConfig,
+    DOCS_DEFAULT_INCLUDE,
+    DOCS_DEFAULT_EXCLUDE,
+} from './config.js';
 
 describe('applyDocsDefaults', () => {
     it('returns all defaults when docs is undefined', () => {
@@ -44,5 +50,51 @@ describe('applyDocsDefaults', () => {
 
     it('throws on non-positive maxFileBytes', () => {
         expect(() => applyDocsDefaults({ maxFileBytes: 0 })).toThrow(/positive integer/);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// D1: applySemanticDefaults
+// ---------------------------------------------------------------------------
+
+describe('applySemanticDefaults (D1)', () => {
+    it('returns {model:"minilm"} when semantic is undefined', () => {
+        expect(applySemanticDefaults(undefined)).toEqual({ model: 'minilm' });
+    });
+
+    it('passthrough when semantic.model is "bge-m3"', () => {
+        expect(applySemanticDefaults({ model: 'bge-m3' })).toEqual({ model: 'bge-m3' });
+    });
+
+    it('throws for unknown model alias', () => {
+        expect(() => applySemanticDefaults({ model: 'unknown' as never })).toThrow(
+            /not a recognised alias/,
+        );
+    });
+});
+
+// ---------------------------------------------------------------------------
+// D1: validateConfig — semantic block validation
+// ---------------------------------------------------------------------------
+
+const BASE_CONFIG = { id: 'test', root: '.', appsGlob: 'apps/*' };
+
+describe('validateConfig semantic block (D1)', () => {
+    it('throws when semantic is a string (not an object)', () => {
+        expect(() => validateConfig({ ...BASE_CONFIG, semantic: 'minilm' }, 'test')).toThrow(
+            /semantic must be an object/,
+        );
+    });
+
+    it('throws when semantic.model is an unrecognised alias', () => {
+        expect(() =>
+            validateConfig({ ...BASE_CONFIG, semantic: { model: 'bad-alias' } }, 'test'),
+        ).toThrow(/not a recognised alias/);
+    });
+
+    it('does not throw when semantic.model is "bge-m3"', () => {
+        expect(() =>
+            validateConfig({ ...BASE_CONFIG, semantic: { model: 'bge-m3' } }, 'test'),
+        ).not.toThrow();
     });
 });

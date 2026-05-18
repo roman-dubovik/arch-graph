@@ -267,7 +267,8 @@ async function loadTs(absPath: string): Promise<unknown> {
     return mod;
 }
 
-function validateConfig(raw: unknown, source: string): ArchGraphConfig {
+/** @internal — exported for unit tests; do not use in production code outside config.ts. */
+export function validateConfig(raw: unknown, source: string): ArchGraphConfig {
     if (!raw || typeof raw !== 'object') {
         throw new Error(`config in ${source} must export an object`);
     }

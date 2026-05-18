@@ -1,35 +1,52 @@
 /**
- * Lazy singleton tokenizer for the embedder model.
+ * Lazy per-alias tokenizer cache for the embedding models.
  *
- * Loads only the tokenizer (small JSON, ~5 MB), not the 384-dim model weights.
- * Used by docs chunking (`markdown-split.ts`) and any future code that needs to
- * size content against the embedder's BERT-style context (native 128 tokens
- * for paraphrase-multilingual-MiniLM-L12-v2).
+ * Loads only the tokenizer (small JSON, ~5 MB), not the model weights.
+ * Used by docs chunking (`markdown-split.ts`) and any code that needs to
+ * size content against the embedder's BERT-style context window.
+ *
+ * Per-alias cache: each supported alias ('minilm', 'bge-m3') has its own
+ * tokenizer instance because the models use different vocabularies.
+ * For bge-m3, BERT-style token counts from minilm are 20-40% off on
+ * Cyrillic/multilingual text — always use the matching tokenizer.
  *
  * DO NOT use `@dqbd/tiktoken` for embedder chunking — that's cl100k_base
- * (Claude's tokenizer); the embedder uses XLM-RoBERTa SentencePiece, and the
- * counts disagree by 20-40% on Cyrillic/multilingual text.
+ * (Claude's tokenizer); embedding models use XLM-RoBERTa SentencePiece /
+ * BERT wordpiece tokenizers, and the counts disagree significantly on
+ * Cyrillic/multilingual text.
  */
 import { AutoTokenizer } from '@xenova/transformers';
 
-import { SEMANTIC_MODEL } from './types.js';
+import type { SemanticModelAlias } from './types.js';
+import { SEMANTIC_MODELS } from './types.js';
 
 type Tokenizer = Awaited<ReturnType<typeof AutoTokenizer.from_pretrained>>;
-let pending: Promise<Tokenizer> | null = null;
+
+/** Per-alias pending promise cache. */
+const pendingMap = new Map<SemanticModelAlias, Promise<Tokenizer>>();
 
 export function _resetTokenizerForTesting(): void {
-    pending = null;
+    pendingMap.clear();
 }
 
-function getTokenizer(): Promise<Tokenizer> {
-    if (pending === null) {
-        pending = AutoTokenizer.from_pretrained(SEMANTIC_MODEL);
-    }
-    return pending;
+function getTokenizer(alias: SemanticModelAlias): Promise<Tokenizer> {
+    const cached = pendingMap.get(alias);
+    if (cached !== undefined) return cached;
+    const hubId = SEMANTIC_MODELS[alias].hubId;
+    const p = AutoTokenizer.from_pretrained(hubId);
+    pendingMap.set(alias, p);
+    return p;
 }
 
-export async function countTokens(text: string): Promise<number> {
-    const tk = await getTokenizer();
+/**
+ * Count tokens in `text` using the tokenizer for the given model alias.
+ *
+ * Defaults to `'minilm'` for backward compatibility when no alias is supplied,
+ * but callers with access to the active build/search config should always pass
+ * the resolved alias explicitly.
+ */
+export async function countTokens(text: string, alias: SemanticModelAlias = 'minilm'): Promise<number> {
+    const tk = await getTokenizer(alias);
     const enc = tk.encode(text);
     if (Array.isArray(enc)) return enc.length;
     return (enc as { input_ids: number[] }).input_ids.length;

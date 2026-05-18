@@ -34,6 +34,8 @@ import { writeGraphJson } from '../../src/output/graph-json.js';
 import { makeEmbedder } from '../../src/semantic/embedder.js';
 import { semanticSearch } from '../../src/semantic/search.js';
 import { buildSemanticIndexFromArgs } from '../../src/cli/semantic-commands.js';
+import type { SemanticModelAlias } from '../../src/semantic/types.js';
+import { SEMANTIC_MODELS } from '../../src/semantic/types.js';
 import type { BenchResultRow, QuerySpec } from './compare.js';
 
 // ---------------------------------------------------------------------------
@@ -41,23 +43,36 @@ import type { BenchResultRow, QuerySpec } from './compare.js';
 // ---------------------------------------------------------------------------
 
 interface RunArgs {
-    model: string;
+    model: SemanticModelAlias;
     out: string;
     config: string;
 }
 
+/** Validate a --model alias against the SEMANTIC_MODELS registry. */
+function parseModelAlias(raw: string): SemanticModelAlias {
+    const validAliases = Object.keys(SEMANTIC_MODELS) as SemanticModelAlias[];
+    if (!validAliases.includes(raw as SemanticModelAlias)) {
+        process.stderr.write(
+            `run.ts: invalid --model alias '${raw}'. ` +
+            `Valid aliases: ${validAliases.join(', ')}.\n`,
+        );
+        process.exit(1);
+    }
+    return raw as SemanticModelAlias;
+}
+
 function parseArgs(): RunArgs {
     const argv = process.argv.slice(2);
-    let model = 'minilm';
+    let model: SemanticModelAlias = 'minilm';
     let out = '';
     let config = './arch-graph.config.ts';
 
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i]!;
         if (a === '--model' && argv[i + 1]) {
-            model = argv[++i]!;
+            model = parseModelAlias(argv[++i]!);
         } else if (a.startsWith('--model=')) {
-            model = a.slice('--model='.length);
+            model = parseModelAlias(a.slice('--model='.length));
         } else if (a === '--out' && argv[i + 1]) {
             out = argv[++i]!;
         } else if (a.startsWith('--out=')) {
@@ -82,7 +97,7 @@ function parseArgs(): RunArgs {
 // ---------------------------------------------------------------------------
 
 export async function runBench(opts: {
-    modelAlias: string;
+    modelAlias: SemanticModelAlias;
     outResultPath: string;
     configPath: string;
     queries: QuerySpec[];
@@ -108,13 +123,11 @@ export async function runBench(opts: {
             config: configPath,
             out: workDir,
             format: 'json',
-            model: modelAlias as import('../../src/semantic/types.js').SemanticModelAlias,
+            model: modelAlias,
         });
 
         // Build a single-text embedder for search queries.
-        const batchEmbedder = makeEmbedder(
-            modelAlias as import('../../src/semantic/types.js').SemanticModelAlias,
-        );
+        const batchEmbedder = makeEmbedder(modelAlias);
         const embedOneFn = async (text: string): Promise<number[]> => {
             const results = await batchEmbedder([text]);
             return results[0]!;
@@ -128,22 +141,32 @@ export async function runBench(opts: {
                 query: spec.query,
                 outDir: workDir,
                 embedder: embedOneFn,
-                modelAlias: modelAlias as import('../../src/semantic/types.js').SemanticModelAlias,
+                modelAlias,
                 topK,
             });
 
-            if (response.output.results) {
-                for (const r of response.output.results) {
-                    allRows.push({
-                        queryId: spec.id,
-                        nodeId: r.nodeId,
-                        kind: r.kind as string,
-                        label: r.label,
-                        score: r.score,
-                        path: r.path,
-                        snippet: r.snippet ?? '',
-                    });
-                }
+            // C2: check for infrastructure failures — silent empty rows misrepresent model quality.
+            if (response.output.error) {
+                throw new Error(
+                    `bench: semanticSearch returned error for query "${spec.id}": ${response.output.error} — ${response.output.hint ?? ''}`,
+                );
+            }
+            if (response.output.embedError) {
+                throw new Error(
+                    `bench: semanticSearch returned embedError for query "${spec.id}": ${response.output.embedError}`,
+                );
+            }
+
+            for (const r of response.output.results) {
+                allRows.push({
+                    queryId: spec.id,
+                    nodeId: r.nodeId,
+                    kind: r.kind,
+                    label: r.label,
+                    score: r.score,
+                    path: r.path,
+                    snippet: r.snippet ?? '',
+                });
             }
         }
 
