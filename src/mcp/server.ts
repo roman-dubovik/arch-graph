@@ -35,6 +35,7 @@ import { semanticSearch, MAX_TOP_K } from '../semantic/search.js';
 import { makeEmbedder } from '../semantic/embedder.js';
 import { readEmbeddingsJsonl } from '../semantic/io.js';
 import type { SemanticModelAlias } from '../semantic/types.js';
+import { resolveMinScore } from '../semantic/types.js';
 import { applySemanticDefaults, loadConfig } from '../core/config.js';
 
 const SERVER_NAME = 'arch-graph';
@@ -114,6 +115,15 @@ export const semanticSearchInputShape = {
         .optional()
         .default(false)
         .describe('If true, include the embedding vector for each result.'),
+    minScore: z
+        .number()
+        .min(-1)
+        .max(1)
+        .optional()
+        .describe(
+            'Minimum cosine similarity threshold. Results below this value are dropped. ' +
+            'When omitted, the per-model recommended threshold is used (e.g. 0.30 for minilm, 0.55 for e5-base).',
+        ),
 } as const;
 
 /**
@@ -606,6 +616,13 @@ export interface SemanticSearchHandlerInput {
      */
     excludeKinds?: NodeKind[];
     includeVectors?: boolean;
+    /**
+     * Caller-supplied minimum cosine similarity threshold.
+     * When provided, overrides the per-model `recommendedMinScore`.
+     * When absent, the handler resolves via {@link resolveMinScore}
+     * using the factory-bound `modelAlias`.
+     */
+    minScore?: number;
 }
 
 /**
@@ -637,7 +654,7 @@ export function makeSemanticSearchHandler(handlerOpts: SemanticSearchHandlerOpts
         })();
 
     return async (input: SemanticSearchHandlerInput) => {
-        const { query, topK = 10, kinds, excludeKinds, includeVectors = false } = input;
+        const { query, topK = 10, kinds, excludeKinds, includeVectors = false, minScore: userMinScore } = input;
 
         // Factory `lockedKinds` is authoritative. If the caller tries to pass
         // `kinds`, that would be a silent contract violation in production —
@@ -659,6 +676,9 @@ export function makeSemanticSearchHandler(handlerOpts: SemanticSearchHandlerOpts
                 ? [...baseExcludeKinds, ...excludeKinds]
                 : (baseExcludeKinds ?? excludeKinds);
 
+        // Resolve minScore: user value wins; else per-model recommended; else 0.30 fallback.
+        const effectiveMinScore = resolveMinScore(modelAlias, userMinScore);
+
         const searchRes = await semanticSearch({
             query,
             outDir,
@@ -667,6 +687,7 @@ export function makeSemanticSearchHandler(handlerOpts: SemanticSearchHandlerOpts
             topK,
             kinds: effectiveKinds,
             excludeKinds: effectiveExclude,
+            minScore: effectiveMinScore,
         });
 
         const output = searchRes.output;

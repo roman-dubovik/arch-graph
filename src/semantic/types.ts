@@ -34,6 +34,34 @@ export interface EmbedPrefix {
 /** Short alias for a supported embedding model. */
 export type SemanticModelAlias = 'minilm' | 'bge-m3' | 'e5-base' | 'arctic-m';
 
+/**
+ * Fallback `minScore` threshold used when the index manifest's model alias is
+ * absent from {@link SEMANTIC_MODELS} (i.e. unknown alias at runtime).
+ *
+ * This is the step-3 fallback in the three-step resolution:
+ *   1. User-supplied value (CLI `--min-score` / MCP `minScore`) — always wins.
+ *   2. `SEMANTIC_MODELS[alias].recommendedMinScore` — per-model calibration.
+ *   3. `DEFAULT_MIN_SCORE_FALLBACK` — when alias is missing or unrecognised.
+ */
+export const DEFAULT_MIN_SCORE_FALLBACK = 0.30 as const;
+
+/**
+ * Resolve the effective `minScore` threshold for a search call using the
+ * three-step priority chain:
+ *
+ *   1. `userValue` — if provided (not undefined), it always wins.
+ *   2. `SEMANTIC_MODELS[alias].recommendedMinScore` — per-model calibration.
+ *   3. {@link DEFAULT_MIN_SCORE_FALLBACK} (0.30) — unknown / missing alias.
+ *
+ * @param alias      The model alias resolved from config or manifest.
+ * @param userValue  The caller-supplied override, or `undefined` when absent.
+ */
+export function resolveMinScore(alias: string, userValue?: number): number {
+    if (userValue !== undefined) return userValue;
+    const entry = (SEMANTIC_MODELS as Record<string, { recommendedMinScore?: number } | undefined>)[alias];
+    return entry?.recommendedMinScore ?? DEFAULT_MIN_SCORE_FALLBACK;
+}
+
 /** Registry of all supported embedding models. */
 export const SEMANTIC_MODELS = {
     minilm: {
@@ -43,6 +71,12 @@ export const SEMANTIC_MODELS = {
         normalize: true,
         prefix: undefined,
         quantized: undefined,
+        /**
+         * Cosine similarity floor for search results.
+         * 0.30 matches the historical default — no behaviour change for MiniLM
+         * deployments. MiniLM scores are typically 0.30–0.60 for relevant matches.
+         */
+        recommendedMinScore: 0.30,
     },
     'bge-m3': {
         hubId: 'Xenova/bge-m3',
@@ -51,6 +85,11 @@ export const SEMANTIC_MODELS = {
         normalize: true,
         prefix: undefined,
         quantized: undefined,
+        /**
+         * BGE-M3 scores are typically 0.65–0.80 for relevant matches;
+         * a 0.55 floor removes noise while retaining useful results.
+         */
+        recommendedMinScore: 0.55,
     },
     'e5-base': {
         hubId: 'Xenova/multilingual-e5-base',
@@ -59,6 +98,12 @@ export const SEMANTIC_MODELS = {
         normalize: true,
         prefix: { passage: 'passage: ', query: 'query: ' } satisfies EmbedPrefix,
         quantized: undefined,
+        /**
+         * E5-base prefix normalisation yields scores 0.78–0.86 for relevant
+         * matches; a 0.55 floor removes low-quality results while preserving
+         * relevant cross-lingual hits.
+         */
+        recommendedMinScore: 0.55,
     },
     // Arctic v2.0 has only model.onnx (no model_quantized.onnx) in the upstream
     // repo, so we force fp32 loading via { quantized: false }.  The 'gte' model
@@ -71,8 +116,14 @@ export const SEMANTIC_MODELS = {
         normalize: true,
         prefix: { passage: '', query: 'query: ' } satisfies EmbedPrefix,
         quantized: false as const,
+        /**
+         * Provisional value — arctic-m has not been validated on arch-graph
+         * workloads as of 2026-05-18 (transformers.js v3 migration pending).
+         * Value is intentionally conservative to avoid over-filtering.
+         */
+        recommendedMinScore: 0.40,
     },
-} as const satisfies Record<SemanticModelAlias, { hubId: string; dim: number; pooling: string; normalize: boolean; prefix?: EmbedPrefix; quantized?: boolean }>;
+} as const satisfies Record<SemanticModelAlias, { hubId: string; dim: number; pooling: string; normalize: boolean; prefix?: EmbedPrefix; quantized?: boolean; recommendedMinScore: number }>;
 
 // ---------------------------------------------------------------------------
 // Backward-compat aliases — existing code referencing SEMANTIC_MODEL /

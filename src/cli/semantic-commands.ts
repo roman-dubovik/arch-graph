@@ -29,7 +29,7 @@ import { semanticSearch } from '../semantic/search.js';
 import type { SearchResult } from '../semantic/search.js';
 import { validateSnippetRecall } from '../validation/snippet-recall-validator.js';
 import type { SemanticModelAlias } from '../semantic/types.js';
-import { SEMANTIC_MODELS } from '../semantic/types.js';
+import { SEMANTIC_MODELS, resolveMinScore } from '../semantic/types.js';
 
 // ---------------------------------------------------------------------------
 // Arg parsing
@@ -61,6 +61,12 @@ export interface SemanticArgs {
      * regardless of this flag.
      */
     strictRecall?: boolean;
+    /**
+     * search: caller-supplied minimum cosine similarity threshold.
+     * When provided, overrides the per-model `recommendedMinScore`.
+     * When absent, `runSemanticSearch` resolves via `resolveMinScore`.
+     */
+    minScore?: number;
 }
 
 /**
@@ -79,6 +85,7 @@ export function parseSemanticArgs(argv: string[]): SemanticArgs {
     let kinds: NodeKind[] | undefined;
     let excludeKinds: NodeKind[] | undefined;
     let model: SemanticModelAlias | undefined;
+    let minScore: number | undefined;
     /** Track which preset / explicit filter flag was used so we can reject mixes. */
     let kindFilterSource: '--kinds' | '--exclude-kinds' | '--code-only' | '--docs-only' | null = null;
 
@@ -176,6 +183,27 @@ export function parseSemanticArgs(argv: string[]): SemanticArgs {
         return raw as SemanticModelAlias;
     }
 
+    /**
+     * Validate and parse a --min-score value string.
+     * Returns the parsed float on success. Writes to stderr and exits on invalid input.
+     */
+    function parseMinScore(raw: string): number {
+        const parsed = parseFloat(raw);
+        if (isNaN(parsed)) {
+            process.stderr.write(
+                `arch-graph semantic search: invalid --min-score value '${raw}': must be a number between -1 and 1.\n`,
+            );
+            process.exit(1);
+        }
+        if (parsed < -1 || parsed > 1) {
+            process.stderr.write(
+                `arch-graph semantic search: invalid --min-score value '${raw}': must be between -1 and 1.\n`,
+            );
+            process.exit(1);
+        }
+        return parsed;
+    }
+
     // For 'search', the first non-flag argument after the subcommand is the query.
     // We collect it separately.
     const positionals: string[] = [];
@@ -225,6 +253,10 @@ export function parseSemanticArgs(argv: string[]): SemanticArgs {
             model = parseModelAlias(raw);
         } else if (a.startsWith('--model=')) {
             model = parseModelAlias(a.slice('--model='.length));
+        } else if (a === '--min-score') {
+            minScore = parseMinScore(requireValue('--min-score', rest[++i]));
+        } else if (a.startsWith('--min-score=')) {
+            minScore = parseMinScore(a.slice('--min-score='.length));
         } else if (!a.startsWith('-')) {
             positionals.push(a);
         }
@@ -250,6 +282,7 @@ export function parseSemanticArgs(argv: string[]): SemanticArgs {
         excludeKinds,
         model,
         strictRecall,
+        minScore,
     };
 }
 
@@ -614,6 +647,9 @@ export async function runSemanticSearch(args: SemanticArgs): Promise<void> {
     const embedOneFn = async (text: string): Promise<number[]> =>
         embedderObj2.embedOne(text, 'query');
 
+    // Resolve minScore: user-supplied value wins; else per-model recommended; else 0.30 fallback.
+    const effectiveMinScore = resolveMinScore(modelAlias, args.minScore);
+
     const { output, exitCode, stderrWarning } = await semanticSearch({
         query: args.query,
         outDir,
@@ -622,6 +658,7 @@ export async function runSemanticSearch(args: SemanticArgs): Promise<void> {
         topK: args.k,
         kinds: args.kinds,
         excludeKinds: args.excludeKinds,
+        minScore: effectiveMinScore,
     });
 
     // Emit hash-drift or other warnings to stderr
