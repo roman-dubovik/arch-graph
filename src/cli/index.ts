@@ -706,7 +706,7 @@ async function cmdMcp(args: ParsedArgs): Promise<void> {
     const outDir = resolve(args.out);
     // Log to stderr so we don't pollute the stdio JSON-RPC channel on stdout.
     process.stderr.write(`arch-graph mcp: serving ${outDir}/graph.json over stdio\n`);
-    await startMcpServer({ out: outDir });
+    await startMcpServer({ out: outDir, config: args.config });
 }
 
 async function main(): Promise<void> {
