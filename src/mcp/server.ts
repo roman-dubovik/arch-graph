@@ -610,7 +610,7 @@ export function makeSemanticSearchHandler(handlerOpts: SemanticSearchHandlerOpts
             const resultNodeIds = new Set(output.results.map((r) => r.nodeId));
 
             try {
-                for await (const record of readEmbeddingsJsonl(embeddingsPath)) {
+                for await (const record of readEmbeddingsJsonl(embeddingsPath, output.dim)) {
                     const result = output.results.find((r) => r.nodeId === record.nodeId);
                     if (result && resultNodeIds.has(record.nodeId)) {
                         result.vector = record.vector;

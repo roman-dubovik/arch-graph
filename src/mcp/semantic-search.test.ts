@@ -298,11 +298,11 @@ describe('semantic_search handler — vectorsError on augmentation failure', () 
         const ioModule = await import('../semantic/io.js');
         let callCount = 0;
         const origReadEmbeddingsJsonl = ioModule.readEmbeddingsJsonl;
-        vi.spyOn(ioModule, 'readEmbeddingsJsonl').mockImplementation(async function* (path: string) {
+        vi.spyOn(ioModule, 'readEmbeddingsJsonl').mockImplementation(async function* (path: string, expectedDim: number) {
             callCount++;
             if (callCount === 1) {
                 // First call (search scoring): yield normally
-                yield* origReadEmbeddingsJsonl(path);
+                yield* origReadEmbeddingsJsonl(path, expectedDim);
             } else {
                 // Second call (vector augmentation): fail
                 throw new Error('disk read failure');

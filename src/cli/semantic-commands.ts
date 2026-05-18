@@ -19,9 +19,9 @@
 import { join, resolve } from 'node:path';
 import { Project, ts } from 'ts-morph';
 
-import { loadConfig } from '../core/config.js';
+import { applySemanticDefaults, loadConfig } from '../core/config.js';
 import { buildSemanticIndex } from '../semantic/builder.js';
-import { embed, embedOne } from '../semantic/embedder.js';
+import { makeEmbedder } from '../semantic/embedder.js';
 import { readFile as readFileGraph } from 'node:fs/promises';
 import type { ArchGraph, NodeKind } from '../core/types.js';
 import { NODE_KIND_VALUES } from '../core/types.js';
@@ -313,14 +313,19 @@ export async function buildSemanticIndexFromArgs(args: SemanticArgs): Promise<{ 
 
     process.stdout.write(`  source files: ${project.getSourceFiles().length}\n`);
 
+    // --- Resolve model alias from config ------------------------------------
+    const { model: modelAlias } = applySemanticDefaults(cfg.semantic);
+    const embedder = makeEmbedder(modelAlias);
+
     // --- Run builder --------------------------------------------------------
     let result;
     try {
         result = await buildSemanticIndex({
             graph,
             project,
-            embedder: embed,
+            embedder,
             outDir,
+            modelAlias,
         });
     } catch (err) {
         throw new Error(
@@ -552,10 +557,27 @@ export async function runSemanticSearch(args: SemanticArgs): Promise<void> {
     const outDir = resolve(args.out);
     const isJson = args.format !== 'table';
 
+    // Resolve model alias from config (best-effort — fall back to minilm on error).
+    let modelAlias: import('../semantic/types.js').SemanticModelAlias = 'minilm';
+    try {
+        const cfg = await loadConfig(resolve(args.config));
+        modelAlias = applySemanticDefaults(cfg.semantic).model;
+    } catch {
+        // Config load failure is non-fatal for search — model defaults to minilm.
+    }
+
+    // Build a single-text embedder bound to the resolved alias.
+    const embedderFn = makeEmbedder(modelAlias);
+    const embedOneFn = async (text: string): Promise<number[]> => {
+        const results = await embedderFn([text]);
+        return results[0]!;
+    };
+
     const { output, exitCode, stderrWarning } = await semanticSearch({
         query: args.query,
         outDir,
-        embedder: embedOne,
+        embedder: embedOneFn,
+        modelAlias,
         topK: args.k,
         kinds: args.kinds,
         excludeKinds: args.excludeKinds,
