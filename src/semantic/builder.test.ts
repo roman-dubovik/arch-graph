@@ -726,6 +726,7 @@ describe('buildSemanticIndex + semanticSearch — round-trip (PT-P1-3)', () => {
             query: 'alpha service',
             outDir: testDir,
             embedder: queryEmbedder,
+            modelAlias: 'minilm',
             topK: 3,
         });
 
