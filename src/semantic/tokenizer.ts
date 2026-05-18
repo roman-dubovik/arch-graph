@@ -41,11 +41,11 @@ function getTokenizer(alias: SemanticModelAlias): Promise<Tokenizer> {
 /**
  * Count tokens in `text` using the tokenizer for the given model alias.
  *
- * Defaults to `'minilm'` for backward compatibility when no alias is supplied,
- * but callers with access to the active build/search config should always pass
- * the resolved alias explicitly.
+ * The alias is required: using the wrong tokenizer silently produces incorrect
+ * chunk sizes (minilm counts are 20-40% off on multilingual text vs bge-m3).
+ * Pass the resolved alias from the active build or search config.
  */
-export async function countTokens(text: string, alias: SemanticModelAlias = 'minilm'): Promise<number> {
+export async function countTokens(text: string, alias: SemanticModelAlias): Promise<number> {
     const tk = await getTokenizer(alias);
     const enc = tk.encode(text);
     if (Array.isArray(enc)) return enc.length;
