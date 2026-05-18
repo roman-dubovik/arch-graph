@@ -32,9 +32,10 @@ import {
     tableUsers,
 } from './graph-queries.js';
 import { semanticSearch, MAX_TOP_K } from '../semantic/search.js';
-import { embedOne } from '../semantic/embedder.js';
+import { makeEmbedder } from '../semantic/embedder.js';
 import { readEmbeddingsJsonl } from '../semantic/io.js';
-import { SEMANTIC_DIM, SEMANTIC_MODEL } from '../semantic/types.js';
+import type { SemanticModelAlias } from '../semantic/types.js';
+import { applySemanticDefaults, loadConfig } from '../core/config.js';
 
 const SERVER_NAME = 'arch-graph';
 const SERVER_VERSION = '0.1.0';
@@ -297,11 +298,32 @@ function routeQuestion(question: string): RoutedAction {
 // Server construction.
 // ---------------------------------------------------------------------------
 
-export async function startMcpServer(opts: { out: string }): Promise<void> {
+export async function startMcpServer(opts: { out: string; config?: string }): Promise<void> {
     const graphPath = resolve(opts.out, 'graph.json');
     const loadGraphFn = makeGraphLoader(graphPath);
     // Eager load so startup errors surface immediately on stderr instead of on first tool call.
     await loadGraphFn();
+
+    // Resolve the embedding model alias from the config file (if supplied), falling back to
+    // the 'minilm' default so behaviour is identical to pre-bge-m3 deployments.
+    let resolvedModelAlias: SemanticModelAlias = 'minilm';
+    if (opts.config) {
+        try {
+            const cfg = await loadConfig(resolve(opts.config));
+            resolvedModelAlias = applySemanticDefaults(cfg.semantic).model;
+        } catch {
+            // Config absent or unreadable at startup — silently keep the minilm default.
+            // The semantic index already encodes which model it was built with; if the
+            // alias mismatches, semanticSearch will surface a structured error on first call.
+        }
+    }
+
+    // Build a single-text embedder bound to the resolved alias.
+    const batchEmbedder = makeEmbedder(resolvedModelAlias);
+    const embedOneFn = async (text: string): Promise<number[]> => {
+        const vecs = await batchEmbedder([text]);
+        return vecs[0]!;
+    };
 
     const server = new McpServer(
         { name: SERVER_NAME, version: SERVER_VERSION },
@@ -418,7 +440,7 @@ export async function startMcpServer(opts: { out: string }): Promise<void> {
         },
         // Reuse the exported handler factory so the test-accessible path and the
         // production registration share exactly the same logic.
-        makeSemanticSearchHandler({ outDir: opts.out }),
+        makeSemanticSearchHandler({ outDir: opts.out, embedder: embedOneFn, modelAlias: resolvedModelAlias }),
     );
 
     server.registerTool(
@@ -433,7 +455,7 @@ export async function startMcpServer(opts: { out: string }): Promise<void> {
                 '("first code_search; only call docs_search if nothing relevant").',
             inputSchema: codeSearchInputShape,
         },
-        makeSemanticSearchHandler({ outDir: opts.out, baseExcludeKinds: ['doc-section'] }),
+        makeSemanticSearchHandler({ outDir: opts.out, embedder: embedOneFn, modelAlias: resolvedModelAlias, baseExcludeKinds: ['doc-section'] }),
     );
 
     server.registerTool(
@@ -447,7 +469,7 @@ export async function startMcpServer(opts: { out: string }): Promise<void> {
                 'RECOMMENDED USAGE: call together with code_search in parallel — see code_search description.',
             inputSchema: docsSearchInputShape,
         },
-        makeSemanticSearchHandler({ outDir: opts.out, lockedKinds: ['doc-section'] }),
+        makeSemanticSearchHandler({ outDir: opts.out, embedder: embedOneFn, modelAlias: resolvedModelAlias, lockedKinds: ['doc-section'] }),
     );
 
     server.registerTool(
@@ -522,8 +544,19 @@ export { routeQuestion };
 export interface SemanticSearchHandlerOpts {
     /** Directory where arch-graph-out lives (contains graph.json + semantic/). */
     outDir: string;
-    /** Injectable embedder — defaults to `embedOne` in production. */
+    /**
+     * Injectable single-text embedder.  In production this is derived from
+     * `makeEmbedder(modelAlias)`.  Tests supply a fake here to avoid real model
+     * downloads.  When omitted, the factory builds a default embedder bound to
+     * `modelAlias` (defaults to `'minilm'`).
+     */
     embedder?: (text: string) => Promise<number[]>;
+    /**
+     * Model alias that was used to build the index.  Passed to `semanticSearch`
+     * so it can validate the manifest's model/dim against the expected values.
+     * Defaults to `'minilm'` when omitted.
+     */
+    modelAlias?: SemanticModelAlias;
     /**
      * Locks the handler to this kind-whitelist. Authoritative — overrides any
      * `kinds` passed in the caller input (and a runtime assert fires if the
@@ -569,7 +602,26 @@ export interface SemanticSearchHandlerInput {
  * and error paths) without spinning up the MCP SDK transport.
  */
 export function makeSemanticSearchHandler(handlerOpts: SemanticSearchHandlerOpts) {
-    const { outDir, embedder: embedderFn = embedOne, lockedKinds, baseExcludeKinds } = handlerOpts;
+    const {
+        outDir,
+        embedder: embedderFn,
+        modelAlias = 'minilm',
+        lockedKinds,
+        baseExcludeKinds,
+    } = handlerOpts;
+
+    // Default single-text embedder: bound to the resolved alias so production
+    // and test paths share the same lazy-loading path.  Tests that supply their
+    // own `embedder` override this entirely.
+    const effectiveEmbedder =
+        embedderFn ??
+        (() => {
+            const batch = makeEmbedder(modelAlias);
+            return async (text: string): Promise<number[]> => {
+                const vecs = await batch([text]);
+                return vecs[0]!;
+            };
+        })();
 
     return async (input: SemanticSearchHandlerInput) => {
         const { query, topK = 10, kinds, excludeKinds, includeVectors = false } = input;
@@ -597,7 +649,8 @@ export function makeSemanticSearchHandler(handlerOpts: SemanticSearchHandlerOpts
         const searchRes = await semanticSearch({
             query,
             outDir,
-            embedder: embedderFn,
+            embedder: effectiveEmbedder,
+            modelAlias,
             topK,
             kinds: effectiveKinds,
             excludeKinds: effectiveExclude,

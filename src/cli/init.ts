@@ -268,8 +268,13 @@ export async function checkBgeSizeWarning(
         if (applySemanticDefaults(resolvedCfg.semantic).model === 'bge-m3') {
             write('Note: bge-m3 model is ~500 MB on first download.\n');
         }
-    } catch {
-        // Non-fatal: config may not be loadable yet.
+    } catch (err) {
+        // Silently ignore only when config is absent (init wizard runs before
+        // the config is written).  Rethrow programmer errors so they surface.
+        const isConfigMissing =
+            (err instanceof Error && err.message.startsWith('config not found')) ||
+            ((err as NodeJS.ErrnoException).code === 'ENOENT');
+        if (!isConfigMissing) throw err;
     }
 }
 
