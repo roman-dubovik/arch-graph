@@ -237,4 +237,5 @@ describe('fileSizeBytes', () => {
         const size = await fileSizeBytes(join(testDir, 'missing.txt'));
         expect(size).toBe(0);
     });
+
 });
