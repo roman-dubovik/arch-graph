@@ -7,20 +7,20 @@ describe('tokenizer', () => {
     });
 
     it('counts tokens deterministically for a fixed input', async () => {
-        const a = await countTokens('hello world');
-        const b = await countTokens('hello world');
+        const a = await countTokens('hello world', 'minilm');
+        const b = await countTokens('hello world', 'minilm');
         expect(a).toBe(b);
         expect(a).toBeGreaterThan(0);
     });
 
     it('returns more tokens for longer text', async () => {
-        const short = await countTokens('hi');
-        const long = await countTokens('hi '.repeat(100));
+        const short = await countTokens('hi', 'minilm');
+        const long = await countTokens('hi '.repeat(100), 'minilm');
         expect(long).toBeGreaterThan(short);
     });
 
     it('handles empty string', async () => {
-        const n = await countTokens('');
+        const n = await countTokens('', 'minilm');
         expect(n).toBeGreaterThanOrEqual(0);
     });
 });
