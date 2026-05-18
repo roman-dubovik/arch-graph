@@ -218,6 +218,79 @@ describe('runBench — mocked pipeline (unit test)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// runBench — error-throw paths (P1-I)
+// ---------------------------------------------------------------------------
+
+describe('runBench — semanticSearch error paths (P1-I)', () => {
+    /** Set up the full mock stack (build + embedder) and return a spy on semanticSearch. */
+    async function setupMockStack() {
+        const commandsModule = await import('../../src/cli/semantic-commands.js');
+        vi.spyOn(commandsModule, 'buildSemanticIndexFromArgs').mockResolvedValue({ outDir: testDir });
+
+        const embedderModule = await import('../../src/semantic/embedder.js');
+        vi.spyOn(embedderModule, 'makeEmbedder').mockReturnValue(
+            async (_texts: string[]) => _texts.map(() => Array(384).fill(0) as number[]),
+        );
+
+        const searchModule = await import('../../src/semantic/search.js');
+        return vi.spyOn(searchModule, 'semanticSearch');
+    }
+
+    it('rejects when semanticSearch returns output.error (e.g. semantic-index-missing)', async () => {
+        const searchSpy = await setupMockStack();
+        searchSpy.mockResolvedValue({
+            output: {
+                query: 'q',
+                results: [],
+                error: 'semantic-index-missing',
+                hint: 'run: arch-graph semantic build',
+                model: 'Xenova/paraphrase-multilingual-MiniLM-L12-v2',
+                dim: 384,
+                indexBuiltAt: '2026-05-18T00:00:00.000Z',
+                graphHashMatches: false,
+            },
+            exitCode: 4 as const,
+            stderrWarning: undefined,
+        });
+
+        await expect(
+            runBench({
+                modelAlias: 'minilm',
+                outResultPath: join(testDir, 'r.json'),
+                configPath: './arch-graph.config.ts',
+                queries: STUB_QUERIES,
+            }),
+        ).rejects.toThrow(/semantic-index-missing/);
+    });
+
+    it('rejects when semanticSearch returns output.embedError (e.g. model load failed)', async () => {
+        const searchSpy = await setupMockStack();
+        searchSpy.mockResolvedValue({
+            output: {
+                query: 'q',
+                results: [],
+                embedError: 'model load failed',
+                model: 'Xenova/paraphrase-multilingual-MiniLM-L12-v2',
+                dim: 384,
+                indexBuiltAt: '2026-05-18T00:00:00.000Z',
+                graphHashMatches: false,
+            },
+            exitCode: 4 as const,
+            stderrWarning: undefined,
+        });
+
+        await expect(
+            runBench({
+                modelAlias: 'minilm',
+                outResultPath: join(testDir, 'r.json'),
+                configPath: './arch-graph.config.ts',
+                queries: STUB_QUERIES,
+            }),
+        ).rejects.toThrow(/model load failed/);
+    });
+});
+
+// ---------------------------------------------------------------------------
 // Integration test — skipped unless model is cached
 // ---------------------------------------------------------------------------
 
