@@ -61,7 +61,11 @@ Replace MiniLM-L12 (384-dim) with `bge-m3` (1024-dim). Forecast: +5–10pp overa
 
 ### 🟡 2. CSS / UI semantics (gated on BGE-M3)
 
-Under research: Tailwind utility expansion (`text-right` → "text-align right"), per-class RU synonym dictionary, real CSS file parsing. Wait for BGE-M3 numbers first — if C_ui ≥ 50% post-migration, this work likely isn't needed.
+Under research: Tailwind utility expansion (`text-right` → "text-align right"), per-class RU synonym dictionary, real CSS file parsing.
+
+**Hypothesis**: C_ui caps at 33–50% because the **embedder** weakly maps RU intent to EN technical vocabulary, not because the snippets lack tokens. Concrete case from the eval: query «обрезать сообщение в 3 точки» misses a `<p className="truncate text-ellipsis">` node — the snippet contains both `truncate` and `text-ellipsis`, but MiniLM-L12 doesn't bridge them to the Russian phrasing. If the bottleneck is the embedder's cross-lingual mapping, BGE-M3 (1024-dim, larger multilingual + technical corpus) should fix it without any snippet changes.
+
+**Decision rule**: ship BGE-M3 first, re-measure C_ui. If ≥ 50% — skip this work entirely (the hypothesis held; the embedder was the limit). If still < 50% — pick one of the three CSS approaches by error analysis on the surviving misses.
 
 ### 🟡 3. Hybrid BM25 + semantic
 
@@ -82,6 +86,18 @@ By request — each extractor is 1–2 days.
 ### ⚪ 6. Broader eval corpus
 
 Currently three NestJS monorepos. A Node monolith or GraphQL backend would broaden the bench shape.
+
+### ⚪ 7. Semantic extension of `compare --share`
+
+Today `compare --share` measures structural graph size (nodes, edges, tokens) and emits anonymous numbers for the public bench Discussion. Adding a semantic recall number would let each contributor publish two data points instead of one — and surface the multilingual handling feature in community-comparable numbers.
+
+**Mode A — paraphrase recall (deterministic, no LLM)**: auto-generate 2–3 queries per sampled node from templates (`endpoint:UsersController.create` → "how do we create users" / "create user endpoint"); score by whether the source node is in top-K. Single recall percentage in the share payload. ~1–2 days.
+
+**Mode B — multilingual delta** (extension of A): generate the same templates in two languages (EN + user-picked once via `arch-graph init`); emit two percentages. The gap exposes the multilingual embedder feature in one number. Translation tables (~20 templates per language) are deterministic, no LLM. +0.5 days.
+
+**Mode C — LLM-generated queries** (NOT for `--share`): a separate `arch-graph semantic eval --llm` command — non-deterministic, non-comparable, useful for local self-eval, but not appropriate for the community contribution stream. 2–3 days if it ships at all.
+
+**Deferred** because contribution volume is currently low. Revisit when external `bench/contributed/` submissions accumulate and the marginal value of a second number per submission becomes meaningful.
 
 ## Deferred / explicit non-goals
 
