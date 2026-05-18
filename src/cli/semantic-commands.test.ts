@@ -15,6 +15,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { parseSemanticArgs, runSemanticSearch, runSemanticBuild } from './semantic-commands.js';
+import * as embedderModule from '../semantic/embedder.js';
 
 // ---------------------------------------------------------------------------
 // Test directory lifecycle (for runSemanticSearch integration tests)
@@ -1033,5 +1034,98 @@ describe('buildSemanticIndexFromArgs — --model flag overrides config (AC2.1)',
         configSpy.mockRestore();
         buildSpy.mockRestore();
         recallSpy.mockRestore();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// E5-T2: Build wiring — embedder closure uses 'passage' mode
+// ---------------------------------------------------------------------------
+
+describe('buildSemanticIndexFromArgs — embedder closure uses passage mode (E5-T2)', () => {
+    it('the embedder closure passed to buildSemanticIndex calls embed(texts, "passage")', async () => {
+        const makeEmbedderSpy = vi.spyOn(embedderModule, 'makeEmbedder');
+
+        // Track calls to embed on the returned embedder object
+        const embedCalls: Array<{ texts: string[]; mode: string | undefined }> = [];
+        makeEmbedderSpy.mockReturnValue({
+            embed: async (texts: string[], mode?: string) => {
+                embedCalls.push({ texts, mode });
+                return texts.map(() => []);
+            },
+            embedOne: async (_text: string, _mode?: string) => [],
+        } as unknown as ReturnType<typeof embedderModule.makeEmbedder>);
+
+        const { configSpy, buildSpy } = await setupBuildMocks(testDir);
+        const validatorModule = await import('../validation/snippet-recall-validator.js');
+        const recallSpy = vi.spyOn(validatorModule, 'validateSnippetRecall').mockResolvedValue({
+            kind: 'empty',
+        });
+        vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+        await runSemanticBuild({
+            sub: 'build',
+            config: join(testDir, 'arch-graph.config.ts'),
+            out: testDir,
+            format: 'json',
+            model: 'minilm',
+        });
+
+        // Extract the embedder closure that was passed to buildSemanticIndex
+        expect(buildSpy).toHaveBeenCalledTimes(1);
+        const buildCallArg = buildSpy.mock.calls[0]![0];
+        const capturedEmbedder = buildCallArg.embedder as (texts: string[]) => Promise<number[][]>;
+
+        // Invoke the captured closure and verify it routes to embed(..., 'passage')
+        await capturedEmbedder(['test text']);
+        expect(embedCalls).toHaveLength(1);
+        expect(embedCalls[0]!.mode).toBe('passage');
+        expect(embedCalls[0]!.texts).toEqual(['test text']);
+
+        makeEmbedderSpy.mockRestore();
+        configSpy.mockRestore();
+        buildSpy.mockRestore();
+        recallSpy.mockRestore();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// E5-T2: Search wiring — embedOne closure uses 'query' mode
+// ---------------------------------------------------------------------------
+
+describe('runSemanticSearch — embedOne closure uses query mode (E5-T2)', () => {
+    it('the embedOne closure passed to semanticSearch calls embedOne(text, "query")', async () => {
+        const makeEmbedderSpy = vi.spyOn(embedderModule, 'makeEmbedder');
+
+        const embedOneCalls: Array<{ text: string; mode: string | undefined }> = [];
+        makeEmbedderSpy.mockReturnValue({
+            embed: async (texts: string[], _mode?: string) => texts.map(() => []),
+            embedOne: async (text: string, mode?: string) => {
+                embedOneCalls.push({ text, mode });
+                return [];
+            },
+        } as unknown as ReturnType<typeof embedderModule.makeEmbedder>);
+
+        const searchSpy = await setupSearchSidecarsAndSpy(testDir);
+
+        const args = parseSemanticArgs(['search', 'find auth flow', '--model', 'minilm']);
+        try {
+            await runSemanticSearch({ ...args, out: testDir });
+        } catch { /* process.exit */ }
+
+        // Extract the embedder closure that was passed to semanticSearch
+        // (semanticSearch uses opts.embedder — a single-text (string) => number[] fn)
+        expect(searchSpy).toHaveBeenCalledTimes(1);
+        const searchCallArg = searchSpy.mock.calls[0]![0];
+        const capturedEmbedder = searchCallArg.embedder as (text: string) => Promise<number[]>;
+
+        // Invoke the captured closure and verify it routes to embedOne(..., 'query')
+        await capturedEmbedder('find auth flow');
+        expect(embedOneCalls).toHaveLength(1);
+        expect(embedOneCalls[0]!.mode).toBe('query');
+        expect(embedOneCalls[0]!.text).toBe('find auth flow');
+
+        makeEmbedderSpy.mockRestore();
+        searchSpy.mockRestore();
     });
 });

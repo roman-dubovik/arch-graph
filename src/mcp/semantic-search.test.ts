@@ -30,6 +30,7 @@ import { SEMANTIC_DIM, SEMANTIC_MODEL, SEMANTIC_SCHEMA_VERSION } from '../semant
 import { MAX_TOP_K } from '../semantic/search.js';
 import { writeEmbeddingsJsonl, writeManifest } from '../semantic/io.js';
 import { makeSemanticSearchHandler, semanticSearchInputShape } from './server.js';
+import * as embedderModule from '../semantic/embedder.js';
 
 // ---------------------------------------------------------------------------
 // Test setup
@@ -588,5 +589,38 @@ describe('makeSemanticSearchHandler — bge-m3 alias (P1-K)', () => {
         expect(output.error).toBeUndefined();
         expect(output.model).toBe(SEMANTIC_MODEL);
         expect(output.dim).toBe(SEMANTIC_DIM);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// E5-T2: MCP wiring — default embedder uses embedOne(text, 'query')
+// ---------------------------------------------------------------------------
+
+describe('makeSemanticSearchHandler — default embedder uses query mode (E5-T2)', () => {
+    it('when no embedder is passed, the factory calls embedOne(text, "query")', async () => {
+        const graphHash = await writeGraphJson('{"nodes":[]}');
+        await writeSidecar([makeRecord('svc:a', 'service', unitVec(0))], graphHash);
+
+        // Spy on makeEmbedder to intercept the embedder object created by the factory
+        const embedOneCalls: Array<{ text: string; mode: string | undefined }> = [];
+        const makeEmbedderSpy = vi.spyOn(embedderModule, 'makeEmbedder');
+        makeEmbedderSpy.mockReturnValue({
+            embed: async (texts: string[], _mode?: string) => texts.map(() => unitVec(0)),
+            embedOne: async (text: string, mode?: string) => {
+                embedOneCalls.push({ text, mode });
+                return unitVec(0);
+            },
+        } as unknown as ReturnType<typeof embedderModule.makeEmbedder>);
+
+        // No embedder override — factory must build its own
+        const handler = makeSemanticSearchHandler({ outDir: testDir });
+        await handler({ query: 'find auth flow', topK: 1 });
+
+        // The factory should have called embedOne with mode='query'
+        expect(embedOneCalls).toHaveLength(1);
+        expect(embedOneCalls[0]!.mode).toBe('query');
+        expect(embedOneCalls[0]!.text).toBe('find auth flow');
+
+        makeEmbedderSpy.mockRestore();
     });
 });
