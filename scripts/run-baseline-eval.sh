@@ -14,13 +14,9 @@
 #
 # Environment overrides:
 #   SKIP_BUILD=1            Same as --skip-build (env var form).
-#   MODEL=minilm            Semantic embedder alias: minilm (default) | bge-m3 | e5-base | arctic-m.
+#   MODEL=minilm            Semantic embedder alias: minilm (default) | e5-base.
 #                           Switches both `semantic build` and `semantic search`
-#                           CLI calls. With bge-m3 the index is rebuilt under
-#                           the 1024-dim model; you can keep both indexes
-#                           side-by-side via separate --out dirs (currently
-#                           CLI rebuilds in place — set SKIP_BUILD=0 the first
-#                           time per model).
+#                           CLI calls.
 #   EVAL_K=10               Number of top results to inspect (default: 10).
 #   EVAL_MODE=per-category  Search routing strategy. One of:
 #     single        — single search call, no kind-bucket filter (legacy
@@ -73,8 +69,8 @@ esac
 DATE="$(date +%Y-%m-%d)"
 MODEL="${MODEL:-minilm}"
 case "$MODEL" in
-  minilm|bge-m3|e5-base|arctic-m) ;;
-  *) echo "ERROR: invalid MODEL='$MODEL'. Use minilm|bge-m3|e5-base|arctic-m." >&2; exit 1 ;;
+  minilm|e5-base) ;;
+  *) echo "ERROR: invalid MODEL='$MODEL'. Use minilm|e5-base." >&2; exit 1 ;;
 esac
 _MODEL_SUFFIX=""
 if [[ "$MODEL" != "minilm" ]]; then
