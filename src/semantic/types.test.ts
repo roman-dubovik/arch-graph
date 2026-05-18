@@ -8,7 +8,7 @@
  *   - Missing/unknown alias in manifest → falls back to DEFAULT_MIN_SCORE_FALLBACK (0.30).
  *   - Edge case: invalid/empty string alias at runtime.
  */
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
     DEFAULT_MIN_SCORE_FALLBACK,
@@ -93,19 +93,48 @@ describe('resolveMinScore — per-model recommendedMinScore (step 2)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// resolveMinScore — step 3: unknown / missing alias → fallback 0.30
+// resolveMinScore — step 3: unknown / missing alias → fallback 0.30 + warning
 // ---------------------------------------------------------------------------
 
 describe('resolveMinScore — fallback for unknown alias (step 3)', () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
     it('falls back to DEFAULT_MIN_SCORE_FALLBACK (0.30) for unknown alias string', () => {
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
         expect(resolveMinScore('completely-unknown')).toBe(DEFAULT_MIN_SCORE_FALLBACK);
     });
 
     it('falls back to 0.30 for empty string alias', () => {
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
         expect(resolveMinScore('')).toBe(DEFAULT_MIN_SCORE_FALLBACK);
     });
 
     it('falls back to 0.30 for alias matching no registry key', () => {
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
         expect(resolveMinScore('not-in-registry')).toBe(DEFAULT_MIN_SCORE_FALLBACK);
+    });
+
+    it('emits a stderr warning when alias is unknown', () => {
+        const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        resolveMinScore('ghost-model');
+        const output = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+        expect(output).toContain('ghost-model');
+        expect(output).toContain('not in the registry');
+        expect(output).toContain(`minScore=${DEFAULT_MIN_SCORE_FALLBACK}`);
+        expect(output).toContain('arch-graph semantic build');
+    });
+
+    it('does NOT emit a warning when alias is in the registry (no false positives)', () => {
+        const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        resolveMinScore('e5-base');
+        expect(stderrSpy).not.toHaveBeenCalled();
+    });
+
+    it('does NOT emit a warning when user value is provided (step 1 short-circuits)', () => {
+        const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        resolveMinScore('ghost-model', 0.5);
+        expect(stderrSpy).not.toHaveBeenCalled();
     });
 });

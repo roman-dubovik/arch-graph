@@ -64,6 +64,13 @@ export const DEFAULT_MIN_SCORE_FALLBACK = 0.30 as const;
 export function resolveMinScore(alias: string, userValue?: number): number {
     if (userValue !== undefined) return userValue;
     const entry = (SEMANTIC_MODELS as Record<string, { recommendedMinScore?: number } | undefined>)[alias];
+    if (!entry) {
+        process.stderr.write(
+            `[arch-graph semantic] WARNING: model alias "${alias}" is not in the registry; ` +
+            `using default minScore=${DEFAULT_MIN_SCORE_FALLBACK}. ` +
+            `If your index was built with a removed model, run \`arch-graph semantic build\` to rebuild.\n`,
+        );
+    }
     return entry?.recommendedMinScore ?? DEFAULT_MIN_SCORE_FALLBACK;
 }
 
