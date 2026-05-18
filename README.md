@@ -52,10 +52,18 @@ Sister project: **[graphify](https://github.com/safishamsi/graphify)** is a gene
 
 ## Install
 
-From a local clone:
+One command — clones into `~/.arch-graph`, installs deps, symlinks `arch-graph` onto your `PATH`, and asks whether to initialise the current directory:
 
 ```sh
-git clone <repo> ~/.arch-graph
+curl -fsSL https://roman-dubovik.github.io/arch-graph/install.sh | sh
+```
+
+If you say **yes** at the init prompt, the installer chains straight into `arch-graph init` — an interactive wizard that writes `arch-graph.config.ts`, optionally installs the Claude Code skill, optionally adds a git pre-push hook, and runs the first build right away. If you say **no**, you get a hint with the exact command to run later in your project directory, plus a `.gitignore` reminder for `arch-graph-out/`.
+
+**Prefer to read the script before piping it to `sh`?** Same script, two commands:
+
+```sh
+git clone https://github.com/roman-dubovik/arch-graph ~/.arch-graph
 bash ~/.arch-graph/scripts/install.sh
 ```
 

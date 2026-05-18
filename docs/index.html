@@ -694,28 +694,29 @@ arch-graph docs-search "how to set up MSSQL agent" # docs bucket only</code></pr
     <section class="section section-install" id="install" aria-labelledby="install-title">
       <div class="container">
         <p class="section-eyebrow">Quick start</p>
-        <h2 id="install-title" class="section-title">Three commands.</h2>
+        <h2 id="install-title" class="section-title">One command to get going.</h2>
 
         <ol class="install-steps">
           <li class="install-step reveal">
             <div class="step-head">
               <span class="step-num">1</span>
-              <h3>Install</h3>
+              <h3>Install + (optionally) init</h3>
             </div>
-            <p>Clone, run the installer. Symlinks <code>arch-graph</code> into <code>~/.local/bin</code>. Requires Node ≥ 20.</p>
+            <p>Clones into <code>~/.arch-graph</code>, symlinks <code>arch-graph</code> into <code>~/.local/bin</code>, then asks whether to initialise the current directory. If yes, chains straight into the wizard — writes <code>arch-graph.config.ts</code>, optionally installs the Claude Code skill, optionally adds a git hook, and runs the first build. Requires Node ≥ 20.</p>
             <div class="code-block">
               <button class="copy-btn" type="button" aria-label="Copy install command">Copy</button>
-              <pre><code class="lang-sh">git clone https://github.com/roman-dubovik/arch-graph ~/.arch-graph
-bash ~/.arch-graph/scripts/install.sh</code></pre>
+              <pre><code class="lang-sh">cd path/to/your/nestjs-monorepo
+curl -fsSL https://roman-dubovik.github.io/arch-graph/install.sh | sh</code></pre>
             </div>
+            <p class="step-foot dim small">Prefer to read the script first? Same effect: <code>git clone https://github.com/roman-dubovik/arch-graph ~/.arch-graph &amp;&amp; bash ~/.arch-graph/scripts/install.sh</code>. If you skip the init prompt, run <code>arch-graph init</code> later in any project — and add <code>arch-graph-out/</code> to <code>.gitignore</code> so build output stays local.</p>
           </li>
 
           <li class="install-step reveal">
             <div class="step-head">
               <span class="step-num">2</span>
-              <h3>Init</h3>
+              <h3>Init separately (if you skipped above)</h3>
             </div>
-            <p>Interactive wizard. Picks defaults, writes <code>arch-graph.config.ts</code>, optionally installs the Claude Code skill and git hook.</p>
+            <p>Same interactive wizard, run on demand in any project. Asks about config, Claude skill, git hook, and offers to run the first build right away.</p>
             <div class="code-block">
               <button class="copy-btn" type="button" aria-label="Copy init command">Copy</button>
               <pre><code class="lang-sh">cd path/to/your/nestjs-monorepo
@@ -726,9 +727,9 @@ arch-graph init</code></pre>
           <li class="install-step reveal">
             <div class="step-head">
               <span class="step-num">3</span>
-              <h3>Build</h3>
+              <h3>Rebuild on demand</h3>
             </div>
-            <p>Emits <code>graph.json</code>, <code>diagnostics.json</code>, <code>validation.json</code>, <code>graph.mermaid</code> — plus an advisory recall table per domain.</p>
+            <p>The init wizard runs the first build automatically. Re-run whenever you want a fresh graph — emits <code>graph.json</code>, <code>diagnostics.json</code>, <code>validation.json</code>, <code>graph.mermaid</code>, plus an advisory recall table per domain.</p>
             <div class="code-block">
               <button class="copy-btn" type="button" aria-label="Copy build command">Copy</button>
               <pre><code class="lang-sh">arch-graph build               # advisory: always exit 0
