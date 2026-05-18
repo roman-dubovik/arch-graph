@@ -29,19 +29,26 @@
 
 ## What's new (May 2026)
 
-Five features shipped on the `develop` branch in May 2026:
+Eight features shipped on `main` in May 2026:
 
 - **`doc-section-v1`** — Markdown files are now indexed as first-class `doc-section` graph nodes alongside code, enabling semantic search over your project's documentation.
-- **`code-vs-docs-v1`** — Semantic search splits into `code_search` and `docs_search` MCP tools, eliminating the dilution effect where docs crowded out code results (measured: A_find recall 80% → 30% → 70% on project-a project).
+- **`code-vs-docs-v1`** — Semantic search splits into `code_search` and `docs_search` MCP tools, eliminating the dilution effect where docs crowded out code results (measured: A_find recall 80% → 30% → 70%).
 - **`ui-uplift-v1`** — fe-component snippet now includes a `classes: <Tailwind tokens>` block and i18n strings appended to embed-text, improving UI-component retrieval accuracy.
 - **`openapi-enrich-v1`** — OpenAPI YAML enrichment for endpoint nodes; route descriptions and parameter summaries are folded into the semantic embedding.
 - **`fe-i18n-multi-enum-v1`** — Multi-file locale support (`locales/<lang>/<feature>.json`) and TS enum-member resolution in `@Controller` path templates.
+- **`closing-tails-v1`** — module recall raised to 100% across all 3 reference projects via excluded-denominator fix.
+- **`snippet-fix-all-kinds-v1`** — snippet extraction now works for every node kind (provider, service, controller, fe-component, etc.).
+- **`init-strategy-v1`** — installer wizard prompts for semantic strategy (`both-buckets` / `fallback`) and writes it to the project's `CLAUDE.md`.
+
+Plus a head-to-head benchmark on 103 fuzzy-intent queries vs graphify (RU 67% vs 35%, EN strict 53.6% vs 56.5% — near tie under apples-to-apples scoring). See [`bench/REPRODUCE.md`](bench/REPRODUCE.md) and [`bench/self-build/README.md`](bench/self-build/README.md) for the reproducible mini-bench.
 
 ---
 
 **Static architecture graph for NestJS monorepos.** Extracts NATS pub/sub, BullMQ queues, TypeORM (`@InjectRepository` → `@Entity` and `@ManyToOne` / `@OneToMany` / `@ManyToMany` / `@OneToOne` → `db-relation`), NestJS module DI (modules / providers / exports / controllers + `@UseGuards` / `@UseInterceptors` / `@UsePipes`), HTTP inter-service calls, and TypeScript imports (static + dynamic + CommonJS `require`) into a single typed graph at `arch-graph-out/graph.json`. Plus an import-cycle diagnostic across `ts-import` / `lib-usage` / `di-import` edges in `diagnostics.cycles`. Designed so an LLM agent can answer "who publishes on this subject?", "what guards run on this endpoint?", or "what tables relate to entity X?" without grepping or guessing.
 
-Sister project: **[graphify](https://github.com/safishamsi/graphify)** is a generic semantic-graph tool (papers, docs, code, mixed media). arch-graph is the opposite end of the trade-off — it knows nothing about general semantics, but it knows NestJS / NATS / BullMQ / TypeORM directly. The edges it produces are deterministic, and the per-build recall gate enforces ≥ 95% recall (≥ 80% for TS imports) against ground truth derived from your own code; any regression below those floors fails `arch-graph build --strict`. Use graphify for "what is this codebase about", arch-graph for "what calls what".
+**Local multilingual semantic search runs alongside, fully offline.** A dense-vector index over node `embed-text` powers `semantic_search` / `code_search` / `docs_search` MCP tools. Multilingual embedder (`Xenova/paraphrase-multilingual-MiniLM-L12-v2`, 384-dim) via `transformers.js` — no API key, no GPU, no network. Russian, English, mixed queries hit the same index. **Zero LLM tokens on both build and query.**
+
+Sister project: **[graphify](https://github.com/safishamsi/graphify)** is a generic semantic-graph tool (papers, docs, code, mixed media) that uses LLM subagents at build time to extract relationships. arch-graph is the deterministic end of the trade-off — it knows NestJS / NATS / BullMQ / TypeORM directly via `ts-morph`, with zero LLM tokens at build, plus a local multilingual semantic layer on top. The per-build recall gate enforces ≥ 95% recall (≥ 80% for TS imports) against ground truth derived from your own code; any regression below those floors fails `arch-graph build --strict`. Head-to-head benchmark: RU 67% vs 35% (multilingual handling), EN-keyword strict 53.6% vs 56.5% (near tie under apples-to-apples scoring). Both tools are local-first; the difference is graphify needs LLM subagents to build the graph, arch-graph does not.
 
 ## Install
 
@@ -321,7 +328,7 @@ The semantic layer is independent and opt-in: arch-graph works identically well 
   Use the **fallback** strategy: call `code_search` first. Only call `docs_search` if the code results don't answer the question. Halves retrieval cost; same hit-rate; agent gets less context.
   ```
 
-  Measured hit-rate (3 projects, 103 queries): overall 47% → 67% with split tools (both-buckets and fallback are identical on that suite). Final number from ongoing eval: `<TBD: final>`. See `INTEGRATION-2BRAIN.md` for the federation contract (2-brain Phase 3 will optionally use this).
+  Measured hit-rate (3 projects, 103 queries): overall **47% → 67%** with split tools (both-buckets and fallback are identical on that suite). Final post-semantic head-to-head numbers vs graphify: RU **67% vs 35%** (+32pp arch-graph), EN-keyword strict **53.6% vs 56.5%** (near tie). See [`docs/comparisons/2026-05-17-arch-graph-vs-graphify-eval.md`](docs/comparisons/2026-05-17-arch-graph-vs-graphify-eval.md) for the full memo and [`INTEGRATION-2BRAIN.md`](INTEGRATION-2BRAIN.md) for the federation contract (2-brain Phase 3 will optionally use this).
 
 ## MCP server
 
