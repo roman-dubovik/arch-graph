@@ -12,6 +12,11 @@ The following items from Tier 1, 2, and 3 are now live on `main`. Each shipped w
 - **What**: Johnson's algorithm enumerates elementary cycles across `ts-import`, `lib-usage`, and `di-import` edge subgraphs. Surfaced as `diagnostics.cycles` (per-kind counts + per-cycle `nodes` + `edgeLocations`). Mermaid output highlights cycle-participating nodes with a red `style` directive. Graceful `RangeError` degradation with a structured `error` sentinel on very large graphs.
 - **Where**: `src/detectors/cycles.ts`, `src/output/graph-mermaid.ts` cycle subgraph, `src/pipeline/build.ts` `safeDetectCycles` wrapper.
 
+### Semantic sidecar — Tier 1 ✅
+- **What**: Optional dense-vector semantic search layer over nodes, built on hybrid (node label + AST snippet) embeddings via local `@xenova/transformers` with model `Xenova/paraphrase-multilingual-MiniLM-L12-v2` (384-dim, multilingual). New CLI subcommands `arch-graph semantic build` and `arch-graph semantic search` plus MCP tool `semantic_search` for fuzzy intent queries ("find code about X"). Sidecar persisted at `arch-graph-out/<repo>/semantic/{manifest.json, embeddings.jsonl}`. Designed for federation with sister project 2-brain Phase 3.
+- **Where**: `src/semantic/` (embedder, snippet extraction, I/O), `src/cli/semantic-commands.ts`, `src/mcp/server.ts` tool registration.
+- **Diagnostic**: extends `diagnostics.json` with `semantic.counts.{indexed, skipped, fileReadErrors, transformerErrors}`, `skippedNodes` (capped at 50), `indexSizeBytes`, `model`, `dim`. Never throws on index errors; failures are values.
+
 ### Guards / Interceptors / Pipes — Tier 1 ✅
 - **What**: `@UseGuards`, `@UseInterceptors`, `@UsePipes` decorators captured as typed edges (`di-guard`, `di-interceptor`, `di-pipe`) with `attachedTo: class | method:<name>`. Handles class-level + method-level decorators, multi-arg variants, `new InterceptorInstance()`, `Namespace.Guard` property access, `(AuthGuard as Type)`, `(((...)))` wrappers; `forwardRef`-aliased imports also resolved.
 - **Where**: `src/extractors/di/filter-chain.ts`, `src/mapper/di-to-graph.ts`.

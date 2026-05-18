@@ -1,5 +1,17 @@
 # arch-graph
 
+## What's new (May 2026)
+
+Five features shipped on the `develop` branch in May 2026:
+
+- **`doc-section-v1`** — Markdown files are now indexed as first-class `doc-section` graph nodes alongside code, enabling semantic search over your project's documentation.
+- **`code-vs-docs-v1`** — Semantic search splits into `code_search` and `docs_search` MCP tools, eliminating the dilution effect where docs crowded out code results (measured: A_find recall 80% → 30% → 70% on project-a project).
+- **`ui-uplift-v1`** — fe-component snippet now includes a `classes: <Tailwind tokens>` block and i18n strings appended to embed-text, improving UI-component retrieval accuracy.
+- **`openapi-enrich-v1`** — OpenAPI YAML enrichment for endpoint nodes; route descriptions and parameter summaries are folded into the semantic embedding.
+- **`fe-i18n-multi-enum-v1`** — Multi-file locale support (`locales/<lang>/<feature>.json`) and TS enum-member resolution in `@Controller` path templates.
+
+---
+
 **Static architecture graph for NestJS monorepos.** Extracts NATS pub/sub, BullMQ queues, TypeORM (`@InjectRepository` → `@Entity` and `@ManyToOne` / `@OneToMany` / `@ManyToMany` / `@OneToOne` → `db-relation`), NestJS module DI (modules / providers / exports / controllers + `@UseGuards` / `@UseInterceptors` / `@UsePipes`), HTTP inter-service calls, and TypeScript imports (static + dynamic + CommonJS `require`) into a single typed graph at `arch-graph-out/graph.json`. Plus an import-cycle diagnostic across `ts-import` / `lib-usage` / `di-import` edges in `diagnostics.cycles`. Designed so an LLM agent can answer "who publishes on this subject?", "what guards run on this endpoint?", or "what tables relate to entity X?" without grepping or guessing.
 
 Sister project: **[graphify](https://github.com/safishamsi/graphify)** is a generic semantic-graph tool (papers, docs, code, mixed media). arch-graph is the opposite end of the trade-off — it knows nothing about general semantics, but it knows NestJS / NATS / BullMQ / TypeORM directly. The edges it produces are deterministic, and the per-build recall gate enforces ≥ 95% recall (≥ 80% for TS imports) against ground truth derived from your own code; any regression below those floors fails `arch-graph build --strict`. Use graphify for "what is this codebase about", arch-graph for "what calls what".
@@ -189,6 +201,15 @@ arch-graph claude uninstall   # remove the section
 arch-graph install-skill      # install the skill file separately, any time
 ```
 
+### Semantic search strategy
+
+During `arch-graph init`, the wizard asks you to choose an agent-side semantic search strategy:
+
+- **both-buckets** (default, recommended) — `code_search` and `docs_search` are called in parallel on every retrieval, giving the LLM the richest context (~$0.005/query on Sonnet, ~$0.025/query on Opus).
+- **fallback** — `code_search` runs first; `docs_search` is only called on a miss. Halves cost for cost-sensitive projects (~$0.003/query on Sonnet, ~$0.012/query on Opus). Recall is identical to `both-buckets`.
+
+The choice is persisted as a `## arch-graph semantic search strategy` section. If no `CLAUDE.md` exists (or the user declines to append), it is written to `CLAUDE.md.arch-graph-snippet.md` in the project root. If a `CLAUDE.md` is already present, the wizard asks whether to append to it or create the separate file. To change the strategy later, edit that file or re-run `arch-graph init`.
+
 ## Git hook
 
 The pre-commit hook (default) rebuilds the graph before each commit that touches `.ts` files and **auto-stages** the output artifacts (`graph.json`, `diagnostics.json`, `validation.json`, `graph.mermaid`) so the graph is always coherent with the code in history.
@@ -240,6 +261,41 @@ publisher  my-api        user.created   nats-publish  apps/api/user.service.ts  
 
 The Claude Code skill calls these subcommands automatically when answering architecture questions — it's cheaper than an MCP round-trip and requires no running server.
 
+## Semantic search (optional)
+
+The above commands answer **deterministic structural questions** — "who publishes on this subject?" — using exact edge traversal. For fuzzy intent like "find code about X" or "how does authentication work?", arch-graph optionally adds **semantic dense-vector search** over node embeddings.
+
+The semantic layer is independent and opt-in: arch-graph works identically well without it. If you enable it, the CLI and MCP server gain new tools:
+
+- **Model**: `Xenova/paraphrase-multilingual-MiniLM-L12-v2` (384-dimensional, multilingual, cross-comparable with sister project 2-brain).
+- **How it works**: each GraphNode (service, module, table, queue, **doc-section**) gets a dense vector computed from `label + kind + AST snippet` (or Markdown section text for doc-section nodes), persisted in a sidecar at `arch-graph-out/<repo>/semantic/`. Markdown files matching the `docs` include globs (including root-level `*.md` by default) are indexed automatically.
+- **Quick start**: 
+  ```sh
+  arch-graph semantic build              # one-time: downloads model (~135 MB, cached), extracts snippets, embeds
+  arch-graph semantic search "auth flow" # fuzzy search for top 10 results
+  arch-graph semantic search "logging" --k 20 --json  # top 20, structured output
+  ```
+- **First build**: the model downloads ~135 MB on first run and is cached under `~/.cache/transformers/` (or via `HF_HOME` env var), so subsequent `semantic build` and `semantic search` run much faster.
+- **Sidecar layout**: `arch-graph-out/<repo>/semantic/{manifest.json, embeddings.jsonl}` — one JSON record per line, streamable for large graphs.
+- **MCP tools**: when the MCP server is running (`arch-graph mcp`), three semantic tools become available:
+  - `semantic_search` — mixed bucket (code + docs together)
+  - `code_search` — code nodes only (excludes `doc-section`)
+  - `docs_search` — doc-section only (Markdown sections)
+
+  Splitting into two buckets removes the dilution effect: when docs are in the same index as code, doc-section nodes can crowd out the relevant code nodes for "find X" queries (measured: A_find recall dropped 80% → 30% on project-a; restored to 70% with `code_search`).
+
+  **Recommended agent pattern (default): `both-buckets`** — call `code_search` and `docs_search` in parallel for every retrieval. The LLM gets two labeled top-K lists and picks what's useful. Doubles retrieval cost (~$0.005/query on Sonnet, ~$0.025/query on Opus) but eliminates intent-routing risk.
+
+  **Override per-project**: write in the project's `CLAUDE.md`:
+
+  ```markdown
+  ## arch-graph search strategy
+
+  Use the **fallback** strategy: call `code_search` first. Only call `docs_search` if the code results don't answer the question. Halves retrieval cost; same hit-rate; agent gets less context.
+  ```
+
+  Measured hit-rate (3 projects, 103 queries): overall 47% → 67% with split tools (both-buckets and fallback are identical on that suite). Final number from ongoing eval: `<TBD: final>`. See `INTEGRATION-2BRAIN.md` for the federation contract (2-brain Phase 3 will optionally use this).
+
 ## MCP server
 
 Optional — for editors with an MCP client configured:
@@ -248,7 +304,16 @@ Optional — for editors with an MCP client configured:
 arch-graph mcp   # starts the stdio MCP server backed by arch-graph-out/graph.json
 ```
 
-Exposes 12 tools: `subject_publishers`, `subject_subscribers`, `queue_producers`, `queue_consumers`, `service_dependencies`, `service_dependents`, `module_imports`, `table_users`, `path`, `explain`, `query`, `stats`. For unresolved / dynamic call-sites, read `arch-graph-out/diagnostics.json` directly — there is no MCP tool for it.
+Exposes 15 tools — 12 structural + 3 semantic.
+
+**Structural (12):** `subject_publishers`, `subject_subscribers`, `queue_producers`, `queue_consumers`, `service_dependencies`, `service_dependents`, `module_imports`, `table_users`, `path`, `explain`, `query`, `stats`.
+
+**Semantic (3, requires sidecar index):**
+- `code_search` — vector search over code nodes only (services, modules, tables, queues, endpoints, fe-components). Use for "find code that does X".
+- `docs_search` — vector search over `doc-section` nodes only (Markdown sections). Use for "find documentation about Y".
+- `semantic_search` — mixed bucket (code + docs together). Useful as a fallback when you don't know which bucket the answer lives in, but expect lower precision on mixed corpora.
+
+See [Semantic search](#semantic-search-optional) for setup and the recommended `both-buckets` agent pattern. For unresolved / dynamic call-sites, read `arch-graph-out/diagnostics.json` directly — there is no MCP tool for it.
 
 The CLI query subcommands are preferred over MCP when both are available (no stdio overhead, no server lifecycle).
 
@@ -262,6 +327,8 @@ This is a **static** extractor. It does not see runtime configuration, container
 - **D4** — Runtime DI overrides (`{ provide: TOKEN, useFactory }` that resolves at runtime). Static analysis sees the factory call, not its output.
 - **D5** — Decorator metadata from external libs that doesn't follow the NestJS conventions encoded here.
 - **D6** — Inferred type-only edges. Type-level uses are not graph edges; only value-level usages are.
+
+**Semantic search limitations**: the current embedding model (`Xenova/paraphrase-multilingual-MiniLM-L12-v2`) has a known ceiling on UI-component retrieval (`C_ui` hit-rate: 33–50%) because Tailwind class tokens and i18n key strings are poor semantic signals for this model. The `ui-uplift-v1` improvement (appending class names + i18n strings to embed-text) brings partial improvement but doesn't fully close the gap. Planned: evaluate BGE-M3 as a replacement model; its code-aware training may perform better on component-level queries.
 
 To extend coverage, add an extractor under `src/extractors/<domain>/` and wire it into `src/pipeline/build.ts` and a `mapper/` that emits typed edges. The validation harness in `src/validation/` is the contract — every extractor must produce a ground-truth comparison that gates `arch-graph build` at the configured recall floor.
 
@@ -277,7 +344,18 @@ Honourable mentions for narrower / different categories: [nestjs-spelunker](http
 
 ## Benchmark
 
-Quantitative comparison with graphify across 5 NestJS monorepos lives in `bench/report.md`. Key finding: arch-graph used **7.6× fewer LLM context tokens** than graphify on the run there (688k vs 5.2M tokens across the same 15 questions, same compression aggressiveness, same `cl100k_base` encoder), because it returns typed structured results instead of raw graph dumps. Mean recall under the substring-presence necessary-condition heuristic was 100% (arch-graph) vs 39% (graphify) on that suite — a permissive "did the context even contain the answer" check, not an end-to-end LLM eval. The five reference projects are anonymized as `Project A`–`E`. The yaml in `bench/questions.yaml` has since been extended to 30 questions; re-running needs the private reference monorepos and is not reflected in the numbers above. To reproduce on your own monorepos, drop one `configs/<id>.config.ts` per project and run `bash bench/run.sh` — see `bench/README.md`.
+Two benchmarks are committed, each measuring a different question.
+
+**Post-semantic (current, 2026-05-17):** 103 fuzzy-intent queries × 3 NestJS monorepos, run through both tools. Live in [`docs/comparisons/2026-05-17-arch-graph-vs-graphify-eval.md`](docs/comparisons/2026-05-17-arch-graph-vs-graphify-eval.md). Headline:
+
+- Overall hit-rate: **arch-graph 67% vs graphify 35%** (+32pp) — 80%+ of queries are in Russian; graphify does keyword-BFS over English code-node labels and returns "no matching nodes" for most non-English fuzzy queries. arch-graph's multilingual embedder (`Xenova/paraphrase-multilingual-MiniLM-L12-v2`) bridges the language gap.
+- Token cost per query: arch-graph ~1000, graphify ~350 (graphify is cheaper when it returns anything at all).
+- Per-query wins: 37 arch-graph, 4 graphify, 32 ties, 30 both-miss.
+- English-identifier queries (e.g. "BaseRepository pattern", "useFormValidation hook") are roughly tied.
+
+**Pre-semantic (historical, 2026-05-16):** 15-question structural-edge comparison on 5 NestJS monorepos lives in [`bench/report.md`](bench/report.md). Key finding from that run: arch-graph used **7.6× fewer LLM context tokens** than graphify (688k vs 5.2M, same `cl100k_base` encoder), with 100% vs 39% substring-presence recall. Those numbers reflect arch-graph's **structural-only** behavior before the semantic sidecar shipped; the post-semantic head-to-head above supersedes them for any question about retrieval quality.
+
+To reproduce on your own monorepos, drop one `configs/<id>.config.ts` per project and run `bash bench/run.sh` — see `bench/README.md`. Or use `arch-graph compare` (below) to auto-generate questions from your own graph.
 
 ## Compare on your own repo
 

@@ -34,7 +34,7 @@ export type MermaidSliceMode =
     | { kind: 'per-service' }
     | { kind: 'domain'; domain: DomainKey };
 
-export type DomainKey = 'nats' | 'bullmq' | 'typeorm' | 'http' | 'di' | 'ts-import' | 'lib';
+export type DomainKey = 'nats' | 'bullmq' | 'typeorm' | 'http' | 'di' | 'ts-import' | 'lib' | 'fe' | 'endpoint' | 'config' | 'scoped';
 
 export interface MermaidWriteOptions {
     /** Slicing mode. Defaults to `{ kind: 'full' }`. */
@@ -147,6 +147,15 @@ const NODE_KIND_META: Record<NodeKind, NodeKindMeta> = {
     provider: { subgraphId: 'providers', subgraphLabel: 'Providers', cssClass: 'module', order: 7 },
     external: { subgraphId: 'externals', subgraphLabel: 'External hosts', cssClass: 'lib', order: 8 },
     file: { subgraphId: 'files', subgraphLabel: 'Files', cssClass: 'file', order: 9 },
+    endpoint: { subgraphId: 'endpoints', subgraphLabel: 'Endpoints', cssClass: 'endpoint', order: 10 },
+    'config-field': { subgraphId: 'config_fields', subgraphLabel: 'Config fields', cssClass: 'config', order: 11 },
+    'scoped-marker': { subgraphId: 'scoped_markers', subgraphLabel: 'Scoped markers', cssClass: 'scoped', order: 12 },
+    'db-entity-field': { subgraphId: 'db_entity_fields', subgraphLabel: 'DB entity fields', cssClass: 'db', order: 13 },
+    'fe-page': { subgraphId: 'fe_pages', subgraphLabel: 'FE pages', cssClass: 'fe', order: 14 },
+    'fe-component': { subgraphId: 'fe_components', subgraphLabel: 'FE components', cssClass: 'fe', order: 15 },
+    'fe-route': { subgraphId: 'fe_routes', subgraphLabel: 'FE routes', cssClass: 'fe', order: 16 },
+    'fe-hook': { subgraphId: 'fe_hooks', subgraphLabel: 'FE hooks', cssClass: 'fe', order: 17 },
+    'doc-section': { subgraphId: 'docs', subgraphLabel: 'Docs', cssClass: 'docs', order: 18 },
 };
 
 const SUBGRAPH_ORDER: NodeKind[] = (Object.keys(NODE_KIND_META) as NodeKind[]).sort(
@@ -190,6 +199,14 @@ const EDGE_SYNTAX: Record<EdgeKind, string> = {
     'di-pipe': '-.->|pipe|',
     'ts-import': '-.->|import|',
     'lib-usage': '-.->|lib|',
+    'fe-imports': '-.->|fe-import|',
+    'fe-renders': '-.->|renders|',
+    'fe-routes-to': '-.->|routes-to|',
+    'endpoint-of': '-.->|endpoint-of|',
+    'endpoint-calls': '==>|calls|',
+    'config-read-by': '-.->|config-read|',
+    'entity-has-field': '--o|has-field|',
+    'scoped': '-.->|scoped|',
 };
 
 /**
@@ -218,6 +235,14 @@ const EDGE_DOMAIN: Record<EdgeKind, DomainKey> = {
     'di-pipe': 'di',
     'ts-import': 'ts-import',
     'lib-usage': 'lib',
+    'fe-imports': 'fe',
+    'fe-renders': 'fe',
+    'fe-routes-to': 'fe',
+    'endpoint-of': 'endpoint',
+    'endpoint-calls': 'endpoint',
+    'config-read-by': 'config',
+    'entity-has-field': 'typeorm',
+    'scoped': 'scoped',
 };
 
 /**
@@ -243,6 +268,20 @@ function nodeDeclaration(node: GraphNode, idMap: Map<string, string>): string {
         case 'module':
         case 'provider':
             return `${id}{{"${label}"}}`;
+        case 'endpoint':
+            return `${id}>"${label}"]`;
+        case 'config-field':
+            return `${id}[/"${label}"/]`;
+        case 'scoped-marker':
+            return `${id}(["${label}"])`;
+        case 'db-entity-field':
+            return `${id}["${label}"]`;
+        case 'fe-page':
+        case 'fe-component':
+        case 'fe-hook':
+            return `${id}["${label}"]`;
+        case 'fe-route':
+            return `${id}(["${label}"])`;
     }
 }
 
@@ -254,6 +293,10 @@ const CLASS_DEFS = [
     'classDef db fill:#fee2e2,stroke:#b91c1c,color:#7f1d1d;',
     'classDef module fill:#e0f2fe,stroke:#0369a1,color:#0c4a6e;',
     'classDef file fill:#f1f5f9,stroke:#475569,color:#0f172a;',
+    'classDef endpoint fill:#fdf4ff,stroke:#a21caf,color:#701a75;',
+    'classDef config fill:#fff7ed,stroke:#c2410c,color:#7c2d12;',
+    'classDef scoped fill:#ecfdf5,stroke:#059669,color:#064e3b;',
+    'classDef fe fill:#fce7f3,stroke:#be185d,color:#831843;',
 ].join('\n    ');
 
 export function renderMermaid(
@@ -536,7 +579,7 @@ export function parseSliceMode(raw: string): MermaidSliceMode {
         const key = raw.slice('domain:'.length);
         if (!isDomainKey(key)) {
             throw new Error(
-                `unknown mermaid-slice domain '${key}'; valid: nats, bullmq, typeorm, http, di, ts-import, lib`,
+                `unknown mermaid-slice domain '${key}'; valid: nats, bullmq, typeorm, http, di, ts-import, lib, endpoint, config, scoped`,
             );
         }
         return { kind: 'domain', domain: key };
@@ -554,7 +597,10 @@ function isDomainKey(s: string): s is DomainKey {
         s === 'http' ||
         s === 'di' ||
         s === 'ts-import' ||
-        s === 'lib'
+        s === 'lib' ||
+        s === 'endpoint' ||
+        s === 'config' ||
+        s === 'scoped'
     );
 }
 

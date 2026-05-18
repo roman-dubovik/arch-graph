@@ -2,7 +2,13 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
     test: {
-        include: ['src/**/*.test.ts'],
+        include: ['src/**/*.test.ts', 'src/**/*.test-d.ts'],
+        typecheck: {
+            enabled: true,
+            // Separate tsconfig — base tsconfig.json excludes *.test-d.ts; this override re-includes them for typecheck only.
+            tsconfig: './tsconfig.typecheck.json',
+            include: ['src/**/*.test-d.ts'],
+        },
         exclude: ['node_modules', 'dist', 'arch-graph-out', 'poc', '.worktrees'],
         coverage: {
             provider: 'v8',
@@ -30,6 +36,7 @@ export default defineConfig({
                 'src/cli/build-tips.ts',
                 'src/cli/skill.ts',
                 'src/cli/marker-block.ts',
+                'src/cli/semantic-commands.ts',
                 // project-registry.ts is INCLUDED in coverage (per-file threshold below)
                 'src/mcp/**',
                 'src/compare/**',
@@ -116,6 +123,133 @@ export default defineConfig({
                     statements: 80,
                     functions: 85,
                     branches: 70,
+                },
+                // Task 3 — Semantic search CLI (standard gate: 95/95/95/90)
+                'src/semantic/search.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                // Task 2 — Semantic build CLI (standard gate: 95/95/95/90)
+                'src/semantic/builder.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                // Task 1 — Semantic foundation (standard gate: 95/95/95/90)
+                'src/semantic/types.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                'src/semantic/embedder.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                'src/semantic/snippet.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                'src/semantic/io.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                // Track A — FE Level 1 (standard gate: 95/95/95/90)
+                'src/extractors/fe/react-patterns.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                'src/extractors/fe/router-patterns.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                'src/extractors/fe/extractor.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                'src/mapper/fe-to-graph.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                'src/validation/fe-validator.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                // Var 2 — Endpoint extractor + mapper + validator
+                'src/extractors/endpoint/extractor.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                'src/mapper/endpoint-to-graph.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                'src/validation/endpoint-validator.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                // Var 2 — Config extractor + mapper + validator
+                'src/extractors/config/extractor.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                'src/mapper/config-to-graph.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                'src/validation/config-validator.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                // Var 2 — db-entity-field extractor + mapper + validator
+                'src/extractors/typeorm/fields.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                'src/mapper/entity-fields-to-graph.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
+                },
+                'src/validation/db-entity-fields-validator.ts': {
+                    lines: 95,
+                    statements: 95,
+                    functions: 95,
+                    branches: 90,
                 },
             },
         },

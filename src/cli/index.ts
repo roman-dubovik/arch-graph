@@ -19,14 +19,18 @@ import { runInitWizard } from './init.js';
 import { installSkill } from './skill.js';
 import { parseQueryArgs, QUERY_CMDS, runQueryCommand } from './query-commands.js';
 import { parseCompareArgs, runCompareCommand } from './compare-command.js';
+import { parseSemanticArgs, runSemanticBuild, runSemanticSearch } from './semantic-commands.js';
 import {
     tipsForBullmq,
     tipsForDi,
+    tipsForFe,
     tipsForHttp,
     tipsForImports,
     tipsForNats,
     tipsForTypeorm,
 } from './build-tips.js';
+import { computeStrictFails, type StrictDomainName } from './strict-gate.js';
+export { computeStrictFails } from './strict-gate.js';
 import type { BuildValidation, DiagnosticsReport } from '../core/types.js';
 
 interface ParsedArgs {
@@ -120,6 +124,14 @@ Usage:
                         Auto-detects ./graphify-out/ if --graphify omitted.
                         --share: contribute anonymized counts to the public bench.
 
+Semantic sidecar (optional — requires 'semantic build' first):
+  arch-graph semantic build   [--out <dir>] [--config <path>] [--repo <id>]
+                              Embed all graph nodes and write arch-graph-out/semantic/.
+  arch-graph semantic search  "<query>" [--out <dir>] [--repo <id>] [--k <n>]
+                              [--json|--table] [--kinds k1,k2,...]
+                              Cosine kNN search over the semantic sidecar.
+                              Exit codes: 0=found, 4=empty results, 1=sidecar missing.
+
 Graph query subcommands (read arch-graph-out/graph.json):
   arch-graph who-publishes  <subject>      NATS publishers of subject (e.g. user.created)
   arch-graph who-subscribes <subject>      NATS subscribers of subject
@@ -150,7 +162,7 @@ Flags:
 Defaults:
   --config  ./arch-graph.config.ts
   --out     ./arch-graph-out
-  --mode    pre-commit          (for \`hook install\`)
+  --mode    pre-commit          (for 'hook install')
 
 Mermaid slice modes (default writes graph.mermaid; flag adds an extra slice):
   full              full graph (already written as graph.mermaid)
@@ -345,6 +357,84 @@ function buildDomainRows(
         rows.push({ name: 'imports', recall, resolve: NaN, floor: 0.8, status, tips });
     }
 
+    // ---- FE (React/Next.js) ----
+    {
+        const v = validation.fe.summary;
+        const en = enabled.fe!;
+        let status: DomainStatus;
+        let recall = NaN;
+        let tips: string[] = [];
+        if (!en) {
+            status = 'disabled';
+        } else if (
+            v.groundTruthComponents === 0 &&
+            v.groundTruthRoutes === 0 &&
+            v.groundTruthHooks === 0
+        ) {
+            status = 'no-gt';
+        } else {
+            const recallVals: number[] = [];
+            if (v.groundTruthComponents > 0) recallVals.push(v.recallComponents);
+            if (v.groundTruthRoutes > 0) recallVals.push(v.recallRoutes);
+            if (v.groundTruthHooks > 0) recallVals.push(v.recallHooks);
+            recall = recallVals.length > 0 ? Math.min(...recallVals) : 1;
+            status = recall >= 0.9 ? 'ok' : 'warn';
+            if (status === 'warn') tips = tipsForFe(validation.fe);
+        }
+        rows.push({ name: 'fe', recall, resolve: NaN, floor: 0.9, status, tips });
+    }
+
+    // ---- endpoint (Var 2) ----
+    if (validation.endpoint) {
+        const vr = validation.endpoint;
+        const en = enabled.endpoint!;
+        let status: DomainStatus;
+        let recall = NaN;
+        if (!en) {
+            status = 'disabled';
+        } else if (vr.groundTruthCount === 0) {
+            status = 'no-gt';
+        } else {
+            recall = vr.recall ?? 1;
+            status = recall >= 0.95 ? 'ok' : 'warn';
+        }
+        rows.push({ name: 'endpoint', recall, resolve: NaN, floor: 0.95, status, tips: [] });
+    }
+
+    // ---- config (Var 2) ----
+    if (validation.config) {
+        const vc = validation.config;
+        const en = enabled.config!;
+        let status: DomainStatus;
+        let recall = NaN;
+        if (!en) {
+            status = 'disabled';
+        } else if (vc.groundTruthCount === 0) {
+            status = 'no-gt';
+        } else {
+            recall = vc.recall ?? 1;
+            status = recall >= 0.9 ? 'ok' : 'warn';
+        }
+        rows.push({ name: 'config', recall, resolve: NaN, floor: 0.9, status, tips: [] });
+    }
+
+    // ---- db-entity-field (Var 2) ----
+    if (validation.dbEntityFields) {
+        const vf = validation.dbEntityFields;
+        const en = enabled.dbEntityFields!;
+        let status: DomainStatus;
+        let recall = NaN;
+        if (!en) {
+            status = 'disabled';
+        } else if (vf.groundTruthCount === 0) {
+            status = 'no-gt';
+        } else {
+            recall = vf.recall ?? 1;
+            status = recall >= 0.95 ? 'ok' : 'warn';
+        }
+        rows.push({ name: 'db-entity-field', recall, resolve: NaN, floor: 0.95, status, tips: [] });
+    }
+
     return rows;
 }
 
@@ -417,102 +507,15 @@ function printValidationTable(rows: DomainRow[]): void {
 }
 
 // ---------------------------------------------------------------------------
-// Strict-mode gate (same semantics as the old hard-fail, but collected here)
+// Strict-mode gate — delegated to strict-gate.ts (computeStrictFails re-exported above)
 // ---------------------------------------------------------------------------
-
-function computeStrictFails(
-    validation: BuildValidation,
-    enabled: Record<string, boolean>,
-): string[] {
-    const fails: string[] = [];
-    const n = validation.nats.summary;
-    const t = validation.typeorm.summary;
-    const b = validation.bullmq.summary;
-    const d = validation.di.summary;
-    const h = validation.http.summary;
-    const i = validation.imports.summary;
-
-    // Per-role zero-GT: handlers misconfig and senders misconfig fail independently.
-    if (enabled.nats) {
-        if (n.groundTruthHandlers === 0) fails.push(`nats: zero handler ground-truth — check subscribe decorators / wrapperSubscribeApis`);
-        if (n.groundTruthSenders === 0) fails.push(`nats: zero sender ground-truth — check wrapperPublishApis (typo'd class name?)`);
-        strictGateRecall('nats', 'handlers', n.groundTruthHandlers, n.recallHandlers, fails);
-        strictGateRecall('nats', 'senders', n.groundTruthSenders, n.recallSenders, fails);
-    }
-    if (enabled.typeorm) {
-        if (t.groundTruthInjections === 0) fails.push(`typeorm: zero injection ground-truth — check appsGlob / @InjectRepository usage`);
-        if (t.groundTruthEntities === 0) fails.push(`typeorm: zero entity ground-truth — check @Entity declarations in libs/`);
-        strictGateRecall('typeorm', 'injections', t.groundTruthInjections, t.recallInjections, fails);
-        strictGateRecall('typeorm', 'entities', t.groundTruthEntities, t.recallEntities, fails);
-        strictGateResolve('typeorm', t.totalInjections, t.resolveRate, fails);
-    }
-    if (enabled.http) {
-        if (h.groundTruthCalls === 0) {
-            fails.push(`http: zero ground-truth — set domains.http=false if this project has no HTTP usage`);
-        }
-        strictGateRecall('http', 'recall', h.groundTruthCalls, h.recallCalls, fails);
-    }
-    if (enabled.bullmq) {
-        const anyGt = b.groundTruthProducers + b.groundTruthConsumers + b.groundTruthRegistrations;
-        if (anyGt === 0) fails.push(`bullmq: zero ground-truth across producers/consumers/registrations — set domains.bullmq=false if this project has no BullMQ`);
-        strictGateRecall('bullmq', 'producers', b.groundTruthProducers, b.recallProducers, fails);
-        strictGateRecall('bullmq', 'consumers', b.groundTruthConsumers, b.recallConsumers, fails);
-        strictGateRecall('bullmq', 'registrations', b.groundTruthRegistrations, b.recallRegistrations, fails);
-        const totalSites = b.totalProducers + b.totalConsumers + b.totalRegistrations;
-        strictGateResolve('bullmq', totalSites, b.resolveRate, fails);
-    }
-    if (enabled.di) {
-        if (d.groundTruthModules === 0) {
-            fails.push(`di: zero @Module ground-truth — set domains.di=false if this project is not NestJS`);
-        }
-        strictGateRecall('di', 'modules', d.groundTruthModules, d.recallModules, fails);
-        strictGateRecall('di', 'imports-fields', d.groundTruthImportsFields, d.recallImportsFields, fails);
-        strictGateRecall('di', 'providers-fields', d.groundTruthProvidersFields, d.recallProvidersFields, fails);
-        strictGateRecall('di', 'exports-fields', d.groundTruthExportsFields, d.recallExportsFields, fails);
-        strictGateRecall('di', 'controllers-fields', d.groundTruthControllersFields, d.recallControllersFields, fails);
-        const totalRefs = d.totalImports + d.totalProviders + d.totalExports + d.totalControllers;
-        strictGateResolve('di', totalRefs, d.resolveRate, fails);
-    }
-    if (enabled.imports) {
-        if (i.groundTruthStatic === 0) {
-            fails.push(`imports: zero ground-truth — appsGlob/libsGlob almost certainly broken`);
-        } else if (i.recallStatic < 0.8) {
-            fails.push(`imports recall ${pct(i.recallStatic)} (< 80%)`);
-        }
-    }
-
-    return fails;
-}
-
-function strictGateRecall(
-    domain: string,
-    field: string,
-    gt: number,
-    recall: number,
-    fails: string[],
-    threshold = 0.95,
-): void {
-    if (gt === 0) return;
-    if (recall < threshold) fails.push(`${domain} ${field} ${pct(recall)}`);
-}
-
-function strictGateResolve(
-    domain: string,
-    total: number,
-    rate: number,
-    fails: string[],
-    threshold = 0.95,
-): void {
-    if (total === 0) return;
-    if (rate < threshold) fails.push(`${domain} resolve ${pct(rate)} (< ${pct(threshold)})`);
-}
 
 // ---------------------------------------------------------------------------
 // Build command
 // ---------------------------------------------------------------------------
 
 async function cmdBuild(args: ParsedArgs): Promise<void> {
-    const ALLOWED_ONLY = ['nats', 'typeorm', 'bullmq', 'di', 'http', 'imports'] as const;
+    const ALLOWED_ONLY = ['nats', 'typeorm', 'bullmq', 'di', 'http', 'imports', 'fe', 'endpoint', 'config', 'db-entity-field'] as const;
     if (args.only && !ALLOWED_ONLY.includes(args.only as (typeof ALLOWED_ONLY)[number])) {
         process.stderr.write(
             `error: --only=${args.only} not yet supported; available: ${ALLOWED_ONLY.join(', ')}\n`,
@@ -576,13 +579,17 @@ async function cmdBuild(args: ParsedArgs): Promise<void> {
     }
 
     // Determine which domains are enabled
-    const enabled: Record<string, boolean> = {
+    const enabled: Record<StrictDomainName, boolean> = {
         nats: cfg.domains?.nats !== false,
         typeorm: cfg.domains?.typeorm !== false,
         bullmq: cfg.domains?.bullmq !== false,
         di: cfg.domains?.di !== false,
         http: cfg.domains?.http !== false,
         imports: cfg.domains?.imports !== false,
+        fe: cfg.domains?.fe !== false,
+        endpoint: cfg.domains?.endpoint !== false,
+        config: cfg.domains?.config !== false,
+        dbEntityFields: cfg.domains?.dbEntityFields !== false,
     };
 
     // Build per-domain rows for advisory table
@@ -602,10 +609,6 @@ async function cmdBuild(args: ParsedArgs): Promise<void> {
         }
     }
     // Default (advisory) mode: always exit 0
-}
-
-function pct(n: number): string {
-    return `${(n * 100).toFixed(1)}%`;
 }
 
 function describeSlice(slice: MermaidSliceMode): string {
@@ -637,6 +640,7 @@ async function cmdDiagnose(args: ParsedArgs): Promise<void> {
     const di = result.diagnostics.di;
     const hd = result.diagnostics.http;
     const im = result.diagnostics.imports;
+    const fe = result.diagnostics.fe;
     process.stdout.write(`\n--- diagnostics for ${cfg.id} ---\n`);
     process.stdout.write(`[nats]    literal=${n.counts.literal} pattern=${n.counts.pattern} dynamic=${n.counts.dynamic} unresolved=${n.counts.unresolved}\n`);
     process.stdout.write(`[typeorm] resolved=${t.counts.resolved} unresolvedEntity=${t.counts.unresolvedEntity} unowned=${t.counts.unowned} entityWarnings=${t.counts.entityDecoratorWarnings}\n`);
@@ -644,6 +648,7 @@ async function cmdDiagnose(args: ParsedArgs): Promise<void> {
     process.stdout.write(`[di]      modules=${di.counts.modules} imports=${di.counts.imports} providers=${di.counts.providers} exports=${di.counts.exports} controllers=${di.counts.controllers} unresolvedRefs=${di.counts.unresolvedRefs} unowned=${di.counts.unowned}\n`);
     process.stdout.write(`[http]    total=${hd.counts.totalSites} literal=${hd.counts.literal} envRef=${hd.counts.envRef} pattern=${hd.counts.pattern} unresolved=${hd.counts.unresolved} internal=${hd.counts.internal} external=${hd.counts.external} unowned=${hd.counts.unowned}\n`);
     process.stdout.write(`[imports] static=${im.counts.totalStatic} dynamic=${im.counts.totalDynamic} cjsRequire=${im.counts.totalCjsRequire} resolved=${im.counts.resolvedToOwner} external/unres=${im.counts.externalOrUnresolved} unresolvedInternal=${im.counts.unresolvedInternal}\n`);
+    process.stdout.write(`[fe]      unresolvedImports=${fe.counts.unresolvedImports} unresolvedRenders=${fe.counts.unresolvedRenders} unowned=${fe.counts.unowned}\n`);
 
     if (n.unresolved.length > 0) {
         process.stdout.write(`\nTop 10 unresolved NATS subjects:\n`);
@@ -668,6 +673,20 @@ async function cmdDiagnose(args: ParsedArgs): Promise<void> {
         process.stdout.write(`\nTop 10 unresolved internal imports (likely typo'd alias or broken path):\n`);
         for (const u of im.unresolvedImports.slice(0, 10)) {
             process.stdout.write(`  ${u.location.file}:${u.location.line}  '${u.specifier}'\n`);
+        }
+    }
+
+    if (fe.unresolved.length > 0) {
+        process.stdout.write(`\nTop 10 unresolved FE references (fe-imports / fe-renders):\n`);
+        for (const u of fe.unresolved.slice(0, 10)) {
+            process.stdout.write(`  ${u.kind}  '${u.ref}'  reason=${u.reason}\n`);
+        }
+    }
+
+    if (fe.unowned.length > 0) {
+        process.stdout.write(`\nTop 10 unowned FE nodes (outside appsGlob/libsGlob):\n`);
+        for (const u of fe.unowned.slice(0, 10)) {
+            process.stdout.write(`  ${u.kind}  ${u.file}\n`);
         }
     }
 
@@ -716,6 +735,17 @@ async function main(): Promise<void> {
         process.stderr.write(`unknown subcommand: hook ${sub}\n${HELP}`);
         process.exit(1);
     }
+    if (cmd === 'semantic') {
+        const { sub, ...rest } = parseSemanticArgs(argv.slice(1));
+        if (sub === 'build') return runSemanticBuild({ sub, ...rest });
+        if (sub === 'search') return runSemanticSearch({ sub, ...rest });
+        process.stderr.write(
+            `unknown subcommand: semantic ${sub}\n` +
+            `  Usage: arch-graph semantic build [--out <dir>] [--config <path>] [--repo <id>]\n` +
+            `         arch-graph semantic search "<query>" [--out <dir>] [--repo <id>] [--k <n>] [--json|--table] [--kinds k1,k2,...]\n`,
+        );
+        process.exit(1);
+    }
     if (cmd === 'install-skill') {
         return installSkill();
     }
@@ -760,7 +790,12 @@ async function main(): Promise<void> {
     }
 }
 
-main().catch((err) => {
-    process.stderr.write(`fatal: ${err}\n${(err as Error)?.stack ?? ''}\n`);
-    process.exit(1);
-});
+// Guard against running during vitest imports — the CLI is not a library and
+// the top-level `main()` call must only fire when executed as a script, not
+// when the module is imported by a test that only needs exported functions.
+if (process.env['VITEST'] === undefined) {
+    main().catch((err) => {
+        process.stderr.write(`fatal: ${err}\n${(err as Error)?.stack ?? ''}\n`);
+        process.exit(1);
+    });
+}

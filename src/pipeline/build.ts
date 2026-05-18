@@ -1,30 +1,50 @@
 import { join } from 'node:path';
-import { Project } from 'ts-morph';
+import { Project, ts } from 'ts-morph';
 
 import type { ArchGraphConfig } from '../core/config.js';
+import { applyDocsDefaults } from '../core/config.js';
 import { discoverOwnership } from '../core/service-registry.js';
 import type { ArchGraph, BuildValidation, CyclesDiagnostics, DiagnosticsReport } from '../core/types.js';
+import { extractDocs } from '../extractors/docs/extract-docs.js';
 import { extractBullMq } from '../extractors/bullmq/extractor.js';
 import { extractDi } from '../extractors/di/extractor.js';
+import { extractFe } from '../extractors/fe/extractor.js';
 import { extractHttp } from '../extractors/http/extractor.js';
 import { extractImports } from '../extractors/imports/extractor.js';
 import { extractNats } from '../extractors/nats/extractor.js';
 import { extractTypeOrm } from '../extractors/typeorm/extractor.js';
+import { extractEndpoints } from '../extractors/endpoint/extractor.js';
+import { extractConfig } from '../extractors/config/extractor.js';
+import { extractScoped } from '../extractors/scoped/extractor.js';
+import { extractEntityFields } from '../extractors/typeorm/fields.js';
+import { mapDocsToGraph } from '../mapper/docs-to-graph.js';
 import { mapBullMqToGraph } from '../mapper/bullmq-to-graph.js';
 import { mapDiToGraph } from '../mapper/di-to-graph.js';
+import { mapFeToGraph } from '../mapper/fe-to-graph.js';
 import { mapHttpToGraph } from '../mapper/http-to-graph.js';
 import { mapImportsToGraph } from '../mapper/imports-to-graph.js';
 import { assembleGraph, buildNatsDiagnostics, mapNatsToGraph } from '../mapper/nats-to-graph.js';
 import { mapTypeOrmToGraph } from '../mapper/typeorm-to-graph.js';
+import { mapEndpointsToGraph } from '../mapper/endpoint-to-graph.js';
+import { mapConfigToGraph } from '../mapper/config-to-graph.js';
+import { mapEntityFieldsToGraph } from '../mapper/entity-fields-to-graph.js';
+import { buildClassIndex } from '../extractors/di/class-index.js';
 import { enumerateBullMqGroundTruth, buildBullMqReport } from '../validation/bullmq-validator.js';
 import { enumerateDiGroundTruth, buildDiReport } from '../validation/di-validator.js';
+import { enumerateFeGroundTruth, buildFeReport } from '../validation/fe-validator.js';
 import { enumerateHandlers } from '../validation/handlers.js';
 import { enumerateHttpGroundTruth, buildHttpReport } from '../validation/http-validator.js';
 import { buildImportsReport, enumerateImportsGroundTruth } from '../validation/imports-validator.js';
 import { enumerateSenders } from '../validation/senders.js';
 import { enumerateTypeOrmGroundTruth, buildTypeOrmReport } from '../validation/typeorm-validator.js';
+import { validateEndpoints } from '../validation/endpoint-validator.js';
+import { validateConfig } from '../validation/config-validator.js';
+import { validateDbEntityFields } from '../validation/db-entity-fields-validator.js';
 import { buildReport as buildNatsReport } from '../validation/validator.js';
+import { validateDocs } from '../validation/docs-validator.js';
+import { countTokens } from '../semantic/tokenizer.js';
 import { detectCycles } from '../detectors/cycles.js';
+import { enrichEndpointsFromOpenApi } from '../extractors/openapi/enrich-endpoints.js';
 
 export interface BuildResult {
     graph: ArchGraph;
@@ -89,12 +109,22 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
     const project = new Project({
         useInMemoryFileSystem: false,
         skipAddingFilesFromTsConfig: true,
-        compilerOptions: { allowJs: false, strict: false, noEmit: true },
+        compilerOptions: {
+            allowJs: false,
+            strict: false,
+            noEmit: true,
+            // Enable JSX parsing so ts-morph accepts .tsx/.jsx syntax without errors.
+            jsx: ts.JsxEmit.React,
+        },
     });
 
+    // Always include .tsx; include .jsx when the project opts in via cfg.fe?.allowJsx.
+    // See: P0-NEW — .tsx/.jsx files not in ts-morph Project globs (CATASTROPHIC).
+    const sourceExts = ['**/*.ts', '**/*.tsx'];
+    const libsGlob = cfg.libsGlob;
     const globs = [
-        join(cfg.root, cfg.appsGlob, '**/*.ts'),
-        ...(cfg.libsGlob ? [join(cfg.root, cfg.libsGlob, '**/*.ts')] : []),
+        ...sourceExts.map((ext) => join(cfg.root, cfg.appsGlob, ext)),
+        ...(libsGlob ? sourceExts.map((ext) => join(cfg.root, libsGlob, ext)) : []),
     ];
     // cfg.excludeGlobs MUST be applied here too — otherwise extractor and validator
     // disagree on the file set, and excluded paths become phantom `extra` matches
@@ -111,6 +141,10 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
             '!' + join(cfg.root, '**/.worktrees/**'),
             '!**/*.spec.ts',
             '!**/*.test.ts',
+            '!**/*.spec.tsx',
+            '!**/*.test.tsx',
+            '!**/*.spec.jsx',
+            '!**/*.test.jsx',
             '!**/*.d.ts',
             ...extraExcludes,
         ]);
@@ -230,7 +264,11 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
     }
 
     process.stdout.write(`mapping DI to graph...\n`);
-    const diMapped = mapDiToGraph(di.modules, di.moduleIndex, ownership, di.filterChain, di.skippedAnonymousFiles);
+    // A1: build class index so provider/module nodes get path + anchor fields.
+    const classIndex = buildClassIndex(project);
+    const diMapped = await stage(`[${cfg.id}] di.map`, () =>
+        mapDiToGraph(di.modules, di.moduleIndex, ownership, di.filterChain, di.skippedAnonymousFiles, classIndex),
+    );
     process.stdout.write(
         `  nodes: ${diMapped.nodes.length}, edges: ${diMapped.edges.length}, unresolvedRefs: ${diMapped.diagnostics.unresolvedRefs.length}, unowned: ${diMapped.diagnostics.unowned.length}, guards: ${diMapped.diagnostics.counts.guards}, interceptors: ${diMapped.diagnostics.counts.interceptors}, pipes: ${diMapped.diagnostics.counts.pipes}, unresolvedFilterRefs: ${diMapped.diagnostics.counts.unresolvedFilterRefs}, truncatedFilterRefs: ${diMapped.diagnostics.counts.truncatedFilterRefs}, skippedAnonymousFiles: ${diMapped.diagnostics.skippedAnonymousFiles.length}\n`,
     );
@@ -283,6 +321,105 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         `  nodes: ${importsMapped.nodes.length}, edges: ${importsMapped.edges.length}, unresolvedInternal: ${importsMapped.diagnostics.counts.unresolvedInternal}, externalOrUnresolved: ${importsMapped.diagnostics.counts.externalOrUnresolved}, dynamic: ${importsMapped.diagnostics.counts.totalDynamic}, cjsRequire: ${importsMapped.diagnostics.counts.totalCjsRequire}\n`,
     );
 
+    // ---- FE domain ----
+    process.stdout.write(`extracting FE...\n`);
+    t0 = Date.now();
+    const fe = await stage(`[${cfg.id}] fe.extract`, () => extractFe(cfg, project));
+    process.stdout.write(`  components: ${fe.components.length}, routes: ${fe.routes.length}, hooks: ${fe.hooks.length}, imports: ${fe.imports.length} in ${Date.now() - t0}ms\n`);
+
+    process.stdout.write(`validating FE against ground truth...\n`);
+    const feGT = await stage(`[${cfg.id}] fe.GT`, () => enumerateFeGroundTruth(cfg));
+    const feValidation = buildFeReport(fe, feGT);
+    {
+        const v = feValidation.summary;
+        process.stdout.write(
+            `  recallComp=${pct(v.recallComponents)} recallRoute=${pct(v.recallRoutes)} recallHook=${pct(v.recallHooks)}\n`,
+        );
+    }
+
+    process.stdout.write(`mapping FE to graph...\n`);
+    const feMapped = mapFeToGraph(fe, ownership);
+    process.stdout.write(
+        `  nodes: ${feMapped.nodes.length}, edges: ${feMapped.edges.length}, unresolved: ${feMapped.diagnostics.unresolved.length}, unowned: ${feMapped.diagnostics.unowned.length}\n`,
+    );
+
+    // ---- Endpoint domain (Var 2) ----
+    process.stdout.write(`extracting endpoints...\n`);
+    t0 = Date.now();
+    const endpoints = await stage(`[${cfg.id}] endpoint.extract`, () => extractEndpoints(project));
+    process.stdout.write(
+        `  ${endpoints.endpoints.length} endpoint sites, ${endpoints.diagnostics.length} diagnostics in ${Date.now() - t0}ms\n`,
+    );
+
+    process.stdout.write(`validating endpoints against ground truth...\n`);
+    const endpointValidation = await stage(`[${cfg.id}] endpoint.GT`, () =>
+        validateEndpoints(cfg, endpoints.endpoints.length),
+    );
+    process.stdout.write(
+        `  groundTruth: ${endpointValidation.groundTruthCount}, recall: ${endpointValidation.recall !== null ? pct(endpointValidation.recall) : 'N/A'}\n`,
+    );
+
+    process.stdout.write(`mapping endpoints to graph...\n`);
+    const endpointsMapped = mapEndpointsToGraph(endpoints.endpoints, ownership);
+    process.stdout.write(
+        `  nodes: ${endpointsMapped.nodes.length}, edges: ${endpointsMapped.edges.length}\n`,
+    );
+
+    // ---- Config domain (Var 2) ----
+    process.stdout.write(`extracting config callsites...\n`);
+    t0 = Date.now();
+    const config = await stage(`[${cfg.id}] config.extract`, () => extractConfig(project));
+    process.stdout.write(
+        `  ${config.fields.length} config callsites, ${config.diagnostics.length} diagnostics in ${Date.now() - t0}ms\n`,
+    );
+
+    process.stdout.write(`validating config against ground truth...\n`);
+    const configValidation = await stage(`[${cfg.id}] config.GT`, () =>
+        validateConfig(cfg, config.fields.length),
+    );
+    process.stdout.write(
+        `  groundTruth: ${configValidation.groundTruthCount}, recall: ${configValidation.recall !== null ? pct(configValidation.recall) : 'N/A'}\n`,
+    );
+
+    process.stdout.write(`mapping config to graph...\n`);
+    const configMapped = await stage(`[${cfg.id}] config.map`, () =>
+        mapConfigToGraph(config.fields, ownership),
+    );
+    process.stdout.write(
+        `  nodes: ${configMapped.nodes.length}, edges: ${configMapped.edges.length}\n`,
+    );
+
+    // ---- Scoped-marker domain (Var 2 stub) ----
+    process.stdout.write(`extracting scoped markers (stub)...\n`);
+    const scoped = await stage(`[${cfg.id}] scoped.extract`, () => extractScoped(project));
+    process.stdout.write(
+        `  ${scoped.markers.length} scoped sites (stub: awaiting corpus signal)\n`,
+    );
+
+    // ---- db-entity-field domain (Var 2) ----
+    process.stdout.write(`extracting db entity fields...\n`);
+    t0 = Date.now();
+    const dbEntityFields = await stage(`[${cfg.id}] dbEntityFields.extract`, () =>
+        extractEntityFields(Array.from(typeorm.entities.entries()), project),
+    );
+    process.stdout.write(
+        `  ${dbEntityFields.fields.length} entity fields, ${dbEntityFields.diagnostics.length} diagnostics in ${Date.now() - t0}ms\n`,
+    );
+
+    process.stdout.write(`validating db entity fields against ground truth...\n`);
+    const dbEntityFieldsValidation = await stage(`[${cfg.id}] dbEntityFields.GT`, () =>
+        validateDbEntityFields(cfg, dbEntityFields.fields.length),
+    );
+    process.stdout.write(
+        `  groundTruth: ${dbEntityFieldsValidation.groundTruthCount}, recall: ${dbEntityFieldsValidation.recall !== null ? pct(dbEntityFieldsValidation.recall) : 'N/A'}\n`,
+    );
+
+    process.stdout.write(`mapping db entity fields to graph...\n`);
+    const entityFieldsMapped = mapEntityFieldsToGraph(dbEntityFields.fields);
+    process.stdout.write(
+        `  nodes: ${entityFieldsMapped.nodes.length}, edges: ${entityFieldsMapped.edges.length}\n`,
+    );
+
     // ---- Compose ----
     const graph = assembleGraph(cfg.root, [
         natsMapped,
@@ -291,6 +428,10 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         diMapped,
         httpMapped,
         importsMapped,
+        feMapped,
+        endpointsMapped,
+        configMapped,
+        entityFieldsMapped,
     ]);
 
     // ---- Cycle detection ----
@@ -303,6 +444,48 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         );
     }
 
+    // ─── docs pass ────────────────────────────────────────────────────────────
+    const docsConfig = applyDocsDefaults(cfg.docs);
+    let docsDiagnostics: import('../core/types.js').DocsDiagnostics;
+    try {
+        const docs = await extractDocs({
+            projectRoot: cfg.root,
+            include: docsConfig.include,
+            exclude: docsConfig.exclude,
+            respectGitignore: docsConfig.respectGitignore,
+            chunkTokens: docsConfig.chunkTokens,
+            maxFileBytes: docsConfig.maxFileBytes,
+            countTokens,
+        });
+        const docNodes = mapDocsToGraph(docs.sites, cfg.root);
+        graph.nodes.push(...docNodes);
+        docsDiagnostics = docs.diagnostics;
+    } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        process.stderr.write(`  docs: pass skipped due to error — ${message}\n`);
+        docsDiagnostics = {
+            filesScanned: 0,
+            filesSkipped: [],
+            frontmatterErrors: [{ path: '<docs-pass>', error: message }],
+            oversizedChunks: [],
+            counts: { filesIncluded: 0, nodesEmitted: 0, headingsTotal: 0, sectionsSplit: 0, filesWithFrontmatter: 0 },
+        };
+    }
+
+    // ─── OpenAPI enrichment pass ───────────────────────────────────────────────
+    // Runs after graph assembly so all endpoint nodes are in graph.nodes.
+    // Mutates matched endpoint nodes in-place (adds meta.openapiInfo).
+    // Silent no-op when no YAML files match the configured globs.
+    process.stdout.write(`enriching endpoints from OpenAPI YAML...\n`);
+    const openapiEnrich = await enrichEndpointsFromOpenApi(
+        graph.nodes.filter((n) => n.kind === 'endpoint'),
+        cfg.root,
+        cfg.openapi?.globs,
+    );
+    process.stdout.write(
+        `  files: ${openapiEnrich.diagnostics.filesProcessed}, matched: ${openapiEnrich.diagnostics.endpointsMatched}, unmatched: ${openapiEnrich.diagnostics.endpointsUnmatched.length}, errors: ${openapiEnrich.diagnostics.parseErrors.length}\n`,
+    );
+
     const diagnostics: DiagnosticsReport = {
         projectId: cfg.id,
         timestamp: new Date().toISOString(),
@@ -312,8 +495,40 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         di: diMapped.diagnostics,
         http: httpMapped.diagnostics,
         imports: importsMapped.diagnostics,
+        fe: feMapped.diagnostics,
         cycles: cyclesDiagnostics,
+        endpoint: {
+            // Merge: extractor-level (non-literal arg) + mapper-level (unowned files)
+            messages: [
+                ...endpoints.diagnostics,
+                ...endpointsMapped.diagnostics,
+            ],
+        },
+        config: {
+            // Merge: extractor-level (non-literal key) + mapper-level (unowned files)
+            messages: [
+                ...config.diagnostics,
+                ...configMapped.diagnostics,
+            ],
+        },
+        dbEntityFields: {
+            // Merge: extractor-level (not-in-index) + mapper-level (duplicate fields)
+            messages: [
+                ...dbEntityFields.diagnostics,
+                ...entityFieldsMapped.diagnostics,
+            ],
+            counts: {
+                baseClassCycles: dbEntityFields.baseClassCycles,
+            },
+        },
+        scoped: {
+            markerCount: scoped.markers.length,
+            messages: scoped.diagnostics,
+        },
+        docs: docsDiagnostics,
+        openapi: openapiEnrich.diagnostics,
     };
+    const docsValidation = validateDocs(docsDiagnostics, graph.nodes);
     const validation: BuildValidation = {
         projectId: cfg.id,
         timestamp: new Date().toISOString(),
@@ -323,6 +538,11 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         di: diValidation,
         http: httpValidation,
         imports: importsValidation,
+        fe: feValidation,
+        endpoint: endpointValidation,
+        config: configValidation,
+        dbEntityFields: dbEntityFieldsValidation,
+        docs: docsValidation,
     };
 
     return { graph, diagnostics, validation };
@@ -337,11 +557,19 @@ function pct(n: number): string {
  * Otherwise a fatal NATS-grep failure surfaces as a bare `ENOENT: ...` with
  * no indication of which pipeline phase produced it.
  */
-async function stage<T>(label: string, fn: () => Promise<T>): Promise<T> {
+export async function stage<T>(label: string, fn: () => T | Promise<T>): Promise<Awaited<T>> {
     try {
         return await fn();
     } catch (err) {
-        const e = err as Error;
-        throw new Error(`${label} failed: ${e.message}`, { cause: err });
+        // Mutate message in-place instead of constructing a new Error so the
+        // original throw-site stack frames are preserved.  A `new Error(...)`
+        // would produce a fresh stack rooted here, burying the actual source.
+        // Note: V8 freezes the first line of `.stack` at construction time, so
+        // `.stack` will still open with the un-prefixed message — that is
+        // expected and harmless.
+        const e = err instanceof Error ? err : new Error(String(err));
+        // Non-Error branch (new Error(...)) has no original stack; it will be rooted here.
+        e.message = `${label} failed: ${e.message}`;
+        throw e;
     }
 }

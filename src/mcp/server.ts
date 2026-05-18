@@ -16,7 +16,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 
-import type { ArchGraph, EdgeKind } from '../core/types.js';
+import type { ArchGraph, EdgeKind, NodeKind } from '../core/types.js';
+import { NODE_KIND_VALUES } from '../core/types.js';
 import {
     explain,
     findPath,
@@ -30,6 +31,10 @@ import {
     serviceDependents,
     tableUsers,
 } from './graph-queries.js';
+import { semanticSearch, MAX_TOP_K } from '../semantic/search.js';
+import { embedOne } from '../semantic/embedder.js';
+import { readEmbeddingsJsonl } from '../semantic/io.js';
+import { SEMANTIC_DIM, SEMANTIC_MODEL } from '../semantic/types.js';
 
 const SERVER_NAME = 'arch-graph';
 const SERVER_VERSION = '0.1.0';
@@ -60,10 +65,85 @@ const EDGE_KIND_CHECK: Record<EdgeKind, null> = {
     'di-pipe': null,
     'ts-import': null,
     'lib-usage': null,
+    'fe-imports': null,
+    'fe-renders': null,
+    'fe-routes-to': null,
+    'endpoint-of': null,
+    'endpoint-calls': null,
+    'config-read-by': null,
+    'entity-has-field': null,
+    'scoped': null,
 };
 const EDGE_KIND_VALUES = Object.keys(EDGE_KIND_CHECK) as [EdgeKind, ...EdgeKind[]];
 
 const edgeKindSchema = z.enum(EDGE_KIND_VALUES);
+
+// NODE_KIND_VALUES is imported from src/core/types.ts — the authoritative home
+// for NodeKind exhaustiveness. Centralised so CLI + MCP always share the same set.
+const nodeKindSchema = z.enum(NODE_KIND_VALUES);
+
+/**
+ * Zod shape for the `semantic_search` tool input — exported so tests can build
+ * `z.object(semanticSearchInputShape)` and validate against the exact same
+ * constraints that the registered MCP tool enforces.  Avoids schema drift.
+ */
+export const semanticSearchInputShape = {
+    query: z.string().min(1).describe('Query text to search for.'),
+    topK: z
+        .number()
+        .int()
+        .min(1)
+        .max(MAX_TOP_K)
+        .optional()
+        .default(10)
+        .describe(`Number of results to return (1-${MAX_TOP_K}, default 10).`),
+    kinds: z
+        .array(nodeKindSchema)
+        .optional()
+        .describe('Optional filter: only return nodes of these NodeKind values.'),
+    excludeKinds: z
+        .array(nodeKindSchema)
+        .optional()
+        .describe(
+            'Optional blacklist: drop nodes of these NodeKind values from results. ' +
+                'Applied after `kinds` (exclude wins over include).',
+        ),
+    includeVectors: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe('If true, include the embedding vector for each result.'),
+} as const;
+
+/**
+ * `code_search` exposes the same shape as `semantic_search` minus `kinds` /
+ * `excludeKinds` — those are wired internally to exclude doc-section. Keeping
+ * `topK` + `includeVectors` makes the agent-facing contract identical and
+ * eliminates a class of "I forgot to add the kind filter" mistakes.
+ */
+export const codeSearchInputShape = {
+    query: z.string().min(1).describe('Query text to search for.'),
+    topK: z
+        .number()
+        .int()
+        .min(1)
+        .max(MAX_TOP_K)
+        .optional()
+        .default(10)
+        .describe(`Number of results to return (1-${MAX_TOP_K}, default 10).`),
+    includeVectors: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe('If true, include the embedding vector for each result.'),
+} as const;
+
+/**
+ * `docs_search` — same shape as `code_search`, internally restricted to
+ * `doc-section` results.  Symmetric with `code_search` so an agent picks one
+ * or the other without learning two different schemas.
+ */
+export const docsSearchInputShape = codeSearchInputShape;
 
 interface GraphHandle {
     path: string;
@@ -329,6 +409,48 @@ export async function startMcpServer(opts: { out: string }): Promise<void> {
     );
 
     server.registerTool(
+        'semantic_search',
+        {
+            description:
+                'Semantic kNN search over the sidecar index across ALL node kinds (code + docs mixed). ' +
+                'Use `code_search` / `docs_search` instead when you want one bucket — those avoid doc-section dilution of code results.',
+            inputSchema: semanticSearchInputShape,
+        },
+        // Reuse the exported handler factory so the test-accessible path and the
+        // production registration share exactly the same logic.
+        makeSemanticSearchHandler({ outDir: opts.out }),
+    );
+
+    server.registerTool(
+        'code_search',
+        {
+            description:
+                'Semantic kNN search restricted to CODE nodes (everything except doc-section). ' +
+                'Use for "where is X implemented" — top-K is not diluted by Markdown sections. ' +
+                'RECOMMENDED USAGE: call code_search and docs_search in parallel for every retrieval — ' +
+                'the LLM then sees two labeled top-K lists and picks the more useful one (both-buckets pattern). ' +
+                'Projects that want to halve retrieval cost can override to fallback-only in their CLAUDE.md ' +
+                '("first code_search; only call docs_search if nothing relevant").',
+            inputSchema: codeSearchInputShape,
+        },
+        makeSemanticSearchHandler({ outDir: opts.out, baseExcludeKinds: ['doc-section'] }),
+    );
+
+    server.registerTool(
+        'docs_search',
+        {
+            description:
+                'Semantic kNN search restricted to DOC nodes (Markdown `doc-section` only). ' +
+                'Use for design rationale, plans, README/ADR content, natural-language explanations. ' +
+                'Docs may contain stale plans or speculative content — pair with code_search when the question is ' +
+                '"what does the code actually do" (the code is authoritative). ' +
+                'RECOMMENDED USAGE: call together with code_search in parallel — see code_search description.',
+            inputSchema: docsSearchInputShape,
+        },
+        makeSemanticSearchHandler({ outDir: opts.out, lockedKinds: ['doc-section'] }),
+    );
+
+    server.registerTool(
         'query',
         {
             description:
@@ -391,3 +513,116 @@ export async function startMcpServer(opts: { out: string }): Promise<void> {
 // Exported for test use — the keyword router is also a pure function and
 // worth exercising directly without round-tripping through the SDK.
 export { routeQuestion };
+
+// ---------------------------------------------------------------------------
+// Exported handler factory — lets tests exercise the exact same logic as the
+// registered MCP tool without wiring the SDK transport.
+// ---------------------------------------------------------------------------
+
+export interface SemanticSearchHandlerOpts {
+    /** Directory where arch-graph-out lives (contains graph.json + semantic/). */
+    outDir: string;
+    /** Injectable embedder — defaults to `embedOne` in production. */
+    embedder?: (text: string) => Promise<number[]>;
+    /**
+     * Locks the handler to this kind-whitelist. Authoritative — overrides any
+     * `kinds` passed in the caller input (and a runtime assert fires if the
+     * caller tries — see implementation). Used by `docs_search` to pin the
+     * tool to `doc-section`.
+     *
+     * The field name encodes the override semantics: this is a *lock*, not
+     * an additive default.
+     */
+    lockedKinds?: NodeKind[];
+    /**
+     * Base `excludeKinds` blacklist always applied by this handler. Unlike
+     * `lockedKinds`, this is *additive* — caller-supplied `excludeKinds` are
+     * appended to this list, so callers can drop MORE kinds but never restore
+     * any of these. Used by `code_search` to always exclude `doc-section`.
+     */
+    baseExcludeKinds?: NodeKind[];
+}
+
+export interface SemanticSearchHandlerInput {
+    query: string;
+    topK?: number;
+    /**
+     * Caller-supplied `kinds` whitelist. Ignored when the handler was
+     * factory-constructed with `lockedKinds`; in that case the handler
+     * throws to prevent silent override of the locked bucket.
+     */
+    kinds?: NodeKind[];
+    /**
+     * Caller-supplied `excludeKinds` blacklist. Merged additively with
+     * `baseExcludeKinds` if the handler factory set one.
+     */
+    excludeKinds?: NodeKind[];
+    includeVectors?: boolean;
+}
+
+/**
+ * Create the `semantic_search` MCP handler as a standalone async function.
+ * This is the canonical handler logic — `startMcpServer` calls
+ * `server.registerTool(…, handler)` using the same code path.
+ *
+ * Use this in tests to exercise the full handler (including vector augmentation
+ * and error paths) without spinning up the MCP SDK transport.
+ */
+export function makeSemanticSearchHandler(handlerOpts: SemanticSearchHandlerOpts) {
+    const { outDir, embedder: embedderFn = embedOne, lockedKinds, baseExcludeKinds } = handlerOpts;
+
+    return async (input: SemanticSearchHandlerInput) => {
+        const { query, topK = 10, kinds, excludeKinds, includeVectors = false } = input;
+
+        // Factory `lockedKinds` is authoritative. If the caller tries to pass
+        // `kinds`, that would be a silent contract violation in production —
+        // throw so it surfaces during development. (The MCP Zod boundary
+        // strips this field for external callers, so in practice this guards
+        // in-process consumers like tests and embedders.)
+        if (lockedKinds && kinds && kinds.length > 0) {
+            throw new Error(
+                `arch-graph semantic_search: handler was constructed with lockedKinds=[${lockedKinds.join(
+                    ',',
+                )}]; caller-supplied 'kinds' is not permitted on locked handlers.`,
+            );
+        }
+
+        // Factory `baseExcludeKinds` is additive — caller can extend, never reduce.
+        const effectiveKinds = lockedKinds ?? kinds;
+        const effectiveExclude =
+            baseExcludeKinds && excludeKinds
+                ? [...baseExcludeKinds, ...excludeKinds]
+                : (baseExcludeKinds ?? excludeKinds);
+
+        const searchRes = await semanticSearch({
+            query,
+            outDir,
+            embedder: embedderFn,
+            topK,
+            kinds: effectiveKinds,
+            excludeKinds: effectiveExclude,
+        });
+
+        const output = searchRes.output;
+
+        if (includeVectors && output.results.length > 0 && !output.error) {
+            const embeddingsPath = `${outDir}/semantic/embeddings.jsonl`;
+            const resultNodeIds = new Set(output.results.map((r) => r.nodeId));
+
+            try {
+                for await (const record of readEmbeddingsJsonl(embeddingsPath)) {
+                    const result = output.results.find((r) => r.nodeId === record.nodeId);
+                    if (result && resultNodeIds.has(record.nodeId)) {
+                        result.vector = record.vector;
+                    }
+                }
+            } catch (vecErr) {
+                const vecErrMsg = vecErr instanceof Error ? vecErr.message : String(vecErr);
+                process.stderr.write(`[arch-graph semantic] vector augmentation read error: ${vecErrMsg}\n`);
+                output.vectorsError = `read-error: ${vecErrMsg}`;
+            }
+        }
+
+        return jsonResult(output);
+    };
+}

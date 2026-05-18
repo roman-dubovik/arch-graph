@@ -302,12 +302,34 @@
                 <td title="Query via SCIP tooling"><span class="cell partial">◐</span></td>
               </tr>
               <tr><th scope="row">MCP server</th>
-                <td><span class="cell ok">✓</span></td>
+                <td title="15 tools: 12 structural + 3 semantic (code_search, docs_search, semantic_search)"><span class="cell ok">✓ 15 tools</span></td>
                 <td><span class="cell no">✗</span></td>
                 <td><span class="cell no">✗</span></td>
                 <td><span class="cell no">✗</span></td>
                 <td><span class="cell no">✗</span></td>
                 <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+              </tr>
+              <tr><th scope="row">Semantic search (opt-in)</th>
+                <td title="code_search, docs_search, semantic_search — MiniLM-L12 embeddings; both-buckets pattern recommended"><span class="cell ok">✓ 3 tools</span></td>
+                <td title="LLM-driven semantic graph"><span class="cell ok">✓</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td title="symbol refs/defs, not semantic search"><span class="cell partial">◐</span></td>
+              </tr>
+              <tr><th scope="row">Markdown docs indexed</th>
+                <td title="doc-section NodeKind — root *.md + docs include globs indexed alongside code"><span class="cell ok">✓</span></td>
+                <td title="ingests any text/docs input"><span class="cell ok">✓</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td><span class="cell no">✗</span></td>
+                <td title="HTML report contains inline docs"><span class="cell partial">◐</span></td>
                 <td><span class="cell no">✗</span></td>
                 <td><span class="cell no">✗</span></td>
                 <td><span class="cell no">✗</span></td>
@@ -417,7 +439,7 @@
 
         <h3 class="subsection-title">Reading the heuristic fairly</h3>
         <p class="prose">
-          Our scoring (substring-presence of ground-truth labels) is a permissive <em>necessary-condition</em> heuristic: "did the tool's output even <em>contain</em> the answer". It's not an end-to-end LLM eval. The dependency-cruiser row demonstrates how the heuristic can mislead — a tool that extracts <em>no</em> NestJS-architecture facts can still score double-digit recall purely from file-path coincidences (<code>be-insyra</code> appears in <code>apps/be-insyra/webpack.config.js</code>). The per-category breakdown (NATS / BullMQ / TypeORM / DI / imports) is the more honest cut. arch-graph stays at 100% across every category by construction; every other tool's strength shows up as a single category spike.
+          Our scoring (substring-presence of ground-truth labels) is a permissive <em>necessary-condition</em> heuristic: "did the tool's output even <em>contain</em> the answer". It's not an end-to-end LLM eval. The dependency-cruiser row demonstrates how the heuristic can mislead — a tool that extracts <em>no</em> NestJS-architecture facts can still score double-digit recall purely from file-path coincidences (<code>be-project-b</code> appears in <code>apps/be-project-b/webpack.config.js</code>). The per-category breakdown (NATS / BullMQ / TypeORM / DI / imports) is the more honest cut. arch-graph stays at 100% across every category by construction; every other tool's strength shows up as a single category spike.
         </p>
 
         <h3 class="subsection-title">What this benchmark <em>is</em> and <em>isn't</em></h3>
@@ -443,8 +465,8 @@
         <ul class="compare-tools-list">
           <li class="reveal">
             <h3>arch-graph</h3>
-            <p class="tool-meta mono">static · NestJS-aware · 6 edge kinds · file:line provenance</p>
-            <p>Static ts-morph extractor producing a typed JSON graph across NATS pub/sub, BullMQ queues, TypeORM repositories, NestJS DI, inter-service HTTP, and TS imports. Every edge cites <code>file:line</code>. Ships CLI, MCP server, and Claude Code skill. Wedge: cross-cutting message-bus + data-layer coverage at the intersection where no other static tool lives.</p>
+            <p class="tool-meta mono">static · NestJS-aware · 6 edge kinds · file:line provenance · semantic search</p>
+            <p>Static ts-morph extractor producing a typed JSON graph across NATS pub/sub, BullMQ queues, TypeORM repositories, NestJS DI, inter-service HTTP, and TS imports. Every edge cites <code>file:line</code>. Ships CLI, MCP server (15 tools: 12 structural + 3 semantic), and Claude Code skill. Optional semantic layer indexes code nodes and Markdown <code>doc-section</code> nodes with MiniLM-L12 embeddings, exposed via <code>code_search</code>, <code>docs_search</code>, and <code>semantic_search</code> MCP tools. Wedge: cross-cutting message-bus + data-layer coverage at the intersection where no other static tool lives.</p>
             <p><a class="link" href="https://github.com/roman-dubovik/arch-graph" rel="noopener" target="_blank">repo →</a></p>
           </li>
 
@@ -519,8 +541,8 @@
             <p>Static decorator parsing can't resolve "this provider is conditionally registered when <code>NODE_ENV === 'prod'</code>." DevTools snapshots Nest's <em>actual</em> runtime metadata after <code>NestFactory.create()</code>, so it sees what really got wired up.</p>
           </li>
           <li class="reveal">
-            <h3>TypeORM entity relations (ER) → use erdia or typeorm-uml</h3>
-            <p>arch-graph today emits <code>service → table</code> from <code>@InjectRepository</code> but not <code>@ManyToOne</code> / <code>@OneToMany</code> / <code>@JoinTable</code> as typed ER edges. erdia's Mermaid ER output is the cleanest peer for "what does this entity relate to schema-wise." On the <a class="link" href="https://github.com/roman-dubovik/arch-graph/blob/main/ROADMAP.md" rel="noopener" target="_blank">roadmap</a> as Tier 2.</p>
+            <h3>TypeORM ER diagrams → use erdia or typeorm-uml</h3>
+            <p>arch-graph emits <code>service → table</code> from <code>@InjectRepository</code> and <code>@ManyToOne</code> / <code>@OneToMany</code> / <code>@ManyToMany</code> / <code>@OneToOne</code> as typed <code>db-relation</code> edges. What it does <em>not</em> do is render those as a visual ER diagram. erdia and typeorm-uml produce Mermaid / PlantUML / SVG ER diagrams directly — use them when you need a schema diagram rather than graph edges for agent queries.</p>
           </li>
           <li class="reveal">
             <h3>Pure file-imports across module systems → use dependency-cruiser</h3>
