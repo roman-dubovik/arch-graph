@@ -1129,3 +1129,180 @@ describe('runSemanticSearch — embedOne closure uses query mode (E5-T2)', () =>
         searchSpy.mockRestore();
     });
 });
+
+// ---------------------------------------------------------------------------
+// Task 3: Per-model minScore calibration — CLI path
+// ---------------------------------------------------------------------------
+
+describe('parseSemanticArgs — --min-score flag (Task 3)', () => {
+    it('parses --min-score 0.55 as number', () => {
+        const args = parseSemanticArgs(['search', 'q', '--min-score', '0.55']);
+        expect(args.minScore).toBe(0.55);
+    });
+
+    it('parses --min-score=0.40 (equals-sign form)', () => {
+        const args = parseSemanticArgs(['search', 'q', '--min-score=0.40']);
+        expect(args.minScore).toBe(0.40);
+    });
+
+    it('parses --min-score 0.0 (falsy float)', () => {
+        const args = parseSemanticArgs(['search', 'q', '--min-score', '0.0']);
+        expect(args.minScore).toBe(0.0);
+    });
+
+    it('parses --min-score -1 (lower bound)', () => {
+        const args = parseSemanticArgs(['search', 'q', '--min-score', '-1']);
+        expect(args.minScore).toBe(-1);
+    });
+
+    it('parses --min-score 1 (upper bound)', () => {
+        const args = parseSemanticArgs(['search', 'q', '--min-score', '1']);
+        expect(args.minScore).toBe(1);
+    });
+
+    it('defaults minScore to undefined when --min-score is omitted', () => {
+        const args = parseSemanticArgs(['search', 'q']);
+        expect(args.minScore).toBeUndefined();
+    });
+
+    it('exits 1 for non-numeric --min-score value', () => {
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        expect(() => parseSemanticArgs(['search', 'q', '--min-score', 'abc'])).toThrow('process.exit');
+        expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('exits 1 for --min-score value > 1', () => {
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        expect(() => parseSemanticArgs(['search', 'q', '--min-score', '1.5'])).toThrow('process.exit');
+        expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('exits 1 for --min-score value < -1', () => {
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        expect(() => parseSemanticArgs(['search', 'q', '--min-score', '-2'])).toThrow('process.exit');
+        expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('exits 1 for trailing --min-score with no value', () => {
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        expect(() => parseSemanticArgs(['search', 'q', '--min-score'])).toThrow('process.exit');
+        expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+});
+
+describe('runSemanticSearch — minScore resolution passed to semanticSearch (Task 3)', () => {
+    it('resolves minScore from modelAlias when no --min-score flag (minilm → 0.30)', async () => {
+        const searchSpy = await setupSearchSidecarsAndSpy(testDir);
+
+        const configModule = await import('../core/config.js');
+        const configSpy = vi.spyOn(configModule, 'loadConfig').mockRejectedValue(
+            new Error('config not found: ./arch-graph.config.ts'),
+        );
+
+        const args = parseSemanticArgs(['search', 'q', '--model', 'minilm']);
+        try {
+            await runSemanticSearch({ ...args, out: testDir });
+        } catch { /* process.exit */ }
+
+        expect(searchSpy).toHaveBeenCalledTimes(1);
+        // minilm recommendedMinScore = 0.30
+        expect(searchSpy.mock.calls[0]![0].minScore).toBe(0.30);
+
+        configSpy.mockRestore();
+    });
+
+    it('resolves minScore from modelAlias when no --min-score flag (e5-base → 0.55)', async () => {
+        const searchSpy = await setupSearchSidecarsAndSpy(testDir);
+
+        const configModule = await import('../core/config.js');
+        const configSpy = vi.spyOn(configModule, 'loadConfig').mockRejectedValue(
+            new Error('config not found: ./arch-graph.config.ts'),
+        );
+
+        const args = parseSemanticArgs(['search', 'q', '--model', 'e5-base']);
+        try {
+            await runSemanticSearch({ ...args, out: testDir });
+        } catch { /* process.exit */ }
+
+        expect(searchSpy).toHaveBeenCalledTimes(1);
+        // e5-base recommendedMinScore = 0.55
+        expect(searchSpy.mock.calls[0]![0].minScore).toBe(0.55);
+
+        configSpy.mockRestore();
+    });
+
+    it('user --min-score flag always wins over recommendedMinScore', async () => {
+        const searchSpy = await setupSearchSidecarsAndSpy(testDir);
+
+        const configModule = await import('../core/config.js');
+        const configSpy = vi.spyOn(configModule, 'loadConfig').mockRejectedValue(
+            new Error('config not found: ./arch-graph.config.ts'),
+        );
+
+        // e5-base recommended is 0.55; user passes 0.70
+        const args = parseSemanticArgs(['search', 'q', '--model', 'e5-base', '--min-score', '0.70']);
+        try {
+            await runSemanticSearch({ ...args, out: testDir });
+        } catch { /* process.exit */ }
+
+        expect(searchSpy).toHaveBeenCalledTimes(1);
+        expect(searchSpy.mock.calls[0]![0].minScore).toBe(0.70);
+
+        configSpy.mockRestore();
+    });
+
+    it('user --min-score 0.0 wins (not silently dropped as falsy)', async () => {
+        const searchSpy = await setupSearchSidecarsAndSpy(testDir);
+
+        const configModule = await import('../core/config.js');
+        const configSpy = vi.spyOn(configModule, 'loadConfig').mockRejectedValue(
+            new Error('config not found: ./arch-graph.config.ts'),
+        );
+
+        const args = parseSemanticArgs(['search', 'q', '--model', 'minilm', '--min-score', '0.0']);
+        try {
+            await runSemanticSearch({ ...args, out: testDir });
+        } catch { /* process.exit */ }
+
+        expect(searchSpy).toHaveBeenCalledTimes(1);
+        expect(searchSpy.mock.calls[0]![0].minScore).toBe(0.0);
+
+        configSpy.mockRestore();
+    });
+
+    it('falls back to 0.30 when alias is the minilm default (config absent)', async () => {
+        const searchSpy = await setupSearchSidecarsAndSpy(testDir);
+
+        const configModule = await import('../core/config.js');
+        const configSpy = vi.spyOn(configModule, 'loadConfig').mockRejectedValue(
+            new Error('config not found: ./arch-graph.config.ts'),
+        );
+
+        // No --model flag → resolves to 'minilm' → recommendedMinScore = 0.30
+        const args = parseSemanticArgs(['search', 'q']);
+        try {
+            await runSemanticSearch({ ...args, out: testDir });
+        } catch { /* process.exit */ }
+
+        expect(searchSpy).toHaveBeenCalledTimes(1);
+        expect(searchSpy.mock.calls[0]![0].minScore).toBe(0.30);
+
+        configSpy.mockRestore();
+    });
+});

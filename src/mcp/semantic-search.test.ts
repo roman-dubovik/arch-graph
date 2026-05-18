@@ -26,7 +26,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
 import type { SemanticManifest, SemanticRecord } from '../semantic/types.js';
-import { SEMANTIC_DIM, SEMANTIC_MODEL, SEMANTIC_SCHEMA_VERSION } from '../semantic/types.js';
+import { SEMANTIC_DIM, SEMANTIC_MODEL, SEMANTIC_SCHEMA_VERSION, SEMANTIC_MODELS } from '../semantic/types.js';
 import { MAX_TOP_K } from '../semantic/search.js';
 import { writeEmbeddingsJsonl, writeManifest } from '../semantic/io.js';
 import { makeSemanticSearchHandler, semanticSearchInputShape } from './server.js';
@@ -589,6 +589,217 @@ describe('makeSemanticSearchHandler — bge-m3 alias (P1-K)', () => {
         expect(output.error).toBeUndefined();
         expect(output.model).toBe(SEMANTIC_MODEL);
         expect(output.dim).toBe(SEMANTIC_DIM);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Task 3: Per-model minScore calibration — MCP path
+// ---------------------------------------------------------------------------
+
+describe('makeSemanticSearchHandler — per-model minScore calibration (Task 3)', () => {
+    /**
+     * Write a sidecar where one record scores exactly 1.0 (axis-aligned with
+     * the fakeEmbedder) and one scores 0.0 (orthogonal), using SEMANTIC_DIM
+     * (minilm, 384-dim).
+     */
+    async function writeMixedScoreSidecar(): Promise<void> {
+        const graphHash = await writeGraphJson('{"nodes":[]}');
+        const records: SemanticRecord[] = [
+            makeRecord('high', 'service', unitVec(0), { label: 'high score' }),
+            makeRecord('low', 'service', unitVec(1), { label: 'low score (orthogonal)' }),
+        ];
+        await writeSidecar(records, graphHash);
+    }
+
+    it('minilm: no user override → uses recommendedMinScore 0.30 (both results kept when scores are 0.0 and 1.0 and 0.0 < 0.30 so low filtered)', async () => {
+        // fakeEmbedder returns unitVec(0); high=1.0, low=0.0
+        // minilm recommendedMinScore = 0.30, so low (0.0) is filtered out
+        await writeMixedScoreSidecar();
+
+        const handler = makeSemanticSearchHandler({
+            outDir: testDir,
+            embedder: fakeEmbedder,
+            modelAlias: 'minilm',
+        });
+        const result = await handler({ query: 'test' });
+
+        const output = JSON.parse(result.content[0]!.text);
+        expect(output.error).toBeUndefined();
+        // high (1.0) passes 0.30 threshold; low (0.0) is filtered
+        const ids = (output.results as Array<{ nodeId: string }>).map((r) => r.nodeId);
+        expect(ids).toContain('high');
+        expect(ids).not.toContain('low');
+    });
+
+    it('minilm: user minScore 0.0 override → low result included', async () => {
+        // User explicitly sets 0.0 — overrides the 0.30 recommended
+        await writeMixedScoreSidecar();
+
+        const handler = makeSemanticSearchHandler({
+            outDir: testDir,
+            embedder: fakeEmbedder,
+            modelAlias: 'minilm',
+        });
+        const result = await handler({ query: 'test', minScore: 0.0 });
+
+        const output = JSON.parse(result.content[0]!.text);
+        const ids = (output.results as Array<{ nodeId: string }>).map((r) => r.nodeId);
+        // With 0.0 threshold, both high (1.0 ≥ 0) and low (0.0 ≥ 0) pass
+        expect(ids).toContain('high');
+        expect(ids).toContain('low');
+    });
+
+    it('e5-base: no user override → uses recommendedMinScore 0.55 (filters score 0.0)', async () => {
+        // Write an e5-base (768-dim) sidecar
+        const graphHash = await writeGraphJson('{"nodes":[]}');
+        const e5Dim = SEMANTIC_MODELS['e5-base'].dim; // 768
+        const e5UnitVec = (axis: number): number[] => {
+            const v = new Array<number>(e5Dim).fill(0);
+            v[axis] = 1;
+            return v;
+        };
+        const e5Manifest: SemanticManifest = {
+            schemaVersion: SEMANTIC_SCHEMA_VERSION,
+            model: SEMANTIC_MODELS['e5-base'].hubId,
+            dim: e5Dim,
+            builtAt: '2026-05-18T00:00:00.000Z',
+            graphHash,
+            nodeCount: 2,
+        };
+        await mkdir(join(testDir, 'semantic'), { recursive: true });
+        await writeManifest(e5Manifest, join(testDir, 'semantic', 'manifest.json'));
+        const e5Records: SemanticRecord[] = [
+            makeRecord('e5-high', 'service', e5UnitVec(0), { label: 'e5 high' }),
+            makeRecord('e5-low', 'service', e5UnitVec(1), { label: 'e5 low (orthogonal)' }),
+        ];
+        await writeEmbeddingsJsonl(e5Records, join(testDir, 'semantic', 'embeddings.jsonl'));
+
+        // Embedder returns 768-dim unit vector along axis 0
+        const e5Embedder = async (_text: string): Promise<number[]> => e5UnitVec(0);
+
+        const handler = makeSemanticSearchHandler({
+            outDir: testDir,
+            embedder: e5Embedder,
+            modelAlias: 'e5-base',
+        });
+        const result = await handler({ query: 'find service' });
+
+        const output = JSON.parse(result.content[0]!.text);
+        expect(output.error).toBeUndefined();
+        // e5-base recommendedMinScore = 0.55; high=1.0 passes, low=0.0 filtered
+        const ids = (output.results as Array<{ nodeId: string }>).map((r) => r.nodeId);
+        expect(ids).toContain('e5-high');
+        expect(ids).not.toContain('e5-low');
+    });
+
+    it('e5-base: score 0.50 is filtered (below 0.55) where minilm would have kept it', async () => {
+        // Verify AC from design doc: "e5-base fixture with score 0.50 is filtered (below 0.55)
+        // where MiniLM would have kept it."
+        // Score 0.50: below e5-base's 0.55 but above minilm's 0.30.
+        //
+        // To produce score ≈ 0.50, we use vectors [1,1,...] (query) vs [1,0,...] (doc).
+        // cos([1,1,0,...], [1,0,...]) = 1/√2 ≈ 0.7071 — that's above 0.55.
+        //
+        // Better: use a doc vector with cos ≈ 0.50 by picking orthogonal component.
+        // doc = [1, √3, 0, ...] → cos([1,0,...], [1,√3,...]) = 1/2 = 0.50
+        const graphHash = await writeGraphJson('{"nodes":[]}');
+        const e5Dim = SEMANTIC_MODELS['e5-base'].dim;
+
+        const e5Manifest: SemanticManifest = {
+            schemaVersion: SEMANTIC_SCHEMA_VERSION,
+            model: SEMANTIC_MODELS['e5-base'].hubId,
+            dim: e5Dim,
+            builtAt: '2026-05-18T00:00:00.000Z',
+            graphHash,
+            nodeCount: 1,
+        };
+        await mkdir(join(testDir, 'semantic'), { recursive: true });
+        await writeManifest(e5Manifest, join(testDir, 'semantic', 'manifest.json'));
+
+        // Build a vector with cos([1,0,...], v) = 0.50 exactly.
+        // v = [1, √3, 0, ...] → |v| = 2; cos = (1*1)/(1*2) = 0.50
+        const halfScoreVec = new Array<number>(e5Dim).fill(0);
+        halfScoreVec[0] = 1;
+        halfScoreVec[1] = Math.sqrt(3); // makes |v| = 2
+
+        const record = makeRecord('half', 'service', halfScoreVec, { label: 'half score node' });
+        await writeEmbeddingsJsonl([record], join(testDir, 'semantic', 'embeddings.jsonl'));
+
+        const queryVec = new Array<number>(e5Dim).fill(0);
+        queryVec[0] = 1; // unit vector along axis 0
+        const e5Embedder = async (_text: string): Promise<number[]> => queryVec;
+
+        // --- e5-base: 0.55 threshold → filtered ---
+        const handlerE5 = makeSemanticSearchHandler({
+            outDir: testDir,
+            embedder: e5Embedder,
+            modelAlias: 'e5-base',
+        });
+        const resultE5 = await handlerE5({ query: 'test' });
+        const outputE5 = JSON.parse(resultE5.content[0]!.text);
+        // Score is 0.50 < 0.55 → should be filtered
+        expect(outputE5.results).toHaveLength(0);
+
+        // --- minilm with same vector (conceptually): 0.30 threshold → kept ---
+        // We test this by passing minScore: 0.30 explicitly (simulating minilm)
+        const handlerMinScore30 = makeSemanticSearchHandler({
+            outDir: testDir,
+            embedder: e5Embedder,
+            modelAlias: 'e5-base', // alias doesn't matter here; we override minScore
+        });
+        const resultMs30 = await handlerMinScore30({ query: 'test', minScore: 0.30 });
+        const outputMs30 = JSON.parse(resultMs30.content[0]!.text);
+        // Score 0.50 >= 0.30 → kept
+        expect(outputMs30.results).toHaveLength(1);
+        expect(outputMs30.results[0]!.nodeId).toBe('half');
+    });
+
+    it('missing/unknown alias in handler → falls back to 0.30 (scores 0.0 filtered)', async () => {
+        // makeSemanticSearchHandler defaults modelAlias to 'minilm' when omitted.
+        // resolveMinScore('minilm') = 0.30, so score 0.0 is filtered.
+        await writeMixedScoreSidecar();
+
+        const handler = makeSemanticSearchHandler({
+            outDir: testDir,
+            embedder: fakeEmbedder,
+            // modelAlias omitted → defaults to 'minilm' → resolveMinScore('minilm') = 0.30
+        });
+        const result = await handler({ query: 'test' });
+
+        const output = JSON.parse(result.content[0]!.text);
+        const ids = (output.results as Array<{ nodeId: string }>).map((r) => r.nodeId);
+        expect(ids).toContain('high');
+        expect(ids).not.toContain('low');
+    });
+
+    it('Zod schema rejects minScore out of [-1, 1] range', () => {
+        const semanticSearchInputSchema = z.object(semanticSearchInputShape);
+        expect(() =>
+            semanticSearchInputSchema.parse({ query: 'test', minScore: 1.5 }),
+        ).toThrow();
+        expect(() =>
+            semanticSearchInputSchema.parse({ query: 'test', minScore: -1.5 }),
+        ).toThrow();
+    });
+
+    it('Zod schema accepts valid minScore values', () => {
+        const semanticSearchInputSchema = z.object(semanticSearchInputShape);
+        expect(() =>
+            semanticSearchInputSchema.parse({ query: 'test', minScore: 0.55 }),
+        ).not.toThrow();
+        expect(() =>
+            semanticSearchInputSchema.parse({ query: 'test', minScore: -1 }),
+        ).not.toThrow();
+        expect(() =>
+            semanticSearchInputSchema.parse({ query: 'test', minScore: 1 }),
+        ).not.toThrow();
+    });
+
+    it('Zod schema: minScore omitted → parsed as undefined (not defaulted)', () => {
+        const semanticSearchInputSchema = z.object(semanticSearchInputShape);
+        const parsed = semanticSearchInputSchema.parse({ query: 'test' });
+        expect(parsed.minScore).toBeUndefined();
     });
 });
 
