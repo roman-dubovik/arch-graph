@@ -17,6 +17,7 @@ import {
     askSnippetTarget,
     askBuildSemantic,
     buildStrategySnippet,
+    checkBgeSizeWarning,
     runSemanticBuildStep,
     writeStrategySnippet,
     SEMANTIC_SKIP_HINT,
@@ -294,13 +295,41 @@ describe('runSemanticBuildStep', () => {
 
 // ─── AC2.3 — BGE-M3 size warning in init ─────────────────────────────────────
 
-describe('BGE_M3_SIZE_NOTE constant (AC2.3)', () => {
-    it('the init bge-m3 note string contains the expected text', () => {
-        // Verifies the note text matches the AC2.3 requirement.
-        // The actual printing path is tested indirectly via init.ts integration,
-        // but we pin the note text so it doesn't drift silently.
-        const note = 'Note: bge-m3 model is ~500 MB on first download.';
-        expect(note).toContain('bge-m3');
-        expect(note).toContain('500 MB');
+describe('checkBgeSizeWarning (AC2.3)', () => {
+    it('prints the note when config resolves to bge-m3', async () => {
+        const written: string[] = [];
+        // Inject a fake config loader that returns bge-m3 so no real file I/O occurs.
+        const fakeLoader = async (_p: string) => ({ semantic: { model: 'bge-m3' } });
+        await checkBgeSizeWarning('/fake/arch-graph.config.ts', (s) => written.push(s), fakeLoader);
+        const out = written.join('');
+        expect(out).toContain('bge-m3');
+        expect(out).toContain('500 MB');
+        expect(out).toContain('Note:');
+    });
+
+    it('prints nothing when config resolves to minilm', async () => {
+        const written: string[] = [];
+        const fakeLoader = async (_p: string) => ({ semantic: { model: 'minilm' } });
+        await checkBgeSizeWarning('/fake/arch-graph.config.ts', (s) => written.push(s), fakeLoader);
+        expect(written).toHaveLength(0);
+    });
+
+    it('prints nothing (no throw) when config loader throws', async () => {
+        const written: string[] = [];
+        const fakeLoader = async (_p: string): Promise<never> => {
+            throw new Error('config not found');
+        };
+        // Must not throw — the wizard must continue even if config is unreadable.
+        await expect(
+            checkBgeSizeWarning('/fake/arch-graph.config.ts', (s) => written.push(s), fakeLoader),
+        ).resolves.toBeUndefined();
+        expect(written).toHaveLength(0);
+    });
+
+    it('prints nothing when config has no semantic field (defaults to minilm)', async () => {
+        const written: string[] = [];
+        const fakeLoader = async (_p: string) => ({});
+        await checkBgeSizeWarning('/fake/arch-graph.config.ts', (s) => written.push(s), fakeLoader);
+        expect(written).toHaveLength(0);
     });
 });
