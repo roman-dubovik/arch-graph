@@ -10,13 +10,25 @@ import type { NodeKind } from '../core/types.js';
 // Current supported aliases:
 //   minilm  — Xenova/paraphrase-multilingual-MiniLM-L12-v2, 384-dim, mean pooling
 //   bge-m3  — Xenova/bge-m3, 1024-dim, CLS pooling
+//   e5-base — Xenova/multilingual-e5-base, 768-dim, mean pooling, REQUIRES PREFIX
 //
 // The model name and dim are recorded in `manifest.json` so any external
 // consumer can verify vector compatibility before mixing results.
 // ============================================================================
 
+/**
+ * Dual-prefix spec for models that require a passage/query prefix (e.g. E5 family).
+ * Both fields are the literal prefix string to prepend before the text.
+ */
+export interface EmbedPrefix {
+    /** Prefix for document/node embeddings (build time). */
+    passage: string;
+    /** Prefix for user query embeddings (search time). */
+    query: string;
+}
+
 /** Short alias for a supported embedding model. */
-export type SemanticModelAlias = 'minilm' | 'bge-m3';
+export type SemanticModelAlias = 'minilm' | 'bge-m3' | 'e5-base';
 
 /** Registry of all supported embedding models. */
 export const SEMANTIC_MODELS = {
@@ -25,19 +37,31 @@ export const SEMANTIC_MODELS = {
         dim: 384,
         pooling: 'mean' as const,
         normalize: true,
+        prefix: undefined,
     },
     'bge-m3': {
         hubId: 'Xenova/bge-m3',
         dim: 1024,
         pooling: 'cls' as const,
         normalize: true,
+        prefix: undefined,
     },
-} as const satisfies Record<SemanticModelAlias, { hubId: string; dim: number; pooling: string; normalize: boolean }>;
+    'e5-base': {
+        hubId: 'Xenova/multilingual-e5-base',
+        dim: 768,
+        pooling: 'mean' as const,
+        normalize: true,
+        prefix: { passage: 'passage: ', query: 'query: ' } satisfies EmbedPrefix,
+    },
+} as const satisfies Record<SemanticModelAlias, { hubId: string; dim: number; pooling: string; normalize: boolean; prefix?: EmbedPrefix }>;
 
 // ---------------------------------------------------------------------------
 // Backward-compat aliases — existing code referencing SEMANTIC_MODEL /
 // SEMANTIC_DIM continues to compile and behave identically.
 // ---------------------------------------------------------------------------
+
+/** Embedding mode: passage (build) or query (search). */
+export type EmbedMode = 'passage' | 'query';
 
 /** @deprecated Use `SEMANTIC_MODELS.minilm.hubId` or resolve from config. */
 export const SEMANTIC_MODEL = SEMANTIC_MODELS.minilm.hubId;

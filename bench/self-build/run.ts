@@ -132,11 +132,10 @@ export async function runBench(opts: {
         });
 
         // Build a single-text embedder for search queries.
-        const batchEmbedder = makeEmbedder(modelAlias);
-        const embedOneFn = async (text: string): Promise<number[]> => {
-            const results = await batchEmbedder([text]);
-            return results[0]!;
-        };
+        // Query mode: the user query string must use the query prefix for e5-base.
+        const queryEmbedderObj = makeEmbedder(modelAlias);
+        const embedOneFn = async (text: string): Promise<number[]> =>
+            queryEmbedderObj.embedOne(text, 'query');
 
         // Run all queries and collect results.
         const allRows: BenchResultRow[] = [];

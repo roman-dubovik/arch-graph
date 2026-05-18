@@ -323,11 +323,10 @@ export async function startMcpServer(opts: { out: string; config?: string }): Pr
     }
 
     // Build a single-text embedder bound to the resolved alias.
-    const batchEmbedder = makeEmbedder(resolvedModelAlias);
-    const embedOneFn = async (text: string): Promise<number[]> => {
-        const vecs = await batchEmbedder([text]);
-        return vecs[0]!;
-    };
+    // Query mode: the user query string must use the query prefix for e5-base.
+    const resolvedEmbedderObj = makeEmbedder(resolvedModelAlias);
+    const embedOneFn = async (text: string): Promise<number[]> =>
+        resolvedEmbedderObj.embedOne(text, 'query');
 
     const server = new McpServer(
         { name: SERVER_NAME, version: SERVER_VERSION },
@@ -629,14 +628,12 @@ export function makeSemanticSearchHandler(handlerOpts: SemanticSearchHandlerOpts
     // Default single-text embedder: bound to the resolved alias so production
     // and test paths share the same lazy-loading path.  Tests that supply their
     // own `embedder` override this entirely.
+    // Query mode: the user query string must use the query prefix for e5-base.
     const effectiveEmbedder =
         embedderFn ??
         (() => {
-            const batch = makeEmbedder(modelAlias);
-            return async (text: string): Promise<number[]> => {
-                const vecs = await batch([text]);
-                return vecs[0]!;
-            };
+            const e = makeEmbedder(modelAlias);
+            return async (text: string): Promise<number[]> => e.embedOne(text, 'query');
         })();
 
     return async (input: SemanticSearchHandlerInput) => {

@@ -346,7 +346,10 @@ export async function buildSemanticIndexFromArgs(args: SemanticArgs): Promise<{ 
     // --- Resolve model alias (CLI flag wins over config) --------------------
     const { model: configModelAlias } = applySemanticDefaults(cfg.semantic);
     const modelAlias = args.model ?? configModelAlias;
-    const embedder = makeEmbedder(modelAlias);
+    const embedderObj = makeEmbedder(modelAlias);
+    // Passage mode for builder: nodes are documents, not queries.
+    const embedder: (texts: string[]) => Promise<number[][]> = (texts) =>
+        embedderObj.embed(texts, 'passage');
 
     // --- Run builder --------------------------------------------------------
     let result;
@@ -606,11 +609,10 @@ export async function runSemanticSearch(args: SemanticArgs): Promise<void> {
     }
 
     // Build a single-text embedder bound to the resolved alias.
-    const embedderFn = makeEmbedder(modelAlias);
-    const embedOneFn = async (text: string): Promise<number[]> => {
-        const results = await embedderFn([text]);
-        return results[0]!;
-    };
+    // Query mode: the user query string must use the query prefix for e5-base.
+    const embedderObj2 = makeEmbedder(modelAlias);
+    const embedOneFn = async (text: string): Promise<number[]> =>
+        embedderObj2.embedOne(text, 'query');
 
     const { output, exitCode, stderrWarning } = await semanticSearch({
         query: args.query,

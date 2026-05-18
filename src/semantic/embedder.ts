@@ -7,12 +7,20 @@
  * Supported models (via SEMANTIC_MODELS registry in types.ts):
  *   minilm  — Xenova/paraphrase-multilingual-MiniLM-L12-v2, 384-dim, mean pooling
  *   bge-m3  — Xenova/bge-m3, 1024-dim, CLS pooling
+ *   e5-base — Xenova/multilingual-e5-base, 768-dim, mean pooling, requires prefix
+ *
+ * For e5-base (and any future prefix-requiring model), the `mode` parameter
+ * controls which prefix is applied:
+ *   'passage' (default) — prepends `entry.prefix.passage` to each text (for build)
+ *   'query'             — prepends `entry.prefix.query` to each text (for search)
+ *
+ * For minilm/bge-m3, `mode` is a no-op (no prefix required).
  *
  * Batch size guidance: 32 (safe default). Profile on larger graphs if needed.
  */
 import { pipeline } from '@xenova/transformers';
 
-import type { SemanticModelAlias } from './types.js';
+import type { EmbedMode, SemanticModelAlias } from './types.js';
 import { SEMANTIC_MODELS } from './types.js';
 
 // Per-alias pipeline cache.  Lazily initialised on first embed call per alias.
@@ -45,22 +53,57 @@ async function getPipeline(
 export type EmbedFn = (texts: string[]) => Promise<number[][]>;
 
 /**
- * Create a batch embedder bound to a specific model alias.
- * Returns a function with signature `(texts: string[]) => Promise<number[][]>`.
+ * Object returned by `makeEmbedder`. Exposes both passage and query modes.
+ *
+ * - `embed(texts, mode?)` — embed a batch of texts; `mode` defaults to `'passage'`.
+ * - `embedOne(text, mode?)` — embed a single text; `mode` defaults to `'passage'`.
+ *
+ * For models without a prefix (minilm, bge-m3), `mode` is accepted but has no
+ * effect — prefix is undefined and no prepend is performed.
+ */
+export interface Embedder {
+    embed(texts: string[], mode?: EmbedMode): Promise<number[][]>;
+    embedOne(text: string, mode?: EmbedMode): Promise<number[]>;
+}
+
+/**
+ * Create an embedder bound to a specific model alias.
+ * Returns an {@link Embedder} object exposing both passage and query modes.
  *
  * @example
- *   const embedder = makeEmbedder('bge-m3');
- *   const vectors = await embedder(['hello world']);
+ *   // Builder (passage mode):
+ *   const e = makeEmbedder('e5-base');
+ *   const vecs = await e.embed(['hello world'], 'passage');
+ *
+ *   // Search (query mode):
+ *   const q = await e.embedOne('find auth flow', 'query');
  */
-export function makeEmbedder(alias: SemanticModelAlias): EmbedFn {
+export function makeEmbedder(alias: SemanticModelAlias): Embedder {
     const entry = SEMANTIC_MODELS[alias];
-    return async function embedWithAlias(texts: string[]): Promise<number[][]> {
+
+    async function embedWithMode(texts: string[], mode: EmbedMode = 'passage'): Promise<number[][]> {
         if (texts.length === 0) return [];
+
+        // Apply prefix if the model requires one for this mode.
+        let inputs: string[] = texts;
+        if (entry.prefix) {
+            const p = mode === 'query' ? entry.prefix.query : entry.prefix.passage;
+            inputs = texts.map((t) => `${p}${t}`);
+        }
+
         const extractor = await getPipeline(alias);
         const output = await (
             extractor as (input: unknown, opts: unknown) => Promise<{ tolist(): number[][] }>
-        )(texts, { pooling: entry.pooling, normalize: entry.normalize });
+        )(inputs, { pooling: entry.pooling, normalize: entry.normalize });
         return output.tolist();
+    }
+
+    return {
+        embed: embedWithMode,
+        async embedOne(text: string, mode: EmbedMode = 'passage'): Promise<number[]> {
+            const results = await embedWithMode([text], mode);
+            return results[0]!;
+        },
     };
 }
 
@@ -68,18 +111,16 @@ export function makeEmbedder(alias: SemanticModelAlias): EmbedFn {
  * Embed a batch of texts using the default MiniLM model.
  * Returns one float32 vector per input string (length 384).
  *
- * @deprecated Prefer `makeEmbedder('minilm')` for explicit model selection.
+ * @deprecated Prefer `makeEmbedder('minilm').embed(texts)` for explicit model selection.
  */
-export const embed: EmbedFn = makeEmbedder('minilm');
+export const embed: EmbedFn = (texts: string[]) => makeEmbedder('minilm').embed(texts);
 
 /**
  * Embed a single text string using the default MiniLM model.
  * Returns a float32 vector of length 384.
  *
- * @deprecated Prefer `makeEmbedder('minilm')` and call the result with a
- *   single-element array when you need a one-shot embedder.
+ * @deprecated Prefer `makeEmbedder('minilm').embedOne(text)`.
  */
 export async function embedOne(text: string): Promise<number[]> {
-    const results = await embed([text]);
-    return results[0];
+    return makeEmbedder('minilm').embedOne(text);
 }
