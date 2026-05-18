@@ -58,8 +58,8 @@ describe('applyDocsDefaults', () => {
 // ---------------------------------------------------------------------------
 
 describe('applySemanticDefaults (D1)', () => {
-    it('returns {model:"minilm"} when semantic is undefined', () => {
-        expect(applySemanticDefaults(undefined)).toEqual({ model: 'minilm' });
+    it('returns {model:"e5-base"} when semantic is undefined', () => {
+        expect(applySemanticDefaults(undefined)).toEqual({ model: 'e5-base' });
     });
 
     it('passthrough when semantic.model is "e5-base"', () => {

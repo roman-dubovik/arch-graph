@@ -580,12 +580,12 @@ describe('makeSemanticSearchHandler — e5-base alias (P1-K)', () => {
         const graphHash = await writeGraphJson('{"nodes":[]}');
         await writeSidecar([makeRecord('svc:x', 'service', unitVec(0))], graphHash);
 
-        // Handler constructed WITHOUT modelAlias — should apply 'minilm' default
+        // Handler constructed WITHOUT modelAlias — should apply 'e5-base' default
         const handler = makeSemanticSearchHandler({ outDir: testDir, embedder: fakeEmbedder });
         const result = await handler({ query: 'test', includeVectors: false });
 
         const output = JSON.parse(result.content[0]!.text);
-        // Should succeed against the minilm (384-dim) sidecar without model-mismatch error
+        // Should succeed against the e5-base (768-dim) sidecar without model-mismatch error
         expect(output.error).toBeUndefined();
         expect(output.model).toBe(SEMANTIC_MODEL);
         expect(output.dim).toBe(SEMANTIC_DIM);
@@ -599,27 +599,47 @@ describe('makeSemanticSearchHandler — e5-base alias (P1-K)', () => {
 
 describe('makeSemanticSearchHandler — per-model minScore calibration (Task 3)', () => {
     /**
-     * Write a sidecar where one record scores exactly 1.0 (axis-aligned with
-     * the fakeEmbedder) and one scores 0.0 (orthogonal), using SEMANTIC_DIM
-     * (minilm, 384-dim).
+     * Write a minilm sidecar where one record scores exactly 1.0 (axis-aligned
+     * with the fakeEmbedder) and one scores 0.0 (orthogonal), using 384-dim vectors.
      */
     async function writeMixedScoreSidecar(): Promise<void> {
         const graphHash = await writeGraphJson('{"nodes":[]}');
+        const miniDim = SEMANTIC_MODELS.minilm.dim; // 384
+        const miniVec = (axis: number): number[] => {
+            const v = new Array<number>(miniDim).fill(0);
+            v[axis] = 1;
+            return v;
+        };
         const records: SemanticRecord[] = [
-            makeRecord('high', 'service', unitVec(0), { label: 'high score' }),
-            makeRecord('low', 'service', unitVec(1), { label: 'low score (orthogonal)' }),
+            makeRecord('high', 'service', miniVec(0), { label: 'high score' }),
+            makeRecord('low', 'service', miniVec(1), { label: 'low score (orthogonal)' }),
         ];
-        await writeSidecar(records, graphHash);
+        // Write minilm-specific manifest
+        const miniManifest: SemanticManifest = {
+            schemaVersion: SEMANTIC_SCHEMA_VERSION,
+            model: SEMANTIC_MODELS.minilm.hubId,
+            dim: miniDim,
+            builtAt: '2026-05-16T12:00:00.000Z',
+            graphHash,
+            nodeCount: records.length,
+        };
+        await mkdir(join(testDir, 'semantic'), { recursive: true });
+        await writeManifest(miniManifest, join(testDir, 'semantic', 'manifest.json'));
+        await writeEmbeddingsJsonl(records, join(testDir, 'semantic', 'embeddings.jsonl'));
     }
 
     it('minilm: no user override → uses recommendedMinScore 0.30 (both results kept when scores are 0.0 and 1.0 and 0.0 < 0.30 so low filtered)', async () => {
-        // fakeEmbedder returns unitVec(0); high=1.0, low=0.0
+        // miniEmbedder returns 384-dim unitVec(0); high=1.0, low=0.0
         // minilm recommendedMinScore = 0.30, so low (0.0) is filtered out
         await writeMixedScoreSidecar();
+        const miniDim = SEMANTIC_MODELS.minilm.dim;
+        const miniEmbedder = async (_text: string): Promise<number[]> => {
+            const v = new Array<number>(miniDim).fill(0); v[0] = 1; return v;
+        };
 
         const handler = makeSemanticSearchHandler({
             outDir: testDir,
-            embedder: fakeEmbedder,
+            embedder: miniEmbedder,
             modelAlias: 'minilm',
         });
         const result = await handler({ query: 'test' });
@@ -635,10 +655,14 @@ describe('makeSemanticSearchHandler — per-model minScore calibration (Task 3)'
     it('minilm: user minScore 0.0 override → low result included', async () => {
         // User explicitly sets 0.0 — overrides the 0.30 recommended
         await writeMixedScoreSidecar();
+        const miniDim = SEMANTIC_MODELS.minilm.dim;
+        const miniEmbedder = async (_text: string): Promise<number[]> => {
+            const v = new Array<number>(miniDim).fill(0); v[0] = 1; return v;
+        };
 
         const handler = makeSemanticSearchHandler({
             outDir: testDir,
-            embedder: fakeEmbedder,
+            embedder: miniEmbedder,
             modelAlias: 'minilm',
         });
         const result = await handler({ query: 'test', minScore: 0.0 });
@@ -755,20 +779,40 @@ describe('makeSemanticSearchHandler — per-model minScore calibration (Task 3)'
         expect(outputMs30.results[0]!.nodeId).toBe('half');
     });
 
-    it('missing/unknown alias in handler → falls back to 0.30 (scores 0.0 filtered)', async () => {
-        // makeSemanticSearchHandler defaults modelAlias to 'minilm' when omitted.
-        // resolveMinScore('minilm') = 0.30, so score 0.0 is filtered.
-        await writeMixedScoreSidecar();
+    it('modelAlias omitted → defaults to e5-base (0.55 threshold, score 0.0 filtered)', async () => {
+        // makeSemanticSearchHandler defaults modelAlias to defaultModelAlias = 'e5-base'.
+        // resolveMinScore('e5-base') = 0.55, so score 0.0 is filtered.
+        // Write an e5-base sidecar so the default alias matches.
+        const graphHash = await writeGraphJson('{"nodes":[]}');
+        const e5Dim = SEMANTIC_MODELS['e5-base'].dim;
+        const e5Vec = (axis: number): number[] => { const v = new Array<number>(e5Dim).fill(0); v[axis] = 1; return v; };
+        const e5Manifest: SemanticManifest = {
+            schemaVersion: SEMANTIC_SCHEMA_VERSION,
+            model: SEMANTIC_MODELS['e5-base'].hubId,
+            dim: e5Dim,
+            builtAt: '2026-05-16T12:00:00.000Z',
+            graphHash,
+            nodeCount: 2,
+        };
+        await mkdir(join(testDir, 'semantic'), { recursive: true });
+        await writeManifest(e5Manifest, join(testDir, 'semantic', 'manifest.json'));
+        const e5Records: SemanticRecord[] = [
+            makeRecord('high', 'service', e5Vec(0), { label: 'high score' }),
+            makeRecord('low', 'service', e5Vec(1), { label: 'low score (orthogonal)' }),
+        ];
+        await writeEmbeddingsJsonl(e5Records, join(testDir, 'semantic', 'embeddings.jsonl'));
 
+        // fakeEmbedder returns SEMANTIC_DIM-dim unitVec(0) → matches e5-base
         const handler = makeSemanticSearchHandler({
             outDir: testDir,
             embedder: fakeEmbedder,
-            // modelAlias omitted → defaults to 'minilm' → resolveMinScore('minilm') = 0.30
+            // modelAlias omitted → defaults to 'e5-base' → resolveMinScore('e5-base') = 0.55
         });
         const result = await handler({ query: 'test' });
 
         const output = JSON.parse(result.content[0]!.text);
         const ids = (output.results as Array<{ nodeId: string }>).map((r) => r.nodeId);
+        // high (1.0) passes 0.55; low (0.0) filtered
         expect(ids).toContain('high');
         expect(ids).not.toContain('low');
     });

@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 
 import type { WrapperApi } from './types.js';
 import type { SemanticModelAlias } from '../semantic/types.js';
-import { SEMANTIC_MODELS } from '../semantic/types.js';
+import { SEMANTIC_MODELS, defaultModelAlias } from '../semantic/types.js';
 
 // ============================================================================
 // User-facing config schema (arch-graph.config.ts)
@@ -32,7 +32,7 @@ export interface ArchGraphConfig {
     docs?: DocsConfig;
     /** OpenAPI YAML enrichment settings. */
     openapi?: OpenApiConfig;
-    /** Semantic index settings. Defaults to MiniLM when omitted. */
+    /** Semantic index settings. Defaults to e5-base when omitted. */
     semantic?: SemanticConfig;
     /**
      * Opt-out flags per domain. When a domain is `true` (default) the CLI gate
@@ -130,12 +130,12 @@ export interface OpenApiConfig {
 /**
  * Semantic index settings in `arch-graph.config.ts`.
  * All fields are optional — omitting the entire `semantic` block is valid
- * and defaults to `{ model: 'minilm' }`.
+ * and defaults to `{ model: 'e5-base' }`.
  */
 export interface SemanticConfig {
     /**
      * Short alias for the embedding model to use.
-     * Defaults to `'minilm'` when omitted.
+     * Defaults to `'e5-base'` when omitted.
      */
     model?: SemanticModelAlias;
 }
@@ -149,7 +149,7 @@ export interface ResolvedSemanticConfig {
 const VALID_SEMANTIC_ALIASES = Object.keys(SEMANTIC_MODELS) as SemanticModelAlias[];
 
 export function applySemanticDefaults(s: SemanticConfig | undefined): ResolvedSemanticConfig {
-    const model: SemanticModelAlias = s?.model ?? 'minilm';
+    const model: SemanticModelAlias = s?.model ?? defaultModelAlias;
     if (!VALID_SEMANTIC_ALIASES.includes(model)) {
         throw new Error(
             `config.semantic.model "${model}" is not a recognised alias. ` +

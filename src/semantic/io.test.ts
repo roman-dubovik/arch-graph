@@ -51,7 +51,7 @@ function makeRecord(nodeId: string, overrides: Partial<SemanticRecord> = {}): Se
         kind: 'service',
         label: `Label${nodeId}`,
         snippet: `snippet for ${nodeId}`,
-        vector: Array.from({ length: 384 }, (_, i) => i / 384),
+        vector: Array.from({ length: SEMANTIC_DIM }, (_, i) => i / SEMANTIC_DIM),
         ...overrides,
     };
 }
@@ -120,7 +120,8 @@ describe('writeManifest + readManifest', () => {
 
     it('readManifest throws on incompatible dim when expected is supplied', async () => {
         const manifestPath = join(testDir, 'wrong-dim.json');
-        const bad = { ...makeManifest(), dim: 768 };
+        // Use dim=1024 which doesn't match SEMANTIC_DIM (768 for e5-base default).
+        const bad = { ...makeManifest(), dim: 1024 };
         await writeFile(manifestPath, JSON.stringify(bad), 'utf8');
         await expect(
             readManifest(manifestPath, { model: SEMANTIC_MODEL, dim: SEMANTIC_DIM }),
@@ -152,8 +153,8 @@ describe('writeEmbeddingsJsonl + readEmbeddingsJsonl', () => {
         expect(collected[2].snippet).toBe('');
     });
 
-    it('preserves 384-dim vectors exactly', async () => {
-        const vec = Array.from({ length: 384 }, (_, i) => Math.sin(i));
+    it('preserves SEMANTIC_DIM-length vectors exactly', async () => {
+        const vec = Array.from({ length: SEMANTIC_DIM }, (_, i) => Math.sin(i));
         const records = [makeRecord('vec-node', { vector: vec })];
         const jsonlPath = join(testDir, 'embeddings.jsonl');
         await writeEmbeddingsJsonl(records, jsonlPath);
@@ -165,7 +166,7 @@ describe('writeEmbeddingsJsonl + readEmbeddingsJsonl', () => {
         // JSON serialization rounds floats but they should remain close.
         const roundtripped = collected[0].vector;
         expect(roundtripped).toHaveLength(SEMANTIC_DIM);
-        for (let i = 0; i < 384; i++) {
+        for (let i = 0; i < SEMANTIC_DIM; i++) {
             expect(roundtripped[i]).toBeCloseTo(vec[i], 10);
         }
     });

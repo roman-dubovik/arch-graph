@@ -205,7 +205,7 @@ describe('askBuildSemantic', () => {
         // Explainer must surface the model size, runtime cost, and feature list
         // so users with bandwidth concerns can make an informed choice.
         const explainer = written.join('');
-        expect(explainer).toContain('135 MB');
+        expect(explainer).toContain('280 MB');
         expect(explainer).toContain('cached under');
         expect(explainer).toContain('code_search');
         expect(explainer).toContain('docs_search');

@@ -36,7 +36,7 @@ afterEach(async () => {
     vi.restoreAllMocks();
 });
 
-/** Deterministic 384-dim fake vector seeded by index. */
+/** Deterministic SEMANTIC_DIM-length fake vector seeded by index. */
 function fakeVector(seed: number): number[] {
     return Array.from({ length: SEMANTIC_DIM }, (_, i) => (seed + i) / SEMANTIC_DIM);
 }
@@ -726,7 +726,7 @@ describe('buildSemanticIndex + semanticSearch — round-trip (PT-P1-3)', () => {
             query: 'alpha service',
             outDir: testDir,
             embedder: queryEmbedder,
-            modelAlias: 'minilm',
+            modelAlias: 'e5-base',
             topK: 3,
         });
 
@@ -803,11 +803,11 @@ describe('buildSemanticIndex — skippedNodes cap truncation (P1-6)', () => {
 
 // ---------------------------------------------------------------------------
 // Integration: doc-section node produces SemanticRecord with heading-chain
-// snippet and 384-dim vector
+// snippet and SEMANTIC_DIM-length vector (768 for e5-base default)
 // ---------------------------------------------------------------------------
 
 describe('buildSemanticIndex — doc-section integration', () => {
-    it('produces a SemanticRecord with heading-chain snippet and 384-dim vector', async () => {
+    it('produces a SemanticRecord with heading-chain snippet and SEMANTIC_DIM-length vector', async () => {
         /**
          * doc-section extractor uses readFileSync(node.path) directly — bypasses
          * the ts-morph Project.  We point node.path at the real fixture file on
@@ -876,7 +876,7 @@ describe('buildSemanticIndex — doc-section integration', () => {
         expect(record.snippet.startsWith('# Sample Project > Installation')).toBe(true);
         expect(record.snippet.length).toBeGreaterThan(0);
 
-        // Vector is 384-dimensional
+        // Vector length matches SEMANTIC_DIM (768 for e5-base default)
         expect(record.vector).toHaveLength(SEMANTIC_DIM);
     });
 });

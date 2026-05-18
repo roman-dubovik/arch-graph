@@ -172,6 +172,7 @@ describe('incremental build — no-op rebuild', () => {
             project: inMemoryProject({}),
             embedder: embedder1,
             outDir: testDir,
+            modelAlias: 'minilm',
         });
         expect(embedder1).toHaveBeenCalledTimes(1); // 3 nodes in one batch
 
@@ -182,6 +183,7 @@ describe('incremental build — no-op rebuild', () => {
             project: inMemoryProject({}),
             embedder: embedder2,
             outDir: testDir,
+            modelAlias: 'minilm',
         });
 
         expect(embedder2).toHaveBeenCalledTimes(0);
@@ -219,6 +221,7 @@ describe('incremental build — single node change', () => {
             project: project1,
             embedder: embedder1,
             outDir: testDir,
+            modelAlias: 'minilm',
         });
 
         // Second build with changed snippet for node b.
@@ -229,6 +232,7 @@ describe('incremental build — single node change', () => {
             project: project2,
             embedder: embedder2,
             outDir: testDir,
+            modelAlias: 'minilm',
         });
 
         // Exactly 1 embedder call (1 changed node).
@@ -324,6 +328,7 @@ describe('incremental build — schemaVersion mismatch', () => {
             project: inMemoryProject({}),
             embedder,
             outDir: testDir,
+            modelAlias: 'minilm',
         });
 
         // Full rebuild.
@@ -364,6 +369,7 @@ describe('incremental build — --full flag', () => {
             project: inMemoryProject({}),
             embedder: embedder1,
             outDir: testDir,
+            modelAlias: 'minilm',
         });
 
         // Second build with full: true — must re-embed everything.
@@ -374,6 +380,7 @@ describe('incremental build — --full flag', () => {
             embedder: embedder2,
             outDir: testDir,
             full: true,
+            modelAlias: 'minilm',
         });
 
         expect(embedder2).toHaveBeenCalledTimes(1);
@@ -403,6 +410,7 @@ describe('incremental build — deleted nodes', () => {
             project: inMemoryProject({}),
             embedder: embedder1,
             outDir: testDir,
+            modelAlias: 'minilm',
         });
 
         // Remove service:b from the graph.
@@ -420,6 +428,7 @@ describe('incremental build — deleted nodes', () => {
             project: inMemoryProject({}),
             embedder: embedder2,
             outDir: testDir,
+            modelAlias: 'minilm',
         });
 
         // Output has exactly 2 records.
@@ -484,6 +493,7 @@ describe('incremental build — corrupt embeddings.jsonl', () => {
             project: inMemoryProject({}),
             embedder,
             outDir: testDir,
+            modelAlias: 'minilm',
         });
 
         // Full rebuild triggered.
@@ -521,6 +531,7 @@ describe('incremental build — contentHash in JSONL records', () => {
             project: inMemoryProject({}),
             embedder: makeFakeEmbedder(),
             outDir: testDir,
+            modelAlias: 'minilm',
         });
 
         const jsonl = await readFile(join(testDir, 'semantic', 'embeddings.jsonl'), 'utf8');

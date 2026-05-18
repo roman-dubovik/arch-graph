@@ -35,7 +35,7 @@ import { semanticSearch, MAX_TOP_K } from '../semantic/search.js';
 import { makeEmbedder } from '../semantic/embedder.js';
 import { readEmbeddingsJsonl } from '../semantic/io.js';
 import type { SemanticModelAlias } from '../semantic/types.js';
-import { resolveMinScore } from '../semantic/types.js';
+import { defaultModelAlias, resolveMinScore } from '../semantic/types.js';
 import { applySemanticDefaults, loadConfig } from '../core/config.js';
 
 const SERVER_NAME = 'arch-graph';
@@ -315,14 +315,14 @@ export async function startMcpServer(opts: { out: string; config?: string }): Pr
     await loadGraphFn();
 
     // Resolve the embedding model alias from the config file (if supplied), falling back to
-    // the 'minilm' default when no config is present.
-    let resolvedModelAlias: SemanticModelAlias = 'minilm';
+    // the defaultModelAlias ('e5-base') when no config is present.
+    let resolvedModelAlias: SemanticModelAlias = defaultModelAlias;
     if (opts.config) {
         try {
             const cfg = await loadConfig(resolve(opts.config));
             resolvedModelAlias = applySemanticDefaults(cfg.semantic).model;
         } catch (err) {
-            // Silently keep the 'minilm' default ONLY when the config file is
+            // Silently keep the defaultModelAlias ONLY when the config file is
             // absent.  Any other error (syntax error, invalid alias such as
             // 'bge-m4') must surface immediately so the operator knows their
             // config is broken rather than silently running on the wrong model.
@@ -561,11 +561,11 @@ export interface SemanticSearchHandlerOpts {
      * Injectable single-text embedder.  In production this is derived from
      * `makeEmbedder(modelAlias)`.  Tests supply a fake here to avoid real model
      * downloads.  When omitted, the factory builds a default embedder bound to
-     * `modelAlias` (defaults to `'minilm'`).
+     * `modelAlias` (defaults to `defaultModelAlias`, currently `'e5-base'`).
      *
      * **Coupling invariant**: `embedder` must produce vectors whose dimensionality
      * matches the alias registered in `SEMANTIC_MODELS[modelAlias].dim`.  Passing
-     * a bge-m3 embedder (1024-dim) with `modelAlias: 'minilm'` (384-dim) will
+     * a mismatched embedder (wrong dim) with a different `modelAlias` will
      * cause every search to return `semantic-index-corrupt`.  Always set both
      * fields together or omit both (production wires them from the same config
      * lookup; tests use a matching fake).
@@ -574,12 +574,11 @@ export interface SemanticSearchHandlerOpts {
     /**
      * Model alias that was used to build the index.  Passed to `semanticSearch`
      * so it can validate the manifest's model/dim against the expected values.
-     * Defaults to `'minilm'` when omitted — only acceptable for MiniLM deployments.
+     * Defaults to `defaultModelAlias` (`'e5-base'`) when omitted.
      *
      * **Must be set together with `embedder`** when overriding either (see
      * `embedder` coupling invariant above).  Production callers resolve this
-     * from config via `applySemanticDefaults`; the `'minilm'` default is safe
-     * only when the index was built with the MiniLM model.
+     * from config via `applySemanticDefaults`.
      */
     modelAlias?: SemanticModelAlias;
     /**
@@ -637,7 +636,7 @@ export function makeSemanticSearchHandler(handlerOpts: SemanticSearchHandlerOpts
     const {
         outDir,
         embedder: embedderFn,
-        modelAlias = 'minilm',
+        modelAlias = defaultModelAlias,
         lockedKinds,
         baseExcludeKinds,
     } = handlerOpts;

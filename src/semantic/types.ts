@@ -100,6 +100,17 @@ export const SEMANTIC_MODELS = {
 } as const satisfies Record<SemanticModelAlias, { hubId: string; dim: number; pooling: string; normalize: boolean; prefix?: EmbedPrefix; quantized?: boolean; recommendedMinScore: number }>;
 
 // ---------------------------------------------------------------------------
+// Default alias — single source of truth for the fallback model.
+// ---------------------------------------------------------------------------
+
+/**
+ * The model alias used when the user's config omits `semantic.model`.
+ * Switched from `'minilm'` to `'e5-base'` on 2026-05-18; e5-base delivers
+ * +6pp aggregate recall (75% vs 69%) and lifts C_ui from 36% → 82%.
+ */
+export const defaultModelAlias: SemanticModelAlias = 'e5-base';
+
+// ---------------------------------------------------------------------------
 // Backward-compat aliases — existing code referencing SEMANTIC_MODEL /
 // SEMANTIC_DIM continues to compile and behave identically.
 // ---------------------------------------------------------------------------
@@ -107,11 +118,17 @@ export const SEMANTIC_MODELS = {
 /** Embedding mode: passage (build) or query (search). */
 export type EmbedMode = 'passage' | 'query';
 
-/** @deprecated Use `SEMANTIC_MODELS.minilm.hubId` or resolve from config. */
-export const SEMANTIC_MODEL = SEMANTIC_MODELS.minilm.hubId;
+/**
+ * @deprecated Use `SEMANTIC_MODELS['e5-base'].hubId` or resolve from config.
+ * Previously pointed at MiniLM; now points at the new default (e5-base).
+ */
+export const SEMANTIC_MODEL = SEMANTIC_MODELS['e5-base'].hubId;
 
-/** @deprecated Use `SEMANTIC_MODELS.minilm.dim` or resolve from config. */
-export const SEMANTIC_DIM = SEMANTIC_MODELS.minilm.dim;
+/**
+ * @deprecated Use `SEMANTIC_MODELS['e5-base'].dim` or resolve from config.
+ * Previously pointed at MiniLM (384); now points at the new default (e5-base, 768).
+ */
+export const SEMANTIC_DIM = SEMANTIC_MODELS['e5-base'].dim;
 
 /** Schema version for the manifest. Bump when the sidecar format changes. */
 export const SEMANTIC_SCHEMA_VERSION = 2 as const;

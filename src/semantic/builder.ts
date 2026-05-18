@@ -22,7 +22,7 @@ import type { ArchGraph, GraphNode } from '../core/types.js';
 import { fileSizeBytes, readEmbeddingsJsonl, writeEmbeddingsJsonl, writeManifest } from './io.js';
 import { extractSnippet } from './snippet.js';
 import type { SemanticDiagnostics, SemanticManifest, SemanticModelAlias, SemanticRecord, SkipReason, SkippedNode } from './types.js';
-import { SEMANTIC_MODELS, SEMANTIC_SCHEMA_VERSION, SKIPPED_NODES_CAP } from './types.js';
+import { SEMANTIC_MODELS, SEMANTIC_SCHEMA_VERSION, SKIPPED_NODES_CAP, defaultModelAlias } from './types.js';
 import type { OpenApiInfo } from '../extractors/openapi/enrich-endpoints.js';
 
 /** Default batch size for the embedder. Safe for typical RAM budgets. */
@@ -48,8 +48,8 @@ export interface BuildSemanticOpts {
     /** Directory where arch-graph-out lives (where graph.json is). */
     outDir: string;
     /**
-     * Model alias to use for this build.  Defaults to `'minilm'` when omitted
-     * for backward compatibility with existing callers that don't specify a model.
+     * Model alias to use for this build.  Defaults to `defaultModelAlias`
+     * (`'e5-base'`) when omitted.
      */
     modelAlias?: SemanticModelAlias;
     /** Optional ISO timestamp override for deterministic tests. */
@@ -116,8 +116,8 @@ export async function buildSemanticIndex(opts: BuildSemanticOpts): Promise<Build
     const { graph, project, embedder, outDir, now = () => new Date().toISOString(), _testOnlySkippedNodesCap } = opts;
     const effectiveCap = _testOnlySkippedNodesCap ?? SKIPPED_NODES_CAP;
 
-    // Resolve model metadata from registry.  Default to 'minilm' for backward compat.
-    const alias: SemanticModelAlias = opts.modelAlias ?? 'minilm';
+    // Resolve model metadata from registry.  Default to defaultModelAlias ('e5-base').
+    const alias: SemanticModelAlias = opts.modelAlias ?? defaultModelAlias;
     const modelEntry = SEMANTIC_MODELS[alias];
 
     // --- Compute graphHash (SHA-256 of graph.json on disk) ------------------

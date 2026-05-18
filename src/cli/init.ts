@@ -198,7 +198,8 @@ export default {
     root: ${q(a.repoRoot)},
     appsGlob: ${q(a.appsGlob)},
     libsGlob: ${q(a.libsGlob)},
-${domainsBlock}${natsBlock}${importsBlock}${docsBlockStr}${strictComment}};
+${domainsBlock}${natsBlock}${importsBlock}${docsBlockStr}${strictComment}    semantic: { model: 'e5-base' },
+};
 `;
 }
 
@@ -235,9 +236,9 @@ export async function askBuildSemantic(
 ): Promise<boolean> {
     write(
         '\n? Build semantic search index now?\n' +
-        '    Downloads ~135 MB embedding model on first use (cached under\n' +
+        '    Downloads ~280 MB embedding model on first use (cached under\n' +
         '    ~/.cache/transformers/), then embeds every graph node. Typically\n' +
-        '    30–90s on small repos; longer on large ones. Enables fuzzy /\n' +
+        '    5–41 min depending on repo size. Enables fuzzy /\n' +
         '    multilingual queries via `code_search`, `docs_search`,\n' +
         '    `semantic_search` (MCP) and `arch-graph semantic search` (CLI).\n',
     );
