@@ -174,6 +174,7 @@ describe('semanticSearch — kNN cosine correctness (AC 6-1)', () => {
             query: 'test query',
             outDir: testDir,
             embedder: fakeEmbedder(queryVec),
+            modelAlias: 'minilm',
             topK: 5,
         });
 
@@ -220,6 +221,7 @@ describe('semanticSearch — kinds filter (AC 6-2)', () => {
             query: 'service query',
             outDir: testDir,
             embedder: fakeEmbedder(unitVec(0)),
+            modelAlias: 'minilm',
             kinds: ['service'],
             topK: 10,
         });
@@ -244,6 +246,7 @@ describe('semanticSearch — kinds filter (AC 6-2)', () => {
             query: 'q',
             outDir: testDir,
             embedder: fakeEmbedder(unitVec(0)),
+            modelAlias: 'minilm',
             kinds: ['db-table'],
         });
 
@@ -273,6 +276,7 @@ describe('semanticSearch — excludeKinds filter', () => {
             query: 'q',
             outDir: testDir,
             embedder: fakeEmbedder(unitVec(0)),
+            modelAlias: 'minilm',
             excludeKinds: ['doc-section'],
             topK: 10,
         });
@@ -299,6 +303,7 @@ describe('semanticSearch — excludeKinds filter', () => {
             query: 'q',
             outDir: testDir,
             embedder: fakeEmbedder(unitVec(0)),
+            modelAlias: 'minilm',
             kinds: ['service', 'doc-section'],
             excludeKinds: ['doc-section'],
         });
@@ -316,6 +321,7 @@ describe('semanticSearch — excludeKinds filter', () => {
             query: 'q',
             outDir: testDir,
             embedder: fakeEmbedder(unitVec(0)),
+            modelAlias: 'minilm',
             excludeKinds: ['doc-section'],
         });
 
@@ -338,12 +344,14 @@ describe('semanticSearch — excludeKinds filter', () => {
             query: 'q',
             outDir: testDir,
             embedder: fakeEmbedder(unitVec(0)),
+            modelAlias: 'minilm',
             excludeKinds: [],
         });
         const { output: outB } = await semanticSearch({
             query: 'q',
             outDir: testDir,
             embedder: fakeEmbedder(unitVec(0)),
+            modelAlias: 'minilm',
         });
 
         expect(outA.results).toHaveLength(2);
@@ -366,6 +374,7 @@ describe('semanticSearch — empty index (AC 6-3)', () => {
             query: 'anything',
             outDir: testDir,
             embedder: fakeEmbedder(unitVec(0)),
+            modelAlias: 'minilm',
         });
 
         expect(exitCode).toBe(4);
@@ -392,6 +401,7 @@ describe('semanticSearch — hash mismatch (AC 6-4)', () => {
             query: 'q',
             outDir: testDir,
             embedder: fakeEmbedder(unitVec(0)),
+            modelAlias: 'minilm',
         });
 
         expect(output.graphHashMatches).toBe(false);
@@ -408,6 +418,7 @@ describe('semanticSearch — hash mismatch (AC 6-4)', () => {
             query: 'q',
             outDir: testDir,
             embedder: fakeEmbedder(unitVec(0)),
+            modelAlias: 'minilm',
         });
 
         expect(output.graphHashMatches).toBe(true);
@@ -423,6 +434,7 @@ describe('semanticSearch — hash mismatch (AC 6-4)', () => {
             query: 'q',
             outDir: testDir,
             embedder: fakeEmbedder(unitVec(0)),
+            modelAlias: 'minilm',
         });
 
         expect(output.graphHashMatches).toBe(false);
@@ -442,6 +454,7 @@ describe('semanticSearch — missing sidecar', () => {
             query: 'q',
             outDir: testDir,
             embedder: fakeEmbedder(unitVec(0)),
+            modelAlias: 'minilm',
         });
 
         expect(exitCode).toBe(1);
@@ -467,6 +480,7 @@ describe('semanticSearch — corrupt embeddings', () => {
             query: 'q',
             outDir: testDir,
             embedder: fakeEmbedder(unitVec(0)),
+            modelAlias: 'minilm',
         });
 
         expect(exitCode).toBe(1);
@@ -486,6 +500,7 @@ describe('semanticSearch — corrupt embeddings', () => {
             query: 'q',
             outDir: testDir,
             embedder: fakeEmbedder(unitVec(0)),
+            modelAlias: 'minilm',
         });
 
         expect(exitCode).toBe(1);
@@ -508,6 +523,7 @@ describe('semanticSearch — missing embeddings.jsonl', () => {
             query: 'q',
             outDir: testDir,
             embedder: fakeEmbedder(unitVec(0)),
+            modelAlias: 'minilm',
         });
 
         expect(exitCode).toBe(1);
@@ -536,6 +552,7 @@ describe('semanticSearch — non-Error JSONL read failure', () => {
             query: 'q',
             outDir: testDir,
             embedder: fakeEmbedder(unitVec(0)),
+            modelAlias: 'minilm',
         });
 
         expect(exitCode).toBe(1);
@@ -575,6 +592,7 @@ describe('semanticSearch — embedder failure', () => {
             query: 'q',
             outDir: testDir,
             embedder: throwingEmbedder,
+            modelAlias: 'minilm',
         });
 
         expect(exitCode).toBe(1);
@@ -596,6 +614,7 @@ describe('semanticSearch — embedder failure', () => {
             query: 'q',
             outDir: testDir,
             embedder: throwingEmbedder,
+            modelAlias: 'minilm',
         });
 
         expect(exitCode).toBe(1);
@@ -620,6 +639,7 @@ describe('semanticSearch — top-K behaviour', () => {
             query: 'q',
             outDir: testDir,
             embedder: fakeEmbedder(unitVec(0)),
+            modelAlias: 'minilm',
             topK: 3,
         });
 
@@ -639,6 +659,7 @@ describe('semanticSearch — top-K behaviour', () => {
             query: 'q',
             outDir: testDir,
             embedder: fakeEmbedder(unitVec(0)),
+            modelAlias: 'minilm',
             topK: 999,
         });
 
@@ -658,6 +679,7 @@ describe('semanticSearch — top-K behaviour', () => {
             query: 'q',
             outDir: testDir,
             embedder: fakeEmbedder(unitVec(0)),
+            modelAlias: 'minilm',
         });
 
         expect(output.results.length).toBeLessThanOrEqual(DEFAULT_TOP_K);
@@ -678,6 +700,7 @@ describe('semanticSearch — output shape', () => {
             query: 'hello',
             outDir: testDir,
             embedder: fakeEmbedder(unitVec(0)),
+            modelAlias: 'minilm',
         });
 
         expect(output.query).toBe('hello');
@@ -709,6 +732,7 @@ describe('semanticSearch — output shape', () => {
             query: 'q',
             outDir: testDir,
             embedder: fakeEmbedder(unitVec(0)),
+            modelAlias: 'minilm',
         });
 
         const r = output.results[0]!;
@@ -740,6 +764,7 @@ describe('semanticSearch — manifest corrupt (F1)', () => {
             query: 'q',
             outDir: testDir,
             embedder: fakeEmbedder(unitVec(0)),
+            modelAlias: 'minilm',
         });
 
         expect(exitCode).toBe(1);
@@ -756,6 +781,7 @@ describe('semanticSearch — manifest corrupt (F1)', () => {
             query: 'q',
             outDir: testDir,
             embedder: fakeEmbedder(unitVec(0)),
+            modelAlias: 'minilm',
         });
 
         expect(exitCode).toBe(1);
@@ -776,6 +802,7 @@ describe('semanticSearch — manifest corrupt (F1)', () => {
             query: 'q',
             outDir: testDir,
             embedder: fakeEmbedder(unitVec(0)),
+            modelAlias: 'minilm',
         });
 
         expect(exitCode).toBe(1);
@@ -795,6 +822,7 @@ describe('semanticSearch — manifest corrupt (F1)', () => {
             query: 'q',
             outDir: testDir,
             embedder: fakeEmbedder(unitVec(0)),
+            modelAlias: 'minilm',
         });
 
         expect(exitCode).toBe(1);
@@ -818,6 +846,7 @@ describe('semanticSearch — hash drift catch message (F2)', () => {
             query: 'q',
             outDir: testDir,
             embedder: fakeEmbedder(unitVec(0)),
+            modelAlias: 'minilm',
         });
 
         expect(output.graphHashMatches).toBe(false);
@@ -840,6 +869,7 @@ describe('semanticSearch — error/hint invariant (F7)', () => {
             query: 'q',
             outDir: testDir,
             embedder: fakeEmbedder(unitVec(0)),
+            modelAlias: 'minilm',
         });
         if (res1.output.error !== undefined) {
             expect(res1.output.hint).toBeDefined();
@@ -858,6 +888,7 @@ describe('semanticSearch — error/hint invariant (F7)', () => {
             query: 'q',
             outDir: testDir,
             embedder: fakeEmbedder(unitVec(0)),
+            modelAlias: 'minilm',
         });
         if (res2.output.error !== undefined) {
             expect(res2.output.hint).toBeDefined();
@@ -878,6 +909,7 @@ describe('semanticSearch — error/hint invariant (F7)', () => {
             query: 'q',
             outDir: testDir,
             embedder: fakeEmbedder(unitVec(0)),
+            modelAlias: 'minilm',
         });
         if (res3.output.error !== undefined) {
             expect(res3.output.hint).toBeDefined();

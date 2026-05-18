@@ -130,9 +130,13 @@ export interface SemanticSearchOpts {
     /**
      * Model alias used when building the index.  The search function uses this
      * to validate the manifest's model/dim against the expected values.
-     * Defaults to `'minilm'` when omitted for backward compatibility.
+     *
+     * Required: the alias controls which model the embedder must match, so
+     * callers must pass it explicitly.  Production callers resolve it from
+     * config (or use the `'minilm'` literal as a named default); omitting it
+     * silently mismatches a bge-m3 index with minilm validation.
      */
-    modelAlias?: SemanticModelAlias;
+    modelAlias: SemanticModelAlias;
     /** Number of results to return.  Defaults to {@link DEFAULT_TOP_K}.  Capped at {@link MAX_TOP_K}. */
     topK?: number;
     /** Optional NodeKind whitelist.  Filter applied after scoring, before top-K. */
@@ -192,8 +196,8 @@ export async function semanticSearch(opts: SemanticSearchOpts): Promise<SearchRe
     const { query, outDir, embedder, kinds, excludeKinds } = opts;
     const topK = Math.min(opts.topK ?? DEFAULT_TOP_K, MAX_TOP_K);
 
-    // Resolve model entry — defaults to minilm for backward compat.
-    const alias: SemanticModelAlias = opts.modelAlias ?? 'minilm';
+    // Resolve model entry from the required alias.
+    const alias = opts.modelAlias;
     const modelEntry = SEMANTIC_MODELS[alias];
     const expectedModel = { model: modelEntry.hubId, dim: modelEntry.dim };
 
