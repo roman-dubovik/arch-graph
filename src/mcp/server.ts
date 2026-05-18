@@ -553,12 +553,24 @@ export interface SemanticSearchHandlerOpts {
      * `makeEmbedder(modelAlias)`.  Tests supply a fake here to avoid real model
      * downloads.  When omitted, the factory builds a default embedder bound to
      * `modelAlias` (defaults to `'minilm'`).
+     *
+     * **Coupling invariant**: `embedder` must produce vectors whose dimensionality
+     * matches the alias registered in `SEMANTIC_MODELS[modelAlias].dim`.  Passing
+     * a bge-m3 embedder (1024-dim) with `modelAlias: 'minilm'` (384-dim) will
+     * cause every search to return `semantic-index-corrupt`.  Always set both
+     * fields together or omit both (production wires them from the same config
+     * lookup; tests use a matching fake).
      */
     embedder?: (text: string) => Promise<number[]>;
     /**
      * Model alias that was used to build the index.  Passed to `semanticSearch`
      * so it can validate the manifest's model/dim against the expected values.
-     * Defaults to `'minilm'` when omitted.
+     * Defaults to `'minilm'` when omitted — only acceptable for MiniLM deployments.
+     *
+     * **Must be set together with `embedder`** when overriding either (see
+     * `embedder` coupling invariant above).  Production callers resolve this
+     * from config via `applySemanticDefaults`; the `'minilm'` default is safe
+     * only when the index was built with the MiniLM model.
      */
     modelAlias?: SemanticModelAlias;
     /**
