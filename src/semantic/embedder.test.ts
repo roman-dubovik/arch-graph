@@ -352,8 +352,183 @@ describe('makeEmbedder — minilm mode no-op', () => {
         const embedder = makeEmbedder('minilm');
         await embedder.embed(['hello'], 'passage');
         await embedder.embed(['hello'], 'query');
+        // Also verify default mode (no mode arg) passes text unchanged
+        await embedder.embed(['hello']);
         const calls = fakeExtractor.mock.calls;
         expect(calls[0][0]).toEqual(['hello']);
         expect(calls[1][0]).toEqual(['hello']);
+        expect(calls[2][0]).toEqual(['hello']);
+    });
+});
+
+describe('makeEmbedder — bge-m3 mode no-op (default mode coverage)', () => {
+    beforeEach(() => {
+        _resetPipelineForTesting();
+        vi.mocked(pipeline).mockResolvedValue(
+            fakePipeline(SEMANTIC_MODELS['bge-m3'].dim) as unknown as Awaited<ReturnType<typeof pipeline>>,
+        );
+    });
+
+    afterEach(() => {
+        _resetPipelineForTesting();
+        vi.clearAllMocks();
+    });
+
+    it('default mode (no mode arg) passes text unchanged for bge-m3', async () => {
+        const fakeExtractor = fakePipeline(SEMANTIC_MODELS['bge-m3'].dim);
+        vi.mocked(pipeline).mockResolvedValue(
+            fakeExtractor as unknown as Awaited<ReturnType<typeof pipeline>>,
+        );
+        const embedder = makeEmbedder('bge-m3');
+        await embedder.embed(['hello']);
+        expect(fakeExtractor.mock.calls[0]![0]).toEqual(['hello']);
+    });
+});
+
+describe('makeEmbedder — arctic-m', () => {
+    beforeEach(() => {
+        _resetPipelineForTesting();
+        vi.mocked(pipeline).mockResolvedValue(
+            fakePipeline(SEMANTIC_MODELS['arctic-m'].dim) as unknown as Awaited<ReturnType<typeof pipeline>>,
+        );
+    });
+
+    afterEach(() => {
+        _resetPipelineForTesting();
+        vi.clearAllMocks();
+    });
+
+    it('loads arctic-m hub model with { quantized: false }', async () => {
+        const embedder = makeEmbedder('arctic-m');
+        await embedder.embed(['hello']);
+        // arctic-m must use the 3-arg pipeline call with { quantized: false }
+        expect(pipeline).toHaveBeenCalledWith(
+            'feature-extraction',
+            SEMANTIC_MODELS['arctic-m'].hubId,
+            { quantized: false },
+        );
+    });
+
+    it('calls extractor with { pooling: "cls", normalize: true }', async () => {
+        const fakeExtractor = fakePipeline(SEMANTIC_MODELS['arctic-m'].dim);
+        vi.mocked(pipeline).mockResolvedValue(
+            fakeExtractor as unknown as Awaited<ReturnType<typeof pipeline>>,
+        );
+        const embedder = makeEmbedder('arctic-m');
+        await embedder.embed(['cls-pooling test']);
+        expect(fakeExtractor).toHaveBeenCalledWith(
+            expect.anything(),
+            { pooling: 'cls', normalize: true },
+        );
+    });
+
+    it('returns 768-dim vectors for arctic-m', async () => {
+        const embedder = makeEmbedder('arctic-m');
+        const result = await embedder.embed(['dimension check']);
+        expect(result[0]).toHaveLength(SEMANTIC_MODELS['arctic-m'].dim);
+    });
+
+    it('passage mode: empty prefix is applied — texts pass through unchanged', async () => {
+        // arctic-m has passage prefix = '' (empty string). The prefix object IS
+        // set (truthy), so the code enters the prefix branch, but p='' makes
+        // map(t => '' + t) an identity. Observable: extractor receives original texts.
+        const fakeExtractor = fakePipeline(SEMANTIC_MODELS['arctic-m'].dim);
+        vi.mocked(pipeline).mockResolvedValue(
+            fakeExtractor as unknown as Awaited<ReturnType<typeof pipeline>>,
+        );
+        const embedder = makeEmbedder('arctic-m');
+        await embedder.embed(['hello'], 'passage');
+        expect(fakeExtractor).toHaveBeenCalledWith(
+            ['hello'],
+            expect.anything(),
+        );
+    });
+
+    it('query mode: prepends "query: " prefix', async () => {
+        const fakeExtractor = fakePipeline(SEMANTIC_MODELS['arctic-m'].dim);
+        vi.mocked(pipeline).mockResolvedValue(
+            fakeExtractor as unknown as Awaited<ReturnType<typeof pipeline>>,
+        );
+        const embedder = makeEmbedder('arctic-m');
+        await embedder.embed(['hello'], 'query');
+        expect(fakeExtractor).toHaveBeenCalledWith(
+            ['query: hello'],
+            expect.anything(),
+        );
+    });
+
+    it('default mode (no mode arg) applies passage prefix — texts pass through unchanged', async () => {
+        const fakeExtractor = fakePipeline(SEMANTIC_MODELS['arctic-m'].dim);
+        vi.mocked(pipeline).mockResolvedValue(
+            fakeExtractor as unknown as Awaited<ReturnType<typeof pipeline>>,
+        );
+        const embedder = makeEmbedder('arctic-m');
+        await embedder.embed(['hello']);
+        expect(fakeExtractor).toHaveBeenCalledWith(
+            ['hello'],
+            expect.anything(),
+        );
+    });
+
+    it('embedOne passage mode: texts pass through unchanged', async () => {
+        const fakeExtractor = fakePipeline(SEMANTIC_MODELS['arctic-m'].dim);
+        vi.mocked(pipeline).mockResolvedValue(
+            fakeExtractor as unknown as Awaited<ReturnType<typeof pipeline>>,
+        );
+        const embedder = makeEmbedder('arctic-m');
+        await embedder.embedOne('hello', 'passage');
+        expect(fakeExtractor).toHaveBeenCalledWith(
+            ['hello'],
+            expect.anything(),
+        );
+    });
+
+    it('embedOne query mode: prepends "query: " prefix', async () => {
+        const fakeExtractor = fakePipeline(SEMANTIC_MODELS['arctic-m'].dim);
+        vi.mocked(pipeline).mockResolvedValue(
+            fakeExtractor as unknown as Awaited<ReturnType<typeof pipeline>>,
+        );
+        const embedder = makeEmbedder('arctic-m');
+        await embedder.embedOne('hello', 'query');
+        expect(fakeExtractor).toHaveBeenCalledWith(
+            ['query: hello'],
+            expect.anything(),
+        );
+    });
+
+    it('applies query prefix to each text in a batch', async () => {
+        const fakeExtractor = fakePipeline(SEMANTIC_MODELS['arctic-m'].dim);
+        vi.mocked(pipeline).mockResolvedValue(
+            fakeExtractor as unknown as Awaited<ReturnType<typeof pipeline>>,
+        );
+        const embedder = makeEmbedder('arctic-m');
+        await embedder.embed(['foo', 'bar', 'baz'], 'query');
+        expect(fakeExtractor).toHaveBeenCalledWith(
+            ['query: foo', 'query: bar', 'query: baz'],
+            expect.anything(),
+        );
+    });
+
+    it('caches arctic-m pipeline separately from other aliases', async () => {
+        vi.mocked(pipeline)
+            .mockResolvedValueOnce(fakePipeline(384) as unknown as Awaited<ReturnType<typeof pipeline>>)    // minilm
+            .mockResolvedValueOnce(fakePipeline(1024) as unknown as Awaited<ReturnType<typeof pipeline>>)   // bge-m3
+            .mockResolvedValueOnce(fakePipeline(768) as unknown as Awaited<ReturnType<typeof pipeline>>)    // e5-base
+            .mockResolvedValueOnce(fakePipeline(768) as unknown as Awaited<ReturnType<typeof pipeline>>);   // arctic-m
+
+        await embed(['minilm text']);
+        await makeEmbedder('bge-m3').embed(['bge text']);
+        await makeEmbedder('e5-base').embed(['e5 text']);
+        await makeEmbedder('arctic-m').embed(['arctic text']);
+
+        // Each alias needs one pipeline init = 4 total
+        expect(pipeline).toHaveBeenCalledTimes(4);
+
+        // Second calls should all hit cache — no new pipeline() calls
+        await embed(['minilm second']);
+        await makeEmbedder('bge-m3').embed(['bge second']);
+        await makeEmbedder('e5-base').embed(['e5 second']);
+        await makeEmbedder('arctic-m').embed(['arctic second']);
+        expect(pipeline).toHaveBeenCalledTimes(4);
     });
 });
