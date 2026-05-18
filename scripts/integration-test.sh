@@ -617,9 +617,12 @@ grep -q "<!-- arch-graph:start -->" "$FIXTURE/CLAUDE.md" \
 [ -f "$FIXTURE/.git/hooks/pre-commit" ] \
     || fail "re-setup didn't create pre-commit hook"
 
-# Run the wizard with --project --yes (non-TTY-safe scope flag).
-UNINSTALL_ERR=$(arch-graph uninstall --project --yes 2>&1) \
-    || fail "arch-graph uninstall --project --yes failed: $UNINSTALL_ERR"
+# Run the wizard scoped to the fixture repo. `--repo` is required when the
+# user's registry has multiple projects (e.g. the developer running this test
+# also has the arch-graph repo itself registered locally); without it,
+# uninstall refuses to sweep all of them.
+UNINSTALL_ERR=$(arch-graph uninstall --project --yes --repo "$FIXTURE" 2>&1) \
+    || fail "arch-graph uninstall --project --yes --repo \"$FIXTURE\" failed: $UNINSTALL_ERR"
 
 # CLAUDE.md section gone
 if [ -f "$FIXTURE/CLAUDE.md" ]; then
