@@ -272,8 +272,7 @@ export async function checkBgeSizeWarning(
         // Silently ignore only when config is absent (init wizard runs before
         // the config is written).  Rethrow programmer errors so they surface.
         const isConfigMissing =
-            (err instanceof Error && err.message.startsWith('config not found')) ||
-            ((err as NodeJS.ErrnoException).code === 'ENOENT');
+            err instanceof Error && err.message.startsWith('config not found:');
         if (!isConfigMissing) throw err;
     }
 }
