@@ -445,6 +445,122 @@ describe('runSemanticSearch — excludeKinds wiring (parse → search)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// D3: runSemanticSearch — model alias precedence (D3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Shared helper: set up a minimal sidecar in testDir and spy on semanticSearch
+ * to capture the resolved modelAlias passed through.
+ */
+async function setupSearchSidecarsAndSpy(dir: string) {
+    const { SEMANTIC_MODEL, SEMANTIC_DIM, SEMANTIC_SCHEMA_VERSION } = await import(
+        '../semantic/types.js'
+    );
+    await writeFile(
+        join(dir, 'semantic', 'manifest.json'),
+        JSON.stringify({
+            schemaVersion: SEMANTIC_SCHEMA_VERSION,
+            model: SEMANTIC_MODEL,
+            dim: SEMANTIC_DIM,
+            builtAt: '2026-05-16T00:00:00.000Z',
+            graphHash: 'a'.repeat(64),
+            nodeCount: 0,
+        }),
+        'utf8',
+    );
+    await writeFile(join(dir, 'semantic', 'embeddings.jsonl'), '', 'utf8');
+    await writeFile(join(dir, 'graph.json'), '{}', 'utf8');
+
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    vi.spyOn(process, 'exit').mockImplementation((() => {
+        throw new Error('process.exit');
+    }) as never);
+
+    const searchModule = await import('../semantic/search.js');
+    const searchSpy = vi.spyOn(searchModule, 'semanticSearch').mockResolvedValue({
+        output: {
+            query: 'q',
+            results: [],
+            model: SEMANTIC_MODEL,
+            dim: SEMANTIC_DIM,
+            indexBuiltAt: '2026-05-16T00:00:00.000Z',
+            graphHashMatches: true,
+        },
+        exitCode: 4,
+        stderrWarning: undefined,
+    });
+    return searchSpy;
+}
+
+describe('runSemanticSearch — model alias precedence (D3)', () => {
+    it('CLI --model flag wins over config semantic.model', async () => {
+        const searchSpy = await setupSearchSidecarsAndSpy(testDir);
+
+        // Mock config to return bge-m3, but CLI passes minilm — CLI wins.
+        const configModule = await import('../core/config.js');
+        const configSpy = vi.spyOn(configModule, 'loadConfig').mockResolvedValue({
+            id: 'repo',
+            root: '.',
+            appsGlob: 'apps/*',
+            semantic: { model: 'bge-m3' },
+        } as never);
+
+        const args = parseSemanticArgs(['search', 'q', '--model', 'minilm']);
+        try {
+            await runSemanticSearch({ ...args, out: testDir });
+        } catch { /* process.exit */ }
+
+        expect(searchSpy).toHaveBeenCalledTimes(1);
+        expect(searchSpy.mock.calls[0]![0].modelAlias).toBe('minilm');
+
+        configSpy.mockRestore();
+    });
+
+    it('config semantic.model wins over the hardcoded minilm default when no CLI flag', async () => {
+        const searchSpy = await setupSearchSidecarsAndSpy(testDir);
+
+        // Mock config to return bge-m3; no --model flag passed.
+        const configModule = await import('../core/config.js');
+        const configSpy = vi.spyOn(configModule, 'loadConfig').mockResolvedValue({
+            id: 'repo',
+            root: '.',
+            appsGlob: 'apps/*',
+            semantic: { model: 'bge-m3' },
+        } as never);
+
+        const args = parseSemanticArgs(['search', 'q']);
+        try {
+            await runSemanticSearch({ ...args, out: testDir });
+        } catch { /* process.exit */ }
+
+        expect(searchSpy).toHaveBeenCalledTimes(1);
+        expect(searchSpy.mock.calls[0]![0].modelAlias).toBe('bge-m3');
+
+        configSpy.mockRestore();
+    });
+
+    it('falls back to minilm when config is absent (ENOENT)', async () => {
+        const searchSpy = await setupSearchSidecarsAndSpy(testDir);
+
+        // Mock config to throw ENOENT — runSemanticSearch should silently default to minilm.
+        const configModule = await import('../core/config.js');
+        const enoentErr = Object.assign(new Error('ENOENT: no such file'), { code: 'ENOENT' });
+        const configSpy = vi.spyOn(configModule, 'loadConfig').mockRejectedValue(enoentErr);
+
+        const args = parseSemanticArgs(['search', 'q']);
+        try {
+            await runSemanticSearch({ ...args, out: testDir });
+        } catch { /* process.exit */ }
+
+        expect(searchSpy).toHaveBeenCalledTimes(1);
+        expect(searchSpy.mock.calls[0]![0].modelAlias).toBe('minilm');
+
+        configSpy.mockRestore();
+    });
+});
+
+// ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
 // Shared build-mock helper
 // ---------------------------------------------------------------------------
