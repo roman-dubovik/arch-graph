@@ -27,11 +27,11 @@ We measured three semantic embedding models across three large production monore
 | **project-a** | 29,527 | 71% (35/49) | **79% (39/49)** | **+8** ✅ | BUILD FAILED (>2h40m) | — |
 | **project-b** | 21,541 | 75% (22/29) | **82% (24/29)** | **+7** ✅ | BUILD FAILED (>2h40m) | — |
 | **project-c** | 2,065 | 56% (14/25) | 56% (14/25) | 0 | 60% (15/25) | 20% (broken) |
-| **Aggregate** | 53,133 | **~67%** | **~72%** | **+6** | n/a | n/a |
+| **Aggregate** | 53,133 | **69%** (71/103) | **75%** (77/103) | **+6** | n/a | n/a |
 
 ---
 
-## Per-Category Breakdown (project-a, 49 queries)
+## Per-Category Breakdown (aggregate across all 3 projects, 103 queries)
 
 | Category | MiniLM | e5-base | Δ |
 |----------|--------|---------|-----|
