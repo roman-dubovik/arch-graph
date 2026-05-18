@@ -519,3 +519,74 @@ describe('makeSemanticSearchHandler — factory presets', () => {
         expect(output.results).toHaveLength(0);
     });
 });
+
+// ---------------------------------------------------------------------------
+// P1-K: makeSemanticSearchHandler with modelAlias: 'bge-m3'
+// ---------------------------------------------------------------------------
+
+describe('makeSemanticSearchHandler — bge-m3 alias (P1-K)', () => {
+    const bgeDim = 1024;
+
+    /** 1024-dim unit vector along axis `i`. */
+    function bgeUnitVec(axis: number): number[] {
+        const v = new Array<number>(bgeDim).fill(0);
+        v[axis] = 1;
+        return v;
+    }
+
+    it('returns results without model-mismatch error when handler and index both use bge-m3', async () => {
+        const graphHash = await writeGraphJson('{"nodes":[]}');
+
+        // Write a bge-m3 manifest + 1024-dim embeddings
+        const bgeManifest: SemanticManifest = {
+            schemaVersion: SEMANTIC_SCHEMA_VERSION,
+            model: 'Xenova/bge-m3',
+            dim: bgeDim,
+            builtAt: '2026-05-18T00:00:00.000Z',
+            graphHash,
+            nodeCount: 2,
+        };
+        await mkdir(join(testDir, 'semantic'), { recursive: true });
+        await writeManifest(bgeManifest, join(testDir, 'semantic', 'manifest.json'));
+
+        const records: SemanticRecord[] = [
+            makeRecord('svc:a', 'service', bgeUnitVec(0)),
+            makeRecord('svc:b', 'service', bgeUnitVec(1)),
+        ];
+        await writeEmbeddingsJsonl(records, join(testDir, 'semantic', 'embeddings.jsonl'));
+
+        // Embedder returns 1024-dim vectors matching the bge-m3 manifest
+        const bgeEmbedder = async (_text: string): Promise<number[]> => bgeUnitVec(0);
+
+        const handler = makeSemanticSearchHandler({
+            outDir: testDir,
+            embedder: bgeEmbedder,
+            modelAlias: 'bge-m3',
+        });
+        const result = await handler({ query: 'test', topK: 2, includeVectors: false });
+
+        const output = JSON.parse(result.content[0]!.text);
+        // No model-mismatch error — results should be present
+        expect(output.error).toBeUndefined();
+        expect(output.results.length).toBeGreaterThan(0);
+        expect(output.model).toBe('Xenova/bge-m3');
+        expect(output.dim).toBe(bgeDim);
+    });
+
+    it('defaults to minilm when no modelAlias is passed (documented default behaviour per SemanticSearchHandlerOpts JSDoc)', async () => {
+        // The JSDoc on SemanticSearchHandlerOpts.modelAlias documents the default as 'minilm'.
+        // This test pins that contract so silent changes to the default are caught.
+        const graphHash = await writeGraphJson('{"nodes":[]}');
+        await writeSidecar([makeRecord('svc:x', 'service', unitVec(0))], graphHash);
+
+        // Handler constructed WITHOUT modelAlias — should apply 'minilm' default
+        const handler = makeSemanticSearchHandler({ outDir: testDir, embedder: fakeEmbedder });
+        const result = await handler({ query: 'test', includeVectors: false });
+
+        const output = JSON.parse(result.content[0]!.text);
+        // Should succeed against the minilm (384-dim) sidecar without model-mismatch error
+        expect(output.error).toBeUndefined();
+        expect(output.model).toBe(SEMANTIC_MODEL);
+        expect(output.dim).toBe(SEMANTIC_DIM);
+    });
+});
