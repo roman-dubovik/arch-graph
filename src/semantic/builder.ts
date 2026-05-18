@@ -78,8 +78,16 @@ export interface BuildSemanticResult {
 /**
  * Compute a SHA-256 content hash for a node's embedding inputs.
  *
- * All four components are lowercased before hashing to ensure that trivial
- * casing changes in the registry do not bust the cache.
+ * Strings are hashed exactly as the embedder will see them — no casing
+ * normalisation. e5-base uses an XLM-RoBERTa SentencePiece tokenizer that is
+ * case-sensitive; `UserService` and `userservice` produce different vectors and
+ * therefore must produce different hashes.
+ *
+ * The `snippet` field must be the **full embed text** returned by
+ * `buildEmbedText(node, rawSnippet)` — i.e. the text actually fed to the
+ * embedder, including any appended i18n strings or OpenAPI metadata — not the
+ * raw snippet alone.  Passing the raw snippet causes cache hits when metadata
+ * changes but the snippet does not, leaving stale vectors in the index.
  *
  * @param record - The four inputs that determine a node's embedding vector.
  * @returns Lowercase hex SHA-256 digest.
@@ -91,10 +99,10 @@ export function computeContentHash(record: {
     modelAlias: string;
 }): string {
     const input = [
-        record.kind.toLowerCase(),
-        record.label.toLowerCase(),
-        record.snippet.toLowerCase(),
-        record.modelAlias.toLowerCase(),
+        record.kind,
+        record.label,
+        record.snippet,
+        record.modelAlias,
     ].join('|');
     return createHash('sha256').update(input).digest('hex');
 }
@@ -266,7 +274,9 @@ export async function buildSemanticIndex(opts: BuildSemanticOpts): Promise<Build
 
     for (const node of sortedNodes) {
         const snippet = snippetMap.get(node.id)!;
-        const hash = computeContentHash({ kind: node.kind, label: node.label, snippet, modelAlias: alias });
+        // Hash the full embed text (including any appended i18n/OpenAPI metadata),
+        // not just the raw snippet. This ensures metadata-only changes bust the cache.
+        const hash = computeContentHash({ kind: node.kind, label: node.label, snippet: textMap.get(node.id)!, modelAlias: alias });
         const cached = priorCache.get(node.id);
 
         if (cached && cached.contentHash === hash) {

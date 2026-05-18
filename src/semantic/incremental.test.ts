@@ -101,14 +101,14 @@ describe('computeContentHash — determinism', () => {
         expect(h).toMatch(/^[0-9a-f]{64}$/);
     });
 
-    it('matches manual sha256 computation (inputs are lowercased)', () => {
+    it('matches manual sha256 computation (inputs are NOT lowercased — case-sensitive)', () => {
         const kind = 'service';
         const label = 'UsersService';
         const snippet = 'class UsersService {}';
         const modelAlias = 'e5-base';
-        // The implementation lowercases all fields before hashing.
+        // Strings are hashed as-is; no casing normalisation.
         const expected = createHash('sha256')
-            .update([kind.toLowerCase(), label.toLowerCase(), snippet.toLowerCase(), modelAlias.toLowerCase()].join('|'))
+            .update([kind, label, snippet, modelAlias].join('|'))
             .digest('hex');
         expect(computeContentHash({ kind, label, snippet, modelAlias })).toBe(expected);
     });
@@ -141,10 +141,17 @@ describe('computeContentHash — determinism', () => {
         expect(h1).not.toBe(h2);
     });
 
-    it('inputs are lowercased before hashing', () => {
-        const lower = computeContentHash({ kind: 'service', label: 'foo', snippet: 'bar', modelAlias: 'minilm' });
-        const upper = computeContentHash({ kind: 'SERVICE', label: 'FOO', snippet: 'BAR', modelAlias: 'MINILM' });
-        expect(lower).toBe(upper);
+    it('label casing produces different hashes (e5-base is case-sensitive)', () => {
+        // P0-2: UserService and userservice must NOT collide — e5-base tokenizer is case-sensitive.
+        const h1 = computeContentHash({ kind: 'service', label: 'UserService', snippet: 'x', modelAlias: 'e5-base' });
+        const h2 = computeContentHash({ kind: 'service', label: 'userservice', snippet: 'x', modelAlias: 'e5-base' });
+        expect(h1).not.toBe(h2);
+    });
+
+    it('snippet casing produces different hashes', () => {
+        const h1 = computeContentHash({ kind: 'service', label: 'Foo', snippet: 'class UserService {}', modelAlias: 'e5-base' });
+        const h2 = computeContentHash({ kind: 'service', label: 'Foo', snippet: 'class userservice {}', modelAlias: 'e5-base' });
+        expect(h1).not.toBe(h2);
     });
 });
 
@@ -516,6 +523,8 @@ describe('incremental build — corrupt embeddings.jsonl', () => {
 // 9. contentHash in output records
 // ---------------------------------------------------------------------------
 
+// Note: section numbers preserved; new sections appended below.
+
 describe('incremental build — contentHash in JSONL records', () => {
     it('each record in schemaVersion=2 output has a non-empty contentHash', async () => {
         const graph = makeGraph({
@@ -540,5 +549,116 @@ describe('incremental build — contentHash in JSONL records', () => {
             expect(rec.contentHash).toBeTruthy();
             expect(rec.contentHash).toMatch(/^[0-9a-f]{64}$/);
         }
+    });
+});
+
+// ---------------------------------------------------------------------------
+// 10. P0-1: fe-component i18nStrings metadata change busts cache
+// ---------------------------------------------------------------------------
+
+describe('incremental build — fe-component i18nStrings change busts cache (P0-1)', () => {
+    it('same snippet but changed i18nStrings triggers recompute', async () => {
+        const snippet = 'export function MyButton() {}';
+
+        // First build: node with i18nStrings = ['Save']
+        const graphV1 = makeGraph({
+            nodes: [
+                {
+                    id: 'fe-component:MyButton',
+                    kind: 'fe-component',
+                    label: 'MyButton',
+                    meta: { i18nStrings: ['Save'] },
+                },
+            ],
+        });
+        await writeGraphJson(graphV1);
+
+        const embedder1 = makeFakeEmbedder();
+        await buildSemanticIndex({
+            graph: graphV1,
+            project: inMemoryProject({ 'MyButton.tsx': snippet }),
+            embedder: embedder1,
+            outDir: testDir,
+            modelAlias: 'minilm',
+        });
+        expect(embedder1).toHaveBeenCalledTimes(1);
+
+        // Second build: same snippet, but i18nStrings changed to ['Cancel']
+        const graphV2 = makeGraph({
+            nodes: [
+                {
+                    id: 'fe-component:MyButton',
+                    kind: 'fe-component',
+                    label: 'MyButton',
+                    meta: { i18nStrings: ['Cancel'] },
+                },
+            ],
+        });
+        await writeGraphJson(graphV2);
+
+        const embedder2 = makeFakeEmbedder();
+        const { diagnostics } = await buildSemanticIndex({
+            graph: graphV2,
+            project: inMemoryProject({ 'MyButton.tsx': snippet }),
+            embedder: embedder2,
+            outDir: testDir,
+            modelAlias: 'minilm',
+        });
+
+        // Metadata changed → must recompute, not reuse.
+        expect(embedder2).toHaveBeenCalledTimes(1);
+        expect(diagnostics.counts.reused).toBe(0);
+        expect(diagnostics.counts.recomputed).toBe(1);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// 11. e5-base incremental: no-op rebuild with 768-dim vectors
+// ---------------------------------------------------------------------------
+
+describe('incremental build — e5-base no-op rebuild (768-dim)', () => {
+    const E5_DIM = SEMANTIC_MODELS['e5-base'].dim; // 768
+
+    function fakeVector768(seed: number): number[] {
+        return Array.from({ length: E5_DIM }, (_, i) => (seed + i) / E5_DIM);
+    }
+
+    it('second run with identical graph and e5-base: 0 embedder calls, all nodes reused', async () => {
+        const N = 2;
+        const graph = makeGraph({
+            nodes: [
+                { id: 'service:alpha', kind: 'service', label: 'AlphaService' },
+                { id: 'service:beta', kind: 'service', label: 'BetaService' },
+            ],
+        });
+        await writeGraphJson(graph);
+
+        let e5CallCount = 0;
+        const embedder1 = vi.fn(async (texts: string[]) => texts.map((_, i) => fakeVector768(e5CallCount++ + i)));
+
+        // First build — full embed with e5-base.
+        await buildSemanticIndex({
+            graph,
+            project: inMemoryProject({}),
+            embedder: embedder1,
+            outDir: testDir,
+            modelAlias: 'e5-base',
+        });
+        expect(embedder1).toHaveBeenCalledTimes(1);
+
+        // Second build — incremental, nothing changed.
+        let e5CallCount2 = 0;
+        const embedder2 = vi.fn(async (texts: string[]) => texts.map((_, i) => fakeVector768(e5CallCount2++ + i)));
+        const { diagnostics } = await buildSemanticIndex({
+            graph,
+            project: inMemoryProject({}),
+            embedder: embedder2,
+            outDir: testDir,
+            modelAlias: 'e5-base',
+        });
+
+        expect(embedder2).toHaveBeenCalledTimes(0); // zero embed calls — all reused
+        expect(diagnostics.counts.reused).toBe(N);
+        expect(diagnostics.counts.recomputed).toBe(0);
     });
 });
