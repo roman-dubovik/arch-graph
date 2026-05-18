@@ -151,6 +151,8 @@ By category, the pattern is nuanced: graphify leads meaningfully in C_ui (+50pp 
 
 3. **Top-10 as rank proxy.** graphify outputs BFS-ordered node lists, not score-ranked lists. "First 10 NODE lines" is a reasonable BFS-depth proxy but is not identical to a cosine-score ranking. Queries where the relevant community is large may have the target node appear at rank 11–20 even when it is semantically central.
 
+4. **Strict-score sensitivity to graph mutation.** graphify's BFS top-10 is sensitive to community-structure changes — if `graphify-out/graph.json` is regenerated (e.g. the project source changed), the BFS ordering can shift, pushing some target labels past rank 10 even when the underlying retrieval quality is identical. A 2026-05-18 revalidation pass (see [`bench/REVALIDATION-2026-05-18.md`](../../bench/REVALIDATION-2026-05-18.md)) found graphify EN strict = 36/69 = 52.2% on a rebuilt project-a graph, vs the original 39/69 = 56.5% on the 2026-05-17 snapshot. arch-graph numbers (RU and EN strict) reproduced at 0.0 pp delta — arch-graph's dense-embedding ranking is deterministic given the same graph. The graphify strict range is therefore best read as **52-57% across snapshots**; the published 56.5% is the original 2026-05-17 measurement. The arch-graph vs graphify near-tie conclusion holds across the range.
+
 ---
 
 ## 2. Setup
@@ -179,10 +181,12 @@ By category, the pattern is nuanced: graphify leads meaningfully in C_ui (+50pp 
 
 | Project | arch-graph hits/total | arch-graph % | graphify hits/total | graphify % |
 |---------|----------------------|-------------|---------------------|-----------|
-| project-a | 34/49 | 69% | 14/49 | 29% |
-| project-b | 22/29 | 76% | 15/29 | 52% |
-| project-c | 13/25 | 52% | 7/25 | 28% |
+| project-a | 34/49 | 69% | 15/49 | 31% |
+| project-b | 22/29 | 76% | 13/29 | 45% |
+| project-c | 13/25 | 52% | 8/25 | 32% |
 | **Overall** | **69/103** | **67%** | **36/103** | **35%** |
+
+> Per-project counts corrected on 2026-05-18 after revalidation pass (see [`bench/REVALIDATION-2026-05-18.md`](../../bench/REVALIDATION-2026-05-18.md)) — the original 14/15/7 values disagreed with the per-query appendix (section 6) which sums to 15/13/8. The re-run matches section 6 exactly on all 103 per-query verdicts; section 3a is now corrected. Overall total of 36/103 is unchanged.
 
 ### 3b. Hit-rates by category (all projects combined)
 
