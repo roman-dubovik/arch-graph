@@ -540,13 +540,14 @@ describe('runSemanticSearch — model alias precedence (D3)', () => {
         configSpy.mockRestore();
     });
 
-    it('falls back to minilm when config is absent (ENOENT)', async () => {
+    it('falls back to minilm when config is absent ("config not found:" prefix)', async () => {
         const searchSpy = await setupSearchSidecarsAndSpy(testDir);
 
-        // Mock config to throw ENOENT — runSemanticSearch should silently default to minilm.
+        // Mock config to throw the "config not found:" prefix that loadConfig uses for absent files.
+        // The predicate no longer matches ENOENT directly — only the loadConfig message prefix is trusted.
         const configModule = await import('../core/config.js');
-        const enoentErr = Object.assign(new Error('ENOENT: no such file'), { code: 'ENOENT' });
-        const configSpy = vi.spyOn(configModule, 'loadConfig').mockRejectedValue(enoentErr);
+        const notFoundErr = new Error('config not found: ./arch-graph.config.ts');
+        const configSpy = vi.spyOn(configModule, 'loadConfig').mockRejectedValue(notFoundErr);
 
         const args = parseSemanticArgs(['search', 'q']);
         try {

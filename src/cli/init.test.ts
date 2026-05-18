@@ -314,15 +314,26 @@ describe('checkBgeSizeWarning (AC2.3)', () => {
         expect(written).toHaveLength(0);
     });
 
-    it('prints nothing (no throw) when config loader throws', async () => {
+    it('prints nothing (no throw) when config file is absent ("config not found:" prefix)', async () => {
         const written: string[] = [];
         const fakeLoader = async (_p: string): Promise<never> => {
-            throw new Error('config not found');
+            throw new Error('config not found: /fake/arch-graph.config.ts');
         };
-        // Must not throw — the wizard must continue even if config is unreadable.
+        // Must not throw — the wizard must continue when the file simply does not exist yet.
         await expect(
             checkBgeSizeWarning('/fake/arch-graph.config.ts', (s) => written.push(s), fakeLoader),
         ).resolves.toBeUndefined();
+        expect(written).toHaveLength(0);
+    });
+
+    it('rethrows when config loader throws a non-absent error (e.g. syntax error)', async () => {
+        const written: string[] = [];
+        const fakeLoader = async (_p: string): Promise<never> => {
+            throw new Error('SyntaxError: Unexpected token');
+        };
+        await expect(
+            checkBgeSizeWarning('/fake/arch-graph.config.ts', (s) => written.push(s), fakeLoader),
+        ).rejects.toThrow('SyntaxError');
         expect(written).toHaveLength(0);
     });
 

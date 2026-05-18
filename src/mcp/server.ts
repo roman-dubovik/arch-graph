@@ -311,10 +311,14 @@ export async function startMcpServer(opts: { out: string; config?: string }): Pr
         try {
             const cfg = await loadConfig(resolve(opts.config));
             resolvedModelAlias = applySemanticDefaults(cfg.semantic).model;
-        } catch {
-            // Config absent or unreadable at startup — silently keep the minilm default.
-            // The semantic index already encodes which model it was built with; if the
-            // alias mismatches, semanticSearch will surface a structured error on first call.
+        } catch (err) {
+            // Silently keep the 'minilm' default ONLY when the config file is
+            // absent.  Any other error (syntax error, invalid alias such as
+            // 'bge-m4') must surface immediately so the operator knows their
+            // config is broken rather than silently running on the wrong model.
+            const isConfigMissing =
+                err instanceof Error && err.message.startsWith('config not found:');
+            if (!isConfigMissing) throw err;
         }
     }
 

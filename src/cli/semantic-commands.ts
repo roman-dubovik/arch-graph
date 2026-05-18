@@ -595,13 +595,11 @@ export async function runSemanticSearch(args: SemanticArgs): Promise<void> {
             const cfg = await loadConfig(resolve(args.config));
             modelAlias = applySemanticDefaults(cfg.semantic).model;
         } catch (err) {
-            // Silently default to 'minilm' ONLY when the config file is absent
-            // (ENOENT or loadConfig's "config not found:" message).  Any other
-            // error — syntax error, invalid semantic.model value — must surface
-            // so the user knows their config is broken, not the index.
+            // Silently default to 'minilm' ONLY when the config file is absent.
+            // Any other error (syntax, invalid alias) must surface so the user
+            // knows their config is broken, not the index.
             const isConfigMissing =
-                (err instanceof Error && err.message.startsWith('config not found:')) ||
-                ((err as NodeJS.ErrnoException).code === 'ENOENT');
+                err instanceof Error && err.message.startsWith('config not found:');
             if (!isConfigMissing) throw err;
             // Config absent → silent minilm default is acceptable.
         }
