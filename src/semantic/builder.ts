@@ -363,8 +363,13 @@ export async function buildSemanticIndex(opts: BuildSemanticOpts): Promise<Build
         nodeCount: allRecords.length,
     };
 
-    await writeManifest(manifest, manifestPath);
+    // Write JSONL first, then manifest.  If a crash occurs between the two writes,
+    // the OLD manifest survives paired with the new JSONL — the schemaVersion or
+    // model field mismatch forces a full rebuild on the next run.  Writing manifest
+    // first would leave the NEW manifest paired with a possibly-partial JSONL,
+    // which the reader might accept as valid until it hits a truncated line.
     await writeEmbeddingsJsonl(allRecords, embeddingsPath);
+    await writeManifest(manifest, manifestPath);
 
     const indexSizeBytes = await fileSizeBytes(embeddingsPath);
 

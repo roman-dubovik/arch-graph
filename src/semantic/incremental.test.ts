@@ -662,3 +662,65 @@ describe('incremental build — e5-base no-op rebuild (768-dim)', () => {
         expect(diagnostics.counts.recomputed).toBe(0);
     });
 });
+
+// ---------------------------------------------------------------------------
+// 12. Atomic write order: JSONL written before manifest
+// ---------------------------------------------------------------------------
+
+describe('incremental build — JSONL written before manifest (atomic write order)', () => {
+    it('when manifest write fails, prior manifest survives so next run forces full rebuild', async () => {
+        const graph = makeGraph({
+            nodes: [
+                { id: 'service:x', kind: 'service', label: 'X' },
+            ],
+        });
+        await writeGraphJson(graph);
+
+        // First successful build to create a valid prior sidecar.
+        const embedder1 = makeFakeEmbedder();
+        await buildSemanticIndex({
+            graph,
+            project: inMemoryProject({}),
+            embedder: embedder1,
+            outDir: testDir,
+            modelAlias: 'minilm',
+        });
+
+        // Capture the prior manifest content.
+        const priorManifestContent = await readFile(join(testDir, 'semantic', 'manifest.json'), 'utf8');
+        const priorManifest = JSON.parse(priorManifestContent) as { schemaVersion: number; builtAt: string };
+
+        // Make the manifest file read-only so writeManifest will throw.
+        const { chmod } = await import('node:fs/promises');
+        const manifestPath = join(testDir, 'semantic', 'manifest.json');
+        await chmod(manifestPath, 0o444); // read-only
+
+        // Second build — should fail at writeManifest (manifest is read-only).
+        let buildThrew = false;
+        try {
+            await buildSemanticIndex({
+                graph,
+                project: inMemoryProject({}),
+                embedder: makeFakeEmbedder(),
+                outDir: testDir,
+                modelAlias: 'minilm',
+            });
+        } catch {
+            buildThrew = true;
+        }
+
+        // Restore permissions.
+        await chmod(manifestPath, 0o644);
+
+        // Build must have thrown (write failed).
+        expect(buildThrew).toBe(true);
+
+        // The prior manifest content must be unchanged — old manifest survives.
+        // This means the next run will see a schemaVersion/model match and can
+        // either reuse (if JSONL survived) or force full rebuild (if JSONL is new).
+        const currentManifestContent = await readFile(manifestPath, 'utf8');
+        const currentManifest = JSON.parse(currentManifestContent) as { schemaVersion: number; builtAt: string };
+        expect(currentManifest.builtAt).toBe(priorManifest.builtAt);
+        expect(currentManifest.schemaVersion).toBe(priorManifest.schemaVersion);
+    });
+});
