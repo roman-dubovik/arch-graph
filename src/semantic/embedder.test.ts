@@ -15,7 +15,8 @@ vi.mock('@xenova/transformers', () => ({
 
 // Import after mock is set up.
 import { pipeline } from '@xenova/transformers';
-import { _resetPipelineForTesting, embed, embedOne } from './embedder.js';
+import { _resetPipelineForTesting, embed, embedOne, makeEmbedder } from './embedder.js';
+import { SEMANTIC_MODELS } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -116,5 +117,65 @@ describe('embedOne', () => {
     it('vector values are finite numbers', async () => {
         const vec = await embedOne('arch graph node');
         expect(vec.every((v) => isFinite(v))).toBe(true);
+    });
+});
+
+describe('makeEmbedder — bge-m3', () => {
+    beforeEach(() => {
+        _resetPipelineForTesting();
+        // bge-m3 produces 1024-dim vectors
+        vi.mocked(pipeline).mockResolvedValue(
+            fakePipeline(SEMANTIC_MODELS['bge-m3'].dim) as unknown as Awaited<ReturnType<typeof pipeline>>,
+        );
+    });
+
+    afterEach(() => {
+        _resetPipelineForTesting();
+        vi.clearAllMocks();
+    });
+
+    it('loads bge-m3 hub model', async () => {
+        const embedder = makeEmbedder('bge-m3');
+        await embedder(['hello']);
+        expect(pipeline).toHaveBeenCalledWith('feature-extraction', SEMANTIC_MODELS['bge-m3'].hubId);
+    });
+
+    it('calls extractor with { pooling: "cls", normalize: true }', async () => {
+        const fakeExtractor = fakePipeline(SEMANTIC_MODELS['bge-m3'].dim);
+        vi.mocked(pipeline).mockResolvedValue(
+            fakeExtractor as unknown as Awaited<ReturnType<typeof pipeline>>,
+        );
+        const embedder = makeEmbedder('bge-m3');
+        await embedder(['cls-pooling test']);
+        expect(fakeExtractor).toHaveBeenCalledWith(
+            expect.anything(),
+            { pooling: 'cls', normalize: true },
+        );
+    });
+
+    it('returns 1024-dim vectors for bge-m3', async () => {
+        const embedder = makeEmbedder('bge-m3');
+        const result = await embedder(['dimension check']);
+        expect(result[0]).toHaveLength(SEMANTIC_MODELS['bge-m3'].dim);
+    });
+
+    it('caches bge-m3 pipeline separately from minilm pipeline', async () => {
+        // Set up distinct mocks for each alias call sequence
+        vi.mocked(pipeline)
+            .mockResolvedValueOnce(fakePipeline(384) as unknown as Awaited<ReturnType<typeof pipeline>>)  // minilm
+            .mockResolvedValueOnce(fakePipeline(1024) as unknown as Awaited<ReturnType<typeof pipeline>>); // bge-m3
+
+        // First call each alias once
+        await embed(['minilm text']);
+        const bgeEmbedder = makeEmbedder('bge-m3');
+        await bgeEmbedder(['bge text']);
+
+        // pipeline() was called once per alias = 2 total
+        expect(pipeline).toHaveBeenCalledTimes(2);
+
+        // Second call to each alias should use cache — no new pipeline() calls
+        await embed(['minilm second']);
+        await bgeEmbedder(['bge second']);
+        expect(pipeline).toHaveBeenCalledTimes(2);
     });
 });
