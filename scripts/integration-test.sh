@@ -52,7 +52,9 @@ trap 'on_exit $?' EXIT
 # ---------------------------------------------------------------------------
 
 PASS_COUNT=0
-TOTAL_STEPS=7
+# Steps: install, init, build, stats, queries, integrations, filter-chain edges,
+# semantic build (smoke), uninstall --project --yes
+TOTAL_STEPS=9
 
 step_start() {
     local num=$1 label=$2
@@ -535,10 +537,72 @@ PIPE_COUNT=$(jq '[.edges[] | select(.kind == "di-pipe")] | length' "$GRAPH") \
 step_ok
 
 # ---------------------------------------------------------------------------
-# Step 8: arch-graph uninstall --project --yes (interactive wizard, scoped)
+# Step 8: semantic build smoke
+# ---------------------------------------------------------------------------
+# Skip if ARCH_GRAPH_SKIP_SEMANTIC=1 (useful in CI without the ~135 MB model).
+# The step asserts that embeddings.jsonl is non-empty and has >= 1 line.
 # ---------------------------------------------------------------------------
 
-step_start 8 "uninstall --project --yes"
+step_start 8 "semantic build smoke"
+
+cd "$FIXTURE"
+
+if [ "${ARCH_GRAPH_SKIP_SEMANTIC:-0}" = "1" ]; then
+    echo -n " (skipped via ARCH_GRAPH_SKIP_SEMANTIC=1)"
+    step_ok
+else
+    SEMANTIC_ERR=$(arch-graph semantic build 2>&1 >/dev/null) \
+        || fail "arch-graph semantic build failed: $SEMANTIC_ERR"
+
+    EMBEDDINGS="$FIXTURE/arch-graph-out/semantic/embeddings.jsonl"
+    MANIFEST="$FIXTURE/arch-graph-out/semantic/manifest.json"
+
+    assert_file_exists "$EMBEDDINGS" "semantic build"
+    assert_file_exists "$MANIFEST"   "semantic build"
+    assert_nonempty    "$EMBEDDINGS" "semantic build"
+
+    EMBED_LINES=$(wc -l < "$EMBEDDINGS" | tr -d ' ')
+    [ "$EMBED_LINES" -ge 1 ] \
+        || fail "embeddings.jsonl has 0 lines (expected >= 1). Graph may be empty."
+
+    # Check manifest has graphHash field
+    jq -e '.graphHash | length > 0' "$MANIFEST" >/dev/null \
+        || fail "manifest.json missing graphHash"
+
+    # Check diagnostics.json was extended (not clobbered)
+    DIAG="$FIXTURE/arch-graph-out/diagnostics.json"
+    assert_file_exists "$DIAG" "semantic diagnostics merge"
+
+    # Existing nats field must still be present after semantic merge
+    jq -e '.nats' "$DIAG" >/dev/null \
+        || fail "diagnostics.json lost nats field after semantic merge (anti-clobber violation)"
+
+    # semantic field must now exist
+    jq -e '.semantic.model | length > 0' "$DIAG" >/dev/null \
+        || fail "diagnostics.json missing .semantic.model after semantic build"
+
+    # PT-P1-6: end-to-end contract check — search returns expected MCP shape.
+    SEARCH_JSON=$(arch-graph semantic search "service" --json 2>/dev/null) \
+        || fail "arch-graph semantic search failed (exit code non-zero)"
+
+    echo "$SEARCH_JSON" | jq -e '.dim == 384' >/dev/null \
+        || fail "semantic search: .dim != 384. Got: $SEARCH_JSON"
+
+    echo "$SEARCH_JSON" | jq -e '.model == "Xenova/paraphrase-multilingual-MiniLM-L12-v2"' >/dev/null \
+        || fail "semantic search: .model mismatch. Got: $SEARCH_JSON"
+
+    echo "$SEARCH_JSON" | jq -e '.graphHashMatches == true' >/dev/null \
+        || fail "semantic search: .graphHashMatches is not true (graph/index hash mismatch). Got: $SEARCH_JSON"
+
+    echo -n " (${EMBED_LINES} lines)"
+    step_ok
+fi
+
+# ---------------------------------------------------------------------------
+# Step 9: arch-graph uninstall --project --yes (interactive wizard, scoped)
+# ---------------------------------------------------------------------------
+
+step_start 9 "uninstall --project --yes"
 
 cd "$FIXTURE"
 

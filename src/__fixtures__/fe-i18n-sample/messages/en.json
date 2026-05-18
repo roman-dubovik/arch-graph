@@ -1,0 +1,11 @@
+{
+  "common": {
+    "apply": "Apply",
+    "cancel": "Cancel",
+    "title": "Title",
+    "en_only": "English only"
+  },
+  "buttons": {
+    "save": "Save"
+  }
+}

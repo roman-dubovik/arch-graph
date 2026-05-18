@@ -1,4 +1,17 @@
 // ============================================================================
+// Branded types
+// ============================================================================
+
+/**
+ * Branded newtype for graph node anchor strings.
+ *
+ * Prevents accidental assignment of arbitrary strings to `GraphNode.anchor`.
+ * Construct via `buildClassMemberAnchor` (for "Class.member" form) or
+ * `buildAnchor` (for bare-name forms like config keys or class names).
+ */
+export type Anchor = string & { readonly __anchor: unique symbol };
+
+// ============================================================================
 // Source locations
 // ============================================================================
 
@@ -63,7 +76,47 @@ export type NodeKind =
     | 'module'
     | 'provider'
     | 'file'
-    | 'external';
+    | 'external'
+    | 'fe-page'
+    | 'fe-component'
+    | 'fe-route'
+    | 'fe-hook'
+    | 'endpoint'
+    | 'config-field'
+    /** STUB: extractor returns empty in v1 — see B8 in design doc */
+    | 'scoped-marker'
+    | 'db-entity-field'
+    | 'doc-section';
+
+/**
+ * Exhaustiveness-gate pattern for NodeKind.
+ * Using `Record<NodeKind, null>` forces a compile error when a new NodeKind
+ * variant is added but not listed here. Callers use `NODE_KIND_VALUES` for
+ * runtime validation (e.g. CLI --kinds flag, MCP input schema).
+ */
+const NODE_KIND_CHECK: Record<NodeKind, null> = {
+    'service': null,
+    'lib': null,
+    'nats-subject': null,
+    'db-table': null,
+    'queue': null,
+    'module': null,
+    'provider': null,
+    'file': null,
+    'external': null,
+    'fe-page': null,
+    'fe-component': null,
+    'fe-route': null,
+    'fe-hook': null,
+    'endpoint': null,
+    'config-field': null,
+    'scoped-marker': null,
+    'db-entity-field': null,
+    'doc-section': null,
+};
+
+/** All valid NodeKind values — used for runtime validation and zod enum schemas. */
+export const NODE_KIND_VALUES = Object.keys(NODE_KIND_CHECK) as [NodeKind, ...NodeKind[]];
 
 export type EdgeKind =
     | EdgeKindNats
@@ -83,13 +136,31 @@ export type EdgeKind =
     | 'di-interceptor'
     | 'di-pipe'
     | 'ts-import'
-    | 'lib-usage';
+    | 'lib-usage'
+    | 'fe-imports'
+    | 'fe-renders'
+    | 'fe-routes-to'
+    | 'endpoint-of'
+    | 'endpoint-calls'
+    | 'config-read-by'
+    | 'entity-has-field'
+    /** STUB: reserved for forward-compat — no scoped edges emitted in v1; see B8 in design doc */
+    | 'scoped';
 
 export interface GraphNode {
     id: string;
     kind: NodeKind;
     label: string;
     path?: string;
+    /**
+     * Optional anchor into the source file for kinds where the label is not the
+     * declaration name (e.g. `endpoint` labels are `"POST /path"`, but the anchor
+     * is `"ControllerClass.methodName"`; `db-entity-field` labels are `"table/col"`,
+     * anchor is `"EntityClass.propertyName"`).
+     *
+     * Format: flat string — either a bare name or "ClassName.memberName".
+     */
+    anchor?: Anchor;
     meta?: Record<string, unknown>;
 }
 
@@ -286,6 +357,112 @@ export interface TypeOrmDiagnostics {
     };
 }
 
+/**
+ * Diagnostics for the Variant 2 endpoint domain.
+ * Merges extractor-level (non-literal arg) and mapper-level (unowned file) messages.
+ */
+export interface EndpointDiagnostics {
+    /** Combined extractor + mapper diagnostics. file/line are optional (mapper messages carry no location). */
+    messages: Array<{ message: string; file?: string; line?: number }>;
+}
+
+/**
+ * Diagnostics produced by the OpenAPI YAML enrichment pass.
+ * Reported in `DiagnosticsReport.openapi` and in the `diagnostics.json` output.
+ */
+export interface OpenApiDiagnostics {
+    /** Number of YAML files successfully parsed (excludes files that produced parse errors). */
+    filesProcessed: number;
+    /** Number of endpoint graph nodes that were successfully enriched. */
+    endpointsMatched: number;
+    /**
+     * YAML operations that had no matching endpoint graph node.
+     * The caller can use this to detect YAML drift from the actual codebase.
+     */
+    endpointsUnmatched: Array<{
+        /** `operationId` from the YAML operation, if present. */
+        operationId?: string;
+        /** HTTP method (lowercase) from the YAML path item. */
+        method: string;
+        /** Path string from the YAML `paths` object. */
+        path: string;
+    }>;
+    /** YAML files that could not be parsed. Other files continue to be processed. */
+    parseErrors: Array<{ file: string; error: string }>;
+}
+
+/**
+ * Diagnostics for the Variant 2 config-field domain.
+ * Merges extractor-level (non-literal key) and mapper-level (unowned file) messages.
+ */
+export interface ConfigDiagnostics {
+    /** Combined extractor + mapper diagnostics. file/line are optional (mapper messages carry no location). */
+    messages: Array<{ message: string; file?: string; line?: number }>;
+}
+
+/**
+ * Diagnostics for the Variant 2 db-entity-field domain.
+ * Merges extractor-level (not-in-index) and mapper-level (duplicate fields) messages.
+ */
+export interface DbEntityFieldsDiagnostics {
+    /** Combined extractor + mapper diagnostics. file/line are optional (mapper messages carry no location). */
+    messages: Array<{ message: string; file?: string; line?: number }>;
+    counts: {
+        /**
+         * Number of circular base-class chains detected and truncated by the cycle guard
+         * in `getAllFieldProperties`. Mirrors `TypeOrmDiagnostics.counts.baseClassCycles`
+         * so consumers are not blind to the stderr-only signal when entity fields are
+         * extracted via the base-class chain walk.
+         */
+        baseClassCycles: number;
+    };
+}
+
+/**
+ * Diagnostics for the Variant 2 scoped-marker domain (stub).
+ */
+export interface ScopedDiagnostics {
+    /** Number of scoped-marker sites found (0 in v1 stub). */
+    markerCount: number;
+    /** Extractor-level messages. */
+    messages: Array<{ file: string; line: number; message: string }>;
+}
+
+// ============================================================================
+// Docs-domain types (v1 — nodes only, no edges)
+// ============================================================================
+
+export type DocsSkipReason =
+    | 'oversized'
+    | 'non-utf8'
+    | 'empty'
+    | 'gitignored'
+    | 'read-error';
+
+export interface DocsDiagnostics {
+    filesScanned: number;
+    filesSkipped: Array<{ path: string; reason: DocsSkipReason }>;
+    frontmatterErrors: Array<{ path: string; error: string }>;
+    oversizedChunks: Array<{ docSectionId: string; tokenCount: number }>;
+    counts: {
+        filesIncluded: number;
+        nodesEmitted: number;
+        headingsTotal: number;
+        sectionsSplit: number;
+        filesWithFrontmatter: number;
+    };
+}
+
+export interface DocsValidationReport {
+    summary: {
+        filesIncluded: number;
+        filesProcessed: number;
+        filesSkippedWithReason: number;
+        recall: number;
+        meetsFloor: boolean;
+    };
+}
+
 export interface DiagnosticsReport {
     projectId: string;
     timestamp: string;
@@ -295,7 +472,26 @@ export interface DiagnosticsReport {
     di: DiDiagnostics;
     http: HttpDiagnostics;
     imports: ImportsDiagnostics;
+    fe: import('../mapper/fe-to-graph.js').FeDiagnostics;
     cycles: CyclesDiagnostics;
+    /** Variant 2 — endpoint domain diagnostics. */
+    endpoint?: EndpointDiagnostics;
+    /** Variant 2 — config-field domain diagnostics. */
+    config?: ConfigDiagnostics;
+    /** Variant 2 — db-entity-field domain diagnostics. */
+    dbEntityFields?: DbEntityFieldsDiagnostics;
+    /** Variant 2 — scoped-marker domain diagnostics (stub). */
+    scoped?: ScopedDiagnostics;
+    /** Docs-domain diagnostics. */
+    docs?: DocsDiagnostics;
+    /** OpenAPI YAML enrichment diagnostics — populated by the enrichment pass in `runBuild`. */
+    openapi?: OpenApiDiagnostics;
+    /**
+     * Populated only when `arch-graph semantic build` has been run.
+     * Optional so plain `arch-graph build` keeps the same diagnostics.json
+     * shape without breaking existing consumers.
+     */
+    semantic?: import('../semantic/types.js').SemanticDiagnostics;
 }
 
 // ============================================================================
@@ -396,6 +592,33 @@ export interface TypeOrmValidationReport {
     extraInjections: TypeOrmInjectionSite[];
 }
 
+/**
+ * A single ground-truth entry from the db-entity-field validator regex scan.
+ * Named here so `DbEntityFieldsValidationResult.groundTruth` has a concrete type
+ * (avoids anonymous inline object — mirrors `TypeOrmGroundTruthEntry` pattern).
+ */
+export interface DbEntityFieldGroundTruthEntry {
+    file: string;
+    line: number;
+    matchedText: string;
+    decorator: string;
+}
+
+/**
+ * Validation result for the Variant 2 db-entity-field domain.
+ * Mirrors `EndpointValidationResult` / `ConfigValidationResult` shape.
+ */
+export interface DbEntityFieldsValidationResult {
+    /** Ground-truth entries found by `@Column*` decorator regex. */
+    groundTruth: DbEntityFieldGroundTruthEntry[];
+    /** Number of detected column decorator occurrences via ground-truth regex. */
+    groundTruthCount: number;
+    /** Recall: groundTruth > 0 ? extracted / groundTruth : null. */
+    recall: number | null;
+    /** Recall floor 95%. True if recall >= 0.95 or no ground truth detected. */
+    meetsFloor: boolean;
+}
+
 export interface BuildValidation {
     projectId: string;
     timestamp: string;
@@ -405,6 +628,15 @@ export interface BuildValidation {
     di: DiValidationReport;
     http: HttpValidationReport;
     imports: ImportsValidationReport;
+    fe: import('../validation/fe-validator.js').FeValidationReport;
+    /** Variant 2 — endpoint validation report. */
+    endpoint?: import('../validation/endpoint-validator.js').EndpointValidationResult;
+    /** Variant 2 — config-field validation report. */
+    config?: import('../validation/config-validator.js').ConfigValidationResult;
+    /** Variant 2 — db-entity-field validation report. */
+    dbEntityFields?: DbEntityFieldsValidationResult;
+    /** Docs-domain validation report. */
+    docs?: DocsValidationReport;
 }
 
 // ============================================================================

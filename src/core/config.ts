@@ -26,6 +26,10 @@ export interface ArchGraphConfig {
     http?: HttpConfig;
     /** TS-imports extractor settings. */
     imports?: ImportsConfig;
+    /** Documentation scanning settings. */
+    docs?: DocsConfig;
+    /** OpenAPI YAML enrichment settings. */
+    openapi?: OpenApiConfig;
     /**
      * Opt-out flags per domain. When a domain is `true` (default) the CLI gate
      * treats zero ground-truth as a hard failure (regex-typo, missing glob, etc.).
@@ -38,6 +42,14 @@ export interface ArchGraphConfig {
         di?: boolean;
         http?: boolean;
         imports?: boolean;
+        /** Track A — React/Next.js frontend extractor. Defaults to true. */
+        fe?: boolean;
+        /** Variant 2 — NestJS endpoint decorators (@Get, @Post, …). Defaults to true. */
+        endpoint?: boolean;
+        /** Variant 2 — config-field callsites (configService.get / process.env). Defaults to true. */
+        config?: boolean;
+        /** Variant 2 — TypeORM entity column decorators (@Column, @PrimaryColumn, …). Defaults to true. */
+        dbEntityFields?: boolean;
     };
 }
 
@@ -80,6 +92,86 @@ export interface HttpConfig {
      * URL doesn't match any internal-service entry become `external:<hostname>`.
      */
     internalServices?: HttpInternalService[];
+}
+
+export interface DocsConfig {
+    /** Glob patterns to include (relative to project root). */
+    include?: string[];
+    /** Glob patterns to exclude. */
+    exclude?: string[];
+    /** Whether to respect .gitignore when scanning. */
+    respectGitignore?: boolean;
+    /** Embedder-tokens per adaptive chunk (BERT-style, NOT cl100k). */
+    chunkTokens?: number;
+    /** Max file size in bytes before the file is skipped as oversized. */
+    maxFileBytes?: number;
+}
+
+/**
+ * OpenAPI YAML enrichment settings.
+ *
+ * Controls which YAML files are scanned for endpoint metadata (descriptions,
+ * summaries, tags, parameters). Matched operations are injected into endpoint
+ * node `meta.openapiInfo` and picked up by the semantic embed-text builder.
+ */
+export interface OpenApiConfig {
+    /**
+     * Glob patterns (relative to project root) matching OpenAPI YAML files.
+     * Defaults to common locations: api globs and well-known openapi/swagger file names.
+     * See DEFAULT_OPENAPI_GLOBS in enrich-endpoints.ts for the exact defaults.
+     */
+    globs?: string[];
+}
+
+export const DOCS_DEFAULT_INCLUDE: readonly string[] = [
+    'README.md',
+    'docs/**/*.md',
+    'apps/*/README.md',
+    'libs/*/README.md',
+    'packages/*/README.md',
+    'CHANGELOG.md',
+    'ROADMAP.md',
+    // Root-level *.md files (QUICK_START.md, SETUP.md, BACKEND_SERVICES.md, etc.)
+    // observed in real projects like project-c. Without this glob, project-level
+    // docs that aren't standardly named get missed.
+    '*.md',
+];
+
+export const DOCS_DEFAULT_EXCLUDE: readonly string[] = [
+    '**/node_modules/**',
+    '**/dist/**',
+    '**/build/**',
+    '**/.next/**',
+    '**/coverage/**',
+    'LICENSE.md',
+    '.github/**/*.md',
+];
+
+/** All-defaults resolution of a (possibly missing) DocsConfig field. */
+export interface ResolvedDocsConfig {
+    include: string[];
+    exclude: string[];
+    respectGitignore: boolean;
+    chunkTokens: number;
+    maxFileBytes: number;
+}
+
+export function applyDocsDefaults(d: DocsConfig | undefined): ResolvedDocsConfig {
+    const chunkTokens = d?.chunkTokens ?? 100;
+    const maxFileBytes = d?.maxFileBytes ?? 10 * 1024 * 1024;
+    if (!Number.isInteger(chunkTokens) || chunkTokens <= 0) {
+        throw new Error(`docs.chunkTokens must be a positive integer, got ${String(chunkTokens)}`);
+    }
+    if (!Number.isInteger(maxFileBytes) || maxFileBytes <= 0) {
+        throw new Error(`docs.maxFileBytes must be a positive integer, got ${String(maxFileBytes)}`);
+    }
+    return {
+        include: d?.include ?? [...DOCS_DEFAULT_INCLUDE],
+        exclude: d?.exclude ?? [...DOCS_DEFAULT_EXCLUDE],
+        respectGitignore: d?.respectGitignore ?? true,
+        chunkTokens,
+        maxFileBytes,
+    };
 }
 
 /**
