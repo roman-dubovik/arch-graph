@@ -253,3 +253,74 @@ BGE-M3 should remain opt-in via `semantic.model: 'bge-m3'` in `arch-graph.config
 3. **Graph build in run.ts was missing (Task 2 bug).** The bench runner produced ENOENT on first invocation before the fix applied here. This bug was present in the committed Task 2 code; the fix is part of this Task 3 commit set. All results in this report were produced after the fix.
 
 4. **103-query bench pending.** The private monorepo bench must be run by the maintainer locally — agents cannot access those repos. The migration verdict is provisional until those numbers are available.
+
+---
+
+## UPDATE — Arctic Embed M v2.0 spike & 4-way comparison (2026-05-18, evening)
+
+### Sanity bench (project-c, beribuy-2.0, 2065 nodes, mode=both-buckets)
+
+| Model | A_find | B_debug | C_ui | E_arch | D_docs | D_links | **overall** |
+|---|---|---|---|---|---|---|---|
+| MiniLM | 40% | 100% | 50% | 0% | 57% | 100% | **56%** (14/25) |
+| e5-base | 50% | 50% | 50% | 0% | 57% | 100% | **56%** (14/25) |
+| BGE-M3 | 50% | 100% | 50% | 0% | 57% | 100% | **60%** (15/25) |
+| **arctic-m** | **10%** | **0%** | **0%** | **0%** | **14%** | **100%** | **20%** (5/25) |
+
+**Verdict: arctic-m via `@xenova/transformers@2.17.2` is BROKEN for arch-graph workloads.**
+
+### Root cause
+
+`Snowflake/snowflake-arctic-embed-m-v2.0` is built on Alibaba GTE base (`model_type: "gte"` in `config.json`). `@xenova/transformers@2.17.2` does **not** recognise the `gte` model class — runtime emits:
+
+```
+Unknown model class "gte", attempting to construct from base class.
+Model type for 'gte' not found, assuming encoder-only architecture.
+```
+
+The encoder-only fallback uses generic BERT layers. GTE-specific components (RoPE positional encoding, scaled-dot-product variant, possibly normalisation order) are not implemented, so the model produces **numerically plausible but semantically wrong** 768-dim vectors. Result: 20% hit-rate, ~3× worse than every other embedder on the same project.
+
+D_links survives at 100% because that category is URL-string matching where any non-degenerate embedding works.
+
+### Resolution path
+
+The Arctic family requires `@huggingface/transformers` **v3** (different package — note the renamed npm scope), which adds `gte` to its model-class registry. Migration cost:
+
+- Package swap: `@xenova/transformers` → `@huggingface/transformers` (NOT a drop-in — different API surface for `pipeline()`, env config, and ONNX backend).
+- All call sites in `src/semantic/embedder.ts` need re-validation.
+- Test suite needs ~150 LoC of mock-shape updates (pipeline factory shape changed).
+- Cache layout differs (`~/.cache/huggingface/hub` vs current location).
+
+2-brain (sister project) already migrated and empirically validated arctic-m-v2.0:
+- 96% recall@10 (pessimistic, gold from 3-round LLM-judge labelling on 50 real queries)
+- 43% top-5 density (semantic-only) vs MiniLM 29%
+- arctic-l-v2.0 even better: 94% recall + 49% density, but 7.3 GB RAM (tight on VPS)
+
+### 4-way summary
+
+| Dim | MiniLM | e5-base | BGE-M3 | arctic-m |
+|---|---|---|---|---|
+| HF hub ID | Xenova/paraphrase-multilingual-MiniLM-L12-v2 | Xenova/multilingual-e5-base | Xenova/bge-m3 | Snowflake/snowflake-arctic-embed-m-v2.0 |
+| Dim | 384 | 768 | 1024 | 768 |
+| Pooling | mean | mean | CLS | CLS |
+| Prefix | none | passage:/query: | none | (none)/query: |
+| Quant | quantized | quantized | quantized | **fp32 (1.2 GB)** |
+| project-a aggregate (29527 nodes, both-buckets) | **71%** (35/49) | **79%** (39/49) | BUILD FAILED (>2h40m, killed) | not run (sanity FAIL on c) |
+| project-b aggregate (21541 nodes, both-buckets) | **75%** (22/29) | **82%** (24/29) | BUILD FAILED | not run |
+| project-c aggregate (2065 nodes, both-buckets) | **56%** | **56%** | **60%** | **20%** (BROKEN) |
+| Aggregate (a+b+c) | ~67% | ~72% | n/a | n/a |
+| Build time, 29527 nodes (project-a) | ~25 min | **41 min** | >2h40m (killed) | unknown |
+| Build time, 21541 nodes (project-b) | ~18 min | **27 min** | >2h (killed) | unknown |
+| Build time, 2065 nodes (project-c) | ~3 min | **5 min** | ~20 min | ~5 min (broken output) |
+| Disk (HF cache) | ~125 MB | ~280 MB | ~440 MB | **~1.2 GB** |
+| RAM peak (build) | ~600 MB | ~1.2 GB | ~4 GB | unknown |
+| C_ui ceiling (per-category) | 36% (was hypothesised model bottleneck) | **82%** (+46pp; hypothesis confirmed) | 50% (project-c only) | 0% (broken) |
+| transformers.js v2.17 status | ✅ works | ✅ works | ✅ works (slow) | ❌ gte fallback broken |
+| transformers.js v3 status | not tested | not tested | not tested | **✅ works (2-brain: 96% recall@10)** |
+
+### Bottom line for arch-graph
+
+1. **e5-base remains priority-1 default candidate.** +6pp aggregate over MiniLM, MiniLM-ballpark build cost (×1.6), prefix discipline already wired. Gated on per-model min-score calibration and incremental re-embed work (ROADMAP).
+2. **BGE-M3 stays opt-in only.** Confirmed unshippable as default due to 3+ hour cost on 30K-node monorepos.
+3. **Arctic-m blocked on transformers.js v3 migration.** 2-brain numbers suggest it could match or beat e5-base on density, but the package swap is non-trivial. Add to deferred backlog with the migration cost notes above.
+4. **Per-category C_ui resolution.** e5-base alone closes the C_ui gap (36% → 82%); arctic-m would not be needed for that purpose.
