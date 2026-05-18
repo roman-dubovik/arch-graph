@@ -4,12 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>arch-graph — Static architecture graph for NestJS monorepos</title>
-  <meta name="description" content="arch-graph extracts NATS, BullMQ, TypeORM, NestJS DI, HTTP, and TS imports from a NestJS monorepo into a typed graph. Deterministic. No LLM at build time. 14.8× fewer LLM context tokens than graphify and 100% recall on architecture benchmarks (substring-presence heuristic, 40 questions across 4 monorepos)." />
+  <meta name="description" content="arch-graph extracts NATS, BullMQ, TypeORM, NestJS DI, HTTP, TS imports, and Markdown docs from a NestJS monorepo into a typed graph, plus a local multilingual semantic index (Xenova/paraphrase-multilingual-MiniLM-L12-v2). Deterministic structural extraction, zero LLM tokens on both build and query. 67% hit-rate on Russian fuzzy queries vs graphify 35% (103 queries × 3 monorepos)." />
   <meta name="theme-color" content="#0a0a0f" />
 
   <meta property="og:type" content="website" />
-  <meta property="og:title" content="arch-graph — Static architecture graph for NestJS monorepos" />
-  <meta property="og:description" content="Deterministic. No LLM at build time. 14.3× fewer LLM context tokens than graphify and 100% recall on architecture benchmarks (40 questions across 4 monorepos)." />
+  <meta property="og:title" content="arch-graph — Architecture graph + local multilingual semantic search for NestJS" />
+  <meta property="og:description" content="Deterministic structural extraction + local multilingual semantic search. Zero LLM tokens on build AND query. 67% hit-rate on Russian fuzzy queries vs graphify 35% (103 queries × 3 monorepos). EN-keyword apples-to-apples: near tie at 53.6% vs 56.5%." />
   <meta property="og:url" content="https://roman-dubovik.github.io/arch-graph/" />
   <meta property="og:image" content="https://roman-dubovik.github.io/arch-graph/assets/arch-graph-social-card.png" />
   <meta property="og:image:width" content="1200" />
@@ -111,7 +111,7 @@
       <div class="container hero-content">
         <p class="eyebrow">v0.1.0 · Node ≥ 20 · No build step</p>
         <h1 class="hero-title"><span class="title-mono">arch-graph</span></h1>
-        <p class="hero-tagline">Static architecture graph for NestJS monorepos.<br><span class="hl">Deterministic.</span> <span class="hl">Benchmarked.</span> <span class="hl-accent">No LLM at build time.</span></p>
+        <p class="hero-tagline">Static architecture graph <span class="hl-accent">+ local multilingual semantic search</span> for NestJS monorepos.<br><span class="hl">Deterministic.</span> <span class="hl">Benchmarked.</span> <span class="hl-accent">Zero LLM tokens on build AND query.</span></p>
 
         <div class="hero-ctas">
           <a class="btn btn-primary" href="#install">
@@ -125,20 +125,20 @@
 
         <ul class="hero-stats" aria-label="Headline benchmark numbers">
           <li>
-            <span class="stat-num">14.8×</span>
-            <span class="stat-label">fewer LLM tokens</span>
+            <span class="stat-num">14.3×</span>
+            <span class="stat-label">fewer tokens on structural queries</span>
           </li>
           <li>
-            <span class="stat-num">100%</span>
-            <span class="stat-label">recall on architecture queries</span>
-          </li>
-          <li>
-            <span class="stat-num">25%</span>
-            <span class="stat-label">graphify recall on the same set</span>
+            <span class="stat-num">67%</span>
+            <span class="stat-label">RU semantic hit-rate vs graphify 35%</span>
           </li>
           <li>
             <span class="stat-num">0</span>
-            <span class="stat-label">LLM calls at build time</span>
+            <span class="stat-label">LLM tokens at build</span>
+          </li>
+          <li>
+            <span class="stat-num">0</span>
+            <span class="stat-label">LLM tokens at query</span>
           </li>
         </ul>
       </div>
@@ -150,7 +150,7 @@
         <p class="section-eyebrow">The problem</p>
         <h2 id="problem-title" class="section-title">Twelve services in. Nobody knows what depends on what.</h2>
         <p class="prose reveal">
-          You're 12 services into a NestJS monorepo. Who publishes <code>user.created</code>? Which service depends on <code>users_table</code>? What breaks if you rename <code>auth-lib</code>? Each question is a 15-minute grep session — or a 30-second LLM hallucination. arch-graph turns the entire monorepo into a typed graph you can query in milliseconds, with every answer citing <code>file:line</code>.
+          You're 12 services into a NestJS monorepo. Who publishes <code>user.created</code>? Which service depends on <code>users_table</code>? What breaks if you rename <code>auth-lib</code>? Each question is a 15-minute grep session — or a 30-second LLM hallucination — or a context-hungry RAG pipeline that bills you per token. arch-graph turns the entire monorepo into a typed graph you can query in milliseconds — exact queries cite <code>file:line</code>, fuzzy or natural-language queries hit a <strong>local multilingual semantic index</strong>. Zero external LLM calls either way.
         </p>
       </div>
     </section>
