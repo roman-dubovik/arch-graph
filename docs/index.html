@@ -47,6 +47,7 @@
       <nav class="site-nav" aria-label="Primary">
         <a href="#problem">Why</a>
         <a href="#flow">How</a>
+        <a href="#semantic">Semantic</a>
         <a href="#bench">Benchmark</a>
         <a href="#install">Install</a>
         <a href="#queries">Query</a>
@@ -111,7 +112,7 @@
       <div class="container hero-content">
         <p class="eyebrow">v0.1.0 · Node ≥ 20 · No build step</p>
         <h1 class="hero-title"><span class="title-mono">arch-graph</span></h1>
-        <p class="hero-tagline">Static architecture graph <span class="hl-accent">+ local multilingual semantic search</span> for NestJS monorepos.<br><span class="hl">Deterministic.</span> <span class="hl">Benchmarked.</span> <span class="hl-accent">Zero LLM tokens on build AND query.</span></p>
+        <p class="hero-tagline">Static architecture graph for NestJS monorepos. <span class="hl-accent">Local multilingual semantic search runs alongside, fully offline.</span><br><span class="hl">Deterministic.</span> <span class="hl">Benchmarked.</span> <span class="hl-accent">Zero LLM tokens on build AND query.</span></p>
 
         <div class="hero-ctas">
           <a class="btn btn-primary" href="#install">
@@ -343,6 +344,50 @@
             </g>
           </svg>
 
+        </div>
+      </div>
+    </section>
+
+    <!-- ──────────────────────────────────────── SEMANTIC LAYER ────────── -->
+    <section class="section section-bench" id="semantic" aria-labelledby="semantic-title">
+      <div class="container">
+        <p class="section-eyebrow">Semantic layer</p>
+        <h2 id="semantic-title" class="section-title">Local multilingual semantic search.</h2>
+        <p class="section-lead">A dense-vector index sits next to the structural graph and answers fuzzy or natural-language queries — in Russian, English, or any of 50+ supported languages. The embedder runs in-process via <code>transformers.js</code>; no API key, no GPU, no network roundtrip. Build cost: a single CPU pass once per graph rebuild. Query cost: a cosine-similarity scan over ~1k–10k node vectors, sub-100ms on a typical monorepo.</p>
+
+        <div class="bench-cards reveal">
+          <div class="bench-card highlight">
+            <p class="bench-card-label">Search by intent, not by name</p>
+            <p class="bench-card-row"><span class="bench-card-tool">Query</span><span class="bench-card-num mono" style="font-size:0.85em;">«отправка email клиентам»</span></p>
+            <p class="bench-card-row dim"><span class="bench-card-tool">Match</span><span class="bench-card-num mono" style="font-size:0.85em;">provider:EmailSender · queue:email · db-table:email_logs</span></p>
+            <p class="bench-card-foot">RU/EN/mixed queries hit the same index. Useful when the team mixes languages or doesn't remember the exact identifier.</p>
+          </div>
+          <div class="bench-card">
+            <p class="bench-card-label">How it works</p>
+            <p class="bench-card-row"><span class="bench-card-tool">Embedder</span><span class="bench-card-num mono" style="font-size:0.85em;">MiniLM-L12-v2</span></p>
+            <p class="bench-card-row dim"><span class="bench-card-tool">Dim · Index</span><span class="bench-card-num">384 · cosine</span></p>
+            <p class="bench-card-foot"><code>Xenova/paraphrase-multilingual-MiniLM-L12-v2</code> via <code>transformers.js</code>. Deterministic given the same graph. Embeddings persist as <code>arch-graph-out/semantic/embeddings.jsonl</code> with a <code>manifest.json</code> tracking <code>graphHash</code> for stale detection.</p>
+          </div>
+          <div class="bench-card">
+            <p class="bench-card-label">Three MCP tools</p>
+            <p class="bench-card-row"><span class="bench-card-tool">code_search</span><span class="bench-card-num mono" style="font-size:0.85em;">code only</span></p>
+            <p class="bench-card-row dim"><span class="bench-card-tool">docs_search</span><span class="bench-card-num mono" style="font-size:0.85em;">docs only</span></p>
+            <p class="bench-card-foot"><code>semantic_search</code> covers the union. Split exists because mixing buckets drops A_find recall: 80% → 30%. With split: 70% restored. Baseline hit-rate across 103 eval queries: 47% → 67%.</p>
+          </div>
+          <div class="bench-card">
+            <p class="bench-card-label">vs graphify on the same suite</p>
+            <p class="bench-card-row"><span class="bench-card-tool">RU queries</span><span class="bench-card-num">67% · 35%</span></p>
+            <p class="bench-card-row dim"><span class="bench-card-tool">EN strict</span><span class="bench-card-num">53.6% · 56.5%</span></p>
+            <p class="bench-card-foot">Both are local-first graph tools. graphify uses LLM subagents at build time for semantic extraction; arch-graph uses zero LLM tokens at both build and query. On Russian queries arch-graph leads by +32pp (multilingual handling); on EN-keyword queries the two are within 3pp under apples-to-apples scoring. <a href="https://github.com/roman-dubovik/arch-graph/blob/main/docs/comparisons/2026-05-17-arch-graph-vs-graphify-eval.md">Full 103-query memo →</a></p>
+          </div>
+        </div>
+
+        <div class="code-block reveal" style="margin-top:1.5rem;">
+          <button class="copy-btn" type="button" aria-label="Copy semantic search example">Copy</button>
+          <pre><code class="lang-sh">arch-graph semantic build                          # one-time index build
+arch-graph semantic search "email notifications"   # multilingual fuzzy query
+arch-graph code-search "PaymentHandler retry"      # code bucket only
+arch-graph docs-search "how to set up MSSQL agent" # docs bucket only</code></pre>
         </div>
       </div>
     </section>
