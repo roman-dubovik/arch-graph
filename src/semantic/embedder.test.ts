@@ -285,4 +285,40 @@ describe('makeEmbedder — minilm mode no-op', () => {
     });
 });
 
+// ---------------------------------------------------------------------------
+// getPipeline in-flight guard — concurrent calls must not double-download (P1)
+// ---------------------------------------------------------------------------
 
+describe('getPipeline — in-flight promise deduplication (P1)', () => {
+    beforeEach(() => {
+        _resetPipelineForTesting();
+        vi.clearAllMocks();
+    });
+
+    afterEach(() => {
+        _resetPipelineForTesting();
+        vi.clearAllMocks();
+    });
+
+    it('two concurrent embedOne calls share a single pipeline() factory invocation', async () => {
+        // Use a slow pipeline factory (resolves after a microtask) so both calls
+        // are in-flight simultaneously before the first one resolves.
+        let factoryCalls = 0;
+        vi.mocked(pipeline).mockImplementation(async () => {
+            factoryCalls++;
+            // Yield to the event loop so the second concurrent call can arrive.
+            await new Promise<void>((resolve) => setTimeout(resolve, 0));
+            return fakePipeline(384) as unknown as Awaited<ReturnType<typeof pipeline>>;
+        });
+
+        const embedder = makeEmbedder('minilm');
+        // Fire two concurrent calls — neither has resolved yet when the second starts.
+        await Promise.all([
+            embedder.embedOne('hello'),
+            embedder.embedOne('world'),
+        ]);
+
+        // The underlying pipeline() factory must have been called exactly once.
+        expect(factoryCalls).toBe(1);
+    });
+});

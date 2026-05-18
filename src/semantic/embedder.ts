@@ -26,9 +26,15 @@ import { SEMANTIC_MODELS } from './types.js';
 // No global state leaks outside this module.
 const pipelineCache = new Map<SemanticModelAlias, Awaited<ReturnType<typeof pipeline>>>();
 
+// In-flight promise map: prevents concurrent callers from each triggering a
+// model download.  Without this guard, two simultaneous calls to getPipeline
+// before the first await resolves both enter the body and issue two downloads.
+const pipelineInFlight = new Map<SemanticModelAlias, Promise<Awaited<ReturnType<typeof pipeline>>>>();
+
 /** @internal — exposed for testing only; do not call in production code. */
 export function _resetPipelineForTesting(): void {
     pipelineCache.clear();
+    pipelineInFlight.clear();
 }
 
 async function getPipeline(
@@ -37,15 +43,22 @@ async function getPipeline(
     const cached = pipelineCache.get(alias);
     if (cached !== undefined) return cached;
 
-    const entry = SEMANTIC_MODELS[alias];
-    // Downloads on first run; cached to ~/.cache/huggingface/... or $HF_HOME if set.
-    // Subsequent calls are instant.
-    console.error(
-        `[arch-graph semantic] Loading model ${entry.hubId} (one-time download, will cache)...`,
-    );
-    const instance = await pipeline('feature-extraction', entry.hubId);
-    pipelineCache.set(alias, instance);
-    return instance;
+    let p = pipelineInFlight.get(alias);
+    if (!p) {
+        const entry = SEMANTIC_MODELS[alias];
+        // Downloads on first run; cached to ~/.cache/huggingface/... or $HF_HOME if set.
+        // Subsequent calls are instant.
+        console.error(
+            `[arch-graph semantic] Loading model ${entry.hubId} (one-time download, will cache)...`,
+        );
+        p = pipeline('feature-extraction', entry.hubId).then((inst) => {
+            pipelineCache.set(alias, inst);
+            pipelineInFlight.delete(alias);
+            return inst;
+        });
+        pipelineInFlight.set(alias, p);
+    }
+    return p;
 }
 
 /** Signature of the batch embedder expected by `BuildSemanticOpts.embedder`. */
