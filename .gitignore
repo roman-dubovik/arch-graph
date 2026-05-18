@@ -7,6 +7,10 @@ dist/
 
 # Build outputs
 arch-graph-out/
+graphify-out/
+
+# arch-graph init artifacts (snippet emitted by the installer)
+CLAUDE.md.*.md
 
 # Vitest coverage
 coverage/
