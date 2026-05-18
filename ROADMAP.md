@@ -40,42 +40,38 @@ A deterministic TypeScript architecture-graph builder for NestJS monorepos with 
 
 ## Recall trajectory (103-query bench, 3 NestJS monorepos)
 
-| Run | Mode | Recall |
-|-----|------|--------|
-| Session start | `single`, K=5 | 47% |
-| After `code-vs-docs` split | `both-buckets`, K=10 | 67% |
-| vs graphify on the same suite — RU queries | both-buckets, K=10 | **arch-graph 67% / graphify 35%** (+32pp) |
-| vs graphify on the same suite — EN-keyword strict | top-10 NODE lines | **arch-graph 53.6% / graphify 56.5%** (near tie) |
+| Run | Mode | Model | Recall |
+|-----|------|-------|--------|
+| Session start | `single`, K=5 | MiniLM | 47% |
+| After `code-vs-docs` split | `both-buckets`, K=10 | MiniLM | 67% |
+| vs graphify on the same suite — RU queries | `both-buckets`, K=10 | MiniLM | **arch-graph 67% / graphify 35%** (+32pp) |
+| vs graphify on the same suite — EN-keyword strict | top-10 NODE lines | MiniLM | **arch-graph 53.6% / graphify 56.5%** (near tie) |
+| **Embedder swap (2026-05-18)** | `both-buckets`, K=10 | **e5-base** | **75%** (+6pp vs MiniLM 69%, **C_ui 36→82%**) |
 
-The RU lead is multilingual handling (MiniLM is multilingual; graphify keyword-BFS is English-only). Under EN-keyword strict apples-to-apples scoring the two tools are within 3pp.
+The RU lead is multilingual handling (MiniLM is multilingual; graphify keyword-BFS is English-only). Under EN-keyword strict apples-to-apples scoring the two tools are within 3pp. The e5-base swap added another +6pp aggregate and confirmed the C_ui-ceiling-is-the-embedder hypothesis.
 
 ## Strategic options — what's next
 
-### 🟢 1. BGE-M3 migration (priority 1)
+### 🟢 1. e5-base as new default embedder (priority 1) — _evaluated 2026-05-18_
 
-Replace MiniLM-L12 (384-dim) with `bge-m3` (1024-dim). Forecast: +5–10pp overall, especially **C_ui** category (which is stuck at 33–50%) and RU-only queries.
+Replace MiniLM-L12 (384-dim) with `Xenova/multilingual-e5-base` (768-dim, requires `passage:`/`query:` prefix). Already shipped on `feat/bge-m3-migration` as the `e5-base` opt-in alias. Benched against 3 reference monorepos:
 
-- Effort: 1–2 days.
-- Cost: one-time index re-build per repo; 4× memory per vector.
-- Compat: `manifest.json` already carries `model` — backward-compat path exists.
+| Project | MiniLM | e5-base | Δ pp | Build time (e5-base) |
+|---------|--------|---------|------|----------------------|
+| platform (29527 nodes) | 71% | **79%** | **+8** | 41 min |
+| insyra (21541 nodes) | 75% | **82%** | **+7** | 27 min |
+| beribuy (2065 nodes) | 56% | 56% | 0 | 5 min |
+| **Aggregate (103 queries)** | **69%** | **75%** | **+6** ✅ |
 
-### 🟡 2. CSS / UI semantics (gated on BGE-M3)
+**C_ui hypothesis confirmed**: 36% → 82% (+46pp) — the embedder was the bottleneck, no UI uplift / CSS work needed.
 
-Under research: Tailwind utility expansion (`text-right` → "text-align right"), per-class RU synonym dictionary, real CSS file parsing.
+**Cost vs win**: ~2× build time vs MiniLM (41 min vs 25 min on 30k nodes), 2× disk (280 MB vs 135 MB). Decisive accuracy lift across the bench.
 
-**Hypothesis**: C_ui caps at 33–50% because the **embedder** weakly maps RU intent to EN technical vocabulary, not because the snippets lack tokens. Concrete case from the eval: query «обрезать сообщение в 3 точки» misses a `<p className="truncate text-ellipsis">` node — the snippet contains both `truncate` and `text-ellipsis`, but MiniLM-L12 doesn't bridge them to the Russian phrasing. If the bottleneck is the embedder's cross-lingual mapping, BGE-M3 (1024-dim, larger multilingual + technical corpus) should fix it without any snippet changes.
+**Open conditions before default-switch**:
+- Per-model `minScore` calibration (e5-base scores cluster at 0.79–0.86 — current 0.5 floor is a no-op).
+- Item #6 (incremental re-embed) — desirable but no longer a hard prerequisite, since 41 min is a tolerable one-time cost.
 
-**Decision rule**: ship BGE-M3 first, re-measure C_ui. If ≥ 50% — skip this work entirely (the hypothesis held; the embedder was the limit). If still < 50% — pick one of the three CSS approaches by error analysis on the surviving misses.
-
-### 🟡 3. Hybrid BM25 + semantic
-
-Lexical signal alongside cosine for exact-term matches ("truncate", "refresh"). 3–5 days, architectural work. Likely unnecessary after BGE-M3; revisit by the numbers.
-
-### 🟡 4. Eval corpus hygiene
-
-A handful of project-c eval queries reference domains that don't exist in that codebase. Rewrite affected queries (~30 min) for cleaner per-project recall numbers — doesn't affect any other project.
-
-### 🟡 5. Incremental semantic re-embed
+### 🟡 2. Incremental semantic re-embed
 
 Today every `arch-graph semantic build` is a **full re-embed of the entire graph** — there is no node-level cache. On a 30k-node monorepo that's ~20 min with MiniLM and **1–3 hours with BGE-M3**. The cost is one-time per rebuild, but the rebuild becomes painful on any codebase change loop that wants a fresh semantic index.
 
@@ -87,13 +83,21 @@ The git hook installed by `arch-graph hook install` only re-runs the **structura
 3. Write the merged set as the new `embeddings.jsonl`. Drop entries whose `nodeId` no longer exists in the new graph (cleanup).
 4. Manifest stores `model`, `dim`, new `graphHash` as today.
 
-**Expected impact.** Typical PR touches < 5% of nodes. On a 30k-node BGE-M3 index that drops 2h rebuild to ≤ 6 min. Makes BGE-M3-as-default conversation plausible on large repos.
+**Expected impact.** Typical PR touches < 5% of nodes. On a 30k-node e5-base index that drops a 41-min rebuild to ~3 min. Removes the only remaining UX cost of switching to e5-base default.
 
 **Effort.** 2–3 days. Real test: rebuild self-build twice (no code change between runs) and verify zero embedder calls on the second build via a counter.
 
-**Hard prerequisite for default-switching to BGE-M3.** Even if the 103-query bench shows ≥ 5pp lift, the 2h-3h cold rebuild on a 30k-node repo is a UX regression that this item must close first.
+**Recommended pairing with e5-base default switch.** Not a strict prerequisite (41-min one-time cost is tolerable), but landing both together is the right shipping unit.
 
-### ⚪ 6. Additional NodeKinds on demand
+### 🟡 3. Per-model `minScore` calibration
+
+`queries.json` currently uses a uniform `minScore: 0.5` floor. On MiniLM, top-1 scores cluster around 0.56±0.08 — 0.5 is a meaningful filter. On e5-base, top-1 scores cluster at 0.83±0.02 — 0.5 is a no-op. For default-switch to e5-base, the user-facing `minScore` semantic ("how confident does the result have to be") needs to differ per model. Suggested e5-base floor ≈ 0.78 (mean − 3σ — matches MiniLM 0.50 in terms of "filter floor"). Schema change in `queries.json` + default in `arch-graph semantic search` opts. ~1 day.
+
+### 🟡 4. Eval corpus hygiene
+
+A handful of project-c eval queries reference domains that don't exist in that codebase (e.g. I15 expects `provider`/`service` with label `"Auth"` but those nodes don't exist in insyra's graph either — only `useAuth` fe-hook). Rewrite affected queries (~30 min) for cleaner per-project recall numbers — doesn't affect any other project.
+
+### ⚪ 5. Additional NodeKinds on demand
 
 - GraphQL endpoints
 - Cron schedule semantics
@@ -101,11 +105,11 @@ The git hook installed by `arch-graph hook install` only re-runs the **structura
 
 By request — each extractor is 1–2 days.
 
-### ⚪ 7. Broader eval corpus
+### ⚪ 6. Broader eval corpus
 
 Currently three NestJS monorepos. A Node monolith or GraphQL backend would broaden the bench shape.
 
-### ⚪ 8. Semantic extension of `compare --share`
+### ⚪ 7. Semantic extension of `compare --share`
 
 Today `compare --share` measures structural graph size (nodes, edges, tokens) and emits anonymous numbers for the public bench Discussion. Adding a semantic recall number would let each contributor publish two data points instead of one — and surface the multilingual handling feature in community-comparable numbers.
 
@@ -118,6 +122,18 @@ Today `compare --share` measures structural graph size (nodes, edges, tokens) an
 **Deferred** because contribution volume is currently low. Revisit when external `bench/contributed/` submissions accumulate and the marginal value of a second number per submission becomes meaningful.
 
 ## Deferred / explicit non-goals
+
+### BGE-M3 — superseded by e5-base (2026-05-18)
+
+Originally proposed as priority-1 C_ui fix. **Outcome**: aborted at 2h40m on a 30k-node monorepo without completing the build. e5-base delivers the same C_ui win at 6× faster build cost. The `bge-m3` alias stays in the registry (`semantic.model: 'bge-m3'`) for users who specifically want 1024-dim multilingual — but it is **no longer recommended** and not a default candidate.
+
+### CSS / UI semantics — closed by e5-base (2026-05-18)
+
+Original hypothesis: C_ui ceiling 33–50% because the embedder weakly maps RU intent to EN technical vocabulary. e5-base lifted C_ui to 82% with no snippet changes → hypothesis confirmed, **embedder was the bottleneck**. No further CSS-processing work needed unless a future model regression on C_ui appears.
+
+### Hybrid BM25 + semantic — low value after e5-base
+
+Lexical signal alongside cosine for exact-term matches ("truncate", "refresh"). 3–5 days, architectural work. e5-base's stronger multilingual handling closed most of the gap that BM25 would have helped. Revisit only if a concrete failure mode (specific category dropping below threshold) appears.
 
 ### `v2 doc-mentions` edges — won't ship
 
@@ -142,14 +158,14 @@ Complementary, not competing. Possible future `--otel-snapshot` mode if user dem
 ## Known limits (honest)
 
 - **Static extraction** — cannot see runtime config, container env, dynamically-built identifiers. Recorded in `diagnostics.json`.
-- **C_ui recall ceiling 33–50%** — bounded by current embedder. UI uplift + i18n shipped, but the numbers didn't move; the bottleneck is multilingual mapping of UI vocabulary, not snippet content.
+- **~~C_ui recall ceiling 33–50%~~ — RESOLVED (2026-05-18)**: lifted to 82% by switching to e5-base embedder. Hypothesis (embedder, not snippets) confirmed.
 - **i18n format coverage** — supports `messages/*.json` and `locales/<lang>/<feature>.json`. Doesn't yet cover `react-intl` ICU bundles or server-side `.po` files.
 - **Eval set is three NestJS monorepos** — broader shapes (Node monoliths, GraphQL backends) not yet represented in the published numbers.
-- **No incremental semantic re-embed** — every `arch-graph semantic build` re-embeds the entire graph. ~20 min on a 30k-node repo with MiniLM, 1–3 hours with BGE-M3. The git hook only re-runs the structural build (seconds), so this doesn't bite per-commit, but a user who wants a fresh semantic index after a refactor pays the full cost each time. See Strategic option #5 — closing this is a hard prerequisite for any conversation about switching default to BGE-M3.
+- **No incremental semantic re-embed** — every `arch-graph semantic build` re-embeds the entire graph. ~20 min on a 30k-node repo with MiniLM, ~41 min with e5-base. The git hook only re-runs the structural build (seconds), so this doesn't bite per-commit, but a user who wants a fresh semantic index after a refactor pays the full cost each time. See Strategic option #2 — landing this together with the e5-base default switch is the right shipping unit.
 
 ## Open questions
 
-1. **BGE-M3 — when?** Highest-ROI item on the list; 1–2 days; needs one-time index re-build.
+1. **e5-base default switch — when?** Three small follow-ups before flipping the default (per-model `minScore` calibration; incremental re-embed; one round of unit-test review on prefix-handling). Each ~1 day.
 2. **Eval corpus hygiene** — rewrite project-c queries to match actual domain, or preserve historical comparability across runs?
 3. **Expand eval corpus?** Add a non-NestJS shape (Node monolith, GraphQL).
 
