@@ -114,9 +114,10 @@ describe('runBench — mocked pipeline (unit test)', () => {
         );
 
         const embedderModule = await import('../../src/semantic/embedder.js');
-        vi.spyOn(embedderModule, 'makeEmbedder').mockReturnValue(
-            async (_texts: string[]) => _texts.map(() => Array(384).fill(0) as number[]),
-        );
+        vi.spyOn(embedderModule, 'makeEmbedder').mockReturnValue({
+            embed: async (_texts: string[]) => _texts.map(() => Array(384).fill(0) as number[]),
+            embedOne: async (_text: string) => Array(384).fill(0) as number[],
+        });
 
         const searchModule = await import('../../src/semantic/search.js');
         let callCount = 0;
@@ -184,9 +185,10 @@ describe('runBench — mocked pipeline (unit test)', () => {
         );
 
         const embedderModule = await import('../../src/semantic/embedder.js');
-        vi.spyOn(embedderModule, 'makeEmbedder').mockReturnValue(
-            async (_texts: string[]) => _texts.map(() => Array(1024).fill(0) as number[]),
-        );
+        vi.spyOn(embedderModule, 'makeEmbedder').mockReturnValue({
+            embed: async (_texts: string[]) => _texts.map(() => Array(1024).fill(0) as number[]),
+            embedOne: async (_text: string) => Array(1024).fill(0) as number[],
+        });
 
         const searchModule = await import('../../src/semantic/search.js');
         vi.spyOn(searchModule, 'semanticSearch').mockResolvedValue({
@@ -228,9 +230,10 @@ describe('runBench — semanticSearch error paths (P1-I)', () => {
         vi.spyOn(commandsModule, 'buildSemanticIndexFromArgs').mockResolvedValue({ outDir: testDir });
 
         const embedderModule = await import('../../src/semantic/embedder.js');
-        vi.spyOn(embedderModule, 'makeEmbedder').mockReturnValue(
-            async (_texts: string[]) => _texts.map(() => Array(384).fill(0) as number[]),
-        );
+        vi.spyOn(embedderModule, 'makeEmbedder').mockReturnValue({
+            embed: async (_texts: string[]) => _texts.map(() => Array(384).fill(0) as number[]),
+            embedOne: async (_text: string) => Array(384).fill(0) as number[],
+        });
 
         const searchModule = await import('../../src/semantic/search.js');
         return vi.spyOn(searchModule, 'semanticSearch');
