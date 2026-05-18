@@ -62,8 +62,8 @@ describe('applySemanticDefaults (D1)', () => {
         expect(applySemanticDefaults(undefined)).toEqual({ model: 'minilm' });
     });
 
-    it('passthrough when semantic.model is "bge-m3"', () => {
-        expect(applySemanticDefaults({ model: 'bge-m3' })).toEqual({ model: 'bge-m3' });
+    it('passthrough when semantic.model is "e5-base"', () => {
+        expect(applySemanticDefaults({ model: 'e5-base' })).toEqual({ model: 'e5-base' });
     });
 
     it('throws for unknown model alias', () => {
@@ -92,9 +92,15 @@ describe('validateConfig semantic block (D1)', () => {
         ).toThrow(/not a recognised alias/);
     });
 
-    it('does not throw when semantic.model is "bge-m3"', () => {
+    it('does not throw when semantic.model is "e5-base"', () => {
+        expect(() =>
+            validateConfig({ ...BASE_CONFIG, semantic: { model: 'e5-base' } }, 'test'),
+        ).not.toThrow();
+    });
+
+    it('throws when semantic.model is "bge-m3" (removed alias)', () => {
         expect(() =>
             validateConfig({ ...BASE_CONFIG, semantic: { model: 'bge-m3' } }, 'test'),
-        ).not.toThrow();
+        ).toThrow(/not a recognised alias/);
     });
 });

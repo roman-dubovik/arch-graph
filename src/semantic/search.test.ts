@@ -921,25 +921,25 @@ describe('semanticSearch — error/hint invariant (F7)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// BGE-M3: 1024-dim fixture (AC1.x — model registry)
+// E5-base: 768-dim fixture (AC1.x — model registry, model-mismatch detection)
 // ---------------------------------------------------------------------------
 
-describe('semanticSearch — bge-m3 model alias', () => {
-    const bgeDim = SEMANTIC_MODELS['bge-m3'].dim; // 1024
+describe('semanticSearch — e5-base model alias', () => {
+    const e5Dim = SEMANTIC_MODELS['e5-base'].dim; // 768
 
-    /** Build a 1024-dim unit vector along dimension `axis`. */
-    function unitVec1024(axis: number): number[] {
-        const v = new Array<number>(bgeDim).fill(0);
+    /** Build a 768-dim unit vector along dimension `axis`. */
+    function unitVec768(axis: number): number[] {
+        const v = new Array<number>(e5Dim).fill(0);
         v[axis] = 1;
         return v;
     }
 
-    /** Write a sidecar with bge-m3 manifest + 1024-dim records. */
-    async function writeBgeSidecar(records: SemanticRecord[]): Promise<void> {
+    /** Write a sidecar with e5-base manifest + 768-dim records. */
+    async function writeE5Sidecar(records: SemanticRecord[]): Promise<void> {
         const manifest: SemanticManifest = {
             schemaVersion: SEMANTIC_SCHEMA_VERSION,
-            model: SEMANTIC_MODELS['bge-m3'].hubId,
-            dim: bgeDim,
+            model: SEMANTIC_MODELS['e5-base'].hubId,
+            dim: e5Dim,
             builtAt: '2026-05-18T00:00:00.000Z',
             graphHash: 'deadbeef'.repeat(8),
             nodeCount: records.length,
@@ -948,31 +948,31 @@ describe('semanticSearch — bge-m3 model alias', () => {
         await writeEmbeddingsJsonl(records, join(testDir, 'semantic', 'embeddings.jsonl'));
     }
 
-    it('searches successfully with 1024-dim bge-m3 vectors', async () => {
+    it('searches successfully with 768-dim e5-base vectors', async () => {
         await writeGraphJson('{}');
         const records: SemanticRecord[] = [
-            makeRecord('r1', 'service', unitVec1024(0)),
-            makeRecord('r2', 'module', unitVec1024(1)),
+            makeRecord('r1', 'service', unitVec768(0)),
+            makeRecord('r2', 'module', unitVec768(1)),
         ];
-        await writeBgeSidecar(records);
+        await writeE5Sidecar(records);
 
         const { output, exitCode } = await semanticSearch({
             query: 'test',
             outDir: testDir,
-            embedder: async (_text) => unitVec1024(0),
-            modelAlias: 'bge-m3',
+            embedder: async (_text) => unitVec768(0),
+            modelAlias: 'e5-base',
             topK: 2,
         });
 
         expect(exitCode).toBe(0);
         expect(output.results).toHaveLength(2);
-        expect(output.results[0]!.nodeId).toBe('r1'); // highest cosine to unitVec1024(0)
-        expect(output.model).toBe(SEMANTIC_MODELS['bge-m3'].hubId);
-        expect(output.dim).toBe(bgeDim);
+        expect(output.results[0]!.nodeId).toBe('r1'); // highest cosine to unitVec768(0)
+        expect(output.model).toBe(SEMANTIC_MODELS['e5-base'].hubId);
+        expect(output.dim).toBe(e5Dim);
     });
 
-    it('returns semantic-index-corrupt when a minilm index is queried with bge-m3 alias', async () => {
-        // Write a MiniLM manifest (384-dim) but try to search with bge-m3 alias (1024-dim expected)
+    it('returns semantic-index-corrupt when a minilm index is queried with e5-base alias', async () => {
+        // Write a MiniLM manifest (384-dim) but try to search with e5-base alias (768-dim expected)
         await writeGraphJson('{}');
         const miniManifest: SemanticManifest = {
             schemaVersion: SEMANTIC_SCHEMA_VERSION,
@@ -991,8 +991,8 @@ describe('semanticSearch — bge-m3 model alias', () => {
         const { output, exitCode } = await semanticSearch({
             query: 'q',
             outDir: testDir,
-            embedder: async () => unitVec1024(0),
-            modelAlias: 'bge-m3',
+            embedder: async () => unitVec768(0),
+            modelAlias: 'e5-base',
         });
 
         expect(exitCode).toBe(1);

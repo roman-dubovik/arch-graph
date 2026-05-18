@@ -112,8 +112,8 @@ describe('writeManifest + readManifest', () => {
 
     it('readManifest does NOT throw on model mismatch when expected is omitted', async () => {
         const manifestPath = join(testDir, 'other-model-no-expected.json');
-        // bge-m3 manifest — valid schemaVersion, different model
-        const bge = { ...makeManifest(), model: 'Xenova/bge-m3', dim: 1024 };
+        // some-other-model manifest — valid schemaVersion, different model (hub-id is an arbitrary string)
+        const bge = { ...makeManifest(), model: 'OtherOrg/some-other-model', dim: 1024 };
         await writeFile(manifestPath, JSON.stringify(bge), 'utf8');
         await expect(readManifest(manifestPath)).resolves.not.toThrow();
     });

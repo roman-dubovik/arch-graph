@@ -25,16 +25,8 @@ describe('SEMANTIC_MODELS registry — recommendedMinScore field', () => {
         expect(SEMANTIC_MODELS.minilm.recommendedMinScore).toBe(0.30);
     });
 
-    it('bge-m3 has recommendedMinScore: 0.55', () => {
-        expect(SEMANTIC_MODELS['bge-m3'].recommendedMinScore).toBe(0.55);
-    });
-
     it('e5-base has recommendedMinScore: 0.55', () => {
         expect(SEMANTIC_MODELS['e5-base'].recommendedMinScore).toBe(0.55);
-    });
-
-    it('arctic-m has recommendedMinScore: 0.40 (provisional)', () => {
-        expect(SEMANTIC_MODELS['arctic-m'].recommendedMinScore).toBe(0.40);
     });
 
     it('all aliases have recommendedMinScore in [0, 1]', () => {
@@ -68,9 +60,9 @@ describe('resolveMinScore — user override wins (step 1)', () => {
         expect(resolveMinScore('e5-base', 0.70)).toBe(0.70);
     });
 
-    it('returns user value 0.0 (falsy) for bge-m3 — falsy user value wins', () => {
+    it('returns user value 0.0 (falsy) for e5-base — falsy user value wins', () => {
         // Ensures we check `userValue !== undefined`, not `!userValue`.
-        expect(resolveMinScore('bge-m3', 0.0)).toBe(0.0);
+        expect(resolveMinScore('e5-base', 0.0)).toBe(0.0);
     });
 
     it('returns user value -1 for minilm — negative user value wins', () => {
@@ -95,16 +87,8 @@ describe('resolveMinScore — per-model recommendedMinScore (step 2)', () => {
         expect(resolveMinScore('minilm', undefined)).toBe(0.30);
     });
 
-    it('returns 0.55 for bge-m3 when no user override', () => {
-        expect(resolveMinScore('bge-m3')).toBe(0.55);
-    });
-
     it('returns 0.55 for e5-base when no user override', () => {
         expect(resolveMinScore('e5-base')).toBe(0.55);
-    });
-
-    it('returns 0.40 for arctic-m when no user override', () => {
-        expect(resolveMinScore('arctic-m')).toBe(0.40);
     });
 });
 

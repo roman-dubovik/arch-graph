@@ -522,47 +522,47 @@ describe('makeSemanticSearchHandler — factory presets', () => {
 });
 
 // ---------------------------------------------------------------------------
-// P1-K: makeSemanticSearchHandler with modelAlias: 'bge-m3'
+// P1-K: makeSemanticSearchHandler with modelAlias: 'e5-base'
 // ---------------------------------------------------------------------------
 
-describe('makeSemanticSearchHandler — bge-m3 alias (P1-K)', () => {
-    const bgeDim = 1024;
+describe('makeSemanticSearchHandler — e5-base alias (P1-K)', () => {
+    const e5Dim = SEMANTIC_MODELS['e5-base'].dim; // 768
 
-    /** 1024-dim unit vector along axis `i`. */
-    function bgeUnitVec(axis: number): number[] {
-        const v = new Array<number>(bgeDim).fill(0);
+    /** 768-dim unit vector along axis `i`. */
+    function e5UnitVec(axis: number): number[] {
+        const v = new Array<number>(e5Dim).fill(0);
         v[axis] = 1;
         return v;
     }
 
-    it('returns results without model-mismatch error when handler and index both use bge-m3', async () => {
+    it('returns results without model-mismatch error when handler and index both use e5-base', async () => {
         const graphHash = await writeGraphJson('{"nodes":[]}');
 
-        // Write a bge-m3 manifest + 1024-dim embeddings
-        const bgeManifest: SemanticManifest = {
+        // Write an e5-base manifest + 768-dim embeddings
+        const e5Manifest: SemanticManifest = {
             schemaVersion: SEMANTIC_SCHEMA_VERSION,
-            model: 'Xenova/bge-m3',
-            dim: bgeDim,
+            model: SEMANTIC_MODELS['e5-base'].hubId,
+            dim: e5Dim,
             builtAt: '2026-05-18T00:00:00.000Z',
             graphHash,
             nodeCount: 2,
         };
         await mkdir(join(testDir, 'semantic'), { recursive: true });
-        await writeManifest(bgeManifest, join(testDir, 'semantic', 'manifest.json'));
+        await writeManifest(e5Manifest, join(testDir, 'semantic', 'manifest.json'));
 
         const records: SemanticRecord[] = [
-            makeRecord('svc:a', 'service', bgeUnitVec(0)),
-            makeRecord('svc:b', 'service', bgeUnitVec(1)),
+            makeRecord('svc:a', 'service', e5UnitVec(0)),
+            makeRecord('svc:b', 'service', e5UnitVec(1)),
         ];
         await writeEmbeddingsJsonl(records, join(testDir, 'semantic', 'embeddings.jsonl'));
 
-        // Embedder returns 1024-dim vectors matching the bge-m3 manifest
-        const bgeEmbedder = async (_text: string): Promise<number[]> => bgeUnitVec(0);
+        // Embedder returns 768-dim vectors matching the e5-base manifest
+        const e5Embedder = async (_text: string): Promise<number[]> => e5UnitVec(0);
 
         const handler = makeSemanticSearchHandler({
             outDir: testDir,
-            embedder: bgeEmbedder,
-            modelAlias: 'bge-m3',
+            embedder: e5Embedder,
+            modelAlias: 'e5-base',
         });
         const result = await handler({ query: 'test', topK: 2, includeVectors: false });
 
@@ -570,8 +570,8 @@ describe('makeSemanticSearchHandler — bge-m3 alias (P1-K)', () => {
         // No model-mismatch error — results should be present
         expect(output.error).toBeUndefined();
         expect(output.results.length).toBeGreaterThan(0);
-        expect(output.model).toBe('Xenova/bge-m3');
-        expect(output.dim).toBe(bgeDim);
+        expect(output.model).toBe(SEMANTIC_MODELS['e5-base'].hubId);
+        expect(output.dim).toBe(e5Dim);
     });
 
     it('defaults to minilm when no modelAlias is passed (documented default behaviour per SemanticSearchHandlerOpts JSDoc)', async () => {

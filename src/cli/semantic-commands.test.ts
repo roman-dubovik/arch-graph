@@ -498,13 +498,13 @@ describe('runSemanticSearch — model alias precedence (D3)', () => {
     it('CLI --model flag wins over config semantic.model', async () => {
         const searchSpy = await setupSearchSidecarsAndSpy(testDir);
 
-        // Mock config to return bge-m3, but CLI passes minilm — CLI wins.
+        // Mock config to return e5-base, but CLI passes minilm — CLI wins.
         const configModule = await import('../core/config.js');
         const configSpy = vi.spyOn(configModule, 'loadConfig').mockResolvedValue({
             id: 'repo',
             root: '.',
             appsGlob: 'apps/*',
-            semantic: { model: 'bge-m3' },
+            semantic: { model: 'e5-base' },
         } as never);
 
         const args = parseSemanticArgs(['search', 'q', '--model', 'minilm']);
@@ -521,13 +521,13 @@ describe('runSemanticSearch — model alias precedence (D3)', () => {
     it('config semantic.model wins over the hardcoded minilm default when no CLI flag', async () => {
         const searchSpy = await setupSearchSidecarsAndSpy(testDir);
 
-        // Mock config to return bge-m3; no --model flag passed.
+        // Mock config to return e5-base; no --model flag passed.
         const configModule = await import('../core/config.js');
         const configSpy = vi.spyOn(configModule, 'loadConfig').mockResolvedValue({
             id: 'repo',
             root: '.',
             appsGlob: 'apps/*',
-            semantic: { model: 'bge-m3' },
+            semantic: { model: 'e5-base' },
         } as never);
 
         const args = parseSemanticArgs(['search', 'q']);
@@ -536,7 +536,7 @@ describe('runSemanticSearch — model alias precedence (D3)', () => {
         } catch { /* process.exit */ }
 
         expect(searchSpy).toHaveBeenCalledTimes(1);
-        expect(searchSpy.mock.calls[0]![0].modelAlias).toBe('bge-m3');
+        expect(searchSpy.mock.calls[0]![0].modelAlias).toBe('e5-base');
 
         configSpy.mockRestore();
     });
@@ -960,9 +960,9 @@ describe('runSemanticBuild — --strict-recall flag (P1-A)', () => {
 // ---------------------------------------------------------------------------
 
 describe('parseSemanticArgs — --model flag (AC2.1/AC2.2)', () => {
-    it('parses --model bge-m3 on build subcommand', () => {
-        const args = parseSemanticArgs(['build', '--model', 'bge-m3']);
-        expect(args.model).toBe('bge-m3');
+    it('parses --model e5-base on build subcommand', () => {
+        const args = parseSemanticArgs(['build', '--model', 'e5-base']);
+        expect(args.model).toBe('e5-base');
     });
 
     it('parses --model minilm on search subcommand', () => {
@@ -970,9 +970,9 @@ describe('parseSemanticArgs — --model flag (AC2.1/AC2.2)', () => {
         expect(args.model).toBe('minilm');
     });
 
-    it('parses --model=bge-m3 (equals-sign form)', () => {
-        const args = parseSemanticArgs(['build', '--model=bge-m3']);
-        expect(args.model).toBe('bge-m3');
+    it('parses --model=e5-base (equals-sign form)', () => {
+        const args = parseSemanticArgs(['build', '--model=e5-base']);
+        expect(args.model).toBe('e5-base');
     });
 
     it('defaults model to undefined when --model is omitted', () => {
@@ -987,6 +987,26 @@ describe('parseSemanticArgs — --model flag (AC2.1/AC2.2)', () => {
         }) as never);
 
         expect(() => parseSemanticArgs(['build', '--model', 'unknown-model'])).toThrow('process.exit');
+        expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('exits 1 for bge-m3 (removed alias)', () => {
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        expect(() => parseSemanticArgs(['build', '--model', 'bge-m3'])).toThrow('process.exit');
+        expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('exits 1 for arctic-m (removed alias)', () => {
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        expect(() => parseSemanticArgs(['build', '--model', 'arctic-m'])).toThrow('process.exit');
         expect(exitSpy).toHaveBeenCalledWith(1);
     });
 
@@ -1009,7 +1029,7 @@ describe('buildSemanticIndexFromArgs — --model flag overrides config (AC2.1)',
     it('passes args.model to buildSemanticIndex when --model is set', async () => {
         const { configSpy, buildSpy } = await setupBuildMocks(testDir);
         // Config returns no semantic field (defaults to minilm)
-        // but CLI passes --model bge-m3
+        // but CLI passes --model e5-base
 
         const validatorModule = await import('../validation/snippet-recall-validator.js');
         const recallSpy = vi.spyOn(validatorModule, 'validateSnippetRecall').mockResolvedValue({
@@ -1023,13 +1043,13 @@ describe('buildSemanticIndexFromArgs — --model flag overrides config (AC2.1)',
             config: join(testDir, 'arch-graph.config.ts'),
             out: testDir,
             format: 'json',
-            model: 'bge-m3',
+            model: 'e5-base',
         });
 
-        // buildSemanticIndex should have been called with modelAlias 'bge-m3'
+        // buildSemanticIndex should have been called with modelAlias 'e5-base'
         expect(buildSpy).toHaveBeenCalledTimes(1);
         const callArg = buildSpy.mock.calls[0]![0];
-        expect(callArg.modelAlias).toBe('bge-m3');
+        expect(callArg.modelAlias).toBe('e5-base');
 
         configSpy.mockRestore();
         buildSpy.mockRestore();
