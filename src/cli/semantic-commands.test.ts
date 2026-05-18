@@ -541,7 +541,7 @@ describe('runSemanticSearch — model alias precedence (D3)', () => {
         configSpy.mockRestore();
     });
 
-    it('falls back to minilm when config is absent ("config not found:" prefix)', async () => {
+    it('falls back to defaultModelAlias (e5-base) when config is absent ("config not found:" prefix)', async () => {
         const searchSpy = await setupSearchSidecarsAndSpy(testDir);
 
         // Mock config to throw the "config not found:" prefix that loadConfig uses for absent files.
@@ -556,7 +556,7 @@ describe('runSemanticSearch — model alias precedence (D3)', () => {
         } catch { /* process.exit */ }
 
         expect(searchSpy).toHaveBeenCalledTimes(1);
-        expect(searchSpy.mock.calls[0]![0].modelAlias).toBe('minilm');
+        expect(searchSpy.mock.calls[0]![0].modelAlias).toBe('e5-base');
 
         configSpy.mockRestore();
     });
@@ -1306,7 +1306,7 @@ describe('runSemanticSearch — minScore resolution passed to semanticSearch (Ta
         configSpy.mockRestore();
     });
 
-    it('falls back to 0.30 when alias is the minilm default (config absent)', async () => {
+    it('uses e5-base recommendedMinScore (0.55) when config is absent (defaultModelAlias)', async () => {
         const searchSpy = await setupSearchSidecarsAndSpy(testDir);
 
         const configModule = await import('../core/config.js');
@@ -1314,14 +1314,15 @@ describe('runSemanticSearch — minScore resolution passed to semanticSearch (Ta
             new Error('config not found: ./arch-graph.config.ts'),
         );
 
-        // No --model flag → resolves to 'minilm' → recommendedMinScore = 0.30
+        // No --model flag → resolves to defaultModelAlias ('e5-base') → recommendedMinScore = 0.55
         const args = parseSemanticArgs(['search', 'q']);
         try {
             await runSemanticSearch({ ...args, out: testDir });
         } catch { /* process.exit */ }
 
         expect(searchSpy).toHaveBeenCalledTimes(1);
-        expect(searchSpy.mock.calls[0]![0].minScore).toBe(0.30);
+        expect(searchSpy.mock.calls[0]![0].modelAlias).toBe('e5-base');
+        expect(searchSpy.mock.calls[0]![0].minScore).toBe(0.55);
 
         configSpy.mockRestore();
     });

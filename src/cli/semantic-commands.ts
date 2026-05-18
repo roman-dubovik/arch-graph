@@ -29,7 +29,7 @@ import { semanticSearch } from '../semantic/search.js';
 import type { SearchResult } from '../semantic/search.js';
 import { validateSnippetRecall } from '../validation/snippet-recall-validator.js';
 import type { SemanticModelAlias } from '../semantic/types.js';
-import { SEMANTIC_MODELS, resolveMinScore } from '../semantic/types.js';
+import { SEMANTIC_MODELS, defaultModelAlias, resolveMinScore } from '../semantic/types.js';
 
 // ---------------------------------------------------------------------------
 // Arg parsing
@@ -651,19 +651,19 @@ export async function runSemanticSearch(args: SemanticArgs): Promise<void> {
     const isJson = args.format !== 'table';
 
     // Resolve model alias: CLI flag wins over config, config wins over default.
-    let modelAlias: SemanticModelAlias = args.model ?? 'minilm';
+    let modelAlias: SemanticModelAlias = args.model ?? defaultModelAlias;
     if (!args.model) {
         try {
             const cfg = await loadConfig(resolve(args.config));
             modelAlias = applySemanticDefaults(cfg.semantic).model;
         } catch (err) {
-            // Silently default to 'minilm' ONLY when the config file is absent.
+            // Silently default to defaultModelAlias ONLY when the config file is absent.
             // Any other error (syntax, invalid alias) must surface so the user
             // knows their config is broken, not the index.
             const isConfigMissing =
                 err instanceof Error && err.message.startsWith('config not found:');
             if (!isConfigMissing) throw err;
-            // Config absent → silent minilm default is acceptable.
+            // Config absent → defaultModelAlias is the correct assumption.
         }
     }
 
