@@ -196,11 +196,23 @@ export function parseSemanticArgs(argv: string[]): SemanticArgs {
 
     /**
      * Validate and parse a --min-score value string.
-     * Returns the parsed float on success. Writes to stderr and exits on invalid input.
+     * Returns the parsed number on success. Writes to stderr and exits on invalid input.
+     *
+     * Uses strict parsing: the entire string must be a valid finite number.
+     * `parseFloat('0.55e')` silently returns 0.55 — this function rejects it.
      */
     function parseMinScore(raw: string): number {
-        const parsed = parseFloat(raw);
-        if (isNaN(parsed)) {
+        // Reject whitespace-only, empty string, and trailing junk (e.g. '0.55e').
+        // Number('0.55e') → NaN; Number('') → 0 (false positive) — use regex first.
+        const trimmed = raw.trim();
+        if (!/^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(trimmed)) {
+            process.stderr.write(
+                `arch-graph semantic search: invalid --min-score value '${raw}': must be a number between -1 and 1.\n`,
+            );
+            process.exit(1);
+        }
+        const parsed = Number(trimmed);
+        if (!Number.isFinite(parsed)) {
             process.stderr.write(
                 `arch-graph semantic search: invalid --min-score value '${raw}': must be a number between -1 and 1.\n`,
             );

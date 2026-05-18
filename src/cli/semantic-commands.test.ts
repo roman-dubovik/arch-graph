@@ -1224,6 +1224,32 @@ describe('parseSemanticArgs — --min-score flag (Task 3)', () => {
         expect(() => parseSemanticArgs(['search', 'q', '--min-score'])).toThrow('process.exit');
         expect(exitSpy).toHaveBeenCalledWith(1);
     });
+
+    it('exits 1 for --min-score with trailing junk (e.g. "0.55e")', () => {
+        // parseFloat('0.55e') silently returns 0.55; strict parsing rejects it.
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        expect(() => parseSemanticArgs(['search', 'q', '--min-score', '0.55e'])).toThrow('process.exit');
+        expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('exits 1 for --min-score with whitespace-only value', () => {
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        expect(() => parseSemanticArgs(['search', 'q', '--min-score', '   '])).toThrow('process.exit');
+        expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('accepts scientific notation (e.g. "5e-1" = 0.5)', () => {
+        const args = parseSemanticArgs(['search', 'q', '--min-score', '5e-1']);
+        expect(args.minScore).toBeCloseTo(0.5);
+    });
 });
 
 describe('runSemanticSearch — minScore resolution passed to semanticSearch (Task 3)', () => {
