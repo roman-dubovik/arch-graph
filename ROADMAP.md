@@ -75,7 +75,25 @@ Lexical signal alongside cosine for exact-term matches ("truncate", "refresh"). 
 
 A handful of project-c eval queries reference domains that don't exist in that codebase. Rewrite affected queries (~30 min) for cleaner per-project recall numbers — doesn't affect any other project.
 
-### ⚪ 5. Additional NodeKinds on demand
+### 🟡 5. Incremental semantic re-embed
+
+Today every `arch-graph semantic build` is a **full re-embed of the entire graph** — there is no node-level cache. On a 30k-node monorepo that's ~20 min with MiniLM and **1–3 hours with BGE-M3**. The cost is one-time per rebuild, but the rebuild becomes painful on any codebase change loop that wants a fresh semantic index.
+
+The git hook installed by `arch-graph hook install` only re-runs the **structural** build (`arch-graph build`, seconds). Semantic re-embed is opt-in / manual. Stale indexes degrade gracefully via `graphHashMatches: false` + a warning, but the warning nudges the user toward a full rebuild — and on a large repo with BGE-M3 enabled, that nudge stops being friendly.
+
+**Approach.** Key each node's embedding by `(nodeId, content_hash)` where `content_hash` is the SHA of the text fed to the embedder (snippet + label + relevant metadata). At build time:
+1. Read prior `embeddings.jsonl` if present and compatible (same `model` + `dim`).
+2. For each node in the new graph, compute `content_hash`. If `(nodeId, content_hash)` exists in the prior file → reuse vector. Else → enqueue for re-embed.
+3. Write the merged set as the new `embeddings.jsonl`. Drop entries whose `nodeId` no longer exists in the new graph (cleanup).
+4. Manifest stores `model`, `dim`, new `graphHash` as today.
+
+**Expected impact.** Typical PR touches < 5% of nodes. On a 30k-node BGE-M3 index that drops 2h rebuild to ≤ 6 min. Makes BGE-M3-as-default conversation plausible on large repos.
+
+**Effort.** 2–3 days. Real test: rebuild self-build twice (no code change between runs) and verify zero embedder calls on the second build via a counter.
+
+**Hard prerequisite for default-switching to BGE-M3.** Even if the 103-query bench shows ≥ 5pp lift, the 2h-3h cold rebuild on a 30k-node repo is a UX regression that this item must close first.
+
+### ⚪ 6. Additional NodeKinds on demand
 
 - GraphQL endpoints
 - Cron schedule semantics
@@ -83,11 +101,11 @@ A handful of project-c eval queries reference domains that don't exist in that c
 
 By request — each extractor is 1–2 days.
 
-### ⚪ 6. Broader eval corpus
+### ⚪ 7. Broader eval corpus
 
 Currently three NestJS monorepos. A Node monolith or GraphQL backend would broaden the bench shape.
 
-### ⚪ 7. Semantic extension of `compare --share`
+### ⚪ 8. Semantic extension of `compare --share`
 
 Today `compare --share` measures structural graph size (nodes, edges, tokens) and emits anonymous numbers for the public bench Discussion. Adding a semantic recall number would let each contributor publish two data points instead of one — and surface the multilingual handling feature in community-comparable numbers.
 
@@ -127,6 +145,7 @@ Complementary, not competing. Possible future `--otel-snapshot` mode if user dem
 - **C_ui recall ceiling 33–50%** — bounded by current embedder. UI uplift + i18n shipped, but the numbers didn't move; the bottleneck is multilingual mapping of UI vocabulary, not snippet content.
 - **i18n format coverage** — supports `messages/*.json` and `locales/<lang>/<feature>.json`. Doesn't yet cover `react-intl` ICU bundles or server-side `.po` files.
 - **Eval set is three NestJS monorepos** — broader shapes (Node monoliths, GraphQL backends) not yet represented in the published numbers.
+- **No incremental semantic re-embed** — every `arch-graph semantic build` re-embeds the entire graph. ~20 min on a 30k-node repo with MiniLM, 1–3 hours with BGE-M3. The git hook only re-runs the structural build (seconds), so this doesn't bite per-commit, but a user who wants a fresh semantic index after a refactor pays the full cost each time. See Strategic option #5 — closing this is a hard prerequisite for any conversation about switching default to BGE-M3.
 
 ## Open questions
 
