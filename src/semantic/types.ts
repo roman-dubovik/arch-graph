@@ -140,7 +140,7 @@ export const SEMANTIC_MODEL = SEMANTIC_MODELS.minilm.hubId;
 export const SEMANTIC_DIM = SEMANTIC_MODELS.minilm.dim;
 
 /** Schema version for the manifest. Bump when the sidecar format changes. */
-export const SEMANTIC_SCHEMA_VERSION = 1 as const;
+export const SEMANTIC_SCHEMA_VERSION = 2 as const;
 
 /**
  * Written to `arch-graph-out/<repo>/semantic/manifest.json`.
@@ -178,6 +178,12 @@ export interface SemanticRecord {
      * cases `label + kind` alone forms the embedding input.
      */
     snippet: string;
+    /**
+     * SHA-256 hex digest of `kind|label|snippet|modelAlias` (all lowercased).
+     * Used by incremental builds to detect which nodes changed since the last
+     * index was written. Added in schemaVersion 2.
+     */
+    contentHash: string;
     /** Dense embedding vector (float32 cast to JSON numbers). Length matches the model's dim. */
     vector: number[];
 }
@@ -220,6 +226,10 @@ export interface SemanticDiagnostics {
         transformerErrors: number;
         /** Nodes whose label could not be located in the source file. */
         labelErrors: number;
+        /** Nodes whose vector was reused from the prior index (incremental build). */
+        reused: number;
+        /** Nodes that were re-embedded in this run (incremental or full build). */
+        recomputed: number;
     };
     /** Capped at {@link SKIPPED_NODES_CAP} entries to keep diagnostics.json small. */
     skippedNodes: SkippedNode[];
