@@ -101,9 +101,9 @@ Structural build (parsing, graph assembly, no embeddings) is unchanged. e5-base 
 
 ---
 
-## Open Follow-Ups
+## Blocking Tasks (all shipped)
 
-Before flipping the default on `main`, three blocking tasks must complete:
+Before the default was flipped on `main`, three blocking tasks were required, all of which have shipped:
 
 1. **Prefix-implementation audit & tests** — Verify `passage:` is applied at build-time, `query:` at search-time, and undefined for models without prefixes (unit tests added to `src/semantic/embedder.test.ts`, `src/semantic/builder.test.ts`, `src/mcp/semantic-search.test.ts`). *Status: completed in Task 2.*
 

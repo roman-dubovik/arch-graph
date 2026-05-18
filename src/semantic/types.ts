@@ -99,8 +99,10 @@ export const SEMANTIC_MODELS = {
         quantized: undefined,
         /**
          * E5-base prefix normalisation yields scores 0.78–0.86 for relevant
-         * matches; a 0.55 floor removes low-quality results while preserving
-         * relevant cross-lingual hits.
+         * matches in the typical case.  The 0.55 floor is intentionally below
+         * that distribution to retain borderline cross-lingual hits, which often
+         * score in the 0.55–0.78 band — filtering them at 0.78 would discard valid
+         * results on multilingual codebases.
          */
         recommendedMinScore: 0.55,
     },

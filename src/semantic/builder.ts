@@ -10,7 +10,8 @@
  * clobbering any existing fields (nats, typeorm, bullmq, di, http, imports,
  * cycles). This is the anti-clobber contract: read → merge → write back.
  *
- * Injectable embedder: pass a fake in tests, the real `embed` in production.
+ * Injectable embedder: pass a fake in tests,
+ * `makeEmbedder(alias).embed(texts, 'passage')` in production.
  * This keeps the test suite free of network calls and model downloads.
  */
 import { createHash } from 'node:crypto';

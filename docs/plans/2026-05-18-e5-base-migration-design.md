@@ -66,7 +66,7 @@ Final order:
 
 ## Patterns to follow
 
-- **Test style:** vitest, see existing `src/semantic/embedder.test.ts` for `Awaited<ReturnType<typeof pipeline>>` mocking with `vi.mock('@xenova/transformers', ...)`. Tests must keep using the 2-arg `toHaveBeenCalledWith('feature-extraction', hubId)` form for minilm/bge-m3/e5-base (only arctic-m uses the 3-arg form).
+- **Test style:** vitest, see existing `src/semantic/embedder.test.ts` for `Awaited<ReturnType<typeof pipeline>>` mocking with `vi.mock('@xenova/transformers', ...)`. Tests use the 2-arg `toHaveBeenCalledWith('feature-extraction', hubId)` form for `minilm` and `e5-base` (the only remaining aliases after Task 6 cleanup).
 - **Conventional Commits:** `feat(semantic): ...`, `test(semantic): ...`, `docs(comparisons): ...`, `fix(semantic): ...`. Keep scope=semantic for code/tests; scope=comparisons for site doc; scope=hook for hook changes.
 - **Selective `git add`:** stage only files you touched. Do NOT `git add -A`. The worktree has untracked `arch-graph-out/` artifacts from past local builds — leave them alone.
 - **Bench artifacts retained:** `/tmp/bge-m3-bench/results-*` and `/tmp/bge-m3-bench/run-*.log` are kept for future analysis. Do not delete.
@@ -102,29 +102,32 @@ Tests: doc must lint clean (no broken markdown), no leakage of private repo name
 
 ### Task 2 — Prefix unit-test review
 
-For every model alias (`minilm`, `bge-m3`, `e5-base`, `arctic-m`), the following invariants must be covered by tests:
+> **Note:** `bge-m3` and `arctic-m` were removed from the registry in Task 6.
+> See the [## UPDATE](#update--2026-05-18-evening-scope-expanded-per-user-direction-auto-mode) section below.
+> The alias list and prefix-rule explanations below reflect the final shipped state.
+
+For every model alias (`minilm`, `e5-base`), the following invariants must be covered by tests:
 
 - `makeEmbedder(alias).embed(['x'])` (default mode) — prefix is applied iff `SEMANTIC_MODELS[alias].prefix?.passage` is defined and non-empty.
 - `makeEmbedder(alias).embed(['x'], 'query')` — prefix is applied iff `SEMANTIC_MODELS[alias].prefix?.query` is defined and non-empty.
 - `makeEmbedder(alias).embed(['x'], 'passage')` — same as default.
-- For `minilm` and `bge-m3` (prefix undefined): input passes through unchanged in both modes.
-- For `e5-base` and `arctic-m` (prefix defined): exact `passage: ` / `query: ` strings prepended (note: arctic-m has empty passage prefix — verify pass-through in passage mode).
+- For `minilm` (prefix undefined): input passes through unchanged in both modes.
+- For `e5-base` (prefix defined): exact `passage: ` / `query: ` strings prepended.
 
 Build path (semantic builder) must call embedder with `'passage'` (or no argument, which defaults to passage) — assert via spy.
 Search path (CLI `semantic search`, MCP `semantic_search`) must call embedder with `'query'` — assert via spy.
 
-Tests: `pnpm test src/semantic/embedder.test.ts src/cli/semantic-commands.test.ts src/mcp/semantic-search.test.ts src/semantic/builder.test.ts` passes. Existing 2-arg pipeline assertion (`toHaveBeenCalledWith('feature-extraction', hubId)`) for minilm/bge-m3/e5-base preserved.
+Tests: `pnpm test src/semantic/embedder.test.ts src/cli/semantic-commands.test.ts src/mcp/semantic-search.test.ts src/semantic/builder.test.ts` passes. Existing 2-arg pipeline assertion (`toHaveBeenCalledWith('feature-extraction', hubId)`) for minilm/e5-base preserved.
 
 **Tests:** the task IS the tests. Pass = AC met.
 
 ### Task 3 — Per-model `recommendedMinScore` calibration
 
-`src/semantic/types.ts` SEMANTIC_MODELS gains a `recommendedMinScore: number` field per entry:
+`src/semantic/types.ts` SEMANTIC_MODELS gains a `recommendedMinScore: number` field per entry.
+(`bge-m3` and `arctic-m` were removed in Task 6 — see the UPDATE section.)
 
 - `minilm`: 0.30 (matches current hardcoded default — no behavior change)
-- `bge-m3`: 0.55 (compensates for tighter distribution; bench shows scores 0.65-0.80 typical)
-- `e5-base`: 0.55 (prefix-induced normalization yields scores 0.78-0.86 typical)
-- `arctic-m`: 0.40 (provisional; not exercised in production yet)
+- `e5-base`: 0.55 (prefix-induced normalization yields scores 0.78-0.86 typical; 0.55 is intentionally below that range to preserve cross-lingual hits)
 
 Resolution path in `src/mcp/semantic-search.ts` and CLI `semantic search`:
 
@@ -202,9 +205,9 @@ Tests:
 
 ## Open questions
 
-- **Hook auto-trigger of semantic build** — Task 5 design includes `--include-semantic` flag for the hook. Default off. Decide post-design whether to flip default on after migration (depends on whether incremental cost is genuinely <2s for typical commits, measured in Task 5).
+- **Hook auto-trigger of semantic build** — **RESOLVED.** Task 6 UPDATE section flipped the default to on (`arch-graph hook install` includes semantic build by default; `--no-include-semantic` opts out). Incremental per-commit cost measured at ~1-2 s on typical commits — acceptable.
 - **Old indexes on user machines** — schema bump from 1 → 2 forces one full rebuild for existing users. Migration note in README.md or first-run warning?
-- **`recommendedMinScore` for arctic-m** — value is provisional (model not validated on arch-graph workload). Documented as such in the field's JSDoc.
+- **`recommendedMinScore` for arctic-m** — *Moot; arctic-m was removed from the registry in Task 6.* See UPDATE section.
 
 ---
 

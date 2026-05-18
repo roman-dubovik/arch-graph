@@ -73,9 +73,13 @@ See "Shipped" section above.
 
 `arch-graph semantic build` is now incremental by default. Node vectors are keyed by `(nodeId, contentHash)` where `contentHash` is a SHA-256 of `kind|label|snippet|modelAlias`. A prior-compatible index is loaded on each run; unchanged nodes reuse their vectors. The git hook runs `semantic build --incremental` automatically. Typical commit cost: ~1-2 s.
 
-### 🟡 3. Per-model `minScore` calibration
+### ~~3. Per-model `minScore` calibration~~ — SHIPPED (2026-05-18)
 
-`queries.json` currently uses a uniform `minScore: 0.5` floor. On MiniLM, top-1 scores cluster around 0.56±0.08 — 0.5 is a meaningful filter. On e5-base, top-1 scores cluster at 0.83±0.02 — 0.5 is a no-op. For default-switch to e5-base, the user-facing `minScore` semantic ("how confident does the result have to be") needs to differ per model. Suggested e5-base floor ≈ 0.78 (mean − 3σ — matches MiniLM 0.50 in terms of "filter floor"). Schema change in `queries.json` + default in `arch-graph semantic search` opts. ~1 day.
+Per-model `recommendedMinScore` added to `SEMANTIC_MODELS` registry and wired through the three-step resolution chain (user override → per-model value → fallback 0.30):
+- MiniLM: **0.30** (unchanged behaviour — no regression for existing deployments).
+- e5-base: **0.55** (below the 0.83 ± 0.02 typical distribution to retain borderline cross-lingual hits; 0.55 was chosen deliberately — see `src/semantic/types.ts` JSDoc).
+
+The previously suggested floor of 0.78 was rejected: it would have filtered valid cross-lingual results that e5-base returns with scores in the 0.55–0.78 band.
 
 ### 🟡 4. Eval corpus hygiene
 
