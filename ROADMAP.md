@@ -127,6 +127,20 @@ Today `compare --share` measures structural graph size (nodes, edges, tokens) an
 
 Originally proposed as priority-1 C_ui fix. **Outcome**: aborted at 2h40m on a 30k-node monorepo without completing the build. e5-base delivers the same C_ui win at 6× faster build cost. The `bge-m3` alias stays in the registry (`semantic.model: 'bge-m3'`) for users who specifically want 1024-dim multilingual — but it is **no longer recommended** and not a default candidate.
 
+### Arctic Embed M v2.0 — blocked on transformers.js v3 migration (2026-05-18)
+
+Spike result: sanity bench on project-c (beribuy-2.0, 2065 nodes, mode=both-buckets) returned **20% hit-rate vs 56-60% baselines** — broken.
+
+Root cause: `Snowflake/snowflake-arctic-embed-m-v2.0` is built on Alibaba GTE base (`model_type: "gte"`). `@xenova/transformers@2.17.2` does not register the `gte` class and falls back to a generic BERT encoder-only construction, silently dropping RoPE positional encoding and other GTE-specific layers. Output vectors are numerically plausible but semantically wrong.
+
+2-brain (sister project) is running the same model on `@huggingface/transformers` v3 and reports 96% recall@10 + 43% top-5 density (semantic-only). So the model itself is viable — the blocker is the package migration.
+
+**Cost to unblock:** swap `@xenova/transformers` → `@huggingface/transformers` (different npm scope; `pipeline()` API surface, env config, ONNX backend, and cache layout all differ). ~150 LoC of mock-shape updates in the test suite. Estimated 1-2 days of focused work, separate worktree.
+
+**Why deferred:** e5-base alone closes the C_ui gap (the main reason we explored richer embedders). Arctic would gain ~+14pp density and possibly some recall, but the package swap is wide and risky; not worth it until there is a concrete arch-graph failure mode that e5-base does not cover.
+
+Bench artefacts retained at `/tmp/bge-m3-bench/results-projectc-arctic-m.md` and `run-projectc-arctic-m.log` for future revival.
+
 ### CSS / UI semantics — closed by e5-base (2026-05-18)
 
 Original hypothesis: C_ui ceiling 33–50% because the embedder weakly maps RU intent to EN technical vocabulary. e5-base lifted C_ui to 82% with no snippet changes → hypothesis confirmed, **embedder was the bottleneck**. No further CSS-processing work needed unless a future model regression on C_ui appears.
