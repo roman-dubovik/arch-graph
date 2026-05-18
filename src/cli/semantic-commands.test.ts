@@ -819,3 +819,85 @@ describe('runSemanticBuild — --strict-recall flag (P1-A)', () => {
         recallSpy.mockRestore();
     });
 });
+
+// ---------------------------------------------------------------------------
+// AC2.1/AC2.2 — --model flag parsing
+// ---------------------------------------------------------------------------
+
+describe('parseSemanticArgs — --model flag (AC2.1/AC2.2)', () => {
+    it('parses --model bge-m3 on build subcommand', () => {
+        const args = parseSemanticArgs(['build', '--model', 'bge-m3']);
+        expect(args.model).toBe('bge-m3');
+    });
+
+    it('parses --model minilm on search subcommand', () => {
+        const args = parseSemanticArgs(['search', 'my query', '--model', 'minilm']);
+        expect(args.model).toBe('minilm');
+    });
+
+    it('parses --model=bge-m3 (equals-sign form)', () => {
+        const args = parseSemanticArgs(['build', '--model=bge-m3']);
+        expect(args.model).toBe('bge-m3');
+    });
+
+    it('defaults model to undefined when --model is omitted', () => {
+        const args = parseSemanticArgs(['build']);
+        expect(args.model).toBeUndefined();
+    });
+
+    it('exits 1 for unknown --model alias', () => {
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        expect(() => parseSemanticArgs(['build', '--model', 'unknown-model'])).toThrow('process.exit');
+        expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('exits 1 for trailing --model with no value', () => {
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+            throw new Error('process.exit');
+        }) as never);
+
+        expect(() => parseSemanticArgs(['build', '--model'])).toThrow('process.exit');
+        expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// AC2.1 — --model CLI flag overrides config model in build
+// ---------------------------------------------------------------------------
+
+describe('buildSemanticIndexFromArgs — --model flag overrides config (AC2.1)', () => {
+    it('passes args.model to buildSemanticIndex when --model is set', async () => {
+        const { configSpy, buildSpy } = await setupBuildMocks(testDir);
+        // Config returns no semantic field (defaults to minilm)
+        // but CLI passes --model bge-m3
+
+        const validatorModule = await import('../validation/snippet-recall-validator.js');
+        const recallSpy = vi.spyOn(validatorModule, 'validateSnippetRecall').mockResolvedValue({
+            kind: 'empty',
+        });
+        vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+        vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+        await runSemanticBuild({
+            sub: 'build',
+            config: join(testDir, 'arch-graph.config.ts'),
+            out: testDir,
+            format: 'json',
+            model: 'bge-m3',
+        });
+
+        // buildSemanticIndex should have been called with modelAlias 'bge-m3'
+        expect(buildSpy).toHaveBeenCalledTimes(1);
+        const callArg = buildSpy.mock.calls[0]![0];
+        expect(callArg.modelAlias).toBe('bge-m3');
+
+        configSpy.mockRestore();
+        buildSpy.mockRestore();
+        recallSpy.mockRestore();
+    });
+});
