@@ -112,7 +112,13 @@ BGE-M3 scores are systematically **higher** on most queries (9 of 12 show positi
 
 **Verdict (ii): Recommend keep MiniLM default + advertise BGE-M3 as opt-in.**
 
-Reasoning from the numbers:
+### Caveat-first reading (don't skip)
+
+1. **0pp ≠ "BGE-M3 doesn't help".** Both models scored 12/12, **but the bench saturated mid-task** — new doc-section nodes added by Task 1/2 commits (including this design doc) closed the two previously-failing D_docs queries before BGE-M3 was measured. The bench can no longer discriminate at this corpus density on these specific queries. The verdict reads "no measurable gain on this bench"; it does NOT read "BGE-M3 provides no value."
+2. **The C_ui hypothesis was not tested here.** The design doc and roadmap framed BGE-M3 as the answer to the C_ui ceiling (33–50% on MiniLM on private monorepos). Self-build has zero C_ui queries — it's dominated by D_docs and A_find. The question BGE-M3 was supposed to answer **remains open until the 103-query bench is run**.
+3. **The 7× slowdown is first-run only.** Cached steady-state UX is much closer (the +355 s figure is dominated by the 560 MB model download). The "Trade-offs" table footnote covers this but the headline number is misleading on its own.
+
+### Reasoning from the numbers:
 
 1. **No accuracy gain on this bench.** Both models score 12/12 (100%). The design doc identified D_docs (historically 33% at the time) as the primary candidate for improvement; D_docs is already 100% on this run for MiniLM, leaving no headroom for BGE-M3 to improve. The hit-rate delta is 0pp across all four categories.
 
