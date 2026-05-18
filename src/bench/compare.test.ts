@@ -265,4 +265,37 @@ describe('renderMarkdown', () => {
         expect(q1Line).toBeDefined();
         expect(q1Line).toContain('n/a');
     });
+
+    it('exact sentinel: full markdown output matches byte-for-byte (AC2.6)', () => {
+        const md = renderMarkdown(comparisons, specs);
+
+        // Build the expected string from the same logic, but expressed as a
+        // literal so any change to renderMarkdown fails this test.
+        const expected =
+            '## Per-query comparison\n' +
+            '\n' +
+            '| ID | Category | Query | MiniLM hit | BGE-M3 hit | Change | ' +
+            'Score@1 MiniLM | Score@1 BGE-M3 | Score delta | Rank MiniLM | Rank BGE-M3 | Rank delta |\n' +
+            '|----|----------|-------|-----------|-----------|--------|' +
+            '---------------|---------------|-------------|------------|------------|------------|\n' +
+            '| Q1 | A_find | where is the semantic builder | HIT | MISS | MISS<-HIT | 0.550 | 0.600 | +0.050 | 1 | n/a | -1 |\n' +
+            '| Q2 | D_docs | what does strict mode do | MISS | HIT | MISS->HIT | 0.300 | 0.500 | +0.200 | n/a | 1 | +1 |\n' +
+            '\n' +
+            '## Per-category hit-rate\n' +
+            '\n' +
+            '| Category | MiniLM hits | BGE-M3 hits | Total | MiniLM % | BGE-M3 % | Delta |\n' +
+            '|----------|------------|------------|-------|----------|----------|-------|\n' +
+            '| A_find | 1/1 | 0/1 | 1 | 100% | 0% | -100pp |\n' +
+            '| D_docs | 0/1 | 1/1 | 1 | 0% | 100% | +100pp |\n' +
+            '\n' +
+            '## Overall summary\n' +
+            '\n' +
+            '| Metric | MiniLM | BGE-M3 | Delta |\n' +
+            '|--------|--------|--------|-------|\n' +
+            '| Total queries | 2 | 2 | — |\n' +
+            '| Total hits | 1 | 1 | +0 |\n' +
+            '| Hit rate | 50% | 50% | +0pp |\n';
+
+        expect(md).toBe(expected);
+    });
 });
