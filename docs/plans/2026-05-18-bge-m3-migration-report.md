@@ -112,11 +112,49 @@ BGE-M3 scores are systematically **higher** on most queries (9 of 12 show positi
 
 **Verdict (ii): Recommend keep MiniLM default + advertise BGE-M3 as opt-in.**
 
+### 103-query bench update (2026-05-18, partial)
+
+The 103-query bench was attempted across three reference monorepos. **Only project-c (beribuy-2.0, 2065 nodes) completed both models. project-a (platform, 29527 nodes) and project-b (insyra, 21541 nodes) BGE-M3 builds were aborted after 2h 40min of active embedding** (still running at ~10 CPU cores total, no manifest written) — see UX finding below.
+
+#### Project-c numbers (25 queries, both-buckets mode)
+
+| Category | MiniLM | BGE-M3 | Δ pp |
+|----------|--------|--------|------|
+| A_find   | 40% (4/10) | 50% (5/10) | **+10** |
+| B_debug  | 100% (2/2) | 100% (2/2) | 0 |
+| C_ui     | 50% (1/2)  | 50% (1/2)  | 0 |
+| D_docs   | 57% (4/7)  | 57% (4/7)  | 0 |
+| D_links  | 100% (3/3) | 100% (3/3) | 0 |
+| E_arch   | 0% (0/1)   | 0% (0/1)   | 0 |
+| **Overall** | **56% (14/25)** | **60% (15/25)** | **+4** |
+
+A_find hits +10pp (matches the per-category decision threshold), overall +4pp (below the 5pp overall threshold). C_ui — the original hypothesis target — shows no movement on this project's 2 C_ui queries; sample size too small to draw conclusions.
+
+#### 🚨 UX finding (the kill-shot)
+
+The reason the bench didn't complete: **on a 30k-node real monorepo, BGE-M3 cold rebuild takes ≥ 3 hours of saturated 10-core embedding** on a consumer Mac. Two parallel builds (29527 + 21541 nodes) ran 2h 40min without writing a manifest — both processes were still alive and active (5+ cores each) when stopped.
+
+The self-build report claimed "412s vs 57s, ~7× slower". That measurement was on **2065 nodes** (arch-graph itself). At real-monorepo scale:
+
+| Repo size (nodes) | MiniLM build | BGE-M3 build (extrapolated) |
+|---|---|---|
+| 2065 (self / project-c) | ~57 s | ~7 min (measured) |
+| 21541 (insyra-like) | ~20 min | **2–3 hours (aborted at 2h40m)** |
+| 29527 (platform-like) | ~25 min | **3+ hours (aborted at 2h40m)** |
+
+This kills any conversation about switching default to BGE-M3 — even if the 103-query bench eventually shows ≥ 5pp lift, a 3-hour first-time install is unshippable as default UX. A user running `arch-graph init` followed by `arch-graph semantic build` on their company monorepo would be staring at a saturated Mac for an afternoon.
+
+The git hook (`arch-graph hook install`) runs only the **structural** build (seconds) — so this UX cost is only paid on manual `arch-graph semantic build`. But manual rebuild is exactly the action triggered by a stale-index warning after architectural changes. On large repos with BGE-M3, that warning becomes adversarial — the user will turn it off rather than wait 3 hours.
+
+#### Hard prerequisite: incremental re-embed (ROADMAP option 5)
+
+A full re-embed of every node on every `semantic build` is currently mandatory. ROADMAP option 5 ("Incremental semantic re-embed") closes this — key embeddings by `(nodeId, content_hash)`, reuse on match, embed only deltas. Typical PR touches < 5% of nodes → on a 30k-node BGE-M3 index, drops 3h rebuild to ~10 min. **Until that ships, BGE-M3 default is structurally not on the table** regardless of accuracy numbers.
+
 ### Caveat-first reading (don't skip)
 
-1. **0pp ≠ "BGE-M3 doesn't help".** Both models scored 12/12, **but the bench saturated mid-task** — new doc-section nodes added by Task 1/2 commits (including this design doc) closed the two previously-failing D_docs queries before BGE-M3 was measured. The bench can no longer discriminate at this corpus density on these specific queries. The verdict reads "no measurable gain on this bench"; it does NOT read "BGE-M3 provides no value."
-2. **The C_ui hypothesis was not tested here.** The design doc and roadmap framed BGE-M3 as the answer to the C_ui ceiling (33–50% on MiniLM on private monorepos). Self-build has zero C_ui queries — it's dominated by D_docs and A_find. The question BGE-M3 was supposed to answer **remains open until the 103-query bench is run**.
-3. **The 7× slowdown is first-run only.** Cached steady-state UX is much closer (the +355 s figure is dominated by the 560 MB model download). The "Trade-offs" table footnote covers this but the headline number is misleading on its own.
+1. **0pp on self-build ≠ "BGE-M3 doesn't help".** Both models scored 12/12 on self-build, **but the bench saturated mid-task** — new doc-section nodes added by Task 1/2 commits (including this design doc) closed the two previously-failing D_docs queries before BGE-M3 was measured.
+2. **The C_ui hypothesis was not fully tested.** Self-build has zero C_ui queries; project-c has only 2. The 103-query × 3 monorepo bench was the test — it could not complete in reasonable time, and the abort itself is the UX answer.
+3. **The 7× slowdown understates real cost.** That figure was on 2065 nodes. On 30k-node monorepos the slowdown is closer to **400×** (60-180 min vs 25 min). The model's per-node embedding cost looks fine in isolation; at corpus scale on consumer CPU it is not.
 
 ### Reasoning from the numbers:
 
