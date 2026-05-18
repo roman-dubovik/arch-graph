@@ -101,18 +101,30 @@ describe('writeManifest + readManifest', () => {
         await expect(readManifest(manifestPath)).rejects.toThrow(/schemaVersion/);
     });
 
-    it('readManifest throws on incompatible model', async () => {
+    it('readManifest throws on incompatible model when expected is supplied', async () => {
         const manifestPath = join(testDir, 'wrong-model.json');
         const bad = { ...makeManifest(), model: 'some-other-model' };
         await writeFile(manifestPath, JSON.stringify(bad), 'utf8');
-        await expect(readManifest(manifestPath)).rejects.toThrow(/model/);
+        await expect(
+            readManifest(manifestPath, { model: SEMANTIC_MODEL, dim: SEMANTIC_DIM }),
+        ).rejects.toThrow(/model/);
     });
 
-    it('readManifest throws on incompatible dim', async () => {
+    it('readManifest does NOT throw on model mismatch when expected is omitted', async () => {
+        const manifestPath = join(testDir, 'other-model-no-expected.json');
+        // bge-m3 manifest — valid schemaVersion, different model
+        const bge = { ...makeManifest(), model: 'Xenova/bge-m3', dim: 1024 };
+        await writeFile(manifestPath, JSON.stringify(bge), 'utf8');
+        await expect(readManifest(manifestPath)).resolves.not.toThrow();
+    });
+
+    it('readManifest throws on incompatible dim when expected is supplied', async () => {
         const manifestPath = join(testDir, 'wrong-dim.json');
         const bad = { ...makeManifest(), dim: 768 };
         await writeFile(manifestPath, JSON.stringify(bad), 'utf8');
-        await expect(readManifest(manifestPath)).rejects.toThrow(/dim/);
+        await expect(
+            readManifest(manifestPath, { model: SEMANTIC_MODEL, dim: SEMANTIC_DIM }),
+        ).rejects.toThrow(/dim/);
     });
 });
 
@@ -131,7 +143,7 @@ describe('writeEmbeddingsJsonl + readEmbeddingsJsonl', () => {
         await writeEmbeddingsJsonl(records, jsonlPath);
 
         const collected: SemanticRecord[] = [];
-        for await (const rec of readEmbeddingsJsonl(jsonlPath)) {
+        for await (const rec of readEmbeddingsJsonl(jsonlPath, SEMANTIC_DIM)) {
             collected.push(rec);
         }
         expect(collected).toHaveLength(3);
@@ -147,12 +159,12 @@ describe('writeEmbeddingsJsonl + readEmbeddingsJsonl', () => {
         await writeEmbeddingsJsonl(records, jsonlPath);
 
         const collected: SemanticRecord[] = [];
-        for await (const rec of readEmbeddingsJsonl(jsonlPath)) {
+        for await (const rec of readEmbeddingsJsonl(jsonlPath, SEMANTIC_DIM)) {
             collected.push(rec);
         }
         // JSON serialization rounds floats but they should remain close.
         const roundtripped = collected[0].vector;
-        expect(roundtripped).toHaveLength(384);
+        expect(roundtripped).toHaveLength(SEMANTIC_DIM);
         for (let i = 0; i < 384; i++) {
             expect(roundtripped[i]).toBeCloseTo(vec[i], 10);
         }
@@ -173,7 +185,7 @@ describe('writeEmbeddingsJsonl + readEmbeddingsJsonl', () => {
         const jsonlPath = join(testDir, 'empty.jsonl');
         await writeFile(jsonlPath, '', 'utf8');
         const collected: SemanticRecord[] = [];
-        for await (const rec of readEmbeddingsJsonl(jsonlPath)) {
+        for await (const rec of readEmbeddingsJsonl(jsonlPath, SEMANTIC_DIM)) {
             collected.push(rec);
         }
         expect(collected).toHaveLength(0);
@@ -185,7 +197,7 @@ describe('writeEmbeddingsJsonl + readEmbeddingsJsonl', () => {
 
         const collected: SemanticRecord[] = [];
         await expect(async () => {
-            for await (const rec of readEmbeddingsJsonl(jsonlPath)) {
+            for await (const rec of readEmbeddingsJsonl(jsonlPath, SEMANTIC_DIM)) {
                 collected.push(rec);
             }
         }).rejects.toThrow();
@@ -197,7 +209,7 @@ describe('writeEmbeddingsJsonl + readEmbeddingsJsonl', () => {
         const line = JSON.stringify(makeRecord('blank-test'));
         await writeFile(jsonlPath, `${line}\n\n${line}\n`, 'utf8');
         const collected: SemanticRecord[] = [];
-        for await (const rec of readEmbeddingsJsonl(jsonlPath)) {
+        for await (const rec of readEmbeddingsJsonl(jsonlPath, SEMANTIC_DIM)) {
             collected.push(rec);
         }
         expect(collected).toHaveLength(2);
