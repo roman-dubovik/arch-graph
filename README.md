@@ -429,7 +429,7 @@ npx tsc --noEmit                                  # typecheck
 
 ### Integration test
 
-Runs a full install→init→build→stats→queries→integrations flow on a synthetic NestJS fixture in a sandboxed `$TMPDIR`. No external dependencies beyond `node` and `jq`.
+Runs a full install→init→build→stats→queries→integrations flow on a synthetic NestJS fixture in a sandboxed `$TMPDIR`. Required deps: `node` and `jq`. Optional: `expect` — enables the PTY-driven test of `install.sh`'s interactive prompt (gracefully skipped when absent or when the host has no usable PTY).
 
 ```
 npm run test:integration             # uses the current clone

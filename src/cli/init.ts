@@ -219,6 +219,76 @@ async function askYesNo(rl: Rl, prompt: string, defaultYes = true): Promise<bool
     return trimmed === 'y' || trimmed === 'yes';
 }
 
+// ─── semantic-build prompt + execution (extracted for unit testing) ──────────
+
+/**
+ * Prompt the user whether to build the semantic index now. The body is the
+ * multi-line explainer; the question line follows. Defaults to "Y" so the
+ * curl-piped install ends with a fully usable stack out of the box.
+ *
+ * Exported so unit tests can drive it with a fake readline; not part of the
+ * public CLI surface.
+ */
+export async function askBuildSemantic(
+    rl: Rl,
+    write: (s: string) => void,
+): Promise<boolean> {
+    write(
+        '\n? Build semantic search index now?\n' +
+        '    Downloads ~135 MB embedding model on first use (cached under\n' +
+        '    ~/.cache/transformers/), then embeds every graph node. Typically\n' +
+        '    30–90s on small repos; longer on large ones. Enables fuzzy /\n' +
+        '    multilingual queries via `code_search`, `docs_search`,\n' +
+        '    `semantic_search` (MCP) and `arch-graph semantic search` (CLI).\n',
+    );
+    return askYesNo(rl, '  build now?', true);
+}
+
+/** Injectable build runner — production passes the real `buildSemanticIndexFromArgs`. */
+export type SemanticBuildRunner = (args: {
+    sub: string;
+    config: string;
+    out: string;
+    format: 'json' | 'table';
+}) => Promise<unknown>;
+
+/**
+ * Run the semantic build with init-wizard-friendly error handling: a failure
+ * here (e.g. model download interrupted) must NOT tear down the rest of the
+ * wizard. Prints either a success line or a recovery hint pointing at the
+ * manual command, then returns.
+ *
+ * Exported alongside `askBuildSemantic` so unit tests can verify the recovery
+ * path without spinning up the real embedder.
+ */
+export async function runSemanticBuildStep(opts: {
+    targetPath: string;
+    outDir: string;
+    runner: SemanticBuildRunner;
+    write: (s: string) => void;
+}): Promise<void> {
+    opts.write('\n... building semantic index (first run downloads the model) ...\n');
+    try {
+        await opts.runner({
+            sub: 'build',
+            config: opts.targetPath,
+            out: opts.outDir,
+            // `format` is required by SemanticArgs but only read by the
+            // `search` subcommand. Any value satisfies the type here.
+            format: 'json',
+        });
+        opts.write('\n✓ semantic index ready\n');
+    } catch (err) {
+        opts.write(`\n⚠  semantic build failed: ${(err as Error).message}\n`);
+        opts.write('   Run `arch-graph semantic build` manually to retry.\n');
+    }
+}
+
+/** Body printed when the user declines the semantic-build prompt. */
+export const SEMANTIC_SKIP_HINT =
+    '\n  Skipped. To enable semantic search later:\n' +
+    '    arch-graph semantic build\n';
+
 // Multi-select: show numbered list, ask which to disable (blank = all enabled).
 async function askMultiSelect(rl: Rl, options: DomainOption[]): Promise<DomainKey[]> {
     output.write('\n? Which domains to extract?\n');
@@ -629,41 +699,17 @@ export async function runInitWizard(target: string): Promise<void> {
     // the prompt on build failure prevents a follow-up error that would just
     // tell the user to run `arch-graph build` first — they already know.
     if (structuralBuildOk) {
-        output.write(
-            '\n? Build semantic search index now?\n' +
-            '    Downloads ~135 MB embedding model on first use (cached under\n' +
-            '    ~/.cache/transformers/), then embeds every graph node. Typically\n' +
-            '    30–90s on small repos; longer on large ones. Enables fuzzy /\n' +
-            '    multilingual queries via `code_search`, `docs_search`,\n' +
-            '    `semantic_search` (MCP) and `arch-graph semantic search` (CLI).\n',
-        );
-        const buildSemantic = await askYesNo(rl, '  build now?', true);
+        const buildSemantic = await askBuildSemantic(rl, (s) => output.write(s));
         if (buildSemantic) {
-            output.write('\n... building semantic index (first run downloads the model) ...\n');
-            try {
-                // Use the throwing helper (not runSemanticBuild) so a failure
-                // inside the model download / embed path doesn't process.exit
-                // and tear down the rest of this wizard before the "next steps"
-                // block can print.
-                const { buildSemanticIndexFromArgs } = await import('./semantic-commands.js');
-                await buildSemanticIndexFromArgs({
-                    sub: 'build',
-                    config: targetPath,
-                    out: resolve('./arch-graph-out'),
-                    // `format` is required by SemanticArgs but only read by the
-                    // `search` subcommand. Any value satisfies the type here.
-                    format: 'json',
-                });
-                output.write('\n✓ semantic index ready\n');
-            } catch (err) {
-                output.write(`\n⚠  semantic build failed: ${(err as Error).message}\n`);
-                output.write('   Run `arch-graph semantic build` manually to retry.\n');
-            }
+            const { buildSemanticIndexFromArgs } = await import('./semantic-commands.js');
+            await runSemanticBuildStep({
+                targetPath,
+                outDir: resolve('./arch-graph-out'),
+                runner: buildSemanticIndexFromArgs,
+                write: (s) => output.write(s),
+            });
         } else {
-            output.write(
-                '\n  Skipped. To enable semantic search later:\n' +
-                '    arch-graph semantic build\n',
-            );
+            output.write(SEMANTIC_SKIP_HINT);
         }
     }
 

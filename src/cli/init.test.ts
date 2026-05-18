@@ -15,8 +15,11 @@ import { join } from 'node:path';
 import {
     askSemanticStrategy,
     askSnippetTarget,
+    askBuildSemantic,
     buildStrategySnippet,
+    runSemanticBuildStep,
     writeStrategySnippet,
+    SEMANTIC_SKIP_HINT,
     type SemanticStrategy,
     type SnippetTarget,
 } from './init.js';
@@ -188,5 +191,103 @@ describe('writeStrategySnippet', () => {
         } finally {
             await rm(dir, { recursive: true, force: true });
         }
+    });
+});
+
+// ─── askBuildSemantic ────────────────────────────────────────────────────────
+
+describe('askBuildSemantic', () => {
+    it('blank answer defaults to true (Y default for one-command-install UX)', async () => {
+        const rl = makeRl(['']);
+        const written: string[] = [];
+        const result = await askBuildSemantic(rl as any, (s) => written.push(s));
+        expect(result).toBe(true);
+        // Explainer must surface the model size, runtime cost, and feature list
+        // so users with bandwidth concerns can make an informed choice.
+        const explainer = written.join('');
+        expect(explainer).toContain('135 MB');
+        expect(explainer).toContain('cached under');
+        expect(explainer).toContain('code_search');
+        expect(explainer).toContain('docs_search');
+    });
+
+    it('"y" returns true', async () => {
+        const rl = makeRl(['y']);
+        const result = await askBuildSemantic(rl as any, () => {});
+        expect(result).toBe(true);
+    });
+
+    it('"n" returns false', async () => {
+        const rl = makeRl(['n']);
+        const result = await askBuildSemantic(rl as any, () => {});
+        expect(result).toBe(false);
+    });
+
+    it('"no" returns false', async () => {
+        const rl = makeRl(['no']);
+        const result = await askBuildSemantic(rl as any, () => {});
+        expect(result).toBe(false);
+    });
+});
+
+// ─── runSemanticBuildStep ────────────────────────────────────────────────────
+
+describe('runSemanticBuildStep', () => {
+    it('calls the injected runner with correct args on success path', async () => {
+        const calls: Array<Record<string, unknown>> = [];
+        const written: string[] = [];
+
+        await runSemanticBuildStep({
+            targetPath: '/repo/arch-graph.config.ts',
+            outDir: '/repo/arch-graph-out',
+            runner: async (args) => {
+                calls.push({ ...args });
+                return { manifest: 'ok' };
+            },
+            write: (s) => written.push(s),
+        });
+
+        expect(calls).toHaveLength(1);
+        expect(calls[0]).toMatchObject({
+            sub: 'build',
+            config: '/repo/arch-graph.config.ts',
+            out: '/repo/arch-graph-out',
+        });
+        expect(written.join('')).toContain('building semantic index');
+        expect(written.join('')).toContain('✓ semantic index ready');
+    });
+
+    it('runner failure prints recovery hint and does NOT re-throw', async () => {
+        const written: string[] = [];
+
+        // The whole point of the helper: a thrown error here must be CAUGHT,
+        // so the calling wizard can continue to its "next steps" block.
+        await expect(
+            runSemanticBuildStep({
+                targetPath: '/repo/arch-graph.config.ts',
+                outDir: '/repo/arch-graph-out',
+                runner: async () => {
+                    throw new Error('model download interrupted');
+                },
+                write: (s) => written.push(s),
+            }),
+        ).resolves.toBeUndefined();
+
+        const out = written.join('');
+        expect(out).toContain('⚠  semantic build failed');
+        expect(out).toContain('model download interrupted');
+        // The recovery hint must point at the manual recovery command —
+        // otherwise users have no obvious path forward after a failure.
+        expect(out).toContain('arch-graph semantic build');
+        // The success line MUST NOT appear after a failure.
+        expect(out).not.toContain('✓ semantic index ready');
+    });
+
+    it('SEMANTIC_SKIP_HINT documents the manual recovery path', () => {
+        // Sanity check that the canonical skip hint stays in sync with the
+        // helper's recovery message — both should name the same command so
+        // users only have one thing to remember.
+        expect(SEMANTIC_SKIP_HINT).toContain('arch-graph semantic build');
+        expect(SEMANTIC_SKIP_HINT).toContain('Skipped');
     });
 });
