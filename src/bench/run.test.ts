@@ -27,7 +27,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { BenchResultRow, QuerySpec } from '../../bench/self-build/compare.js';
-import { runBench } from '../../bench/self-build/run.js';
+import { runBench, parseModelAlias } from '../../bench/self-build/run.js';
 import { SEMANTIC_MODELS } from '../semantic/types.js';
 
 // ---------------------------------------------------------------------------
@@ -287,6 +287,60 @@ describe('runBench — semanticSearch error paths (P1-I)', () => {
                 queries: STUB_QUERIES,
             }),
         ).rejects.toThrow(/model load failed/);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// parseModelAlias — prototype pollution protection
+// ---------------------------------------------------------------------------
+
+describe('parseModelAlias — rejects inherited Object.prototype keys', () => {
+    it('rejects __proto__', () => {
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
+        const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+        parseModelAlias('__proto__');
+
+        expect(exitSpy).toHaveBeenCalledWith(1);
+        expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('invalid --model alias'));
+        expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('__proto__'));
+    });
+
+    it('rejects toString', () => {
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
+        const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+        parseModelAlias('toString');
+
+        expect(exitSpy).toHaveBeenCalledWith(1);
+        expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('invalid --model alias'));
+        expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('toString'));
+    });
+
+    it('rejects constructor', () => {
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
+        const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+        parseModelAlias('constructor');
+
+        expect(exitSpy).toHaveBeenCalledWith(1);
+        expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('invalid --model alias'));
+        expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('constructor'));
+    });
+
+    it('accepts valid aliases', () => {
+        expect(parseModelAlias('minilm')).toBe('minilm');
+        expect(parseModelAlias('bge-m3')).toBe('bge-m3');
+    });
+
+    it('rejects invalid non-prototype aliases', () => {
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
+        const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+        parseModelAlias('invalid-model');
+
+        expect(exitSpy).toHaveBeenCalledWith(1);
+        expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('invalid --model alias'));
     });
 });
 

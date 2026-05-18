@@ -50,11 +50,11 @@ interface RunArgs {
 
 /** Type predicate: narrows a string to SemanticModelAlias without casts. */
 function isSemanticModelAlias(s: string): s is SemanticModelAlias {
-    return s in SEMANTIC_MODELS;
+    return Object.hasOwn(SEMANTIC_MODELS, s);
 }
 
 /** Validate a --model alias against the SEMANTIC_MODELS registry. */
-function parseModelAlias(raw: string): SemanticModelAlias {
+export function parseModelAlias(raw: string): SemanticModelAlias {
     if (!isSemanticModelAlias(raw)) {
         const validAliases = Object.keys(SEMANTIC_MODELS).join(', ');
         process.stderr.write(
