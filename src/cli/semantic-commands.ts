@@ -19,15 +19,17 @@
 import { join, resolve } from 'node:path';
 import { Project, ts } from 'ts-morph';
 
-import { loadConfig } from '../core/config.js';
+import { applySemanticDefaults, loadConfig } from '../core/config.js';
 import { buildSemanticIndex } from '../semantic/builder.js';
-import { embed, embedOne } from '../semantic/embedder.js';
+import { makeEmbedder } from '../semantic/embedder.js';
 import { readFile as readFileGraph } from 'node:fs/promises';
 import type { ArchGraph, NodeKind } from '../core/types.js';
 import { NODE_KIND_VALUES } from '../core/types.js';
 import { semanticSearch } from '../semantic/search.js';
 import type { SearchResult } from '../semantic/search.js';
 import { validateSnippetRecall } from '../validation/snippet-recall-validator.js';
+import type { SemanticModelAlias } from '../semantic/types.js';
+import { SEMANTIC_MODELS } from '../semantic/types.js';
 
 // ---------------------------------------------------------------------------
 // Arg parsing
@@ -48,6 +50,11 @@ export interface SemanticArgs {
     kinds?: NodeKind[];
     /** search: node kinds blacklist (validated against NODE_KIND_VALUES) */
     excludeKinds?: NodeKind[];
+    /**
+     * build + search: override the embedding model alias. CLI wins over config.
+     * When undefined, the resolved config value (or default 'minilm') is used.
+     */
+    model?: SemanticModelAlias;
     /**
      * build: when true, exit 1 if recall is below floor for any kind, or if
      * the index is empty. Has no effect on corrupt indexes, which always exit 1
@@ -71,6 +78,7 @@ export function parseSemanticArgs(argv: string[]): SemanticArgs {
     let format: 'json' | 'table' = 'json';
     let kinds: NodeKind[] | undefined;
     let excludeKinds: NodeKind[] | undefined;
+    let model: SemanticModelAlias | undefined;
     /** Track which preset / explicit filter flag was used so we can reject mixes. */
     let kindFilterSource: '--kinds' | '--exclude-kinds' | '--code-only' | '--docs-only' | null = null;
 
@@ -152,6 +160,22 @@ export function parseSemanticArgs(argv: string[]): SemanticArgs {
         return value;
     }
 
+    /**
+     * Validate a --model alias value against the SEMANTIC_MODELS registry.
+     * Exits with 1 and writes to stderr on invalid alias.
+     */
+    function parseModelAlias(raw: string): SemanticModelAlias {
+        const validAliases = Object.keys(SEMANTIC_MODELS) as SemanticModelAlias[];
+        if (!validAliases.includes(raw as SemanticModelAlias)) {
+            process.stderr.write(
+                `arch-graph semantic: invalid --model alias '${raw}'. ` +
+                `Valid aliases: ${validAliases.join(', ')}.\n`,
+            );
+            process.exit(1);
+        }
+        return raw as SemanticModelAlias;
+    }
+
     // For 'search', the first non-flag argument after the subcommand is the query.
     // We collect it separately.
     const positionals: string[] = [];
@@ -196,6 +220,11 @@ export function parseSemanticArgs(argv: string[]): SemanticArgs {
         } else if (a === '--docs-only') {
             claimFilterSource('--docs-only');
             kinds = ['doc-section'];
+        } else if (a === '--model') {
+            const raw = requireValue('--model', rest[++i]);
+            model = parseModelAlias(raw);
+        } else if (a.startsWith('--model=')) {
+            model = parseModelAlias(a.slice('--model='.length));
         } else if (!a.startsWith('-')) {
             positionals.push(a);
         }
@@ -219,6 +248,7 @@ export function parseSemanticArgs(argv: string[]): SemanticArgs {
         format,
         kinds,
         excludeKinds,
+        model,
         strictRecall,
     };
 }
@@ -313,14 +343,23 @@ export async function buildSemanticIndexFromArgs(args: SemanticArgs): Promise<{ 
 
     process.stdout.write(`  source files: ${project.getSourceFiles().length}\n`);
 
+    // --- Resolve model alias (CLI flag wins over config) --------------------
+    const { model: configModelAlias } = applySemanticDefaults(cfg.semantic);
+    const modelAlias = args.model ?? configModelAlias;
+    const embedderObj = makeEmbedder(modelAlias);
+    // Passage mode for builder: nodes are documents, not queries.
+    const embedder: (texts: string[]) => Promise<number[][]> = (texts) =>
+        embedderObj.embed(texts, 'passage');
+
     // --- Run builder --------------------------------------------------------
     let result;
     try {
         result = await buildSemanticIndex({
             graph,
             project,
-            embedder: embed,
+            embedder,
             outDir,
+            modelAlias,
         });
     } catch (err) {
         throw new Error(
@@ -552,10 +591,34 @@ export async function runSemanticSearch(args: SemanticArgs): Promise<void> {
     const outDir = resolve(args.out);
     const isJson = args.format !== 'table';
 
+    // Resolve model alias: CLI flag wins over config, config wins over default.
+    let modelAlias: SemanticModelAlias = args.model ?? 'minilm';
+    if (!args.model) {
+        try {
+            const cfg = await loadConfig(resolve(args.config));
+            modelAlias = applySemanticDefaults(cfg.semantic).model;
+        } catch (err) {
+            // Silently default to 'minilm' ONLY when the config file is absent.
+            // Any other error (syntax, invalid alias) must surface so the user
+            // knows their config is broken, not the index.
+            const isConfigMissing =
+                err instanceof Error && err.message.startsWith('config not found:');
+            if (!isConfigMissing) throw err;
+            // Config absent → silent minilm default is acceptable.
+        }
+    }
+
+    // Build a single-text embedder bound to the resolved alias.
+    // Query mode: the user query string must use the query prefix for e5-base.
+    const embedderObj2 = makeEmbedder(modelAlias);
+    const embedOneFn = async (text: string): Promise<number[]> =>
+        embedderObj2.embedOne(text, 'query');
+
     const { output, exitCode, stderrWarning } = await semanticSearch({
         query: args.query,
         outDir,
-        embedder: embedOne,
+        embedder: embedOneFn,
+        modelAlias,
         topK: args.k,
         kinds: args.kinds,
         excludeKinds: args.excludeKinds,

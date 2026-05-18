@@ -14,6 +14,13 @@
 #
 # Environment overrides:
 #   SKIP_BUILD=1            Same as --skip-build (env var form).
+#   MODEL=minilm            Semantic embedder alias: minilm (default) | bge-m3 | e5-base | arctic-m.
+#                           Switches both `semantic build` and `semantic search`
+#                           CLI calls. With bge-m3 the index is rebuilt under
+#                           the 1024-dim model; you can keep both indexes
+#                           side-by-side via separate --out dirs (currently
+#                           CLI rebuilds in place — set SKIP_BUILD=0 the first
+#                           time per model).
 #   EVAL_K=10               Number of top results to inspect (default: 10).
 #   EVAL_MODE=per-category  Search routing strategy. One of:
 #     single        — single search call, no kind-bucket filter (legacy
@@ -64,7 +71,16 @@ case "$EVAL_MODE" in
   *) echo "ERROR: invalid EVAL_MODE='$EVAL_MODE'. Use single|per-category|fallback|both-buckets." >&2; exit 1 ;;
 esac
 DATE="$(date +%Y-%m-%d)"
-RESULTS_FILE="${RESULTS_FILE:-$SCRIPT_DIR/eval/results-${DATE}-${EVAL_MODE}.md}"
+MODEL="${MODEL:-minilm}"
+case "$MODEL" in
+  minilm|bge-m3|e5-base|arctic-m) ;;
+  *) echo "ERROR: invalid MODEL='$MODEL'. Use minilm|bge-m3|e5-base|arctic-m." >&2; exit 1 ;;
+esac
+_MODEL_SUFFIX=""
+if [[ "$MODEL" != "minilm" ]]; then
+  _MODEL_SUFFIX="-${MODEL}"
+fi
+RESULTS_FILE="${RESULTS_FILE:-$SCRIPT_DIR/eval/results-${DATE}-${EVAL_MODE}${_MODEL_SUFFIX}.md}"
 SKIP_BUILD="${SKIP_BUILD:-0}"
 
 # Project paths — replace these with your local checkout locations OR set them
@@ -74,21 +90,30 @@ PROJECT_A_DIR="${PROJECT_A_DIR:-/REPLACE-WITH/path/to/project-a}"
 PROJECT_B_DIR="${PROJECT_B_DIR:-/REPLACE-WITH/path/to/project-b}"
 PROJECT_C_DIR="${PROJECT_C_DIR:-/REPLACE-WITH/path/to/project-c}"
 
-# Fail loudly if the user forgot to override the placeholders — saves debugging
-# a confusing "directory not found" or empty-results scenario.
+# Validate each project path. Placeholder OR missing-dir = skip this project
+# (a warning is logged later in the run loop). Hard error only if BOTH the
+# CLI args AND no PROJECT_*_DIR overrides were supplied at all — i.e. user
+# ran the script with nothing useful. This relaxed gate enables per-project
+# parallel runs (one agent per project, only its own PROJECT_X_DIR set).
+_AT_LEAST_ONE_VALID=0
 for _p_var in PROJECT_A_DIR PROJECT_B_DIR PROJECT_C_DIR; do
   _p_val="${!_p_var}"
   if [[ "$_p_val" == /REPLACE-WITH/* ]]; then
-    echo "ERROR: $_p_var is still the placeholder ($_p_val). " >&2
-    echo "       Edit scripts/run-baseline-eval.sh OR set $_p_var=/your/local/path before running." >&2
-    exit 1
+    # Placeholder — silently mark as missing; the per-project loop logs once.
+    continue
   fi
   if [[ ! -d "$_p_val" ]]; then
     echo "ERROR: $_p_var points at $_p_val which doesn't exist." >&2
     exit 1
   fi
+  _AT_LEAST_ONE_VALID=1
 done
-unset _p_var _p_val
+if [[ "$_AT_LEAST_ONE_VALID" == "0" ]]; then
+  echo "ERROR: no valid PROJECT_*_DIR set. Provide at least one of:" >&2
+  echo "       PROJECT_A_DIR=/path  PROJECT_B_DIR=/path  PROJECT_C_DIR=/path" >&2
+  exit 1
+fi
+unset _p_var _p_val _AT_LEAST_ONE_VALID
 
 # ---------------------------------------------------------------------------
 # Argument parsing
@@ -137,8 +162,8 @@ build_project() {
     return 1
   fi
 
-  log "[$proj_name] Building semantic sidecar ..."
-  if ! (cd "$project_dir" && "$TSX_BIN" "$CLI" semantic build 2>&1); then
+  log "[$proj_name] Building semantic sidecar (model=$MODEL) ..."
+  if ! (cd "$project_dir" && "$TSX_BIN" "$CLI" semantic build --model "$MODEL" 2>&1); then
     warn "[$proj_name] semantic build failed"
     return 1
   fi
@@ -199,9 +224,9 @@ search_and_judge() {
   local cli_stderr cli_exit json_output verdict result_count
   cli_stderr=$(mktemp)
   if [[ -n "$filter_flag" ]]; then
-    json_output=$(cd "$project_dir" && "$TSX_BIN" "$CLI" semantic search "$query" --k "$K" "$filter_flag" --json 2>"$cli_stderr")
+    json_output=$(cd "$project_dir" && "$TSX_BIN" "$CLI" semantic search "$query" --model "$MODEL" --k "$K" "$filter_flag" --json 2>"$cli_stderr")
   else
-    json_output=$(cd "$project_dir" && "$TSX_BIN" "$CLI" semantic search "$query" --k "$K" --json 2>"$cli_stderr")
+    json_output=$(cd "$project_dir" && "$TSX_BIN" "$CLI" semantic search "$query" --model "$MODEL" --k "$K" --json 2>"$cli_stderr")
   fi
   cli_exit=$?
   # Surface stderr unless every line matches a known-harmless banner.
@@ -418,7 +443,7 @@ run_query() {
 # ---------------------------------------------------------------------------
 log "arch-graph baseline eval — $(date)"
 log "Worktree: $WORKTREE_DIR"
-log "k=$K  mode=$EVAL_MODE  skip_build=$SKIP_BUILD"
+log "k=$K  mode=$EVAL_MODE  model=$MODEL  skip_build=$SKIP_BUILD"
 log ""
 
 PROJECTS="project-a project-b project-c"
@@ -432,6 +457,17 @@ for proj in $PROJECTS; do
     project-b) proj_dir="$PROJECT_B_DIR" ;;
     project-c) proj_dir="$PROJECT_C_DIR" ;;
   esac
+
+  if [[ "$proj_dir" == /REPLACE-WITH/* ]]; then
+    _suffix=$(echo "${proj: -1}" | tr '[:lower:]' '[:upper:]')
+    log "[$proj] skipped (no PROJECT_${_suffix}_DIR override)"
+    case "$proj" in
+      project-a) PROJECT_A_FAILED=1 ;;
+      project-b) PROJECT_B_FAILED=1 ;;
+      project-c) PROJECT_C_FAILED=1 ;;
+    esac
+    continue
+  fi
 
   if ! build_project "$proj" "$proj_dir"; then
     case "$proj" in
@@ -542,6 +578,7 @@ GLOBAL_EXIT=0
   echo "**CLI**: \`$CLI\`  "
   echo "**k**: $K  "
   echo "**mode**: \`$EVAL_MODE\`  "
+  echo "**model**: \`$MODEL\`  "
   echo "**skip_build**: $SKIP_BUILD  "
   echo "**Run at**: $(date)"
   echo ""

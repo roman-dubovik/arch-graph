@@ -4,6 +4,8 @@ import { dirname, isAbsolute, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import type { WrapperApi } from './types.js';
+import type { SemanticModelAlias } from '../semantic/types.js';
+import { SEMANTIC_MODELS } from '../semantic/types.js';
 
 // ============================================================================
 // User-facing config schema (arch-graph.config.ts)
@@ -30,6 +32,8 @@ export interface ArchGraphConfig {
     docs?: DocsConfig;
     /** OpenAPI YAML enrichment settings. */
     openapi?: OpenApiConfig;
+    /** Semantic index settings. Defaults to MiniLM when omitted. */
+    semantic?: SemanticConfig;
     /**
      * Opt-out flags per domain. When a domain is `true` (default) the CLI gate
      * treats zero ground-truth as a hard failure (regex-typo, missing glob, etc.).
@@ -121,6 +125,38 @@ export interface OpenApiConfig {
      * See DEFAULT_OPENAPI_GLOBS in enrich-endpoints.ts for the exact defaults.
      */
     globs?: string[];
+}
+
+/**
+ * Semantic index settings in `arch-graph.config.ts`.
+ * All fields are optional — omitting the entire `semantic` block is valid
+ * and defaults to `{ model: 'minilm' }`.
+ */
+export interface SemanticConfig {
+    /**
+     * Short alias for the embedding model to use.
+     * Defaults to `'minilm'` when omitted.
+     */
+    model?: SemanticModelAlias;
+}
+
+/** All-defaults resolution of a (possibly missing) SemanticConfig field. */
+export interface ResolvedSemanticConfig {
+    model: SemanticModelAlias;
+}
+
+/** Valid model aliases, checked at config-load time. */
+const VALID_SEMANTIC_ALIASES = Object.keys(SEMANTIC_MODELS) as SemanticModelAlias[];
+
+export function applySemanticDefaults(s: SemanticConfig | undefined): ResolvedSemanticConfig {
+    const model: SemanticModelAlias = s?.model ?? 'minilm';
+    if (!VALID_SEMANTIC_ALIASES.includes(model)) {
+        throw new Error(
+            `config.semantic.model "${model}" is not a recognised alias. ` +
+            `Valid aliases: ${VALID_SEMANTIC_ALIASES.join(', ')}`,
+        );
+    }
+    return { model };
 }
 
 export const DOCS_DEFAULT_INCLUDE: readonly string[] = [
@@ -231,7 +267,8 @@ async function loadTs(absPath: string): Promise<unknown> {
     return mod;
 }
 
-function validateConfig(raw: unknown, source: string): ArchGraphConfig {
+/** @internal — exported for unit tests; do not use in production code outside config.ts. */
+export function validateConfig(raw: unknown, source: string): ArchGraphConfig {
     if (!raw || typeof raw !== 'object') {
         throw new Error(`config in ${source} must export an object`);
     }
@@ -245,6 +282,20 @@ function validateConfig(raw: unknown, source: string): ArchGraphConfig {
     if (!cfg.appsGlob || typeof cfg.appsGlob !== 'string') {
         throw new Error(`config.appsGlob (string) required in ${source}`);
     }
+    // Validate semantic.model if provided.
+    if (cfg.semantic !== undefined) {
+        if (typeof cfg.semantic !== 'object' || cfg.semantic === null) {
+            throw new Error(`config.semantic must be an object in ${source}`);
+        }
+        const alias = (cfg.semantic as Partial<SemanticConfig>).model;
+        if (alias !== undefined && !(VALID_SEMANTIC_ALIASES as string[]).includes(alias)) {
+            throw new Error(
+                `config.semantic.model "${alias}" is not a recognised alias in ${source}. ` +
+                `Valid aliases: ${VALID_SEMANTIC_ALIASES.join(', ')}`,
+            );
+        }
+    }
+
     return cfg as ArchGraphConfig;
 }
 

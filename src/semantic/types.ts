@@ -3,17 +3,90 @@ import type { NodeKind } from '../core/types.js';
 // ============================================================================
 // Semantic sidecar — type contracts
 //
-// Model contract (locked for cross-tool federation):
-//   Xenova/paraphrase-multilingual-MiniLM-L12-v2 — 384-dim, multilingual ONNX.
-//   The model name is recorded in `manifest.json` so any external consumer
-//   can verify vector compatibility before mixing results.
+// Model registry: models are keyed by a short alias.  Each entry records the
+// Hugging Face hub ID, output dimensionality, pooling strategy, and whether
+// vectors are L2-normalised before storage.
+//
+// Current supported aliases:
+//   minilm   — Xenova/paraphrase-multilingual-MiniLM-L12-v2, 384-dim, mean pooling
+//   bge-m3   — Xenova/bge-m3, 1024-dim, CLS pooling
+//   e5-base  — Xenova/multilingual-e5-base, 768-dim, mean pooling, REQUIRES PREFIX
+//   arctic-m — Snowflake/snowflake-arctic-embed-m-v2.0, 768-dim, CLS pooling,
+//              query-prefix only ('query: '); loads fp32 (no quantized variant
+//              with the standard model_quantized.onnx name in the upstream repo
+//              as of transformers.js@2.17 expectations)
+//
+// The model name and dim are recorded in `manifest.json` so any external
+// consumer can verify vector compatibility before mixing results.
 // ============================================================================
 
-/** The fixed embedding model used by the semantic layer. */
-export const SEMANTIC_MODEL = 'Xenova/paraphrase-multilingual-MiniLM-L12-v2' as const;
+/**
+ * Dual-prefix spec for models that require a passage/query prefix (e.g. E5 family).
+ * Both fields are the literal prefix string to prepend before the text.
+ */
+export interface EmbedPrefix {
+    /** Prefix for document/node embeddings (build time). */
+    passage: string;
+    /** Prefix for user query embeddings (search time). */
+    query: string;
+}
 
-/** Embedding dimensionality produced by SEMANTIC_MODEL. */
-export const SEMANTIC_DIM = 384 as const;
+/** Short alias for a supported embedding model. */
+export type SemanticModelAlias = 'minilm' | 'bge-m3' | 'e5-base' | 'arctic-m';
+
+/** Registry of all supported embedding models. */
+export const SEMANTIC_MODELS = {
+    minilm: {
+        hubId: 'Xenova/paraphrase-multilingual-MiniLM-L12-v2',
+        dim: 384,
+        pooling: 'mean' as const,
+        normalize: true,
+        prefix: undefined,
+        quantized: undefined,
+    },
+    'bge-m3': {
+        hubId: 'Xenova/bge-m3',
+        dim: 1024,
+        pooling: 'cls' as const,
+        normalize: true,
+        prefix: undefined,
+        quantized: undefined,
+    },
+    'e5-base': {
+        hubId: 'Xenova/multilingual-e5-base',
+        dim: 768,
+        pooling: 'mean' as const,
+        normalize: true,
+        prefix: { passage: 'passage: ', query: 'query: ' } satisfies EmbedPrefix,
+        quantized: undefined,
+    },
+    // Arctic v2.0 has only model.onnx (no model_quantized.onnx) in the upstream
+    // repo, so we force fp32 loading via { quantized: false }.  The 'gte' model
+    // type is unknown to @xenova/transformers@2.17 — falls back to the
+    // encoder-only base class.  Empirically loads and produces 768-dim output.
+    'arctic-m': {
+        hubId: 'Snowflake/snowflake-arctic-embed-m-v2.0',
+        dim: 768,
+        pooling: 'cls' as const,
+        normalize: true,
+        prefix: { passage: '', query: 'query: ' } satisfies EmbedPrefix,
+        quantized: false as const,
+    },
+} as const satisfies Record<SemanticModelAlias, { hubId: string; dim: number; pooling: string; normalize: boolean; prefix?: EmbedPrefix; quantized?: boolean }>;
+
+// ---------------------------------------------------------------------------
+// Backward-compat aliases — existing code referencing SEMANTIC_MODEL /
+// SEMANTIC_DIM continues to compile and behave identically.
+// ---------------------------------------------------------------------------
+
+/** Embedding mode: passage (build) or query (search). */
+export type EmbedMode = 'passage' | 'query';
+
+/** @deprecated Use `SEMANTIC_MODELS.minilm.hubId` or resolve from config. */
+export const SEMANTIC_MODEL = SEMANTIC_MODELS.minilm.hubId;
+
+/** @deprecated Use `SEMANTIC_MODELS.minilm.dim` or resolve from config. */
+export const SEMANTIC_DIM = SEMANTIC_MODELS.minilm.dim;
 
 /** Schema version for the manifest. Bump when the sidecar format changes. */
 export const SEMANTIC_SCHEMA_VERSION = 1 as const;
@@ -26,10 +99,10 @@ export const SEMANTIC_SCHEMA_VERSION = 1 as const;
 export interface SemanticManifest {
     /** Schema version — must equal {@link SEMANTIC_SCHEMA_VERSION}. */
     schemaVersion: typeof SEMANTIC_SCHEMA_VERSION;
-    /** Locked value: {@link SEMANTIC_MODEL}. Checked by consumers. */
-    model: typeof SEMANTIC_MODEL;
-    /** Locked value: {@link SEMANTIC_DIM}. */
-    dim: typeof SEMANTIC_DIM;
+    /** Hub ID of the model used to build this index. */
+    model: string;
+    /** Embedding dimensionality of the model used to build this index. */
+    dim: number;
     /** ISO 8601 timestamp of when `semantic build` ran. */
     builtAt: string;
     /** SHA-256 hex of `graph.json` at build time — used to detect staleness. */
@@ -54,7 +127,7 @@ export interface SemanticRecord {
      * cases `label + kind` alone forms the embedding input.
      */
     snippet: string;
-    /** Dense embedding vector of length 384 (float32 cast to JSON numbers). */
+    /** Dense embedding vector (float32 cast to JSON numbers). Length matches the model's dim. */
     vector: number[];
 }
 
@@ -86,8 +159,8 @@ export interface SkippedNode {
  * diagnostics.json shape without breaking existing consumers.
  */
 export interface SemanticDiagnostics {
-    model: typeof SEMANTIC_MODEL;
-    dim: typeof SEMANTIC_DIM;
+    model: string;
+    dim: number;
     schemaVersion: typeof SEMANTIC_SCHEMA_VERSION;
     counts: {
         indexed: number;

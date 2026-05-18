@@ -43,6 +43,7 @@ import { validateDbEntityFields } from '../validation/db-entity-fields-validator
 import { buildReport as buildNatsReport } from '../validation/validator.js';
 import { validateDocs } from '../validation/docs-validator.js';
 import { countTokens } from '../semantic/tokenizer.js';
+import { applySemanticDefaults } from '../core/config.js';
 import { detectCycles } from '../detectors/cycles.js';
 import { enrichEndpointsFromOpenApi } from '../extractors/openapi/enrich-endpoints.js';
 
@@ -446,6 +447,10 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
 
     // ─── docs pass ────────────────────────────────────────────────────────────
     const docsConfig = applyDocsDefaults(cfg.docs);
+    // Resolve the semantic model alias so docs chunking uses the matching tokenizer.
+    // countTokens defaults to 'minilm' but bge-m3 indexes should use the bge-m3 tokenizer.
+    const semanticAlias = applySemanticDefaults(cfg.semantic).model;
+    const countTokensForAlias = (text: string) => countTokens(text, semanticAlias);
     let docsDiagnostics: import('../core/types.js').DocsDiagnostics;
     try {
         const docs = await extractDocs({
@@ -455,7 +460,7 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
             respectGitignore: docsConfig.respectGitignore,
             chunkTokens: docsConfig.chunkTokens,
             maxFileBytes: docsConfig.maxFileBytes,
-            countTokens,
+            countTokens: countTokensForAlias,
         });
         const docNodes = mapDocsToGraph(docs.sites, cfg.root);
         graph.nodes.push(...docNodes);

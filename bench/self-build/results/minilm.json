@@ -1,0 +1,1082 @@
+[
+  {
+    "queryId": "SB1",
+    "nodeId": "doc-section:bench/self-build/arch-graph-results.md#sb1-where-is-the-semantic-builder--part-1",
+    "kind": "doc-section",
+    "label": "SB1 — where is the semantic builder",
+    "score": 0.6093933736273097,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/bench/self-build/arch-graph-results.md",
+    "snippet": "# arch-graph Results — Self-Build Bench > SB1 — where is the semantic builder\n\n\n**Category:** A_find  \n**Verdict:** HIT  \n**minScore:** 0.4  \n**expectedKindIn:** doc-section, config-field  \n**expectedLabelHas:** Semantic search, semantic, builder"
+  },
+  {
+    "queryId": "SB1",
+    "nodeId": "doc-section:README.md#__root__--part-3",
+    "kind": "doc-section",
+    "label": "README",
+    "score": 0.5088452331671447,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/README.md",
+    "snippet": "# README\n\n<p align=\"center\">\n  <em>Static architecture graph + local multilingual semantic search for NestJS monorepos.<br>\n  Deterministic. Benchmarked. Zero LLM tokens on build AND query.</em>\n</p>\n\n---"
+  },
+  {
+    "queryId": "SB1",
+    "nodeId": "doc-section:docs/plans/v_2026-05-16-semantic-sidecar-design.md#goal--part-1",
+    "kind": "doc-section",
+    "label": "Goal",
+    "score": 0.49933585628596977,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-16-semantic-sidecar-design.md",
+    "snippet": "# Design: Semantic sidecar for arch-graph (Variant 3) > Goal\n\n\nAdd an optional, self-contained semantic-search layer to arch-graph as a new subcommand `arch-graph semantic build|search` plus a new MCP tool `semantic_search`. The layer is built on top of the existing deterministic graph: each `GraphNode` gets a dense vector embedding produced from `label + kind + AST snippet`, persisted in a sidecar at `arch-graph-out/<repo>/semantic/`."
+  },
+  {
+    "queryId": "SB1",
+    "nodeId": "doc-section:README.md#semantic-search-optional--part-1",
+    "kind": "doc-section",
+    "label": "Semantic search (optional)",
+    "score": 0.47912090768818255,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/README.md",
+    "snippet": "# arch-graph > Semantic search (optional)\n\n\nThe above commands answer **deterministic structural questions** — \"who publishes on this subject?\" — using exact edge traversal. For fuzzy intent like \"find code about X\" or \"how does authentication work?\", arch-graph optionally adds **semantic dense-vector search** over node embeddings."
+  },
+  {
+    "queryId": "SB1",
+    "nodeId": "doc-section:README.md#semantic-search-optional--part-2",
+    "kind": "doc-section",
+    "label": "Semantic search (optional)",
+    "score": 0.4724621509911261,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/README.md",
+    "snippet": "# arch-graph > Semantic search (optional)\n\nThe semantic layer is independent and opt-in: arch-graph works identically well without it. If you enable it, the CLI and MCP server gain new tools:"
+  },
+  {
+    "queryId": "SB1",
+    "nodeId": "doc-section:ROADMAP.md#7-semantic-extension-of-compare-share--part-3",
+    "kind": "doc-section",
+    "label": "⚪ 7. Semantic extension of `compare --share`",
+    "score": 0.47094673055539904,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/ROADMAP.md",
+    "snippet": "# arch-graph roadmap > Strategic options — what's next > ⚪ 7. Semantic extension of `compare --share`\n\n**Mode B — multilingual delta** (extension of A): generate the same templates in two languages (EN + user-picked once via `arch-graph init`); emit two percentages. The gap exposes the multilingual embedder feature in one number. Translation tables (~20 templates per language) are deterministic, no LLM. +0.5 days."
+  },
+  {
+    "queryId": "SB1",
+    "nodeId": "doc-section:ROADMAP.md#where-we-are",
+    "kind": "doc-section",
+    "label": "Where we are",
+    "score": 0.4688506811970545,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/ROADMAP.md",
+    "snippet": "# arch-graph roadmap > Where we are\n\n\nA deterministic TypeScript architecture-graph builder for NestJS monorepos with an optional local multilingual semantic sidecar. Pipeline: ts-morph extractors → `graph.json` + (optional) `embeddings.jsonl` + `manifest.json`. **Zero LLM tokens at build and query.**\n"
+  },
+  {
+    "queryId": "SB1",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-13-semantic-build-mcp-filter-integration-tests--part-3",
+    "kind": "doc-section",
+    "label": "Task 13: Semantic build + MCP filter — integration tests",
+    "score": 0.4636739327718303,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 13: Semantic build + MCP filter — integration tests\n\nAdd to `src/semantic/builder.test.ts`:"
+  },
+  {
+    "queryId": "SB1",
+    "nodeId": "doc-section:bench/self-build/arch-graph-results.md#sb9-what-is-in-the-semantic-manifest-file--part-1",
+    "kind": "doc-section",
+    "label": "SB9 — what is in the semantic manifest file",
+    "score": 0.4618917491340574,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/bench/self-build/arch-graph-results.md",
+    "snippet": "# arch-graph Results — Self-Build Bench > SB9 — what is in the semantic manifest file\n\n\n**Category:** D_docs  \n**Verdict:** MISS  \n**minScore:** 0.35  \n**expectedKindIn:** doc-section  \n**expectedLabelHas:** manifest, Manifest"
+  },
+  {
+    "queryId": "SB1",
+    "nodeId": "doc-section:docs/plans/v_2026-05-16-semantic-sidecar-design.md#design-semantic-sidecar-for-arch-graph-variant-3",
+    "kind": "doc-section",
+    "label": "Design: Semantic sidecar for arch-graph (Variant 3)",
+    "score": 0.4618863149063745,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-16-semantic-sidecar-design.md",
+    "snippet": "# Design: Semantic sidecar for arch-graph (Variant 3)\n\nDate: 2026-05-16\nBranch: `feat/semantic`\nWorktree: `.worktrees/feat-semantic`\n"
+  },
+  {
+    "queryId": "SB2",
+    "nodeId": "doc-section:bench/self-build/arch-graph-results.md#sb2-where-is-the-doc-section-extractor-source-file--part-1",
+    "kind": "doc-section",
+    "label": "SB2 — where is the doc-section extractor source file",
+    "score": 0.6305508798188716,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/bench/self-build/arch-graph-results.md",
+    "snippet": "# arch-graph Results — Self-Build Bench > SB2 — where is the doc-section extractor source file\n\n\n**Category:** A_find  \n**Verdict:** HIT  \n**minScore:** 0.45  \n**expectedKindIn:** doc-section  \n**expectedLabelHas:** extract-docs, Extractor, doc-section"
+  },
+  {
+    "queryId": "SB2",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-12-interactive-init-docs-discovery-prompts--part-9",
+    "kind": "doc-section",
+    "label": "Task 12: Interactive init — docs discovery prompts",
+    "score": 0.5596022462188334,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 12: Interactive init — docs discovery prompts\n\n```ts\nimport { execFileSync } from 'node:child_process';\nimport { relative as relPath } from 'node:path';\nimport fastGlob from 'fast-glob';"
+  },
+  {
+    "queryId": "SB2",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-11-docs-validator-file-coverage-gate--part-10",
+    "kind": "doc-section",
+    "label": "Task 11: Docs validator — file-coverage gate",
+    "score": 0.5547607598644355,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 11: Docs validator — file-coverage gate\n\nimport type { DocsDiagnostics, DocsValidationReport, GraphNode } from '../core/types.js';\n\nconst REAL_SKIP_REASONS = new Set(['oversized', 'non-utf8', 'empty']);"
+  },
+  {
+    "queryId": "SB2",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-12-interactive-init-docs-discovery-prompts--part-22",
+    "kind": "doc-section",
+    "label": "Task 12: Interactive init — docs discovery prompts",
+    "score": 0.5449911738459245,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 12: Interactive init — docs discovery prompts\n\n```bash\nmkdir -p /tmp/init-smoke && cd /tmp/init-smoke && git init -q && echo \"# foo\" > README.md && echo \"# extra\" > NOTES.md\npnpm --dir <arch-graph-root> exec tsx <arch-graph-root>/src/cli/index.ts init\n```"
+  },
+  {
+    "queryId": "SB2",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-5-extractor-file-walker-reader-frontmatter-extractorsdocsextract-docsts--part-23",
+    "kind": "doc-section",
+    "label": "Task 5: Extractor — file walker + reader + frontmatter (`extractors/docs/extract-docs.ts`)",
+    "score": 0.5444894550951179,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 5: Extractor — file walker + reader + frontmatter (`extractors/docs/extract-docs.ts`)\n\nexport interface ExtractedDocSite extends DocSite {\n    filePath: string;\n    frontmatter?: Record<string, unknown>;\n}"
+  },
+  {
+    "queryId": "SB2",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-12-interactive-init-docs-discovery-prompts--part-10",
+    "kind": "doc-section",
+    "label": "Task 12: Interactive init — docs discovery prompts",
+    "score": 0.5365590299273937,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 12: Interactive init — docs discovery prompts\n\nconst DEFAULT_DOC_INCLUDE = [\n    'README.md',\n    'docs/**/*.md',\n    'apps/*/README.md',\n    'libs/*/README.md',\n    'packages/*/README.md',\n    'CHANGELOG.md',\n    'ROADMAP.md',\n];"
+  },
+  {
+    "queryId": "SB2",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-12-interactive-init-docs-discovery-prompts--part-12",
+    "kind": "doc-section",
+    "label": "Task 12: Interactive init — docs discovery prompts",
+    "score": 0.528431013738212,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 12: Interactive init — docs discovery prompts\n\n(c) Add the docs prompt block (somewhere between existing domain prompts and the final `runBuild?` question):"
+  },
+  {
+    "queryId": "SB2",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-12-interactive-init-docs-discovery-prompts--part-18",
+    "kind": "doc-section",
+    "label": "Task 12: Interactive init — docs discovery prompts",
+    "score": 0.5242931291672557,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 12: Interactive init — docs discovery prompts\n\n(e) Update `buildConfigTemplate`. Add a block builder:"
+  },
+  {
+    "queryId": "SB2",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-7-mapper-mapperdocs-to-graphts--part-13",
+    "kind": "doc-section",
+    "label": "Task 7: Mapper — `mapper/docs-to-graph.ts`",
+    "score": 0.523313831489208,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 7: Mapper — `mapper/docs-to-graph.ts`\n\nimport { basename, relative } from 'node:path';\n\nimport type { GraphNode } from '../core/types.js';\nimport type { ExtractedDocSite } from '../extractors/docs/extract-docs.js';\nimport { buildAnchor } from './anchor.js';"
+  },
+  {
+    "queryId": "SB2",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-12-interactive-init-docs-discovery-prompts--part-24",
+    "kind": "doc-section",
+    "label": "Task 12: Interactive init — docs discovery prompts",
+    "score": 0.511478999574318,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 12: Interactive init — docs discovery prompts\n\n```bash\ngit add src/cli/init.ts src/cli/init.docs.test.ts\ngit commit -m \"feat(arch-graph): init wizard — docs discovery prompts (gitignore-aware)\"\n```\n\n---"
+  },
+  {
+    "queryId": "SB3",
+    "nodeId": "doc-section:bench/self-build/arch-graph-results.md#sb3-where-is-the-openapi-enricher--part-1",
+    "kind": "doc-section",
+    "label": "SB3 — where is the OpenAPI enricher",
+    "score": 0.5876984177576564,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/bench/self-build/arch-graph-results.md",
+    "snippet": "# arch-graph Results — Self-Build Bench > SB3 — where is the OpenAPI enricher\n\n\n**Category:** A_find  \n**Verdict:** HIT  \n**minScore:** 0.35  \n**expectedKindIn:** doc-section, config-field  \n**expectedLabelHas:** openapi, OpenAPI, enrich"
+  },
+  {
+    "queryId": "SB3",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-openapi-enrich-design.md#architecture-overview",
+    "kind": "doc-section",
+    "label": "Architecture overview",
+    "score": 0.4074812636189243,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-openapi-enrich-design.md",
+    "snippet": "# Design: OpenAPI YAML Enrichment for Endpoint Nodes > Architecture overview\n\n\n```\nArchGraphConfig  (new field: openapiGlobs?)\n        │\n        ▼\nenrichEndpointsFromOpenApi(graphNodes, projectRoot, openapiGlobs)\n        │  uses fast-glob to find YAML files\n        │  uses js-yaml to parse each file\n        │  matches by operationId-first, fallback (method,path)\n        │  mutates endpoint GraphNode meta.openapiInfo in-place\n        │\n        ▼\nDiagnosticsReport.openapi (new optional field)\n        │\n        ▼\nbuildEmbedText() — appends openapiInfo fields for endpoint nodes\n```"
+  },
+  {
+    "queryId": "SB3",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-openapi-enrich-design.md#goal",
+    "kind": "doc-section",
+    "label": "Goal",
+    "score": 0.37732488220499166,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-openapi-enrich-design.md",
+    "snippet": "# Design: OpenAPI YAML Enrichment for Endpoint Nodes > Goal\n\nAdd a post-extraction enrichment pass that reads OpenAPI YAML files and injects\noperation descriptions (often in Russian for project-c) into matching endpoint nodes\nvia `meta.openapiInfo`, extending `buildEmbedText` so the richer text gets\nvectorized and improves A_find recall.\n"
+  },
+  {
+    "queryId": "SB3",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-openapi-enrich-design.md#design-openapi-yaml-enrichment-for-endpoint-nodes",
+    "kind": "doc-section",
+    "label": "Design: OpenAPI YAML Enrichment for Endpoint Nodes",
+    "score": 0.35674833766428726,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-openapi-enrich-design.md",
+    "snippet": "# Design: OpenAPI YAML Enrichment for Endpoint Nodes\n\nDate: 2026-05-17\n"
+  },
+  {
+    "queryId": "SB3",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-openapi-enrich-design.md#execution-order",
+    "kind": "doc-section",
+    "label": "Execution order",
+    "score": 0.35589171156358174,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-openapi-enrich-design.md",
+    "snippet": "# Design: OpenAPI YAML Enrichment for Endpoint Nodes > Execution order\n\nAll 4 tasks touch DIFFERENT files — safe to run as single agent sequentially.\nSingle implementer (Sonnet) in the existing worktree. No isolation needed (already isolated).\n"
+  },
+  {
+    "queryId": "SB3",
+    "nodeId": "doc-section:README.md#quick-start--part-1",
+    "kind": "doc-section",
+    "label": "Quick start",
+    "score": 0.3472557608646204,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/README.md",
+    "snippet": "# arch-graph > Quick start\n\n\n```sh\ncd path/to/your/nestjs-monorepo\narch-graph init\n```\n\n`arch-graph init` is an interactive wizard. It asks a series of questions with sensible defaults, writes `arch-graph.config.ts`, and optionally chains: Claude Code integration install, git hook install, and a first build — all in one command.\n\nSample session:"
+  },
+  {
+    "queryId": "SB3",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-12-interactive-init-docs-discovery-prompts--part-2",
+    "kind": "doc-section",
+    "label": "Task 12: Interactive init — docs discovery prompts",
+    "score": 0.3345116377119015,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 12: Interactive init — docs discovery prompts\n\nRead all of `src/cli/init.ts`. Identify:\n- The `WizardAnswers` interface.\n- The `runInit` (or similar) function with `createInterface`.\n- The non-TTY fallback (probably checks `input.isTTY`).\n- `buildConfigTemplate(answers)` and where blocks are interpolated."
+  },
+  {
+    "queryId": "SB3",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-openapi-enrich-design.md#key-findings-from-analysis",
+    "kind": "doc-section",
+    "label": "Key findings from analysis",
+    "score": 0.3266661381220165,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-openapi-enrich-design.md",
+    "snippet": "# Design: OpenAPI YAML Enrichment for Endpoint Nodes > Key findings from analysis\n\n"
+  },
+  {
+    "queryId": "SB3",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-openapi-enrich-design.md#constraints",
+    "kind": "doc-section",
+    "label": "Constraints",
+    "score": 0.311259684096842,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-openapi-enrich-design.md",
+    "snippet": "# Design: OpenAPI YAML Enrichment for Endpoint Nodes > Constraints\n\n- Do NOT add a new `NodeKind`\n- Do NOT modify endpoint extractor logic\n- Do NOT touch doc-section pipeline\n- `js-yaml` and `fast-glob` already in deps — no new deps needed\n- Conventional Commits, scope = `openapi` or `arch-graph`\n- Selective `git add <paths>` — NEVER `git add -A`\n- All git ops via `git -C <arch-graph-root>/.worktrees/feat-openapi-enrich`"
+  },
+  {
+    "queryId": "SB3",
+    "nodeId": "doc-section:README.md#quick-start--part-2",
+    "kind": "doc-section",
+    "label": "Quick start",
+    "score": 0.3069449107448967,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/README.md",
+    "snippet": "# arch-graph > Quick start\n\n```\narch-graph init — interactive setup wizard\n\n? Project id (used as service:<id> prefix) [my-project]: my-project\n? Repo root [.]:\n? Apps glob (where services live) [apps/*]:\n? Libs glob [libs/**]:"
+  },
+  {
+    "queryId": "SB4",
+    "nodeId": "doc-section:bench/self-build/arch-graph-results.md#sb4-why-might-semantic-search-return-zero-results--part-1",
+    "kind": "doc-section",
+    "label": "SB4 — why might semantic search return zero results",
+    "score": 0.8041113335040402,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/bench/self-build/arch-graph-results.md",
+    "snippet": "# arch-graph Results — Self-Build Bench > SB4 — why might semantic search return zero results\n\n\n**Category:** B_debug  \n**Verdict:** HIT  \n**minScore:** 0.35  \n**expectedKindIn:** doc-section  \n**expectedLabelHas:** semantic, Semantic, search"
+  },
+  {
+    "queryId": "SB4",
+    "nodeId": "doc-section:README.md#semantic-search-optional--part-6",
+    "kind": "doc-section",
+    "label": "Semantic search (optional)",
+    "score": 0.5750018888931189,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/README.md",
+    "snippet": "# arch-graph > Semantic search (optional)\n\n  **Override per-project**: write in the project's `CLAUDE.md`:\n\n  ```markdown\n  ## arch-graph search strategy\n\n  Use the **fallback** strategy: call `code_search` first. Only call `docs_search` if the code results don't answer the question. Halves retrieval cost; same hit-rate; agent gets less context.\n  ```"
+  },
+  {
+    "queryId": "SB4",
+    "nodeId": "doc-section:README.md#semantic-search-optional--part-4",
+    "kind": "doc-section",
+    "label": "Semantic search (optional)",
+    "score": 0.5704016349352434,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/README.md",
+    "snippet": "# arch-graph > Semantic search (optional)\n\n  Splitting into two buckets removes the dilution effect: when docs are in the same index as code, doc-section nodes can crowd out the relevant code nodes for \"find X\" queries (measured: A_find recall dropped 80% → 30% on project-a; restored to 70% with `code_search`)."
+  },
+  {
+    "queryId": "SB4",
+    "nodeId": "doc-section:bench/REVALIDATION-2026-05-18.md#4-conclusion--part-1",
+    "kind": "doc-section",
+    "label": "4. Conclusion",
+    "score": 0.5643261864824138,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/bench/REVALIDATION-2026-05-18.md",
+    "snippet": "# Validation Report: 103-Query Head-to-Head Bench Re-run > 4. Conclusion\n\n\n**arch-graph numbers reproduce exactly (0 pp delta) on both RU and EN runs.** The semantic search index is deterministic given `--skip-build`."
+  },
+  {
+    "queryId": "SB4",
+    "nodeId": "doc-section:bench/self-build/README.md#top-3-results-per-query--part-8",
+    "kind": "doc-section",
+    "label": "Top-3 Results per Query",
+    "score": 0.5627839420782851,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/bench/self-build/README.md",
+    "snippet": "# Public Self-Build Mini-Bench: arch-graph vs graphify > Results > Top-3 Results per Query\n\ngraphify (MISS):\n1. `types.ts` (src/core/types.ts)\n2. `build.ts` (src/pipeline/build.ts)\n3. `config.ts` (src/core/config.ts)\n\n---\n\n**SB4 — why might semantic search return zero results**"
+  },
+  {
+    "queryId": "SB4",
+    "nodeId": "doc-section:README.md#semantic-search-optional--part-5",
+    "kind": "doc-section",
+    "label": "Semantic search (optional)",
+    "score": 0.5532784295830442,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/README.md",
+    "snippet": "# arch-graph > Semantic search (optional)\n\n  **Recommended agent pattern (default): `both-buckets`** — call `code_search` and `docs_search` in parallel for every retrieval. The LLM gets two labeled top-K lists and picks what's useful. Doubles retrieval cost (~$0.005/query on Sonnet, ~$0.025/query on Opus) but eliminates intent-routing risk."
+  },
+  {
+    "queryId": "SB4",
+    "nodeId": "doc-section:README.md#semantic-search-strategy--part-1",
+    "kind": "doc-section",
+    "label": "Semantic search strategy",
+    "score": 0.5088858830801555,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/README.md",
+    "snippet": "# arch-graph > CLAUDE.md integration > Semantic search strategy\n\n\nDuring `arch-graph init`, the wizard asks you to choose an agent-side semantic search strategy:"
+  },
+  {
+    "queryId": "SB4",
+    "nodeId": "doc-section:README.md#__root__--part-3",
+    "kind": "doc-section",
+    "label": "README",
+    "score": 0.5013506622041844,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/README.md",
+    "snippet": "# README\n\n<p align=\"center\">\n  <em>Static architecture graph + local multilingual semantic search for NestJS monorepos.<br>\n  Deterministic. Benchmarked. Zero LLM tokens on build AND query.</em>\n</p>\n\n---"
+  },
+  {
+    "queryId": "SB4",
+    "nodeId": "doc-section:README.md#semantic-search-optional--part-2",
+    "kind": "doc-section",
+    "label": "Semantic search (optional)",
+    "score": 0.49915786963255465,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/README.md",
+    "snippet": "# arch-graph > Semantic search (optional)\n\nThe semantic layer is independent and opt-in: arch-graph works identically well without it. If you enable it, the CLI and MCP server gain new tools:"
+  },
+  {
+    "queryId": "SB4",
+    "nodeId": "doc-section:bench/self-build/README.md#top-3-results-per-query--part-15",
+    "kind": "doc-section",
+    "label": "Top-3 Results per Query",
+    "score": 0.4889464950422558,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/bench/self-build/README.md",
+    "snippet": "# Public Self-Build Mini-Bench: arch-graph vs graphify > Results > Top-3 Results per Query\n\nNote: The \"Semantic search\" section discusses score semantics including floor behavior. Graphify returned no relevant code for \"score floor.\"\n\ngraphify (MISS):\n1. `types.ts` (src/core/types.ts)\n2. `build.ts` (src/pipeline/build.ts)\n3. `config.ts` (src/core/config.ts)\n\n---"
+  },
+  {
+    "queryId": "SB5",
+    "nodeId": "doc-section:bench/self-build/arch-graph-results.md#sb5-what-handles-empty-markdown-files-during-doc-extraction--part-1",
+    "kind": "doc-section",
+    "label": "SB5 — what handles empty markdown files during doc extraction",
+    "score": 0.7143877946754978,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/bench/self-build/arch-graph-results.md",
+    "snippet": "# arch-graph Results — Self-Build Bench > SB5 — what handles empty markdown files during doc extraction\n\n\n**Category:** B_debug  \n**Verdict:** HIT  \n**minScore:** 0.35  \n**expectedKindIn:** doc-section  \n**expectedLabelHas:** empty, markdown, Extractor, docs"
+  },
+  {
+    "queryId": "SB5",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-design.md#1-file-coverage-gate-hard--part-1",
+    "kind": "doc-section",
+    "label": "1. File-coverage gate (hard)",
+    "score": 0.5588764150787222,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-design.md",
+    "snippet": "# Design: doc-section — Markdown sections as a new graph kind > Validator (`validation/docs-validator.ts`) > 1. File-coverage gate (hard)\n\n\n```ts\nprocessedFiles  = files that produced ≥1 doc-section node\nskippedFiles    = files in diagnostics.docs.filesSkipped (reason in\n                  { 'oversized', 'non-utf8', 'empty' })\nresolvedFiles   = files returned by resolveDocFiles() — already after\n                  user-exclude filter; this is what we asked for, not what\n                  the file system happens to contain"
+  },
+  {
+    "queryId": "SB5",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-4-markdown-splitter-extractorsdocsmarkdown-splitts--part-35",
+    "kind": "doc-section",
+    "label": "Task 4: Markdown splitter (`extractors/docs/markdown-split.ts`)",
+    "score": 0.5504419439166703,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 4: Markdown splitter (`extractors/docs/markdown-split.ts`)\n\n        const chunks = await packIntoChunks(section.bodyLines, section.startLine, chunkTokens, countTokens);"
+  },
+  {
+    "queryId": "SB5",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-4-markdown-splitter-extractorsdocsmarkdown-splitts--part-29",
+    "kind": "doc-section",
+    "label": "Task 4: Markdown splitter (`extractors/docs/markdown-split.ts`)",
+    "score": 0.5491953862249184,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 4: Markdown splitter (`extractors/docs/markdown-split.ts`)\n\n    if (paragraphs.length === 0) {\n        return [{\n            lines: bodyLines,\n            startLine: bodyStartLine,\n            endLine: bodyStartLine + bodyLines.length - 1,\n            tokens: 0,\n        }];\n    }"
+  },
+  {
+    "queryId": "SB5",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-5-extractor-file-walker-reader-frontmatter-extractorsdocsextract-docsts--part-40",
+    "kind": "doc-section",
+    "label": "Task 5: Extractor — file walker + reader + frontmatter (`extractors/docs/extract-docs.ts`)",
+    "score": 0.548572960186657,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 5: Extractor — file walker + reader + frontmatter (`extractors/docs/extract-docs.ts`)\n\n        const docs = await splitMarkdown(parsed.body, { chunkTokens, countTokens });\n        const offset = parsed.bodyStartLine - 1;"
+  },
+  {
+    "queryId": "SB5",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-4-markdown-splitter-extractorsdocsmarkdown-splitts--part-9",
+    "kind": "doc-section",
+    "label": "Task 4: Markdown splitter (`extractors/docs/markdown-split.ts`)",
+    "score": 0.5464553324904491,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 4: Markdown splitter (`extractors/docs/markdown-split.ts`)\n\n        const out = await splitMarkdown(md, { chunkTokens: 100, countTokens: stubCount });\n        expect(out).toHaveLength(1);\n        expect(out[0].headingChain).toEqual(['Real heading']);\n    });"
+  },
+  {
+    "queryId": "SB5",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-5-extractor-file-walker-reader-frontmatter-extractorsdocsextract-docsts--part-16",
+    "kind": "doc-section",
+    "label": "Task 5: Extractor — file walker + reader + frontmatter (`extractors/docs/extract-docs.ts`)",
+    "score": 0.5393757261731505,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 5: Extractor — file walker + reader + frontmatter (`extractors/docs/extract-docs.ts`)\n\n        const skipped = result.diagnostics.filesSkipped.find(s => s.path.endsWith('EMPTY.md'));\n        expect(skipped).toBeDefined();\n        expect(skipped?.reason).toBe('empty');\n    });"
+  },
+  {
+    "queryId": "SB5",
+    "nodeId": "doc-section:ROADMAP.md#v2-doc-mentions-edges-wont-ship",
+    "kind": "doc-section",
+    "label": "`v2 doc-mentions` edges — won't ship",
+    "score": 0.5390122710464933,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/ROADMAP.md",
+    "snippet": "# arch-graph roadmap > Deferred / explicit non-goals > `v2 doc-mentions` edges — won't ship\n\n\nAfter `doc-section` reached D_docs = 100%, single-shot retrieval over doc nodes is sufficient. Edges would add explainability, not recall.\n"
+  },
+  {
+    "queryId": "SB5",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-design.md#1-file-coverage-gate-hard--part-4",
+    "kind": "doc-section",
+    "label": "1. File-coverage gate (hard)",
+    "score": 0.5382283899248274,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-design.md",
+    "snippet": "# Design: doc-section — Markdown sections as a new graph kind > Validator (`validation/docs-validator.ts`) > 1. File-coverage gate (hard)\n\n**Excluded-by-config** does NOT count against recall — a file the user\nexplicitly deselected via interactive init or via `docs.exclude` is not a\nmiss."
+  },
+  {
+    "queryId": "SB5",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-5-extractor-file-walker-reader-frontmatter-extractorsdocsextract-docsts--part-17",
+    "kind": "doc-section",
+    "label": "Task 5: Extractor — file walker + reader + frontmatter (`extractors/docs/extract-docs.ts`)",
+    "score": 0.5365030211968072,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 5: Extractor — file walker + reader + frontmatter (`extractors/docs/extract-docs.ts`)\n\n    it('reports oversized file in filesSkipped', async () => {\n        const result = await extractDocs({\n            projectRoot: FIXTURES,\n            include: ['README.md'],\n            exclude: [],\n            respectGitignore: false,\n            chunkTokens: 100,\n            maxFileBytes: 1,\n            countTokens: stubCountTokens,\n        });"
+  },
+  {
+    "queryId": "SB6",
+    "nodeId": "doc-section:bench/self-build/arch-graph-results.md#sb6-where-is-the-score-floor-applied-in-semantic-search--part-1",
+    "kind": "doc-section",
+    "label": "SB6 — where is the score floor applied in semantic search",
+    "score": 0.7349435022355592,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/bench/self-build/arch-graph-results.md",
+    "snippet": "# arch-graph Results — Self-Build Bench > SB6 — where is the score floor applied in semantic search\n\n\n**Category:** B_debug  \n**Verdict:** HIT  \n**minScore:** 0.35  \n**expectedKindIn:** doc-section  \n**expectedLabelHas:** strict, floor, Semantic, recall"
+  },
+  {
+    "queryId": "SB6",
+    "nodeId": "doc-section:bench/self-build/README.md#top-3-results-per-query--part-13",
+    "kind": "doc-section",
+    "label": "Top-3 Results per Query",
+    "score": 0.6326247598001699,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/bench/self-build/README.md",
+    "snippet": "# Public Self-Build Mini-Bench: arch-graph vs graphify > Results > Top-3 Results per Query\n\n**SB6 — where is the score floor applied in semantic search**"
+  },
+  {
+    "queryId": "SB6",
+    "nodeId": "doc-section:bench/self-build/arch-graph-results.md#sb4-why-might-semantic-search-return-zero-results--part-1",
+    "kind": "doc-section",
+    "label": "SB4 — why might semantic search return zero results",
+    "score": 0.5940080791009202,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/bench/self-build/arch-graph-results.md",
+    "snippet": "# arch-graph Results — Self-Build Bench > SB4 — why might semantic search return zero results\n\n\n**Category:** B_debug  \n**Verdict:** HIT  \n**minScore:** 0.35  \n**expectedKindIn:** doc-section  \n**expectedLabelHas:** semantic, Semantic, search"
+  },
+  {
+    "queryId": "SB6",
+    "nodeId": "doc-section:README.md#semantic-search-optional--part-4",
+    "kind": "doc-section",
+    "label": "Semantic search (optional)",
+    "score": 0.5897681928882347,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/README.md",
+    "snippet": "# arch-graph > Semantic search (optional)\n\n  Splitting into two buckets removes the dilution effect: when docs are in the same index as code, doc-section nodes can crowd out the relevant code nodes for \"find X\" queries (measured: A_find recall dropped 80% → 30% on project-a; restored to 70% with `code_search`)."
+  },
+  {
+    "queryId": "SB6",
+    "nodeId": "doc-section:bench/REVALIDATION-2026-05-18.md#4-conclusion--part-1",
+    "kind": "doc-section",
+    "label": "4. Conclusion",
+    "score": 0.580136071220224,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/bench/REVALIDATION-2026-05-18.md",
+    "snippet": "# Validation Report: 103-Query Head-to-Head Bench Re-run > 4. Conclusion\n\n\n**arch-graph numbers reproduce exactly (0 pp delta) on both RU and EN runs.** The semantic search index is deterministic given `--skip-build`."
+  },
+  {
+    "queryId": "SB6",
+    "nodeId": "doc-section:bench/self-build/README.md#top-3-results-per-query--part-15",
+    "kind": "doc-section",
+    "label": "Top-3 Results per Query",
+    "score": 0.5759444106188185,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/bench/self-build/README.md",
+    "snippet": "# Public Self-Build Mini-Bench: arch-graph vs graphify > Results > Top-3 Results per Query\n\nNote: The \"Semantic search\" section discusses score semantics including floor behavior. Graphify returned no relevant code for \"score floor.\"\n\ngraphify (MISS):\n1. `types.ts` (src/core/types.ts)\n2. `build.ts` (src/pipeline/build.ts)\n3. `config.ts` (src/core/config.ts)\n\n---"
+  },
+  {
+    "queryId": "SB6",
+    "nodeId": "doc-section:README.md#semantic-search-optional--part-5",
+    "kind": "doc-section",
+    "label": "Semantic search (optional)",
+    "score": 0.5613640987086221,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/README.md",
+    "snippet": "# arch-graph > Semantic search (optional)\n\n  **Recommended agent pattern (default): `both-buckets`** — call `code_search` and `docs_search` in parallel for every retrieval. The LLM gets two labeled top-K lists and picks what's useful. Doubles retrieval cost (~$0.005/query on Sonnet, ~$0.025/query on Opus) but eliminates intent-routing risk."
+  },
+  {
+    "queryId": "SB6",
+    "nodeId": "doc-section:README.md#semantic-search-strategy--part-1",
+    "kind": "doc-section",
+    "label": "Semantic search strategy",
+    "score": 0.5579968108304297,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/README.md",
+    "snippet": "# arch-graph > CLAUDE.md integration > Semantic search strategy\n\n\nDuring `arch-graph init`, the wizard asks you to choose an agent-side semantic search strategy:"
+  },
+  {
+    "queryId": "SB6",
+    "nodeId": "doc-section:README.md#semantic-search-optional--part-6",
+    "kind": "doc-section",
+    "label": "Semantic search (optional)",
+    "score": 0.5560369873088223,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/README.md",
+    "snippet": "# arch-graph > Semantic search (optional)\n\n  **Override per-project**: write in the project's `CLAUDE.md`:\n\n  ```markdown\n  ## arch-graph search strategy\n\n  Use the **fallback** strategy: call `code_search` first. Only call `docs_search` if the code results don't answer the question. Halves retrieval cost; same hit-rate; agent gets less context.\n  ```"
+  },
+  {
+    "queryId": "SB6",
+    "nodeId": "doc-section:bench/self-build/README.md#top-3-results-per-query--part-1",
+    "kind": "doc-section",
+    "label": "Top-3 Results per Query",
+    "score": 0.542550477458432,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/bench/self-build/README.md",
+    "snippet": "# Public Self-Build Mini-Bench: arch-graph vs graphify > Results > Top-3 Results per Query\n\n\n**SB1 — where is the semantic builder**"
+  },
+  {
+    "queryId": "SB7",
+    "nodeId": "doc-section:bench/self-build/arch-graph-results.md#sb7-what-does-strict-mode-do--part-1",
+    "kind": "doc-section",
+    "label": "SB7 — what does --strict mode do",
+    "score": 0.4317347733768151,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/bench/self-build/arch-graph-results.md",
+    "snippet": "# arch-graph Results — Self-Build Bench > SB7 — what does --strict mode do\n\n\n**Category:** D_docs  \n**Verdict:** MISS  \n**minScore:** 0.4  \n**expectedKindIn:** doc-section  \n**expectedLabelHas:** strict, Strict"
+  },
+  {
+    "queryId": "SB7",
+    "nodeId": "doc-section:ROADMAP.md#hybrid-mode-consume-nestjsdevtools-integration-snapshot",
+    "kind": "doc-section",
+    "label": "Hybrid mode: consume `@nestjs/devtools-integration` snapshot",
+    "score": 0.31690684311852796,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/ROADMAP.md",
+    "snippet": "# arch-graph roadmap > Deferred / explicit non-goals > Hybrid mode: consume `@nestjs/devtools-integration` snapshot\n\n\nOptional `--devtools-snapshot <graph.json>` to merge runtime DI authority with static cross-cutting edges. Still on the table — revisit if a real failure mode appears (currently static decorator parse covers ≥ 95% of structural questions on the reference set).\n"
+  },
+  {
+    "queryId": "SB7",
+    "nodeId": "doc-section:docs/plans/v_2026-05-16-fe-l1-and-var2-design.md#real-corpus-signal-from-phase-1-research--part-3",
+    "kind": "doc-section",
+    "label": "Real-corpus signal (from Phase 1 research)",
+    "score": 0.3129950432438994,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-16-fe-l1-and-var2-design.md",
+    "snippet": "# Design: FE Level 1 + Variant 2 extractors > Real-corpus signal (from Phase 1 research)\n\nThis is a deliberate scope reduction vs. naïve \"Var 2 full\" — we add the kind to the enum for future-proofing but emit zero scoped-marker nodes in v1. Documented as `tests: N/A` for the stub."
+  },
+  {
+    "queryId": "SB7",
+    "nodeId": "doc-section:src/__fixtures__/README.md#conventions",
+    "kind": "doc-section",
+    "label": "Conventions",
+    "score": 0.3103367459840738,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/src/__fixtures__/README.md",
+    "snippet": "# Test fixtures — pattern > Conventions\n\n\n- Test files live next to the code they exercise: `src/extractors/foo/extractor.ts`\n  → `src/extractors/foo/extractor.test.ts`.\n- File paths inside `useInMemoryFileSystem` should look like absolute\n  POSIX paths (`/src/app.ts`) — the extractors expect absolute paths.\n- For owner resolution (`apps/` vs `libs/`) use `/apps/<svc>/...` and\n  `/libs/<lib>/...` to match the same heuristic used in real projects.\n- Coverage threshold is **95% lines / 95% statements / 95% functions /\n  90% branches** per file (see `vitest.config.ts`). Each new extractor\n  adds its source files to `coverage.thresholds.include`."
+  },
+  {
+    "queryId": "SB7",
+    "nodeId": "doc-section:skill/SKILL.md#limitations-honest",
+    "kind": "doc-section",
+    "label": "Limitations (honest)",
+    "score": 0.3092576888523912,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/skill/SKILL.md",
+    "snippet": "# /arch-graph > Limitations (honest)\n\n\n- **No runtime tracing.** A subject published only in production code paths that never hit a static call-site won't appear.\n- **Dynamic subjects** (`subject.${id}`) become `unresolved` entries in `diagnostics.json`, not edges.\n- **Decorator-only sources.** Wrapper publish / subscribe APIs need to be declared in `arch-graph.config.ts` (`nats.wrapperPublishApis`, `wrapperSubscribeApis`).\n- **TS-import resolution** uses `tsconfig.base.json` paths — exotic alias setups may produce `externalOrUnresolved` entries.\n- **Recall gates** (`validation.json`) are the floor: 95% for NATS / TypeORM / BullMQ / DI / HTTP, 80% for TS imports. `arch-graph build --strict` hard-fails (exit 3) when any enabled domain drops below floor; without `--strict`, the build is advi"
+  },
+  {
+    "queryId": "SB7",
+    "nodeId": "doc-section:docs/plans/2026-05-16-coverage-baseline.md#extension-a-fe-level-1-react-next-pagescomponentsroutes--part-1",
+    "kind": "doc-section",
+    "label": "Extension A — FE Level 1 (React + Next pages/components/routes)",
+    "score": 0.30699651909137954,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/2026-05-16-coverage-baseline.md",
+    "snippet": "# Coverage Baseline & Expectations > Expected uplift per extension > Extension A — FE Level 1 (React + Next pages/components/routes)\n\n\n**Adds nodes**:\n- `fe-page` — files in `pages/`, `app/`, `routes/` (Next-style or React Router)\n- `fe-component` — `.tsx`/`.jsx` exporting a function/class returning JSX\n- `fe-route` — Next router patterns (`pages/users/[id].tsx`, `app/users/[id]/page.tsx`)\n- `fe-hook` — custom hooks (`useX`)"
+  },
+  {
+    "queryId": "SB7",
+    "nodeId": "doc-section:docs/plans/v_2026-05-16-fe-l1-and-var2-design.md#external-constraints",
+    "kind": "doc-section",
+    "label": "External constraints",
+    "score": 0.29867933396798146,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-16-fe-l1-and-var2-design.md",
+    "snippet": "# Design: FE Level 1 + Variant 2 extractors > External constraints\n\n\n- **NodeKind enum** is consumed by MCP server's Zod schema (`NODE_KIND_VALUES` enum) — additions automatically propagate, but contract is locked, **no kind renames allowed**.\n- **`semantic build` reuse**: the existing semantic sidecar code is kind-agnostic — new nodes automatically get embeddings without semantic code changes. Snippet extractor (`src/semantic/snippet.ts`) handles `VariableDeclaration`/`FunctionDeclaration`/`ClassDeclaration` — sufficient for new node kinds.\n- **Recall floors**:\n  - FE extractor: ≥ 90% on canonical patterns (looser than NestJS-canonical 95% because React variant is wider).\n  - Endpoint extractor: ≥ 95% (canonical NestJS).\n  - db-entity-field: ≥ 95%.\n  - Config-field: ≥ 90% (callsite detect"
+  },
+  {
+    "queryId": "SB7",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-closing-tails-design.md#external-constraints",
+    "kind": "doc-section",
+    "label": "External constraints",
+    "score": 0.29839375739325324,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-closing-tails-design.md",
+    "snippet": "# Design: closing-tails — module recall + virtual-kind exclusion > External constraints\n\n\n- **No retrieval change.** Search results, scoring, embeddings unchanged.\n- **Backward-compat diagnostics**: existing `--strict-recall` flag still\n  exits 1 when any kind with a non-zero \"expected-snippet\" denominator falls\n  below floor. The denominator is now smaller (more honest), but the rule\n  is the same.\n- **Test coverage**: every branch of `isExpectedToHaveSnippet` covered by\n  unit test. Including the regression vector: a future PR removes a path\n  emit from internal modules → recall correctly drops <85% → exit code 1.\n- **Commit policy**: Conventional Commits, no Co-Authored-By, scope = arch-graph.\n- **Branch hygiene**: work in `.claude/worktrees/<auto-name>` (harness-created).\n  Never `git "
+  },
+  {
+    "queryId": "SB7",
+    "nodeId": "doc-section:src/__fixtures__/README.md#why-in-memory",
+    "kind": "doc-section",
+    "label": "Why in-memory",
+    "score": 0.2948842862726361,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/src/__fixtures__/README.md",
+    "snippet": "# Test fixtures — pattern > Why in-memory\n\n\n- **Hermetic**: tests don't need configs/*.local.ts. They run on CI without secrets.\n- **Fast**: vitest + ts-morph in-memory parses a 20-line synthetic file in <1 ms.\n- **Targeted**: each test asserts one shape (one decorator, one cycle, one alias).\n"
+  },
+  {
+    "queryId": "SB7",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-openapi-enrich-design.md#cwd-discipline-mandatory-for-all-agents",
+    "kind": "doc-section",
+    "label": "CWD discipline (mandatory for all agents)",
+    "score": 0.29197534088277544,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-openapi-enrich-design.md",
+    "snippet": "# Design: OpenAPI YAML Enrichment for Endpoint Nodes > CWD discipline (mandatory for all agents)\n\n- Worktree: `<arch-graph-root>/.worktrees/feat-openapi-enrich`\n- Branch: `feat/openapi-enrich`\n- All git ops: `git -C <arch-graph-root>/.worktrees/feat-openapi-enrich <cmd>`\n- DO NOT `git switch` / `git checkout <other-branch>`\n- Commit ONLY to current branch `feat/openapi-enrich`"
+  },
+  {
+    "queryId": "SB8",
+    "nodeId": "doc-section:bench/self-build/arch-graph-results.md#sb8-how-does-codesearch-differ-from-docssearch--part-1",
+    "kind": "doc-section",
+    "label": "SB8 — how does code_search differ from docs_search",
+    "score": 0.7620747064427297,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/bench/self-build/arch-graph-results.md",
+    "snippet": "# arch-graph Results — Self-Build Bench > SB8 — how does code_search differ from docs_search\n\n\n**Category:** D_docs  \n**Verdict:** HIT  \n**minScore:** 0.35  \n**expectedKindIn:** doc-section  \n**expectedLabelHas:** Semantic search, semantic, search, MCP"
+  },
+  {
+    "queryId": "SB8",
+    "nodeId": "doc-section:README.md#semantic-search-optional--part-4",
+    "kind": "doc-section",
+    "label": "Semantic search (optional)",
+    "score": 0.6381623248313553,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/README.md",
+    "snippet": "# arch-graph > Semantic search (optional)\n\n  Splitting into two buckets removes the dilution effect: when docs are in the same index as code, doc-section nodes can crowd out the relevant code nodes for \"find X\" queries (measured: A_find recall dropped 80% → 30% on project-a; restored to 70% with `code_search`)."
+  },
+  {
+    "queryId": "SB8",
+    "nodeId": "doc-section:bench/self-build/README.md#top-3-results-per-query--part-17",
+    "kind": "doc-section",
+    "label": "Top-3 Results per Query",
+    "score": 0.5858429063421071,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/bench/self-build/README.md",
+    "snippet": "# Public Self-Build Mini-Bench: arch-graph vs graphify > Results > Top-3 Results per Query\n\n---\n\n**SB8 — how does code_search differ from docs_search**"
+  },
+  {
+    "queryId": "SB8",
+    "nodeId": "doc-section:README.md#semantic-search-strategy--part-2",
+    "kind": "doc-section",
+    "label": "Semantic search strategy",
+    "score": 0.5734116127783668,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/README.md",
+    "snippet": "# arch-graph > CLAUDE.md integration > Semantic search strategy\n\n- **both-buckets** (default, recommended) — `code_search` and `docs_search` are called in parallel on every retrieval, giving the LLM the richest context (~$0.005/query on Sonnet, ~$0.025/query on Opus).\n- **fallback** — `code_search` runs first; `docs_search` is only called on a miss. Halves cost for cost-sensitive projects (~$0.003/query on Sonnet, ~$0.012/query on Opus). Recall is identical to `both-buckets`."
+  },
+  {
+    "queryId": "SB8",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-12-interactive-init-docs-discovery-prompts--part-14",
+    "kind": "doc-section",
+    "label": "Task 12: Interactive init — docs discovery prompts",
+    "score": 0.5558296287865028,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 12: Interactive init — docs discovery prompts\n\n    const candidates = await discoverExtraMdFiles(repoRoot, respectGitignore);\n    const userInclude: string[] = [];\n    const userExclude: string[] = [];"
+  },
+  {
+    "queryId": "SB8",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-12-interactive-init-docs-discovery-prompts--part-10",
+    "kind": "doc-section",
+    "label": "Task 12: Interactive init — docs discovery prompts",
+    "score": 0.5316937863401356,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 12: Interactive init — docs discovery prompts\n\nconst DEFAULT_DOC_INCLUDE = [\n    'README.md',\n    'docs/**/*.md',\n    'apps/*/README.md',\n    'libs/*/README.md',\n    'packages/*/README.md',\n    'CHANGELOG.md',\n    'ROADMAP.md',\n];"
+  },
+  {
+    "queryId": "SB8",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-12-interactive-init-docs-discovery-prompts--part-8",
+    "kind": "doc-section",
+    "label": "Task 12: Interactive init — docs discovery prompts",
+    "score": 0.5302831708984345,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 12: Interactive init — docs discovery prompts\n\n```ts\ninterface WizardAnswers {\n    // ... existing fields ...\n    docs?: {\n        respectGitignore: boolean;\n        chunkTokens: number;\n        userInclude: string[];\n        userExclude: string[];\n    };\n}\n```\n\n(b) Add discovery helper (top-of-file or near other helpers):"
+  },
+  {
+    "queryId": "SB8",
+    "nodeId": "doc-section:README.md#semantic-search-optional--part-5",
+    "kind": "doc-section",
+    "label": "Semantic search (optional)",
+    "score": 0.5165503102860542,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/README.md",
+    "snippet": "# arch-graph > Semantic search (optional)\n\n  **Recommended agent pattern (default): `both-buckets`** — call `code_search` and `docs_search` in parallel for every retrieval. The LLM gets two labeled top-K lists and picks what's useful. Doubles retrieval cost (~$0.005/query on Sonnet, ~$0.025/query on Opus) but eliminates intent-routing risk."
+  },
+  {
+    "queryId": "SB8",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-12-interactive-init-docs-discovery-prompts--part-22",
+    "kind": "doc-section",
+    "label": "Task 12: Interactive init — docs discovery prompts",
+    "score": 0.5162038809761957,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 12: Interactive init — docs discovery prompts\n\n```bash\nmkdir -p /tmp/init-smoke && cd /tmp/init-smoke && git init -q && echo \"# foo\" > README.md && echo \"# extra\" > NOTES.md\npnpm --dir <arch-graph-root> exec tsx <arch-graph-root>/src/cli/index.ts init\n```"
+  },
+  {
+    "queryId": "SB8",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-12-interactive-init-docs-discovery-prompts--part-23",
+    "kind": "doc-section",
+    "label": "Task 12: Interactive init — docs discovery prompts",
+    "score": 0.5161342154044194,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 12: Interactive init — docs discovery prompts\n\nWalk through prompts; verify generated config has the `docs:` block with your selections.\n\n- [ ] **Step 7: Commit**"
+  },
+  {
+    "queryId": "SB9",
+    "nodeId": "doc-section:bench/self-build/arch-graph-results.md#sb9-what-is-in-the-semantic-manifest-file--part-1",
+    "kind": "doc-section",
+    "label": "SB9 — what is in the semantic manifest file",
+    "score": 0.7087223726131743,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/bench/self-build/arch-graph-results.md",
+    "snippet": "# arch-graph Results — Self-Build Bench > SB9 — what is in the semantic manifest file\n\n\n**Category:** D_docs  \n**Verdict:** MISS  \n**minScore:** 0.35  \n**expectedKindIn:** doc-section  \n**expectedLabelHas:** manifest, Manifest"
+  },
+  {
+    "queryId": "SB9",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-design.md#tokenizer-semantictokenizerts--part-3",
+    "kind": "doc-section",
+    "label": "Tokenizer (`semantic/tokenizer.ts`)",
+    "score": 0.49904750773748896,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-design.md",
+    "snippet": "# Design: doc-section — Markdown sections as a new graph kind > Tokenizer (`semantic/tokenizer.ts`)\n\nexport async function countTokens(text: string): Promise<number> {\n    const tk = await getTokenizer();\n    const enc = tk.encode(text);\n    return enc.length;\n}\n```"
+  },
+  {
+    "queryId": "SB9",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-design.md#tokenizer-semantictokenizerts--part-2",
+    "kind": "doc-section",
+    "label": "Tokenizer (`semantic/tokenizer.ts`)",
+    "score": 0.4971699812769145,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-design.md",
+    "snippet": "# Design: doc-section — Markdown sections as a new graph kind > Tokenizer (`semantic/tokenizer.ts`)\n\nasync function getTokenizer() {\n    if (cached === null) {\n        cached = await AutoTokenizer.from_pretrained(SEMANTIC_MODEL);\n    }\n    return cached;\n}"
+  },
+  {
+    "queryId": "SB9",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-design.md#tokenizer-semantictokenizerts--part-1",
+    "kind": "doc-section",
+    "label": "Tokenizer (`semantic/tokenizer.ts`)",
+    "score": 0.48063276080271,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-design.md",
+    "snippet": "# Design: doc-section — Markdown sections as a new graph kind > Tokenizer (`semantic/tokenizer.ts`)\n\n\n```ts\nimport { AutoTokenizer } from '@xenova/transformers';\nimport { SEMANTIC_MODEL } from './types.js';\n\nlet cached: Awaited<ReturnType<typeof AutoTokenizer.from_pretrained>> | null = null;"
+  },
+  {
+    "queryId": "SB9",
+    "nodeId": "doc-section:ROADMAP.md#7-semantic-extension-of-compare-share--part-3",
+    "kind": "doc-section",
+    "label": "⚪ 7. Semantic extension of `compare --share`",
+    "score": 0.4665256563595188,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/ROADMAP.md",
+    "snippet": "# arch-graph roadmap > Strategic options — what's next > ⚪ 7. Semantic extension of `compare --share`\n\n**Mode B — multilingual delta** (extension of A): generate the same templates in two languages (EN + user-picked once via `arch-graph init`); emit two percentages. The gap exposes the multilingual embedder feature in one number. Translation tables (~20 templates per language) are deterministic, no LLM. +0.5 days."
+  },
+  {
+    "queryId": "SB9",
+    "nodeId": "doc-section:bench/self-build/arch-graph-results.md#sb1-where-is-the-semantic-builder--part-1",
+    "kind": "doc-section",
+    "label": "SB1 — where is the semantic builder",
+    "score": 0.46459441871574125,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/bench/self-build/arch-graph-results.md",
+    "snippet": "# arch-graph Results — Self-Build Bench > SB1 — where is the semantic builder\n\n\n**Category:** A_find  \n**Verdict:** HIT  \n**minScore:** 0.4  \n**expectedKindIn:** doc-section, config-field  \n**expectedLabelHas:** Semantic search, semantic, builder"
+  },
+  {
+    "queryId": "SB9",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-2-tokenizer-wrapper-semantictokenizerts--part-10",
+    "kind": "doc-section",
+    "label": "Task 2: Tokenizer wrapper (`semantic/tokenizer.ts`)",
+    "score": 0.46420684797294554,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 2: Tokenizer wrapper (`semantic/tokenizer.ts`)\n\nimport { SEMANTIC_MODEL } from './types.js';\n\ntype Tokenizer = Awaited<ReturnType<typeof AutoTokenizer.from_pretrained>>;\nlet cached: Tokenizer | null = null;\n\nexport function _resetTokenizerForTesting(): void {\n    cached = null;\n}"
+  },
+  {
+    "queryId": "SB9",
+    "nodeId": "doc-section:ROADMAP.md#2-css-ui-semantics-gated-on-bge-m3--part-1",
+    "kind": "doc-section",
+    "label": "🟡 2. CSS / UI semantics (gated on BGE-M3)",
+    "score": 0.4617495432503701,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/ROADMAP.md",
+    "snippet": "# arch-graph roadmap > Strategic options — what's next > 🟡 2. CSS / UI semantics (gated on BGE-M3)\n\n\nUnder research: Tailwind utility expansion (`text-right` → \"text-align right\"), per-class RU synonym dictionary, real CSS file parsing."
+  },
+  {
+    "queryId": "SB9",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-2-tokenizer-wrapper-semantictokenizerts--part-3",
+    "kind": "doc-section",
+    "label": "Task 2: Tokenizer wrapper (`semantic/tokenizer.ts`)",
+    "score": 0.4615134270698273,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 2: Tokenizer wrapper (`semantic/tokenizer.ts`)\n\nCreate `src/semantic/tokenizer.test.ts`:\n\n```ts\nimport { describe, it, expect, beforeAll } from 'vitest';\nimport { countTokens, _resetTokenizerForTesting } from './tokenizer.js';"
+  },
+  {
+    "queryId": "SB9",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-2-tokenizer-wrapper-semantictokenizerts--part-1",
+    "kind": "doc-section",
+    "label": "Task 2: Tokenizer wrapper (`semantic/tokenizer.ts`)",
+    "score": 0.4561421965249569,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 2: Tokenizer wrapper (`semantic/tokenizer.ts`)\n\n\n**Files:**\n- Create: `src/semantic/tokenizer.ts`\n- Test: `src/semantic/tokenizer.test.ts`"
+  },
+  {
+    "queryId": "SB10",
+    "nodeId": "doc-section:bench/self-build/arch-graph-results.md#sb10-how-is-the-build-pipeline-structured--part-1",
+    "kind": "doc-section",
+    "label": "SB10 — how is the build pipeline structured",
+    "score": 0.6887425487366798,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/bench/self-build/arch-graph-results.md",
+    "snippet": "# arch-graph Results — Self-Build Bench > SB10 — how is the build pipeline structured\n\n\n**Category:** E_arch  \n**Verdict:** HIT  \n**minScore:** 0.4  \n**expectedKindIn:** doc-section  \n**expectedLabelHas:** pipeline, build, Build"
+  },
+  {
+    "queryId": "SB10",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-10-pipeline-wiring-call-docs-extractor-mapper-in-pipelinebuildts--part-9",
+    "kind": "doc-section",
+    "label": "Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`",
+    "score": 0.553101183642157,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`\n\nInside the `build(config: ArchGraphConfig): Promise<BuildResult>` function, AFTER `assembleGraph(...)` populates `graph` and the diagnostics/validation accumulators are initialised, add:"
+  },
+  {
+    "queryId": "SB10",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-10-pipeline-wiring-call-docs-extractor-mapper-in-pipelinebuildts--part-2",
+    "kind": "doc-section",
+    "label": "Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`",
+    "score": 0.544242102550275,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`\n\n```ts\nimport { describe, it, expect } from 'vitest';\nimport { resolve } from 'node:path';\nimport { configSchema } from '../core/config.js';      // adjust to actual path\nimport { build } from './build.js';"
+  },
+  {
+    "queryId": "SB10",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-10-pipeline-wiring-call-docs-extractor-mapper-in-pipelinebuildts--part-7",
+    "kind": "doc-section",
+    "label": "Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`",
+    "score": 0.5303128392963318,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`\n\nExpected: FAIL — `result.diagnostics.docs` undefined.\n\n- [ ] **Step 3: Wire docs into the pipeline**\n\nIn `src/pipeline/build.ts`, add imports near the top:"
+  },
+  {
+    "queryId": "SB10",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-10-pipeline-wiring-call-docs-extractor-mapper-in-pipelinebuildts--part-4",
+    "kind": "doc-section",
+    "label": "Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`",
+    "score": 0.5288191038814137,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`\n\n        const result = await build(cfg);"
+  },
+  {
+    "queryId": "SB10",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-10-pipeline-wiring-call-docs-extractor-mapper-in-pipelinebuildts--part-14",
+    "kind": "doc-section",
+    "label": "Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`",
+    "score": 0.5285308323001243,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`\n\n```bash\ngit add src/pipeline/build.ts src/pipeline/build.test.ts\ngit commit -m \"feat(arch-graph): wire docs extractor + mapper into build pipeline\"\n```\n\n---"
+  },
+  {
+    "queryId": "SB10",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-10-pipeline-wiring-call-docs-extractor-mapper-in-pipelinebuildts--part-12",
+    "kind": "doc-section",
+    "label": "Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`",
+    "score": 0.5045870985973239,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`\n\nIf config.docs may legally be undefined (because schema is `.default({})` and parse-time was bypassed), wrap with `if (config.docs !== undefined) { ... }` for defensive safety.\n\n- [ ] **Step 4: Run pipeline tests + full suite**"
+  },
+  {
+    "queryId": "SB10",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-10-pipeline-wiring-call-docs-extractor-mapper-in-pipelinebuildts--part-11",
+    "kind": "doc-section",
+    "label": "Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`",
+    "score": 0.49361570867354326,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`\n\nNote: the existing test fixtures live under `src/__fixtures__/docs/sample/` — `extractDocs` will use them via the fixtureRoot passed in tests."
+  },
+  {
+    "queryId": "SB10",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-10-pipeline-wiring-call-docs-extractor-mapper-in-pipelinebuildts--part-13",
+    "kind": "doc-section",
+    "label": "Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`",
+    "score": 0.490276746725595,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`\n\n```bash\npnpm test src/pipeline/build.test.ts\npnpm test\npnpm exec tsc --noEmit\n```\n\nExpected: docs-pass test PASS, all existing tests PASS, 0 type errors.\n\n- [ ] **Step 5: Commit**"
+  },
+  {
+    "queryId": "SB10",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-10-pipeline-wiring-call-docs-extractor-mapper-in-pipelinebuildts--part-1",
+    "kind": "doc-section",
+    "label": "Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`",
+    "score": 0.47351406084555386,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`\n\n\n**Files:**\n- Modify: `src/pipeline/build.ts`\n- Modify or add: `src/pipeline/build.test.ts`\n\n- [ ] **Step 1: Write failing test**\n\nIn `src/pipeline/build.test.ts`, add:"
+  },
+  {
+    "queryId": "SB11",
+    "nodeId": "doc-section:bench/self-build/arch-graph-results.md#sb11-what-is-the-mcp-server-architecture--part-1",
+    "kind": "doc-section",
+    "label": "SB11 — what is the MCP server architecture",
+    "score": 0.7051434798505866,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/bench/self-build/arch-graph-results.md",
+    "snippet": "# arch-graph Results — Self-Build Bench > SB11 — what is the MCP server architecture\n\n\n**Category:** E_arch  \n**Verdict:** HIT  \n**minScore:** 0.4  \n**expectedKindIn:** doc-section  \n**expectedLabelHas:** MCP server, MCP"
+  },
+  {
+    "queryId": "SB11",
+    "nodeId": "doc-section:README.md#mcp-server--part-1",
+    "kind": "doc-section",
+    "label": "MCP server",
+    "score": 0.6885374819122076,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/README.md",
+    "snippet": "# arch-graph > MCP server\n\n\nOptional — for editors with an MCP client configured:\n\n```sh\narch-graph mcp   # starts the stdio MCP server backed by arch-graph-out/graph.json\n```\n\nExposes 15 tools — 12 structural + 3 semantic."
+  },
+  {
+    "queryId": "SB11",
+    "nodeId": "doc-section:README.md#mcp-server--part-5",
+    "kind": "doc-section",
+    "label": "MCP server",
+    "score": 0.6426049063193559,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/README.md",
+    "snippet": "# arch-graph > MCP server\n\nThe CLI query subcommands are preferred over MCP when both are available (no stdio overhead, no server lifecycle)."
+  },
+  {
+    "queryId": "SB11",
+    "nodeId": "doc-section:README.md#mcp-server--part-2",
+    "kind": "doc-section",
+    "label": "MCP server",
+    "score": 0.6171384577195298,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/README.md",
+    "snippet": "# arch-graph > MCP server\n\n**Structural (12):** `subject_publishers`, `subject_subscribers`, `queue_producers`, `queue_consumers`, `service_dependencies`, `service_dependents`, `module_imports`, `table_users`, `path`, `explain`, `query`, `stats`."
+  },
+  {
+    "queryId": "SB11",
+    "nodeId": "doc-section:skill/SKILL.md#fallback-1-mcp-server-if-installed",
+    "kind": "doc-section",
+    "label": "Fallback 1 — MCP server (if installed)",
+    "score": 0.6128017742820417,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/skill/SKILL.md",
+    "snippet": "# /arch-graph > What You Must Do When Invoked > Fallback 1 — MCP server (if installed)\n\n\nIf `arch-graph mcp` is configured in the editor's MCP client, use its typed tools: `subject_publishers`, `subject_subscribers`, `queue_producers`, `queue_consumers`, `service_dependencies`, `service_dependents`, `module_imports`, `table_users`, `path`, `explain`, `query`, `stats`. MCP is slightly more expressive (the `explain` and `query` tools) but requires a running server."
+  },
+  {
+    "queryId": "SB11",
+    "nodeId": "doc-section:README.md#mcp-server--part-4",
+    "kind": "doc-section",
+    "label": "MCP server",
+    "score": 0.5668696885357306,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/README.md",
+    "snippet": "# arch-graph > MCP server\n\nSee [Semantic search](#semantic-search-optional) for setup and the recommended `both-buckets` agent pattern. For unresolved / dynamic call-sites, read `arch-graph-out/diagnostics.json` directly — there is no MCP tool for it."
+  },
+  {
+    "queryId": "SB11",
+    "nodeId": "doc-section:claude-md.template.md#mcp-fallback-if-installed",
+    "kind": "doc-section",
+    "label": "MCP fallback (if installed)",
+    "score": 0.5254342367162896,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/claude-md.template.md",
+    "snippet": "# arch-graph (static architecture facts) > MCP fallback (if installed)\n\n\nIf `arch-graph mcp` is available on PATH and the editor has an MCP client configured, the MCP tools can also answer these queries: `subject_publishers`, `subject_subscribers`, `queue_producers`, `queue_consumers`, `service_dependencies`, `service_dependents`, `module_imports`, `table_users`, `path`, `explain`, `query`, `stats`. For unresolved / dynamic call-sites the extractor couldn't pin down, read `arch-graph-out/diagnostics.json` directly — there is no MCP tool for it."
+  },
+  {
+    "queryId": "SB11",
+    "nodeId": "doc-section:docs/plans/v_2026-05-16-semantic-sidecar-design.md#mcp-contract-task-4-locked-for-federation--part-4",
+    "kind": "doc-section",
+    "label": "MCP contract (Task 4) — locked for federation",
+    "score": 0.5120580452307623,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-16-semantic-sidecar-design.md",
+    "snippet": "# Design: Semantic sidecar for arch-graph (Variant 3) > MCP contract (Task 4) — locked for federation\n\nThis is the shape any external consumer (a federated memory layer, a second retrieval tool) is expected to rely on. **Do not break it post-merge** without a coordinated version bump in `manifest.json`."
+  },
+  {
+    "queryId": "SB11",
+    "nodeId": "doc-section:README.md#mcp-server--part-3",
+    "kind": "doc-section",
+    "label": "MCP server",
+    "score": 0.4841484818119496,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/README.md",
+    "snippet": "# arch-graph > MCP server\n\n**Semantic (3, requires sidecar index):**\n- `code_search` — vector search over code nodes only (services, modules, tables, queues, endpoints, fe-components). Use for \"find code that does X\".\n- `docs_search` — vector search over `doc-section` nodes only (Markdown sections). Use for \"find documentation about Y\".\n- `semantic_search` — mixed bucket (code + docs together). Useful as a fallback when you don't know which bucket the answer lives in, but expect lower precision on mixed corpora."
+  },
+  {
+    "queryId": "SB11",
+    "nodeId": "service:src",
+    "kind": "service",
+    "label": "src",
+    "score": 0.44058789489752476,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/src",
+    "snippet": ""
+  },
+  {
+    "queryId": "SB12",
+    "nodeId": "doc-section:bench/self-build/arch-graph-results.md#sb12-what-extractors-are-wired-together-in-the-build--part-1",
+    "kind": "doc-section",
+    "label": "SB12 — what extractors are wired together in the build",
+    "score": 0.6591633553009154,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/bench/self-build/arch-graph-results.md",
+    "snippet": "# arch-graph Results — Self-Build Bench > SB12 — what extractors are wired together in the build\n\n\n**Category:** E_arch  \n**Verdict:** HIT  \n**minScore:** 0.35  \n**expectedKindIn:** doc-section  \n**expectedLabelHas:** pipeline, extractor, Extractor, build"
+  },
+  {
+    "queryId": "SB12",
+    "nodeId": "doc-section:CONTRIBUTING.md#adding-a-new-extractor--part-1",
+    "kind": "doc-section",
+    "label": "Adding a new extractor",
+    "score": 0.5827009430015936,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/CONTRIBUTING.md",
+    "snippet": "# Contributing to arch-graph > 3. Code contributions > Adding a new extractor\n\n\nThe repo is organized by extractor — each new edge kind or node kind is a self-contained module under `src/extractors/`. The cleanest examples to read for the shape:"
+  },
+  {
+    "queryId": "SB12",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-10-pipeline-wiring-call-docs-extractor-mapper-in-pipelinebuildts--part-9",
+    "kind": "doc-section",
+    "label": "Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`",
+    "score": 0.5023416668035131,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`\n\nInside the `build(config: ArchGraphConfig): Promise<BuildResult>` function, AFTER `assembleGraph(...)` populates `graph` and the diagnostics/validation accumulators are initialised, add:"
+  },
+  {
+    "queryId": "SB12",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-5-extractor-file-walker-reader-frontmatter-extractorsdocsextract-docsts--part-23",
+    "kind": "doc-section",
+    "label": "Task 5: Extractor — file walker + reader + frontmatter (`extractors/docs/extract-docs.ts`)",
+    "score": 0.49664972711343064,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 5: Extractor — file walker + reader + frontmatter (`extractors/docs/extract-docs.ts`)\n\nexport interface ExtractedDocSite extends DocSite {\n    filePath: string;\n    frontmatter?: Record<string, unknown>;\n}"
+  },
+  {
+    "queryId": "SB12",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-10-pipeline-wiring-call-docs-extractor-mapper-in-pipelinebuildts--part-8",
+    "kind": "doc-section",
+    "label": "Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`",
+    "score": 0.49475983385998756,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`\n\n```ts\nimport { extractDocs } from '../extractors/docs/extract-docs.js';\nimport { mapDocsToGraph } from '../mapper/docs-to-graph.js';\nimport { countTokens } from '../semantic/tokenizer.js';\n```"
+  },
+  {
+    "queryId": "SB12",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-5-extractor-file-walker-reader-frontmatter-extractorsdocsextract-docsts--part-8",
+    "kind": "doc-section",
+    "label": "Task 5: Extractor — file walker + reader + frontmatter (`extractors/docs/extract-docs.ts`)",
+    "score": 0.48659901151579327,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 5: Extractor — file walker + reader + frontmatter (`extractors/docs/extract-docs.ts`)\n\ndescribe('extractDocs', () => {\n    it('extracts sites from README.md', async () => {\n        const result = await extractDocs({\n            projectRoot: FIXTURES,\n            include: ['README.md'],\n            exclude: [],\n            respectGitignore: false,\n            chunkTokens: 100,\n            maxFileBytes: 10_000_000,\n            countTokens: stubCountTokens,\n        });"
+  },
+  {
+    "queryId": "SB12",
+    "nodeId": "doc-section:src/__fixtures__/README.md#test-fixtures-pattern",
+    "kind": "doc-section",
+    "label": "Test fixtures — pattern",
+    "score": 0.4816772970857041,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/src/__fixtures__/README.md",
+    "snippet": "# Test fixtures — pattern\n\n\nEvery extractor test in arch-graph follows the same shape: an **in-memory**\n`ts-morph` `Project` with one or two synthetic `.ts` files added as strings,\nfed to the extractor under test. No filesystem, no real monorepo dependency,\nno snapshot-based brittleness.\n"
+  },
+  {
+    "queryId": "SB12",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-5-extractor-file-walker-reader-frontmatter-extractorsdocsextract-docsts--part-14",
+    "kind": "doc-section",
+    "label": "Task 5: Extractor — file walker + reader + frontmatter (`extractors/docs/extract-docs.ts`)",
+    "score": 0.47687251939889824,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 5: Extractor — file walker + reader + frontmatter (`extractors/docs/extract-docs.ts`)\n\n        const sites = result.sites.filter(s => s.filePath.endsWith('BAD_FRONTMATTER.md'));\n        expect(sites.map(s => s.headingChain.at(-1))).toContain('Body');\n    });"
+  },
+  {
+    "queryId": "SB12",
+    "nodeId": "doc-section:docs/plans/v_2026-05-17-doc-section-extractor-implementation.md#task-10-pipeline-wiring-call-docs-extractor-mapper-in-pipelinebuildts--part-14",
+    "kind": "doc-section",
+    "label": "Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`",
+    "score": 0.4754326359360479,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "snippet": "# doc-section Implementation Plan > Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`\n\n```bash\ngit add src/pipeline/build.ts src/pipeline/build.test.ts\ngit commit -m \"feat(arch-graph): wire docs extractor + mapper into build pipeline\"\n```\n\n---"
+  },
+  {
+    "queryId": "SB12",
+    "nodeId": "doc-section:CONTRIBUTING.md#adding-a-new-extractor--part-2",
+    "kind": "doc-section",
+    "label": "Adding a new extractor",
+    "score": 0.47533976690629987,
+    "path": "/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-bge-m3-migration/CONTRIBUTING.md",
+    "snippet": "# Contributing to arch-graph > 3. Code contributions > Adding a new extractor\n\n- `src/extractors/docs/` — pure-logic + I/O split, mapper, validator, diagnostics. Read this first for any new extractor.\n- `src/extractors/typeorm/` — decorator-driven, with `forwardRef`/base-class resolution.\n- `src/extractors/di/filter-chain.ts` — class + method-level decorator collection."
+  }
+]
