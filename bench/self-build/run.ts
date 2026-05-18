@@ -48,17 +48,22 @@ interface RunArgs {
     config: string;
 }
 
+/** Type predicate: narrows a string to SemanticModelAlias without casts. */
+function isSemanticModelAlias(s: string): s is SemanticModelAlias {
+    return s in SEMANTIC_MODELS;
+}
+
 /** Validate a --model alias against the SEMANTIC_MODELS registry. */
 function parseModelAlias(raw: string): SemanticModelAlias {
-    const validAliases = Object.keys(SEMANTIC_MODELS) as SemanticModelAlias[];
-    if (!validAliases.includes(raw as SemanticModelAlias)) {
+    if (!isSemanticModelAlias(raw)) {
+        const validAliases = Object.keys(SEMANTIC_MODELS).join(', ');
         process.stderr.write(
             `run.ts: invalid --model alias '${raw}'. ` +
-            `Valid aliases: ${validAliases.join(', ')}.\n`,
+            `Valid aliases: ${validAliases}.\n`,
         );
         process.exit(1);
     }
-    return raw as SemanticModelAlias;
+    return raw;
 }
 
 function parseArgs(): RunArgs {
