@@ -74,7 +74,7 @@ Structural build (parsing, graph assembly, no embeddings) is unchanged. e5-base 
 - **Limited accuracy lift:** project-c (the only completion) showed +4pp overall, +10pp on A_find — below our ≥5pp threshold for meaningful improvement.
 - **Blocked on incremental rebuild:** A 3-hour full rebuild on every `semantic build` is only tolerable with incremental re-embed (ROADMAP option 5), adding implementation cost.
 
-**Verdict:** Keep as opt-in for users needing 1024-dim multilingual embedders and willing to accept longer builds; not recommended as default.
+**Verdict:** Removed from the registry as of Task 6 (feat/e5-base-migration). Historical branch: `feat/bge-m3-migration`. Not available as an opt-in alias in the current registry; see design doc for removal rationale.
 
 ---
 
@@ -86,7 +86,7 @@ Structural build (parsing, graph assembly, no embeddings) is unchanged. e5-base 
 - **Resolution path:** requires `@huggingface/transformers` v3 (package rename, API changes, cache relocation). Impact: ~150 LoC of test mock updates + full embedder.ts re-validation.
 - **Timeline:** sister project (2-brain) has validated arctic-m on their workload (96% recall@10); porting to arch-graph is deferred to post-e5-base launch.
 
-**Verdict:** Blocked on transformers.js v3 migration; defer to later roadmap phase.
+**Verdict:** Removed from the registry as of Task 6 (feat/e5-base-migration). Blocked on transformers.js v3 migration; defer to later roadmap phase. Historical exploration documented here for context.
 
 ---
 
@@ -107,9 +107,9 @@ Before flipping the default on `main`, three blocking tasks must complete:
 
 1. **Prefix-implementation audit & tests** — Verify `passage:` is applied at build-time, `query:` at search-time, and undefined for models without prefixes (unit tests added to `src/semantic/embedder.test.ts`, `src/semantic/builder.test.ts`, `src/mcp/semantic-search.test.ts`). *Status: completed in Task 2.*
 
-2. **Per-model `recommendedMinScore` calibration** — e5-base scores are tighter (0.83 ± 0.02) than MiniLM (0.56 ± 0.08); the default 0.30 floor is a no-op for e5-base. New `recommendedMinScore` field in `SEMANTIC_MODELS` config per alias (MiniLM 0.30, e5-base 0.55, bge-m3 0.55, arctic-m 0.40 provisional). *Status: completed in Task 3.*
+2. **Per-model `recommendedMinScore` calibration** — e5-base scores are tighter (0.83 ± 0.02) than MiniLM (0.56 ± 0.08); the default 0.30 floor is a no-op for e5-base. New `recommendedMinScore` field in `SEMANTIC_MODELS` config per alias (MiniLM 0.30, e5-base 0.55). *Status: completed in Task 3.*
 
-3. **Incremental semantic re-embed** — Schema bump (v1 → v2, add `contentHash` to `SemanticRecord`), hash-based cache hit logic, `--full` flag for forced rebuild, optional hook integration. Typical commit cost drops from 1–5 minutes to ≈1–2 seconds. *Status: design doc + implementation pending in Tasks 4–5.*
+3. **Incremental semantic re-embed** — Schema bump (v1 → v2, add `contentHash` to `SemanticRecord`), hash-based cache hit logic, `--full` flag for forced rebuild, optional hook integration. Typical commit cost drops from 1–5 minutes to ≈1–2 seconds. *Status: completed in Tasks 4–5.*
 
 ---
 
