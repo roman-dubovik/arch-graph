@@ -46,7 +46,7 @@ Plus a head-to-head benchmark on 103 fuzzy-intent queries vs graphify (RU 67% vs
 
 **Static architecture graph for NestJS monorepos.** Extracts NATS pub/sub, BullMQ queues, TypeORM (`@InjectRepository` → `@Entity` and `@ManyToOne` / `@OneToMany` / `@ManyToMany` / `@OneToOne` → `db-relation`), NestJS module DI (modules / providers / exports / controllers + `@UseGuards` / `@UseInterceptors` / `@UsePipes`), HTTP inter-service calls, and TypeScript imports (static + dynamic + CommonJS `require`) into a single typed graph at `arch-graph-out/graph.json`. Plus an import-cycle diagnostic across `ts-import` / `lib-usage` / `di-import` edges in `diagnostics.cycles`. Designed so an LLM agent can answer "who publishes on this subject?", "what guards run on this endpoint?", or "what tables relate to entity X?" without grepping or guessing.
 
-**Local multilingual semantic search runs alongside, fully offline.** A dense-vector index over node `embed-text` powers `semantic_search` / `code_search` / `docs_search` MCP tools. Multilingual embedder (`Xenova/paraphrase-multilingual-MiniLM-L12-v2`, 384-dim) via `transformers.js` — no API key, no GPU, no network. Russian, English, mixed queries hit the same index. **Zero LLM tokens on both build and query.**
+**Local multilingual semantic search runs alongside, fully offline.** A dense-vector index over node `embed-text` powers `semantic_search` / `code_search` / `docs_search` MCP tools. Multilingual embedder (`Xenova/multilingual-e5-base`, 768-dim, passage/query prefixes) via `transformers.js` — no API key, no GPU, no network. Russian, English, mixed queries hit the same index. **Zero LLM tokens on both build and query.**
 
 Sister project: **[graphify](https://github.com/safishamsi/graphify)** is a generic semantic-graph tool (papers, docs, code, mixed media) that uses LLM subagents at build time to extract relationships. arch-graph is the deterministic end of the trade-off — it knows NestJS / NATS / BullMQ / TypeORM directly via `ts-morph`, with zero LLM tokens at build, plus a local multilingual semantic layer on top. The per-build recall gate enforces ≥ 95% recall (≥ 80% for TS imports) against ground truth derived from your own code; any regression below those floors fails `arch-graph build --strict`. Head-to-head benchmark: RU 67% vs 35% (multilingual handling), EN-keyword strict 53.6% vs 56.5% (near tie under apples-to-apples scoring). Both tools are local-first; the difference is graphify needs LLM subagents to build the graph, arch-graph does not.
 
@@ -309,15 +309,15 @@ The above commands answer **deterministic structural questions** — "who publis
 
 The semantic layer is independent and opt-in: arch-graph works identically well without it. If you enable it, the CLI and MCP server gain new tools:
 
-- **Model**: `Xenova/paraphrase-multilingual-MiniLM-L12-v2` (384-dimensional, multilingual). The model name is recorded in `manifest.json` so any external consumer (a second tool, a future agent, a federated index) can verify vector compatibility before mixing results.
+- **Model**: `Xenova/multilingual-e5-base` (768-dimensional, multilingual, passage/query prefixes). The model name is recorded in `manifest.json` so any external consumer (a second tool, a future agent, a federated index) can verify vector compatibility before mixing results.
 - **How it works**: each GraphNode (service, module, table, queue, **doc-section**) gets a dense vector computed from `label + kind + AST snippet` (or Markdown section text for doc-section nodes), persisted in a sidecar at `arch-graph-out/<repo>/semantic/`. Markdown files matching the `docs` include globs (including root-level `*.md` by default) are indexed automatically.
 - **Quick start**: 
   ```sh
-  arch-graph semantic build              # one-time: downloads model (~135 MB, cached), extracts snippets, embeds
+  arch-graph semantic build              # one-time: downloads model (~280 MB, cached), extracts snippets, embeds
   arch-graph semantic search "auth flow" # fuzzy search for top 10 results
   arch-graph semantic search "logging" --k 20 --json  # top 20, structured output
   ```
-- **First build**: the model downloads ~135 MB on first run and is cached under `~/.cache/transformers/` (or via `HF_HOME` env var), so subsequent `semantic build` and `semantic search` run much faster.
+- **First build**: the model downloads ~280 MB on first run and is cached under `~/.cache/transformers/` (or via `HF_HOME` env var), so subsequent `semantic build` and `semantic search` run much faster. After the first `semantic build`, subsequent builds are incremental (~1-2 s per typical commit). The pre-commit hook installs with semantic auto-rebuild on by default.
 - **Sidecar layout**: `arch-graph-out/<repo>/semantic/{manifest.json, embeddings.jsonl}` — one JSON record per line, streamable for large graphs.
 - **MCP tools**: when the MCP server is running (`arch-graph mcp`), three semantic tools become available:
   - `semantic_search` — mixed bucket (code + docs together)
@@ -370,7 +370,7 @@ This is a **static** extractor. It does not see runtime configuration, container
 - **D5** — Decorator metadata from external libs that doesn't follow the NestJS conventions encoded here.
 - **D6** — Inferred type-only edges. Type-level uses are not graph edges; only value-level usages are.
 
-**Semantic search limitations**: the current embedding model (`Xenova/paraphrase-multilingual-MiniLM-L12-v2`) has a known ceiling on UI-component retrieval (`C_ui` hit-rate: 33–50%) because Tailwind class tokens and i18n key strings are poor semantic signals for this model. The `ui-uplift-v1` improvement (appending class names + i18n strings to embed-text) brings partial improvement but doesn't fully close the gap. Planned: evaluate BGE-M3 as a replacement model; its code-aware training may perform better on component-level queries.
+**Semantic search**: the default model is `Xenova/multilingual-e5-base` (768-dim, passage/query prefixes). Build time on a 30K-node monorepo is ~41 min on first run; subsequent incremental builds typically take ~1-2 s per commit. Measured recall: 75% aggregate over 103 queries on 3 NestJS monorepos; C_ui 82% (+46pp vs the previous MiniLM default). See [`docs/comparisons/2026-05-18-embedder-evaluation.md`](docs/comparisons/2026-05-18-embedder-evaluation.md) for the full evaluation.
 
 To extend coverage, add an extractor under `src/extractors/<domain>/` and wire it into `src/pipeline/build.ts` and a `mapper/` that emits typed edges. The validation harness in `src/validation/` is the contract — every extractor must produce a ground-truth comparison that gates `arch-graph build` at the configured recall floor.
 
@@ -390,7 +390,7 @@ Two benchmarks are committed, each measuring a different question.
 
 **Post-semantic (current, 2026-05-17):** 103 fuzzy-intent queries × 3 NestJS monorepos, run through both tools. Live in [`docs/comparisons/2026-05-17-arch-graph-vs-graphify-eval.md`](docs/comparisons/2026-05-17-arch-graph-vs-graphify-eval.md). Two ways to read the numbers, both honest:
 
-- **As a Russian-speaking team would experience it (RU queries):** arch-graph **67%** vs graphify **35%** (+32pp). 80%+ of the queries are in Russian; graphify does keyword-BFS over English code-node labels and returns "no matching nodes" for most non-English fuzzy queries. arch-graph's multilingual embedder (`Xenova/paraphrase-multilingual-MiniLM-L12-v2`) bridges the language gap.
+- **As a Russian-speaking team would experience it (RU queries):** arch-graph **67%** vs graphify **35%** (+32pp). 80%+ of the queries are in Russian; graphify does keyword-BFS over English code-node labels and returns "no matching nodes" for most non-English fuzzy queries. arch-graph's multilingual embedder (`Xenova/multilingual-e5-base`) bridges the language gap.
 - **As an LLM-agent pipeline would experience it (EN-keyword queries, apples-to-apples strict scoring on 69 scoreable queries):** arch-graph **53.6%** vs graphify **56.5%** — a near tie (graphify +3pp). The 32-point RU gap is almost entirely multilingual-handling, not retrieval-quality. By category under strict EN: arch-graph leads in B_debug (+38pp) and D_docs (+20pp); graphify leads in C_ui (+50pp) and E_arch (+18pp); A_find is exact tie.
 - Token cost per query: arch-graph ~1000, graphify ~350. **arch-graph uses zero LLM tokens on both build and query.** graphify uses LLM subagents at build time for semantic extraction.
 - Per-query wins on the RU bench: 37 arch-graph, 4 graphify, 32 ties, 30 both-miss.
