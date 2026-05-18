@@ -25,9 +25,9 @@ not change — only the recall-rate calculation becomes honest.
 
 | Task | Files (absolute paths) | Touches |
 |------|------------------------|---------|
-| A — virtual-kind exclusion (lib/service) | `/Users/romandubovik/Documents/Projects/arch-graph/src/validation/snippet-recall-validator.ts` | extend `KINDS_WITHOUT_SOURCE` set to include `lib` and `service` |
-| B — internal/external module classification | `/Users/romandubovik/Documents/Projects/arch-graph/src/validation/snippet-recall-validator.ts` | per-node classification for `kind === 'module'`: if `node.path` is missing → treat as virtual (skip from denominator); else apply ≥85% floor |
-| C — tests | `/Users/romandubovik/Documents/Projects/arch-graph/src/validation/snippet-recall-validator.test.ts` | add unit tests for: (a) lib/service excluded entirely, (b) module with path counted, (c) module without path excluded, (d) mixed module set computes only-internal rate |
+| A — virtual-kind exclusion (lib/service) | `<arch-graph-root>/src/validation/snippet-recall-validator.ts` | extend `KINDS_WITHOUT_SOURCE` set to include `lib` and `service` |
+| B — internal/external module classification | `<arch-graph-root>/src/validation/snippet-recall-validator.ts` | per-node classification for `kind === 'module'`: if `node.path` is missing → treat as virtual (skip from denominator); else apply ≥85% floor |
+| C — tests | `<arch-graph-root>/src/validation/snippet-recall-validator.test.ts` | add unit tests for: (a) lib/service excluded entirely, (b) module with path counted, (c) module without path excluded, (d) mixed module set computes only-internal rate |
 | D — CLI smoke + recall verification | run `arch-graph semantic build` + check validator output | verify ≥85% on project-b and project-c module recall after exclusion |
 
 **No mapper changes. No snippet.ts changes. Validator-only scope.**

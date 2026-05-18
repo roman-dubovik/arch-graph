@@ -89,16 +89,16 @@ export interface SearchOutput {
      * users as a diagnostic hint. Does not prevent other output fields from
      * being populated.
      *
-     * Optional forward-compatible field — not part of the base MCP contract
-     * required by 2-brain Phase 3, but surfaced for observability.
+     * Optional forward-compatible field — not part of the base MCP contract,
+     * but surfaced for observability by federation consumers.
      */
     embedError?: string;
     /**
      * Present when the vector-augmentation re-read failed (MCP `includeVectors`
      * path). Results are still returned; only vector attachment failed.
      *
-     * Optional forward-compatible field — not part of the base MCP contract
-     * required by 2-brain Phase 3, but surfaced for observability.
+     * Optional forward-compatible field — not part of the base MCP contract,
+     * but surfaced for observability by federation consumers.
      */
     vectorsError?: string;
 }

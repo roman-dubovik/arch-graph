@@ -1,7 +1,7 @@
 # arch-graph Baseline Eval — 2026-05-17
 
-**Worktree**: `/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-semantic`  
-**CLI**: `/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-semantic/src/cli/index.ts`  
+**Worktree**: `<arch-graph-root>/.worktrees/feat-semantic`  
+**CLI**: `<arch-graph-root>/.worktrees/feat-semantic/src/cli/index.ts`  
 **k**: 5  
 **skip_build**: 1  
 **Run at**: Sun May 17 07:56:27 MSK 2026
@@ -106,5 +106,5 @@ Queries that did NOT hit, with top-5 results:
 - Re-run after merging `feat/fe-l1` and `feat/var2-extractors` to measure uplift.
 
 [eval] 
-[eval] Results saved to: /Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-semantic/scripts/eval/results-2026-05-17.md
+[eval] Results saved to: <arch-graph-root>/.worktrees/feat-semantic/scripts/eval/results-2026-05-17.md
 [eval] All thresholds met. Exit 0.

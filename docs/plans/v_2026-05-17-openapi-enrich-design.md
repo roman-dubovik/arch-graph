@@ -111,15 +111,15 @@ Currently: `label + kind` base + snippet. Need to add openapiInfo text for endpo
 - `js-yaml` and `fast-glob` already in deps — no new deps needed
 - Conventional Commits, scope = `openapi` or `arch-graph`
 - Selective `git add <paths>` — NEVER `git add -A`
-- All git ops via `git -C /Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-openapi-enrich`
+- All git ops via `git -C <arch-graph-root>/.worktrees/feat-openapi-enrich`
 
 ## Execution order
 All 4 tasks touch DIFFERENT files — safe to run as single agent sequentially.
 Single implementer (Sonnet) in the existing worktree. No isolation needed (already isolated).
 
 ## CWD discipline (mandatory for all agents)
-- Worktree: `/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-openapi-enrich`
+- Worktree: `<arch-graph-root>/.worktrees/feat-openapi-enrich`
 - Branch: `feat/openapi-enrich`
-- All git ops: `git -C /Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-openapi-enrich <cmd>`
+- All git ops: `git -C <arch-graph-root>/.worktrees/feat-openapi-enrich <cmd>`
 - DO NOT `git switch` / `git checkout <other-branch>`
 - Commit ONLY to current branch `feat/openapi-enrich`

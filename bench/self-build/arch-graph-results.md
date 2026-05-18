@@ -233,8 +233,8 @@ Scoring: HIT = top-10 contains result with `score >= minScore` AND `kind ∈ exp
 | 6 | 0.531 | doc-section | MCP fallback (if installed) |
 | 7 | 0.516 | doc-section | MCP contract — locked for federation |
 | 8 | 0.478 | doc-section | MCP server |
-| 9 | 0.449 | doc-section | MCP contract (Task 4) — locked for 2-brain federation |
-| 10 | 0.444 | doc-section | MCP contract (Task 4) — locked for 2-brain federation |
+| 9 | 0.449 | doc-section | MCP contract (Task 4) — locked for federation |
+| 10 | 0.444 | doc-section | MCP contract (Task 4) — locked for federation |
 
 ## SB12 — what extractors are wired together in the build
 
