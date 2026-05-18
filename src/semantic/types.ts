@@ -3,17 +3,47 @@ import type { NodeKind } from '../core/types.js';
 // ============================================================================
 // Semantic sidecar — type contracts
 //
-// Model contract (locked for cross-tool federation):
-//   Xenova/paraphrase-multilingual-MiniLM-L12-v2 — 384-dim, multilingual ONNX.
-//   The model name is recorded in `manifest.json` so any external consumer
-//   can verify vector compatibility before mixing results.
+// Model registry: models are keyed by a short alias.  Each entry records the
+// Hugging Face hub ID, output dimensionality, pooling strategy, and whether
+// vectors are L2-normalised before storage.
+//
+// Current supported aliases:
+//   minilm  — Xenova/paraphrase-multilingual-MiniLM-L12-v2, 384-dim, mean pooling
+//   bge-m3  — Xenova/bge-m3, 1024-dim, CLS pooling
+//
+// The model name and dim are recorded in `manifest.json` so any external
+// consumer can verify vector compatibility before mixing results.
 // ============================================================================
 
-/** The fixed embedding model used by the semantic layer. */
-export const SEMANTIC_MODEL = 'Xenova/paraphrase-multilingual-MiniLM-L12-v2' as const;
+/** Short alias for a supported embedding model. */
+export type SemanticModelAlias = 'minilm' | 'bge-m3';
 
-/** Embedding dimensionality produced by SEMANTIC_MODEL. */
-export const SEMANTIC_DIM = 384 as const;
+/** Registry of all supported embedding models. */
+export const SEMANTIC_MODELS = {
+    minilm: {
+        hubId: 'Xenova/paraphrase-multilingual-MiniLM-L12-v2',
+        dim: 384,
+        pooling: 'mean' as const,
+        normalize: true,
+    },
+    'bge-m3': {
+        hubId: 'Xenova/bge-m3',
+        dim: 1024,
+        pooling: 'cls' as const,
+        normalize: true,
+    },
+} as const satisfies Record<SemanticModelAlias, { hubId: string; dim: number; pooling: string; normalize: boolean }>;
+
+// ---------------------------------------------------------------------------
+// Backward-compat aliases — existing code referencing SEMANTIC_MODEL /
+// SEMANTIC_DIM continues to compile and behave identically.
+// ---------------------------------------------------------------------------
+
+/** @deprecated Use `SEMANTIC_MODELS.minilm.hubId` or resolve from config. */
+export const SEMANTIC_MODEL = SEMANTIC_MODELS.minilm.hubId;
+
+/** @deprecated Use `SEMANTIC_MODELS.minilm.dim` or resolve from config. */
+export const SEMANTIC_DIM = SEMANTIC_MODELS.minilm.dim;
 
 /** Schema version for the manifest. Bump when the sidecar format changes. */
 export const SEMANTIC_SCHEMA_VERSION = 1 as const;
@@ -26,10 +56,10 @@ export const SEMANTIC_SCHEMA_VERSION = 1 as const;
 export interface SemanticManifest {
     /** Schema version — must equal {@link SEMANTIC_SCHEMA_VERSION}. */
     schemaVersion: typeof SEMANTIC_SCHEMA_VERSION;
-    /** Locked value: {@link SEMANTIC_MODEL}. Checked by consumers. */
-    model: typeof SEMANTIC_MODEL;
-    /** Locked value: {@link SEMANTIC_DIM}. */
-    dim: typeof SEMANTIC_DIM;
+    /** Hub ID of the model used to build this index. */
+    model: string;
+    /** Embedding dimensionality of the model used to build this index. */
+    dim: number;
     /** ISO 8601 timestamp of when `semantic build` ran. */
     builtAt: string;
     /** SHA-256 hex of `graph.json` at build time — used to detect staleness. */
@@ -54,7 +84,7 @@ export interface SemanticRecord {
      * cases `label + kind` alone forms the embedding input.
      */
     snippet: string;
-    /** Dense embedding vector of length 384 (float32 cast to JSON numbers). */
+    /** Dense embedding vector (float32 cast to JSON numbers). Length matches the model's dim. */
     vector: number[];
 }
 
@@ -86,8 +116,8 @@ export interface SkippedNode {
  * diagnostics.json shape without breaking existing consumers.
  */
 export interface SemanticDiagnostics {
-    model: typeof SEMANTIC_MODEL;
-    dim: typeof SEMANTIC_DIM;
+    model: string;
+    dim: number;
     schemaVersion: typeof SEMANTIC_SCHEMA_VERSION;
     counts: {
         indexed: number;
