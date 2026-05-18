@@ -33,10 +33,12 @@ export function postCommitHookPath(repo: string): string {
 function buildPreCommitBody(includeSemantic: boolean): string {
     const semanticBlock = includeSemantic ? `
         # Incremental semantic index update (default-on).
-        # Fail-soft: transient embed errors must not block commits.
-        arch-graph semantic build --quiet || true
-        git add arch-graph-out/semantic/manifest.json \\
-                arch-graph-out/semantic/embeddings.jsonl 2>/dev/null || true` : '';
+        # Only stage the semantic files when the build succeeded — a failed build
+        # (OOM, model download error) must NOT stage a potentially corrupt sidecar.
+        if arch-graph semantic build --quiet; then
+            git add arch-graph-out/semantic/manifest.json \\
+                    arch-graph-out/semantic/embeddings.jsonl 2>/dev/null || true
+        fi` : '';
 
     return `${MARK_START}
 # Auto-rebuild arch-graph before commits that touch TypeScript files.

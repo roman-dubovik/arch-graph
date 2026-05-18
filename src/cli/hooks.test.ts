@@ -2,11 +2,12 @@
  * Unit tests for src/cli/hooks.ts — hook install with semantic build integration.
  *
  * Covers:
- *   1. Default install (no flag): hook body contains `arch-graph semantic build --quiet || true`.
+ *   1. Default install (no flag): hook body contains conditional `if arch-graph semantic build --quiet; then` gate.
  *   2. --no-include-semantic: hook body does NOT contain `arch-graph semantic build`.
  *   3. parseHookArgs: --no-include-semantic parsed correctly.
  *   4. Re-install is idempotent.
  *   5. Switching semantic mode on re-install updates the hook body.
+ *   6. Failure path: semantic build failure → `git add` of semantic files is skipped (if/then gate).
  */
 import { mkdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -61,15 +62,29 @@ describe('parseHookArgs', () => {
 // ---------------------------------------------------------------------------
 
 describe('hookInstall — default (semantic build included)', () => {
-    it('pre-commit hook body contains semantic build invocation', async () => {
+    it('pre-commit hook body gates git add on successful semantic build (if/then)', async () => {
         await hookInstall({ repo: testDir, mode: 'pre-commit' });
 
         const hookPath = preCommitHookPath(testDir);
         const body = await readFile(hookPath, 'utf8');
 
-        expect(body).toContain('arch-graph semantic build --quiet || true');
+        // The gate must use if/then, not || true, so a failed build skips staging.
+        expect(body).toContain('if arch-graph semantic build --quiet; then');
         expect(body).toContain('arch-graph-out/semantic/manifest.json');
         expect(body).toContain('arch-graph-out/semantic/embeddings.jsonl');
+        // The legacy unconditional form must NOT appear.
+        expect(body).not.toContain('arch-graph semantic build --quiet || true');
+    });
+
+    it('pre-commit hook body: semantic build failure path skips git add (no || true after build)', async () => {
+        await hookInstall({ repo: testDir, mode: 'pre-commit' });
+
+        const hookPath = preCommitHookPath(testDir);
+        const body = await readFile(hookPath, 'utf8');
+
+        // Verify the if/then structure — git add of semantic files is inside the if block.
+        // If the build fails, the fi closes without staging.
+        expect(body).toMatch(/if arch-graph semantic build --quiet; then[\s\S]*?git add arch-graph-out\/semantic\/manifest\.json[\s\S]*?fi/);
     });
 
     it('post-commit hook body contains semantic build invocation', async () => {
@@ -147,6 +162,6 @@ describe('hookInstall — re-install', () => {
         // Re-install with semantic enabled.
         await hookInstall({ repo: testDir, mode: 'pre-commit' });
         body = await readFile(preCommitHookPath(testDir), 'utf8');
-        expect(body).toContain('arch-graph semantic build --quiet || true');
+        expect(body).toContain('if arch-graph semantic build --quiet; then');
     });
 });
