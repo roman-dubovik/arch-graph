@@ -561,6 +561,7 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         },
         docs: docsDiagnostics,
         openapi: openapiEnrich.diagnostics,
+        cron: cronMapped.diagnostics,
     };
     const docsValidation = validateDocs(docsDiagnostics, graph.nodes);
     const validation: BuildValidation = {
@@ -577,6 +578,7 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         config: configValidation,
         dbEntityFields: dbEntityFieldsValidation,
         docs: docsValidation,
+        cron: cronValidation,
     };
 
     return { graph, diagnostics, validation };

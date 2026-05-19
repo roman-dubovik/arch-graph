@@ -491,6 +491,8 @@ export interface DiagnosticsReport {
     docs?: DocsDiagnostics;
     /** OpenAPI YAML enrichment diagnostics — populated by the enrichment pass in `runBuild`. */
     openapi?: OpenApiDiagnostics;
+    /** Cron-schedule domain diagnostics (mapper-level: unowned sites + category counts). */
+    cron?: CronScheduleDiagnostics;
     /**
      * Populated only when `arch-graph semantic build` has been run.
      * Optional so plain `arch-graph build` keeps the same diagnostics.json
@@ -642,6 +644,8 @@ export interface BuildValidation {
     dbEntityFields?: DbEntityFieldsValidationResult;
     /** Docs-domain validation report. */
     docs?: DocsValidationReport;
+    /** Cron-schedule domain validation report. */
+    cron?: import('../validation/cron-schedule-validator.js').CronScheduleValidationReport;
 }
 
 // ============================================================================
@@ -784,6 +788,25 @@ export function queueNameOf(ref: BullMqQueueRef): string | null {
 // ============================================================================
 // Cron-schedule-domain types (@nestjs/schedule)
 // ============================================================================
+
+/**
+ * Mapper-level diagnostics for the cron-schedule domain.
+ * Mirrors `BullMqDiagnostics` shape — unowned sites + category counts.
+ */
+export interface CronScheduleDiagnostics {
+    /** Sites whose file falls outside apps/ and libs/ (no owner found). */
+    unowned: CronScheduleSite[];
+    counts: {
+        totalSites: number;
+        cron: number;
+        interval: number;
+        timeout: number;
+        dynamic: number;
+        unowned: number;
+        nodesEmitted: number;
+        edgesEmitted: number;
+    };
+}
 
 /**
  * One cron/interval/timeout site found in source.

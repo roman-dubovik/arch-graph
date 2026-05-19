@@ -1,4 +1,5 @@
 import type {
+    CronScheduleDiagnostics,
     CronScheduleSite,
     GraphEdge,
     GraphNode,
@@ -10,19 +11,7 @@ import { ownerNodeFor, ownerNodeId } from './owner-node.js';
 export interface MapCronScheduleResult {
     nodes: GraphNode[];
     edges: GraphEdge[];
-    diagnostics: {
-        unowned: CronScheduleSite[];
-        counts: {
-            totalSites: number;
-            cron: number;
-            interval: number;
-            timeout: number;
-            dynamic: number;
-            unowned: number;
-            nodesEmitted: number;
-            edgesEmitted: number;
-        };
-    };
+    diagnostics: CronScheduleDiagnostics;
 }
 
 /**
