@@ -812,7 +812,7 @@ arch-graph build --strict            # CI gate: exit 3 if recall drops below flo
               </span>
               <h3>BullMQ</h3>
             </div>
-            <p class="domain-blurb">Queue boundaries. <code>@InjectQueue</code> producers and <code>@Processor</code> consumers tied to a named queue node. Queue meta includes <code>concurrency</code>, <code>defaultDelay</code>, <code>defaultAttempts</code>, <code>defaultBackoff</code>, <code>hasRepeat</code> (extras-v1); <code>jobData</code> type fields and <code>workerConcurrencyEnvVar</code> / <code>workerConcurrencyFallback</code> (types-v1, requires <code>--with-types</code>). Modern @nestjs/bullmq pattern: WorkerHost.process() override AND class heritage type-args (<code>extends BaseWorkerHost&lt;T,R&gt;</code>) both detected (realworld-v1).</p>
+            <p class="domain-blurb">Queue boundaries. <code>@InjectQueue</code> producers and <code>@Processor</code> consumers tied to a named queue node. Queue meta includes <code>concurrency</code>, <code>defaultDelay</code>, <code>defaultAttempts</code>, <code>defaultBackoff</code>, <code>hasRepeat</code> (extras-v1); <code>jobData</code> type fields and <code>workerConcurrencyEnvVar</code> / <code>workerConcurrencyFallback</code> (types-v1, requires <code>--with-types</code>). Modern @nestjs/bullmq pattern: WorkerHost.process() override AND class heritage type-args (<code>extends BaseWorkerHost&lt;T,R&gt;</code>) both detected (realworld-v1) + recursive walk for 2-level inheritance (realworld-v2).</p>
             <ul class="domain-edges mono">
               <li>queue-produce</li>
               <li>queue-consume</li>
