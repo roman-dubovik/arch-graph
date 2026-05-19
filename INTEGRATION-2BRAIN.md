@@ -8,9 +8,10 @@ arch-graph works as a standalone architecture extractor for NestJS monorepos —
 
 Both arch-graph and 2-brain use **the same embedding model** for cross-system vector comparability:
 
-- **Model**: `Xenova/paraphrase-multilingual-MiniLM-L12-v2`
-- **Dimensions**: 384
+- **Model**: `Xenova/multilingual-e5-base`
+- **Dimensions**: 768
 - **Architecture**: multilingual (supports code comments in non-English, natural-language queries in any language)
+- **Prefix discipline**: e5-base requires `passage: ` prefix for indexed documents and `query: ` prefix for search queries. Both arch-graph and any federation consumer MUST apply the same prefix mapping; mismatched prefixes degrade similarity scores by ~10-15 points.
 - **Deployment**:
   - **arch-graph**: local `@xenova/transformers` (ONNX Runtime, in-process)
   - **2-brain**: local Python `sentence-transformers` with ONNX runtime
@@ -28,7 +29,7 @@ The `semantic_search` MCP tool exposes this schema (identical shape expected for
   query: string,                           // text to embed and search for
   topK?: number,                           // default 10, max 50
   kinds?: string[],                        // optional filter by NodeKind
-  includeVectors?: boolean,                // default false; true includes full 384-dim vectors
+  includeVectors?: boolean,                // default false; true includes full 768-dim vectors
 }
 ```
 
@@ -44,10 +45,10 @@ The `semantic_search` MCP tool exposes this schema (identical shape expected for
     path?: string,                         // file path (omitted for abstract nodes like queues)
     score: number,                         // cosine similarity in [-1, 1]
     snippet?: string,                      // ≤ 400 characters of context (code snippet or label)
-    vector?: number[],                     // 384-dim float array; present only if includeVectors=true
+    vector?: number[],                     // 768-dim float array; present only if includeVectors=true
   }>,
-  model: string,                           // "Xenova/paraphrase-multilingual-MiniLM-L12-v2"
-  dim: 384,
+  model: string,                           // "Xenova/multilingual-e5-base"
+  dim: 768,
   indexBuiltAt: string,                    // ISO 8601 timestamp of sidecar build
   graphHashMatches: boolean,               // false → caller should re-run `arch-graph semantic build`
 
@@ -99,9 +100,9 @@ The MCP contract above is **stable for federation**. Any breaking change require
 │     │  2-brain drawers    │     │ arch-graph│               │
 │     │  (memory index)     │     │ semantic  │               │
 │     │ Xenova ONNX Runtime │     │ sidecar   │               │
-│     │ 384-dim vectors     │     │ Xenova    │               │
+│     │ 768-dim vectors     │     │ Xenova    │               │
 │     └──────────┬──────────┘     │ ONNX      │               │
-│                │                │ 384-dim   │               │
+│                │                │ 768-dim   │               │
 │     ┌──────────▼──────────────────────────┐ │               │
 │     │  Optional RRF ranking                │ │               │
 │     │  (combine 2-brain + arch-graph)      │ │               │
