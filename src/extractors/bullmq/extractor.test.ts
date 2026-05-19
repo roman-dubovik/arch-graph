@@ -170,25 +170,25 @@ describe('AC3b.1 — queue node meta', () => {
 
 describe('FIX 1 — failOver resolution and unresolvedFailOver', () => {
     it('failOver as identifier resolves via QueueNameIndex', async () => {
-        const source = `
-            import { BullModule } from '@nestjs/bullmq';
-            const QUEUE_NAMES = { DLQ: 'payments-dlq' };
-            BullModule.registerQueue({
-                name: 'payments',
-                defaultJobOptions: {
-                    attempts: 5,
-                    failOver: QUEUE_NAMES.DLQ,
-                },
-            });
-            BullModule.registerQueue({ name: 'payments-dlq' });
-        `;
+        // QueueNameIndex indexes exported simple const declarations (e.g. export const DLQ_QUEUE = 'payments-dlq')
         const p = new Project({
             useInMemoryFileSystem: true,
             compilerOptions: { target: 99, module: 99, moduleResolution: 100, strict: false },
         });
-        // const declarations must be in a separate file for QueueNameIndex to pick them up
-        p.createSourceFile('/app/apps/test-svc/src/constants.ts', `export const QUEUE_NAMES = { DLQ: 'payments-dlq' };`);
-        p.createSourceFile('/app/apps/test-svc/src/module.ts', source);
+        // The const must be exported for QueueNameIndex to pick it up
+        p.createSourceFile('/app/apps/test-svc/src/constants.ts', `export const DLQ_QUEUE = 'payments-dlq';`);
+        p.createSourceFile('/app/apps/test-svc/src/module.ts', `
+            import { BullModule } from '@nestjs/bullmq';
+            import { DLQ_QUEUE } from './constants';
+            BullModule.registerQueue({
+                name: 'payments',
+                defaultJobOptions: {
+                    attempts: 5,
+                    failOver: DLQ_QUEUE,
+                },
+            });
+            BullModule.registerQueue({ name: 'payments-dlq' });
+        `);
         const result = await extractBullMq(makeConfig(), p);
         const reg = result.registrations.find(
             (r) => r.queue.kind !== 'unresolved' && r.queue.name === 'payments',
