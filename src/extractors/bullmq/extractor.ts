@@ -132,7 +132,7 @@ export async function extractBullMq(
         }
 
         if (hasBullModule) {
-            collectRegistrations(sf, queueNames, registrations);
+            collectRegistrations(sf, queueNames, registrations, unresolvedFailOver);
         }
 
         // Collect .on() and .add() call sites for event listeners, repeat detection, and DLQ heuristic
@@ -280,6 +280,7 @@ function collectRegistrations(
     sf: SourceFile,
     queueNames: QueueNameIndex,
     out: BullMqQueueRegistration[],
+    unresolvedFailOver: Array<{ location: SourceLoc; raw: string }>,
 ): void {
     sf.forEachDescendant((node) => {
         if (node.getKind() !== SyntaxKind.CallExpression) return;
@@ -295,7 +296,7 @@ function collectRegistrations(
         const location = { file: sf.getFilePath(), line: pos.line, column: pos.column };
 
         for (const arg of call.getArguments()) {
-            out.push(resolveRegistrationArg(arg, queueNames, api, location));
+            out.push(resolveRegistrationArg(arg, queueNames, api, location, unresolvedFailOver));
         }
     });
 }
@@ -305,6 +306,7 @@ function resolveRegistrationArg(
     queueNames: QueueNameIndex,
     api: 'registerQueue' | 'registerQueueAsync',
     location: SourceLoc,
+    unresolvedFailOver: Array<{ location: SourceLoc; raw: string }>,
 ): BullMqQueueRegistration {
     if (arg.getKind() !== SyntaxKind.ObjectLiteralExpression) {
         return {
@@ -377,9 +379,11 @@ function resolveRegistrationArg(
         const failOverProp = findProp(djo, 'failOver');
         const failOverInit = failOverProp?.getInitializer();
         if (failOverInit) {
-            const fk = failOverInit.getKind();
-            if (fk === SyntaxKind.StringLiteral || fk === SyntaxKind.NoSubstitutionTemplateLiteral) {
-                failOverTarget = (failOverInit as StringLiteral).getLiteralText();
+            const resolved = resolveQueueArg(failOverInit, queueNames);
+            if (resolved.kind !== 'unresolved') {
+                failOverTarget = resolved.name;
+            } else {
+                unresolvedFailOver.push({ location, raw: failOverInit.getText().slice(0, 80) });
             }
         }
     }

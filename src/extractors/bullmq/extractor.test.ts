@@ -165,6 +165,85 @@ describe('AC3b.1 — queue node meta', () => {
 });
 
 // ---------------------------------------------------------------------------
+// FIX 1 — failOver const resolution + unresolvedFailOver population
+// ---------------------------------------------------------------------------
+
+describe('FIX 1 — failOver resolution and unresolvedFailOver', () => {
+    it('failOver as identifier resolves via QueueNameIndex', async () => {
+        const source = `
+            import { BullModule } from '@nestjs/bullmq';
+            const QUEUE_NAMES = { DLQ: 'payments-dlq' };
+            BullModule.registerQueue({
+                name: 'payments',
+                defaultJobOptions: {
+                    attempts: 5,
+                    failOver: QUEUE_NAMES.DLQ,
+                },
+            });
+            BullModule.registerQueue({ name: 'payments-dlq' });
+        `;
+        const p = new Project({
+            useInMemoryFileSystem: true,
+            compilerOptions: { target: 99, module: 99, moduleResolution: 100, strict: false },
+        });
+        // const declarations must be in a separate file for QueueNameIndex to pick them up
+        p.createSourceFile('/app/apps/test-svc/src/constants.ts', `export const QUEUE_NAMES = { DLQ: 'payments-dlq' };`);
+        p.createSourceFile('/app/apps/test-svc/src/module.ts', source);
+        const result = await extractBullMq(makeConfig(), p);
+        const reg = result.registrations.find(
+            (r) => r.queue.kind !== 'unresolved' && r.queue.name === 'payments',
+        );
+        expect(reg?.failOverTarget).toBe('payments-dlq');
+
+        const registry = makeRegistry();
+        const mapped = mapBullMqToGraph(
+            result.producers,
+            result.consumers,
+            result.registrations,
+            registry,
+            result.repeatAddSites,
+            result.eventListenerSites,
+            result.catchBlockAddSites,
+            result.unresolvedFailOver,
+        );
+        const failsIntoEdge = mapped.edges.find((e) => e.kind === 'queue-fails-into');
+        expect(failsIntoEdge).toBeDefined();
+        expect(failsIntoEdge?.to).toBe('queue:payments-dlq');
+    });
+
+    it('failOver as non-literal (property access not in index) populates unresolvedFailOver', async () => {
+        const source = `
+            import { BullModule } from '@nestjs/bullmq';
+            BullModule.registerQueue({
+                name: 'payments',
+                defaultJobOptions: {
+                    attempts: 5,
+                    failOver: someExternalRef.dlqQueue,
+                },
+            });
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project);
+        // unresolvedFailOver should be populated
+        expect(result.unresolvedFailOver.length).toBeGreaterThan(0);
+        // No queue-fails-into edge should be emitted
+        const registry = makeRegistry();
+        const mapped = mapBullMqToGraph(
+            result.producers,
+            result.consumers,
+            result.registrations,
+            registry,
+            result.repeatAddSites,
+            result.eventListenerSites,
+            result.catchBlockAddSites,
+            result.unresolvedFailOver,
+        );
+        const failsIntoEdge = mapped.edges.find((e) => e.kind === 'queue-fails-into');
+        expect(failsIntoEdge).toBeUndefined();
+    });
+});
+
+// ---------------------------------------------------------------------------
 // AC3b.2 — queue-fails-into edge (MUST case)
 // ---------------------------------------------------------------------------
 
