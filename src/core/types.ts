@@ -825,6 +825,13 @@ export interface BullMqDiagnostics {
         registrations: number;
         unresolved: number;
         unowned: number;
+        repeatAddSites: number;
+        eventListenerSites: number;
+        catchBlockAddSites: number;
+        unresolvedEventListeners: number;
+        unresolvedFailOver: number;
+        unownedEventListeners: number;
+        unresolvedCatchBlockSites: number;
     };
 }
 

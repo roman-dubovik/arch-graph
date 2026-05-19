@@ -261,6 +261,13 @@ export function mapBullMqToGraph(
                 registrations: registrations.length,
                 unresolved: unresolved.length,
                 unowned: unowned.length,
+                repeatAddSites: repeatAddSites.length,
+                eventListenerSites: eventListenerSites.length,
+                catchBlockAddSites: catchBlockAddSites.length,
+                unresolvedEventListeners: unresolvedEventListeners.length,
+                unresolvedFailOver: unresolvedFailOver.length,
+                unownedEventListeners: unownedEventListeners.length,
+                unresolvedCatchBlockSites: unresolvedCatchBlockSites.length,
             },
         },
     };
