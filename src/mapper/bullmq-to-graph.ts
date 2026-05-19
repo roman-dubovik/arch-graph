@@ -173,9 +173,9 @@ export function mapBullMqToGraph(
         // Decision: each repeat-add site creates its own node (no deduplication
         // across sites — per design doc "deduplication is OUT of scope").
         if (r.repeatExpression !== undefined) {
-            const lineHash = `${r.location.line}`;
+            const fileSlug = r.location.file.replace(/^.*\/src\//, 'src/').replace(/\//g, '_');
             const jobPart = r.jobName ? `:${r.jobName}` : '';
-            const cronNodeId = `cron-schedule:queue-repeat:${r.queueName}${jobPart}:${lineHash}`;
+            const cronNodeId = `cron-schedule:queue-repeat:${r.queueName}${jobPart}:${fileSlug}:${r.location.line}`;
             if (!cronNodes.has(cronNodeId)) {
                 cronNodes.set(cronNodeId, {
                     id: cronNodeId,
@@ -186,6 +186,7 @@ export function mapBullMqToGraph(
                         resolvedExpression: r.repeatExpression,
                         category: 'queue-repeat',
                         source: 'BullMqRepeatAddSite',
+                        location: { file: r.location.file, line: r.location.line },
                     },
                 });
             }
