@@ -5,7 +5,7 @@
     "kind": "doc-section",
     "label": "SB1 — where is the semantic builder",
     "score": 0.8703455161129607,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/arch-graph-results.md",
+    "path": "<arch-graph-root>/bench/self-build/arch-graph-results.md",
     "snippet": "# arch-graph Results — Self-Build Bench > SB1 — where is the semantic builder\n\n\n**Category:** A_find  \n**Verdict:** HIT  \n**minScore:** 0.4  \n**expectedKindIn:** doc-section, config-field  \n**expectedLabelHas:** Semantic search, semantic, builder"
   },
   {
@@ -14,7 +14,7 @@
     "kind": "doc-section",
     "label": "Top-3 Results per Query",
     "score": 0.8565744125508633,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/README.md",
+    "path": "<arch-graph-root>/bench/self-build/README.md",
     "snippet": "# Public Self-Build Mini-Bench: arch-graph vs graphify > Results > Top-3 Results per Query\n\n\n**SB1 — where is the semantic builder**"
   },
   {
@@ -23,7 +23,7 @@
     "kind": "doc-section",
     "label": "SB1 — where is the semantic builder",
     "score": 0.8496044216619619,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/arch-graph-results.md",
+    "path": "<arch-graph-root>/bench/self-build/arch-graph-results.md",
     "snippet": "# arch-graph Results — Self-Build Bench > SB1 — where is the semantic builder\n\n| Rank | Score | Kind | Label |\n|------|-------|------|-------|\n| 1 | 0.497 | doc-section | Semantic search (optional) **HIT** |\n| 2 | 0.496 | doc-section | Task 13: Semantic build + MCP filter — integration tests |\n| 3 | 0.495 | doc-section | Goal |\n| 4 | 0.474 | doc-section | 🟡 3. Hybrid BM25 + semantic (отложено) |\n| 5 | 0.464 | doc-section | Task 13: Semantic build + MCP filter — integration tests |\n| 6 | 0.462 | doc-section | Design: Semantic sidecar for arch-graph (Variant 3) |\n| 7 | 0.462 | doc-section | Task 13: Semantic build + MCP filter — integration tests |\n| 8 | 0.461 | doc-section | Semantic search (optional) |\n| 9 | 0.458 | doc-section | Task 13: Semantic build + MCP filter — integration tests |\n"
   },
   {
@@ -32,7 +32,7 @@
     "kind": "doc-section",
     "label": "Task 13: Semantic build + MCP filter — integration tests",
     "score": 0.8492583734416334,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
     "snippet": "# doc-section Implementation Plan > Task 13: Semantic build + MCP filter — integration tests\n\n```bash\nwc -l src/semantic/builder.test.ts src/mcp/semantic-search.test.ts\n```\n\nOpen both, find the public entry points the existing tests use (e.g. `buildSemanticIndex(graph, ...)`, `semanticSearch(opts, root)`).\n\n- [ ] **Step 2: Add builder test for doc-section**"
   },
   {
@@ -41,7 +41,7 @@
     "kind": "doc-section",
     "label": "buildEmbedText location",
     "score": 0.8417910193087366,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-openapi-enrich-design.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-openapi-enrich-design.md",
     "snippet": "# Design: OpenAPI YAML Enrichment for Endpoint Nodes > Key findings from analysis > buildEmbedText location\n\n`src/semantic/builder.ts` — private function `buildEmbedText(node, snippet)` at bottom\nCurrently: `label + kind` base + snippet. Need to add openapiInfo text for endpoint kind.\n"
   },
   {
@@ -50,7 +50,7 @@
     "kind": "doc-section",
     "label": "9. Test Plan",
     "score": 0.8376810830173035,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/2026-05-18-incremental-semantic-design.md",
+    "path": "<arch-graph-root>/docs/plans/2026-05-18-incremental-semantic-design.md",
     "snippet": "# Incremental Semantic Re-embed — Design > 9. Test Plan\n\n\nTask 5 must include a dedicated `src/semantic/incremental.test.ts` file plus\nadditions to `src/semantic/builder.test.ts`. The following cases must each be\ncovered by at least one test:"
   },
   {
@@ -59,7 +59,7 @@
     "kind": "doc-section",
     "label": "Task 13: Semantic build + MCP filter — integration tests",
     "score": 0.8369934796928455,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
     "snippet": "# doc-section Implementation Plan > Task 13: Semantic build + MCP filter — integration tests\n\nIf `buildSemanticIndex` is private and only the top-level `semantic build` CLI is testable, write a tmpdir-based integration test that runs `semantic build` against the fixture graph and reads back `embeddings.jsonl`.\n\n- [ ] **Step 3: Add MCP filter test**\n\nIn `src/mcp/semantic-search.test.ts`:"
   },
   {
@@ -68,7 +68,7 @@
     "kind": "doc-section",
     "label": "Task 13: Semantic build + MCP filter — integration tests",
     "score": 0.835509629350125,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
     "snippet": "# doc-section Implementation Plan > Task 13: Semantic build + MCP filter — integration tests\n\n\n**Files:**\n- Modify: `src/semantic/builder.test.ts` (add doc-section block)\n- Modify: `src/mcp/semantic-search.test.ts` (add doc-section block)\n\n- [ ] **Step 1: Read existing builder + MCP test patterns**"
   },
   {
@@ -77,7 +77,7 @@
     "kind": "doc-section",
     "label": "9. Test Plan",
     "score": 0.8347802712408793,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/2026-05-18-incremental-semantic-design.md",
+    "path": "<arch-graph-root>/docs/plans/2026-05-18-incremental-semantic-design.md",
     "snippet": "# Incremental Semantic Re-embed — Design > 9. Test Plan\n\n8. **Hook with `--include-semantic` (default-on)**\n   - Call `hookInstall` with default args (no `--no-include-semantic`).\n   - Read the installed hook file.\n   - Assert: hook body contains `arch-graph semantic build --quiet || true`."
   },
   {
@@ -86,7 +86,7 @@
     "kind": "doc-section",
     "label": "9. Test Plan",
     "score": 0.8344293568386575,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/2026-05-18-incremental-semantic-design.md",
+    "path": "<arch-graph-root>/docs/plans/2026-05-18-incremental-semantic-design.md",
     "snippet": "# Incremental Semantic Re-embed — Design > 9. Test Plan\n\n9. **Hook with `--no-include-semantic`**\n   - Call `hookInstall` with `noIncludeSemantic: true`.\n   - Read the installed hook file.\n   - Assert: hook body does NOT contain `arch-graph semantic build`."
   },
   {
@@ -95,7 +95,7 @@
     "kind": "doc-section",
     "label": "SB2 — where is the doc-section extractor source file",
     "score": 0.9000802871344671,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/arch-graph-results.md",
+    "path": "<arch-graph-root>/bench/self-build/arch-graph-results.md",
     "snippet": "# arch-graph Results — Self-Build Bench > SB2 — where is the doc-section extractor source file\n\n\n**Category:** A_find  \n**Verdict:** HIT  \n**minScore:** 0.45  \n**expectedKindIn:** doc-section  \n**expectedLabelHas:** extract-docs, Extractor, doc-section"
   },
   {
@@ -104,7 +104,7 @@
     "kind": "doc-section",
     "label": "doc-section Implementation Plan",
     "score": 0.8546104401379249,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
     "snippet": "# doc-section Implementation Plan\n\n**Architecture:** A new extractor walks resolved `.md` files (gitignore-aware include/exclude from config + interactive init), normalizes content, parses frontmatter (`js-yaml`), and adaptively splits into chunks bounded by the embedder's tokenizer (BERT-tokens, default 100). A new mapper turns sites into graph nodes; the existing `snippet.ts` gets a `'doc-section'` case that reconstructs body from disk by line range + heading-chain prefix. No new MCP tools — filtering via existing `kinds: ['doc-section']`."
   },
   {
@@ -113,7 +113,7 @@
     "kind": "doc-section",
     "label": "doc-section Implementation Plan",
     "score": 0.8531940247143114,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
     "snippet": "# doc-section Implementation Plan\n\n**Reference design:** `docs/plans/2026-05-17-doc-section-extractor-design.md` (commit `5de88af` on develop)."
   },
   {
@@ -122,7 +122,7 @@
     "kind": "doc-section",
     "label": "Top-3 Results per Query",
     "score": 0.8515658880572983,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/README.md",
+    "path": "<arch-graph-root>/bench/self-build/README.md",
     "snippet": "# Public Self-Build Mini-Bench: arch-graph vs graphify > Results > Top-3 Results per Query\n\ngraphify (MISS):\n1. `types.ts` (src/core/types.ts)\n2. `build.ts` (src/pipeline/build.ts)\n3. `config.ts` (src/core/config.ts)\n\n---\n\n**SB2 — where is the doc-section extractor source file**"
   },
   {
@@ -131,7 +131,7 @@
     "kind": "doc-section",
     "label": "Diagnostics surface",
     "score": 0.8501656191686302,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-doc-section-extractor-design.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-doc-section-extractor-design.md",
     "snippet": "# Design: doc-section — Markdown sections as a new graph kind > Validator (`validation/docs-validator.ts`) > Diagnostics surface\n\n\n```ts\nexport interface DocsDiagnostics {\n    filesScanned: number;\n    filesSkipped: Array<{\n        path: string;\n        reason: 'oversized' | 'non-utf8' | 'empty' | 'gitignored' | 'excluded-by-config';\n    }>;\n    frontmatterErrors: Array<{ path: string; error: string }>;\n    oversizedChunks: Array<{ docSectionId: string; tokenCount: number }>;\n    counts: {\n        filesIncluded: number;        // resolved set size\n        nodesEmitted: number;\n        headingsTotal: number;\n        sectionsSplit: number;\n        filesWithFrontmatter: number;\n    };\n}\n```"
   },
   {
@@ -140,7 +140,7 @@
     "kind": "doc-section",
     "label": "doc-section Implementation Plan",
     "score": 0.8476280435301126,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
     "snippet": "# doc-section Implementation Plan\n\n**Goal:** Add `doc-section` as a new `NodeKind` so Markdown sections (README, CHANGELOG, ADRs, `docs/**/*.md`) become first-class graph nodes with embeddings, retrievable via the existing `semanticSearch` MCP tool."
   },
   {
@@ -149,7 +149,7 @@
     "kind": "doc-section",
     "label": "Task 3: Slugify (`extractors/docs/slugify.ts`)",
     "score": 0.8451860456422763,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
     "snippet": "# doc-section Implementation Plan > Task 3: Slugify (`extractors/docs/slugify.ts`)\n\n```bash\ngit add src/extractors/docs/slugify.ts src/extractors/docs/slugify.test.ts\ngit commit -m \"feat(arch-graph): GitHub-style slugifier for doc-section anchors\"\n```\n\n---"
   },
   {
@@ -158,7 +158,7 @@
     "kind": "doc-section",
     "label": "Task 5: Extractor — file walker + reader + frontmatter (`extractors/docs/extract-docs.ts`)",
     "score": 0.844877360255791,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
     "snippet": "# doc-section Implementation Plan > Task 5: Extractor — file walker + reader + frontmatter (`extractors/docs/extract-docs.ts`)\n\nexport interface ExtractDocsOptions {\n    projectRoot: string;\n    include: string[];\n    exclude: string[];\n    respectGitignore: boolean;\n    chunkTokens: number;\n    maxFileBytes: number;\n    countTokens: (text: string) => Promise<number>;\n}"
   },
   {
@@ -167,7 +167,7 @@
     "kind": "doc-section",
     "label": "Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`",
     "score": 0.8433433644834222,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
     "snippet": "# doc-section Implementation Plan > Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`\n\n```ts\n// ─── docs pass ────────────────────────────────────────────────────────────\nconst docs = await extractDocs({\n    projectRoot: config.repoRoot,\n    include: config.docs.include,\n    exclude: config.docs.exclude,\n    respectGitignore: config.docs.respectGitignore,\n    chunkTokens: config.docs.chunkTokens,\n    maxFileBytes: config.docs.maxFileBytes,\n    countTokens,\n});\nconst docNodes = mapDocsToGraph(docs.sites, config.repoRoot);\ngraph.nodes.push(...docNodes);\ndiagnostics.docs = docs.diagnostics;\n```"
   },
   {
@@ -176,7 +176,7 @@
     "kind": "doc-section",
     "label": "Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`",
     "score": 0.8430104687193809,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
     "snippet": "# doc-section Implementation Plan > Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`\n\nNote: the existing test fixtures live under `src/__fixtures__/docs/sample/` — `extractDocs` will use them via the fixtureRoot passed in tests."
   },
   {
@@ -185,7 +185,7 @@
     "kind": "doc-section",
     "label": "SB3 — where is the OpenAPI enricher",
     "score": 0.8667341959887165,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/arch-graph-results.md",
+    "path": "<arch-graph-root>/bench/self-build/arch-graph-results.md",
     "snippet": "# arch-graph Results — Self-Build Bench > SB3 — where is the OpenAPI enricher\n\n| Rank | Score | Kind | Label |\n|------|-------|------|-------|\n| 1 | 0.397 | doc-section | Architecture overview |\n| 2 | 0.378 | doc-section | Goal |\n| 3 | 0.367 | doc-section | Design: OpenAPI YAML Enrichment for Endpoint Nodes **HIT** |\n| 4 | 0.352 | doc-section | Execution order |\n| 5 | 0.333 | doc-section | Quick start |\n| 6 | 0.327 | doc-section | Constraints |\n| 7 | 0.319 | doc-section | Key findings from analysis |\n| 8 | 0.317 | doc-section | Runtime trace integration (OpenTelemetry service maps) |\n| 9 | 0.317 | doc-section | 2026-05-17: cumulative — `fe-i18n-multi-enum-v1` + `openapi- |\n| 10 | 0.315 | doc-section | Task 12: Interactive init — docs discovery prompts |"
   },
   {
@@ -194,7 +194,7 @@
     "kind": "doc-section",
     "label": "SB3 — where is the OpenAPI enricher",
     "score": 0.8622913633525434,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/arch-graph-results.md",
+    "path": "<arch-graph-root>/bench/self-build/arch-graph-results.md",
     "snippet": "# arch-graph Results — Self-Build Bench > SB3 — where is the OpenAPI enricher\n\n\n**Category:** A_find  \n**Verdict:** HIT  \n**minScore:** 0.35  \n**expectedKindIn:** doc-section, config-field  \n**expectedLabelHas:** openapi, OpenAPI, enrich"
   },
   {
@@ -203,7 +203,7 @@
     "kind": "doc-section",
     "label": "Architecture overview",
     "score": 0.8434162899819507,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-openapi-enrich-design.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-openapi-enrich-design.md",
     "snippet": "# Design: OpenAPI YAML Enrichment for Endpoint Nodes > Architecture overview\n\n\n```\nArchGraphConfig  (new field: openapiGlobs?)\n        │\n        ▼\nenrichEndpointsFromOpenApi(graphNodes, projectRoot, openapiGlobs)\n        │  uses fast-glob to find YAML files\n        │  uses js-yaml to parse each file\n        │  matches by operationId-first, fallback (method,path)\n        │  mutates endpoint GraphNode meta.openapiInfo in-place\n        │\n        ▼\nDiagnosticsReport.openapi (new optional field)\n        │\n        ▼\nbuildEmbedText() — appends openapiInfo fields for endpoint nodes\n```"
   },
   {
@@ -212,7 +212,7 @@
     "kind": "doc-section",
     "label": "Goal",
     "score": 0.8363248397584712,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-openapi-enrich-design.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-openapi-enrich-design.md",
     "snippet": "# Design: OpenAPI YAML Enrichment for Endpoint Nodes > Goal\n\nAdd a post-extraction enrichment pass that reads OpenAPI YAML files and injects\noperation descriptions (often in Russian for project-c) into matching endpoint nodes\nvia `meta.openapiInfo`, extending `buildEmbedText` so the richer text gets\nvectorized and improves A_find recall.\n"
   },
   {
@@ -221,7 +221,7 @@
     "kind": "doc-section",
     "label": "Design: OpenAPI YAML Enrichment for Endpoint Nodes",
     "score": 0.8252136040220922,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-openapi-enrich-design.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-openapi-enrich-design.md",
     "snippet": "# Design: OpenAPI YAML Enrichment for Endpoint Nodes\n\nDate: 2026-05-17\n"
   },
   {
@@ -230,7 +230,7 @@
     "kind": "doc-section",
     "label": "Constraints",
     "score": 0.8248277382997321,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-openapi-enrich-design.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-openapi-enrich-design.md",
     "snippet": "# Design: OpenAPI YAML Enrichment for Endpoint Nodes > Constraints\n\n- Do NOT add a new `NodeKind`\n- Do NOT modify endpoint extractor logic\n- Do NOT touch doc-section pipeline\n- `js-yaml` and `fast-glob` already in deps — no new deps needed\n- Conventional Commits, scope = `openapi` or `arch-graph`\n- Selective `git add <paths>` — NEVER `git add -A`\n- All git ops via `git -C <arch-graph-root>/.worktrees/feat-openapi-enrich`"
   },
   {
@@ -239,7 +239,7 @@
     "kind": "doc-section",
     "label": "File-touch matrix",
     "score": 0.8191577478011565,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-openapi-enrich-design.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-openapi-enrich-design.md",
     "snippet": "# Design: OpenAPI YAML Enrichment for Endpoint Nodes > File-touch matrix\n\n\n| Task | Files (exact paths) | Touches |\n|------|---------------------|---------|\n| 1 — Core enrichment pass | `src/extractors/openapi/enrich-endpoints.ts` | NEW file |\n| 1 — Tests | `src/extractors/openapi/enrich-endpoints.test.ts` | NEW file |\n| 2 — Config extension | `src/core/config.ts` | add `OpenApiConfig`, `openapiGlobs?` to `ArchGraphConfig` |\n| 2 — Types extension | `src/core/types.ts` | add `OpenApiDiagnostics`, `DiagnosticsReport.openapi?` |\n| 3 — Builder extension | `src/semantic/builder.ts` | extend `buildEmbedText` for endpoint+openapiInfo |\n| 3 — Builder tests | `src/semantic/builder.test.ts` | add tests for AC-F (embed text) |\n| 4 — Pipeline wiring | `src/pipeline/build.ts` | call enrichment pass aft"
   },
   {
@@ -248,7 +248,7 @@
     "kind": "doc-section",
     "label": "Key findings from analysis",
     "score": 0.818462483029716,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-openapi-enrich-design.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-openapi-enrich-design.md",
     "snippet": "# Design: OpenAPI YAML Enrichment for Endpoint Nodes > Key findings from analysis\n\n"
   },
   {
@@ -257,7 +257,7 @@
     "kind": "doc-section",
     "label": "2026-05-17: cumulative — `fe-i18n-multi-enum-v1` + `openapi-enrich-v1` + `*.md`-glob",
     "score": 0.8160544550685667,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/BENCHMARKS.md",
+    "path": "<arch-graph-root>/docs/BENCHMARKS.md",
     "snippet": "# arch-graph benchmarks > Baselines (chronological) > 2026-05-17: cumulative — `fe-i18n-multi-enum-v1` + `openapi-enrich-v1` + `*.md`-glob\n\n**Conclusion**: features ship correctly, but absolute eval needle didn't\nmove on this run because (a) the main win (code-vs-docs split) was the\n20pp lift in the previous baseline, and (b) further features address\nedge cases that this 103-query corpus doesn't sample heavily. The work\nisn't wasted — enum-resolver gave +16pp on B_debug for project-a, and\nOpenAPI/multi-file locales improve embedding quality for queries we\nDON'T have in this corpus."
   },
   {
@@ -266,7 +266,7 @@
     "kind": "doc-section",
     "label": "Task 1 — Core enrichment pass (AC-2, AC-3, AC-4, AC-6, AC-7-A through E)",
     "score": 0.8139203269223406,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-openapi-enrich-design.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-openapi-enrich-design.md",
     "snippet": "# Design: OpenAPI YAML Enrichment for Endpoint Nodes > Acceptance Criteria (per task) > Task 1 — Core enrichment pass (AC-2, AC-3, AC-4, AC-6, AC-7-A through E)\n\n1. `enrichEndpointsFromOpenApi(nodes, projectRoot, globs?)` is exported from new file\n2. Signature: `(nodes: GraphNode[], projectRoot: string, openapiGlobs?: string[]) => Promise<OpenApiEnrichResult>`\n3. Default globs when none provided: `['api/*.yaml', 'api/*.yml', '**/openapi.yaml', '**/swagger.yaml']`\n4. Parses `paths` → each `path/method` → extracts `operationId`, `summary`, `description`, `tags`, `parameters`\n5. Primary match: `node.meta.methodName === operationId`\n6. Fallback match: `node.label.split(' ')[0].toLowerCase() === method` AND `node.id.includes(path)`\n7. Matched nodes get `meta.openapiInfo = { description?, summar"
   },
   {
@@ -275,7 +275,7 @@
     "kind": "doc-section",
     "label": "SB4 — why might semantic search return zero results",
     "score": 0.9079945688636147,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/arch-graph-results.md",
+    "path": "<arch-graph-root>/bench/self-build/arch-graph-results.md",
     "snippet": "# arch-graph Results — Self-Build Bench > SB4 — why might semantic search return zero results\n\n\n**Category:** B_debug  \n**Verdict:** HIT  \n**minScore:** 0.35  \n**expectedKindIn:** doc-section  \n**expectedLabelHas:** semantic, Semantic, search"
   },
   {
@@ -284,7 +284,7 @@
     "kind": "doc-section",
     "label": "SB4 — why might semantic search return zero results",
     "score": 0.8886000871183463,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/arch-graph-results.md",
+    "path": "<arch-graph-root>/bench/self-build/arch-graph-results.md",
     "snippet": "# arch-graph Results — Self-Build Bench > SB4 — why might semantic search return zero results\n\n| Rank | Score | Kind | Label |\n|------|-------|------|-------|\n| 1 | 0.563 | doc-section | Semantic search (optional) **HIT** |\n| 2 | 0.562 | doc-section | Semantic search (optional) |\n| 3 | 0.545 | doc-section | Semantic search (optional) |\n| 4 | 0.494 | doc-section | Semantic search strategy |\n| 5 | 0.490 | doc-section | Semantic search strategy |\n| 6 | 0.484 | doc-section | Semantic search (optional) |\n| 7 | 0.454 | doc-section | Semantic search strategy |\n| 8 | 0.423 | doc-section | Semantic search (optional) |\n| 9 | 0.422 | doc-section | Semantic search (optional) |\n| 10 | 0.419 | doc-section | Methodology — reading the substring heuristic |"
   },
   {
@@ -293,7 +293,7 @@
     "kind": "doc-section",
     "label": "Top-3 Results per Query",
     "score": 0.8554899639094166,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/README.md",
+    "path": "<arch-graph-root>/bench/self-build/README.md",
     "snippet": "# Public Self-Build Mini-Bench: arch-graph vs graphify > Results > Top-3 Results per Query\n\ngraphify (MISS):\n1. `types.ts` (src/core/types.ts)\n2. `build.ts` (src/pipeline/build.ts)\n3. `config.ts` (src/core/config.ts)\n\n---\n\n**SB4 — why might semantic search return zero results**"
   },
   {
@@ -302,7 +302,7 @@
     "kind": "doc-section",
     "label": "Task 4 — MCP `semantic_search` tool",
     "score": 0.8510728423353827,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-16-semantic-sidecar-design.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-16-semantic-sidecar-design.md",
     "snippet": "# Design: Semantic sidecar for arch-graph (Variant 3) > Acceptance Criteria > Task 4 — MCP `semantic_search` tool\n\n\n1. Tool registered in `src/mcp/server.ts` immediately after `explain` registration.\n2. Input/output schema matches the **MCP contract (Task 4)** section above exactly.\n3. Handler reuses `src/semantic/search.ts` — no duplicated logic.\n4. Model is loaded lazily on first invocation (subsequent calls reuse the cached pipeline).\n5. If sidecar is missing for the requested repo, returns a structured error result (not a thrown exception): `{ results: [], error: \"semantic-index-missing\", hint: \"run: arch-graph semantic build\" }`.\n6. Unit test: register and invoke the tool against a fixture index; assert output schema; assert missing-index path."
   },
   {
@@ -311,7 +311,7 @@
     "kind": "doc-section",
     "label": "Semantic search (optional)",
     "score": 0.8493687070407185,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/README.md",
+    "path": "<arch-graph-root>/README.md",
     "snippet": "# arch-graph > Semantic search (optional)\n\nThe semantic layer is independent and opt-in: arch-graph works identically well without it. If you enable it, the CLI and MCP server gain new tools:"
   },
   {
@@ -320,7 +320,7 @@
     "kind": "doc-section",
     "label": "SB6 — where is the score floor applied in semantic search",
     "score": 0.8490579455529496,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/arch-graph-results.md",
+    "path": "<arch-graph-root>/bench/self-build/arch-graph-results.md",
     "snippet": "# arch-graph Results — Self-Build Bench > SB6 — where is the score floor applied in semantic search\n\n| Rank | Score | Kind | Label |\n|------|-------|------|-------|\n| 1 | 0.582 | doc-section | Semantic search (optional) **HIT** |\n| 2 | 0.577 | doc-section | Semantic search (optional) |\n| 3 | 0.550 | doc-section | Semantic search (optional) |\n| 4 | 0.546 | doc-section | Semantic search strategy |\n| 5 | 0.546 | doc-section | Semantic search (optional) |\n| 6 | 0.533 | doc-section | Semantic search (optional) |\n| 7 | 0.531 | doc-section | Semantic search strategy |\n| 8 | 0.513 | doc-section | Methodology — reading the substring heuristic |\n| 9 | 0.512 | doc-section | Semantic search (optional) |\n| 10 | 0.508 | doc-section | How quality is scored |"
   },
   {
@@ -329,7 +329,7 @@
     "kind": "doc-section",
     "label": "SB8 — how does code_search differ from docs_search",
     "score": 0.8468241128022361,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/arch-graph-results.md",
+    "path": "<arch-graph-root>/bench/self-build/arch-graph-results.md",
     "snippet": "# arch-graph Results — Self-Build Bench > SB8 — how does code_search differ from docs_search\n\n| Rank | Score | Kind | Label |\n|------|-------|------|-------|\n| 1 | 0.639 | doc-section | Semantic search (optional) **HIT** |\n| 2 | 0.552 | doc-section | Task 12: Interactive init — docs discovery prompts |\n| 3 | 0.551 | doc-section | Semantic search strategy |\n| 4 | 0.538 | doc-section | Task 12: Interactive init — docs discovery prompts |\n| 5 | 0.530 | doc-section | Semantic search (optional) |\n| 6 | 0.529 | doc-section | Task 12: Interactive init — docs discovery prompts |\n| 7 | 0.524 | doc-section | Task 12: Interactive init — docs discovery prompts |\n| 8 | 0.513 | doc-section | Semantic search (optional) |\n| 9 | 0.507 | doc-section | Task 12: Interactive init — docs discovery prompts |\n| 1"
   },
   {
@@ -338,7 +338,7 @@
     "kind": "doc-section",
     "label": "Semantic search (optional)",
     "score": 0.8452741619655476,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/README.md",
+    "path": "<arch-graph-root>/README.md",
     "snippet": "# arch-graph > Semantic search (optional)\n\n  **Override per-project**: write in the project's `CLAUDE.md`:\n\n  ```markdown\n  ## arch-graph search strategy\n\n  Use the **fallback** strategy: call `code_search` first. Only call `docs_search` if the code results don't answer the question. Halves retrieval cost; same hit-rate; agent gets less context.\n  ```"
   },
   {
@@ -347,7 +347,7 @@
     "kind": "doc-section",
     "label": "SB1 — where is the semantic builder",
     "score": 0.8403649476319618,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/arch-graph-results.md",
+    "path": "<arch-graph-root>/bench/self-build/arch-graph-results.md",
     "snippet": "# arch-graph Results — Self-Build Bench > SB1 — where is the semantic builder\n\n| Rank | Score | Kind | Label |\n|------|-------|------|-------|\n| 1 | 0.497 | doc-section | Semantic search (optional) **HIT** |\n| 2 | 0.496 | doc-section | Task 13: Semantic build + MCP filter — integration tests |\n| 3 | 0.495 | doc-section | Goal |\n| 4 | 0.474 | doc-section | 🟡 3. Hybrid BM25 + semantic (отложено) |\n| 5 | 0.464 | doc-section | Task 13: Semantic build + MCP filter — integration tests |\n| 6 | 0.462 | doc-section | Design: Semantic sidecar for arch-graph (Variant 3) |\n| 7 | 0.462 | doc-section | Task 13: Semantic build + MCP filter — integration tests |\n| 8 | 0.461 | doc-section | Semantic search (optional) |\n| 9 | 0.458 | doc-section | Task 13: Semantic build + MCP filter — integration tests |\n"
   },
   {
@@ -356,7 +356,7 @@
     "kind": "doc-section",
     "label": "Per-Query Results",
     "score": 0.8402622949524728,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/README.md",
+    "path": "<arch-graph-root>/bench/self-build/README.md",
     "snippet": "# Public Self-Build Mini-Bench: arch-graph vs graphify > Results > Per-Query Results\n\n\n| ID | Category | Query | arch-graph | graphify |\n|----|----------|-------|-----------|---------|\n| SB1 | A_find | where is the semantic builder | HIT | MISS |\n| SB2 | A_find | where is the doc-section extractor source file | HIT | HIT |\n| SB3 | A_find | where is the OpenAPI enricher | HIT | MISS |\n| SB4 | B_debug | why might semantic search return zero results | HIT | MISS |\n| SB5 | B_debug | what handles empty markdown files during doc extraction | HIT | HIT |\n| SB6 | B_debug | where is the score floor applied in semantic search | HIT | MISS |\n| SB7 | D_docs | what does --strict mode do | MISS | MISS |\n| SB8 | D_docs | how does code_search differ from docs_search | HIT | HIT |\n| SB9 | D_docs | what is "
   },
   {
@@ -365,7 +365,7 @@
     "kind": "doc-section",
     "label": "SB5 — what handles empty markdown files during doc extraction",
     "score": 0.901709103962137,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/arch-graph-results.md",
+    "path": "<arch-graph-root>/bench/self-build/arch-graph-results.md",
     "snippet": "# arch-graph Results — Self-Build Bench > SB5 — what handles empty markdown files during doc extraction\n\n\n**Category:** B_debug  \n**Verdict:** HIT  \n**minScore:** 0.35  \n**expectedKindIn:** doc-section  \n**expectedLabelHas:** empty, markdown, Extractor, docs"
   },
   {
@@ -374,7 +374,7 @@
     "kind": "doc-section",
     "label": "SB5 — what handles empty markdown files during doc extraction",
     "score": 0.8936707918588566,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/arch-graph-results.md",
+    "path": "<arch-graph-root>/bench/self-build/arch-graph-results.md",
     "snippet": "# arch-graph Results — Self-Build Bench > SB5 — what handles empty markdown files during doc extraction\n\n| Rank | Score | Kind | Label |\n|------|-------|------|-------|\n| 1 | 0.561 | doc-section | Task 5: Extractor — file walker + reader + frontmatter (`ext **HIT** |\n| 2 | 0.550 | doc-section | Task 4: Markdown splitter (`extractors/docs/markdown-split.t |\n| 3 | 0.546 | doc-section | 1. File-coverage gate (hard) |\n| 4 | 0.540 | doc-section | Task 4: Markdown splitter (`extractors/docs/markdown-split.t |\n| 5 | 0.540 | doc-section | Task 4: Markdown splitter (`extractors/docs/markdown-split.t |\n| 6 | 0.539 | doc-section | Task 4: Markdown splitter (`extractors/docs/markdown-split.t |\n| 7 | 0.539 | doc-section | Task 5: Extractor — file walker + reader + frontmatter (`ext |\n| 8 | 0.537 | doc-"
   },
   {
@@ -383,7 +383,7 @@
     "kind": "doc-section",
     "label": "Acceptance Criteria (v1)",
     "score": 0.8553876607105909,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-doc-section-extractor-design.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-doc-section-extractor-design.md",
     "snippet": "# Design: doc-section — Markdown sections as a new graph kind > Acceptance Criteria (v1)\n\n**DS-AC2** — `arch-graph build` on three reference projects (project-a /\nproject-b / project-c) produces a non-empty doc-section bucket in `graph.json`.\nEvery emitted node passes a shape-validator (id format, kind, path is\nrelative, anchor is non-empty, meta required fields present)."
   },
   {
@@ -392,7 +392,7 @@
     "kind": "doc-section",
     "label": "Task 4: Markdown splitter (`extractors/docs/markdown-split.ts`)",
     "score": 0.8530917580711632,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
     "snippet": "# doc-section Implementation Plan > Task 4: Markdown splitter (`extractors/docs/markdown-split.ts`)\n\n    for (let i = 0; i < lines.length; i++) {\n        const line = lines[i];\n        const lineNum = i + 1;"
   },
   {
@@ -401,7 +401,7 @@
     "kind": "doc-section",
     "label": "Task 4: Markdown splitter (`extractors/docs/markdown-split.ts`)",
     "score": 0.8516911605257648,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
     "snippet": "# doc-section Implementation Plan > Task 4: Markdown splitter (`extractors/docs/markdown-split.ts`)\n\n    if (paragraphs.length === 0) {\n        return [{\n            lines: bodyLines,\n            startLine: bodyStartLine,\n            endLine: bodyStartLine + bodyLines.length - 1,\n            tokens: 0,\n        }];\n    }"
   },
   {
@@ -410,7 +410,7 @@
     "kind": "doc-section",
     "label": "Diagnostics surface",
     "score": 0.8512239211611674,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-doc-section-extractor-design.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-doc-section-extractor-design.md",
     "snippet": "# Design: doc-section — Markdown sections as a new graph kind > Validator (`validation/docs-validator.ts`) > Diagnostics surface\n\n\n```ts\nexport interface DocsDiagnostics {\n    filesScanned: number;\n    filesSkipped: Array<{\n        path: string;\n        reason: 'oversized' | 'non-utf8' | 'empty' | 'gitignored' | 'excluded-by-config';\n    }>;\n    frontmatterErrors: Array<{ path: string; error: string }>;\n    oversizedChunks: Array<{ docSectionId: string; tokenCount: number }>;\n    counts: {\n        filesIncluded: number;        // resolved set size\n        nodesEmitted: number;\n        headingsTotal: number;\n        sectionsSplit: number;\n        filesWithFrontmatter: number;\n    };\n}\n```"
   },
   {
@@ -419,7 +419,7 @@
     "kind": "doc-section",
     "label": "Task 4: Markdown splitter (`extractors/docs/markdown-split.ts`)",
     "score": 0.850256455545158,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
     "snippet": "# doc-section Implementation Plan > Task 4: Markdown splitter (`extractors/docs/markdown-split.ts`)\n\nconst ATX_HEADING_RE = /^(#{1,6})\\s+(.+?)\\s*#*\\s*$/;"
   },
   {
@@ -428,7 +428,7 @@
     "kind": "doc-section",
     "label": "Task 4: Markdown splitter (`extractors/docs/markdown-split.ts`)",
     "score": 0.8493909184643093,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
     "snippet": "# doc-section Implementation Plan > Task 4: Markdown splitter (`extractors/docs/markdown-split.ts`)\n\n        // ATX heading.\n        const atxMatch = line.match(ATX_HEADING_RE);\n        if (atxMatch !== null) {\n            const level = atxMatch[1].length;\n            const text = atxMatch[2].trim();\n            flushCurrent(lineNum - 1);\n            while (stack.length > 0 && stack.at(-1)!.level >= level) stack.pop();\n            stack.push({ level, text });\n            currentStart = lineNum + 1;\n            continue;\n        }"
   },
   {
@@ -437,7 +437,7 @@
     "kind": "doc-section",
     "label": "Task 4: Markdown splitter (`extractors/docs/markdown-split.ts`)",
     "score": 0.8482973871563253,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
     "snippet": "# doc-section Implementation Plan > Task 4: Markdown splitter (`extractors/docs/markdown-split.ts`)\n\n        const chunks = await packIntoChunks(section.bodyLines, section.startLine, chunkTokens, countTokens);"
   },
   {
@@ -446,7 +446,7 @@
     "kind": "doc-section",
     "label": "Markdown parser (production rules)",
     "score": 0.8477168177300168,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-doc-section-extractor-design.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-doc-section-extractor-design.md",
     "snippet": "# Design: doc-section — Markdown sections as a new graph kind > Markdown parser (production rules)\n\n1. **Normalization** — CRLF → LF; strip BOM; run `Buffer.isUtf8(buf)`. Non-UTF-8\n   files → emit `filesSkipped[].reason = 'non-utf8'`, no nodes produced.\n2. **Oversize guard** — files > 10 MB (configurable as `docs.maxFileBytes`) →\n   `filesSkipped[].reason = 'oversized'`. Defends against accidental large\n   artefacts under `docs/`.\n3. **Frontmatter** — only at line 1: if file starts with `---\\n` and a closing\n   `\\n---\\n` exists within the first 200 lines, parse the YAML between via\n   `js-yaml.load(input, { schema: yaml.CORE_SCHEMA })`. Parse failure →\n   `frontmatterErrors[]`, file continues without frontmatter. Body parsing\n   starts after the closing `---`.\n4. **Code-fence tracking** — "
   },
   {
@@ -455,7 +455,7 @@
     "kind": "doc-section",
     "label": "SB6 — where is the score floor applied in semantic search",
     "score": 0.9094287328591042,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/arch-graph-results.md",
+    "path": "<arch-graph-root>/bench/self-build/arch-graph-results.md",
     "snippet": "# arch-graph Results — Self-Build Bench > SB6 — where is the score floor applied in semantic search\n\n\n**Category:** B_debug  \n**Verdict:** HIT  \n**minScore:** 0.35  \n**expectedKindIn:** doc-section  \n**expectedLabelHas:** strict, floor, Semantic, recall"
   },
   {
@@ -464,7 +464,7 @@
     "kind": "doc-section",
     "label": "Top-3 Results per Query",
     "score": 0.8808745425254447,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/README.md",
+    "path": "<arch-graph-root>/bench/self-build/README.md",
     "snippet": "# Public Self-Build Mini-Bench: arch-graph vs graphify > Results > Top-3 Results per Query\n\n**SB6 — where is the score floor applied in semantic search**"
   },
   {
@@ -473,7 +473,7 @@
     "kind": "doc-section",
     "label": "SB6 — where is the score floor applied in semantic search",
     "score": 0.8729906973913782,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/arch-graph-results.md",
+    "path": "<arch-graph-root>/bench/self-build/arch-graph-results.md",
     "snippet": "# arch-graph Results — Self-Build Bench > SB6 — where is the score floor applied in semantic search\n\n| Rank | Score | Kind | Label |\n|------|-------|------|-------|\n| 1 | 0.582 | doc-section | Semantic search (optional) **HIT** |\n| 2 | 0.577 | doc-section | Semantic search (optional) |\n| 3 | 0.550 | doc-section | Semantic search (optional) |\n| 4 | 0.546 | doc-section | Semantic search strategy |\n| 5 | 0.546 | doc-section | Semantic search (optional) |\n| 6 | 0.533 | doc-section | Semantic search (optional) |\n| 7 | 0.531 | doc-section | Semantic search strategy |\n| 8 | 0.513 | doc-section | Methodology — reading the substring heuristic |\n| 9 | 0.512 | doc-section | Semantic search (optional) |\n| 10 | 0.508 | doc-section | How quality is scored |"
   },
   {
@@ -482,7 +482,7 @@
     "kind": "doc-section",
     "label": "Task 3 — Per-model `recommendedMinScore` calibration",
     "score": 0.859005725878608,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/2026-05-18-e5-base-migration-design.md",
+    "path": "<arch-graph-root>/docs/plans/2026-05-18-e5-base-migration-design.md",
     "snippet": "# e5-base default-switch migration — design > Acceptance Criteria > Task 3 — Per-model `recommendedMinScore` calibration\n\nResolution path in `src/mcp/semantic-search.ts` and CLI `semantic search`:"
   },
   {
@@ -491,7 +491,7 @@
     "kind": "doc-section",
     "label": "SB1 — where is the semantic builder",
     "score": 0.8427558090220074,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/arch-graph-results.md",
+    "path": "<arch-graph-root>/bench/self-build/arch-graph-results.md",
     "snippet": "# arch-graph Results — Self-Build Bench > SB1 — where is the semantic builder\n\n| Rank | Score | Kind | Label |\n|------|-------|------|-------|\n| 1 | 0.497 | doc-section | Semantic search (optional) **HIT** |\n| 2 | 0.496 | doc-section | Task 13: Semantic build + MCP filter — integration tests |\n| 3 | 0.495 | doc-section | Goal |\n| 4 | 0.474 | doc-section | 🟡 3. Hybrid BM25 + semantic (отложено) |\n| 5 | 0.464 | doc-section | Task 13: Semantic build + MCP filter — integration tests |\n| 6 | 0.462 | doc-section | Design: Semantic sidecar for arch-graph (Variant 3) |\n| 7 | 0.462 | doc-section | Task 13: Semantic build + MCP filter — integration tests |\n| 8 | 0.461 | doc-section | Semantic search (optional) |\n| 9 | 0.458 | doc-section | Task 13: Semantic build + MCP filter — integration tests |\n"
   },
   {
@@ -500,7 +500,7 @@
     "kind": "doc-section",
     "label": "Top-3 Results per Query",
     "score": 0.8414847850124731,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/README.md",
+    "path": "<arch-graph-root>/bench/self-build/README.md",
     "snippet": "# Public Self-Build Mini-Bench: arch-graph vs graphify > Results > Top-3 Results per Query\n\nNote: The \"Semantic search\" section discusses score semantics including floor behavior. Graphify returned no relevant code for \"score floor.\"\n\ngraphify (MISS):\n1. `types.ts` (src/core/types.ts)\n2. `build.ts` (src/pipeline/build.ts)\n3. `config.ts` (src/core/config.ts)\n\n---"
   },
   {
@@ -509,7 +509,7 @@
     "kind": "doc-section",
     "label": "Semantic search (optional)",
     "score": 0.838911093477313,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/README.md",
+    "path": "<arch-graph-root>/README.md",
     "snippet": "# arch-graph > Semantic search (optional)\n\n  **Recommended agent pattern (default): `both-buckets`** — call `code_search` and `docs_search` in parallel for every retrieval. The LLM gets two labeled top-K lists and picks what's useful. Doubles retrieval cost (~$0.005/query on Sonnet, ~$0.025/query on Opus) but eliminates intent-routing risk."
   },
   {
@@ -518,7 +518,7 @@
     "kind": "doc-section",
     "label": "SB4 — why might semantic search return zero results",
     "score": 0.838641987701007,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/arch-graph-results.md",
+    "path": "<arch-graph-root>/bench/self-build/arch-graph-results.md",
     "snippet": "# arch-graph Results — Self-Build Bench > SB4 — why might semantic search return zero results\n\n| Rank | Score | Kind | Label |\n|------|-------|------|-------|\n| 1 | 0.563 | doc-section | Semantic search (optional) **HIT** |\n| 2 | 0.562 | doc-section | Semantic search (optional) |\n| 3 | 0.545 | doc-section | Semantic search (optional) |\n| 4 | 0.494 | doc-section | Semantic search strategy |\n| 5 | 0.490 | doc-section | Semantic search strategy |\n| 6 | 0.484 | doc-section | Semantic search (optional) |\n| 7 | 0.454 | doc-section | Semantic search strategy |\n| 8 | 0.423 | doc-section | Semantic search (optional) |\n| 9 | 0.422 | doc-section | Semantic search (optional) |\n| 10 | 0.419 | doc-section | Methodology — reading the substring heuristic |"
   },
   {
@@ -527,7 +527,7 @@
     "kind": "doc-section",
     "label": "Per-Query Results",
     "score": 0.8384375884339436,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/README.md",
+    "path": "<arch-graph-root>/bench/self-build/README.md",
     "snippet": "# Public Self-Build Mini-Bench: arch-graph vs graphify > Results > Per-Query Results\n\n\n| ID | Category | Query | arch-graph | graphify |\n|----|----------|-------|-----------|---------|\n| SB1 | A_find | where is the semantic builder | HIT | MISS |\n| SB2 | A_find | where is the doc-section extractor source file | HIT | HIT |\n| SB3 | A_find | where is the OpenAPI enricher | HIT | MISS |\n| SB4 | B_debug | why might semantic search return zero results | HIT | MISS |\n| SB5 | B_debug | what handles empty markdown files during doc extraction | HIT | HIT |\n| SB6 | B_debug | where is the score floor applied in semantic search | HIT | MISS |\n| SB7 | D_docs | what does --strict mode do | MISS | MISS |\n| SB8 | D_docs | how does code_search differ from docs_search | HIT | HIT |\n| SB9 | D_docs | what is "
   },
   {
@@ -536,7 +536,7 @@
     "kind": "doc-section",
     "label": "Top-3 Results per Query",
     "score": 0.8370021732907711,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/README.md",
+    "path": "<arch-graph-root>/bench/self-build/README.md",
     "snippet": "# Public Self-Build Mini-Bench: arch-graph vs graphify > Results > Top-3 Results per Query\n\narch-graph (HIT):\n1. [doc-section] `Semantic search (optional)` — README.md (score=0.563)\n2. [doc-section] `Semantic search strategy` — README.md (score=0.548)\n3. [doc-section] `Goal` — semantic sidecar design (score=0.548)"
   },
   {
@@ -545,7 +545,7 @@
     "kind": "doc-section",
     "label": "SB7 — what does --strict mode do",
     "score": 0.8397857496623731,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/arch-graph-results.md",
+    "path": "<arch-graph-root>/bench/self-build/arch-graph-results.md",
     "snippet": "# arch-graph Results — Self-Build Bench > SB7 — what does --strict mode do\n\n| Rank | Score | Kind | Label |\n|------|-------|------|-------|\n| 1 | 0.348 | doc-section | CWD discipline (mandatory for all agents) |\n| 2 | 0.314 | doc-section | Real-corpus signal (from Phase 1 research) |\n| 3 | 0.304 | doc-section | Limitations (honest) |\n| 4 | 0.303 | doc-section | Extension A — FE Level 1 (React + Next pages/components/rout |\n| 5 | 0.302 | doc-section | Hybrid mode: consume devtools snapshot (from @nestjs/devtool |\n| 6 | 0.301 | doc-section | Conventions |\n| 7 | 0.299 | doc-section | Why in-memory |\n| 8 | 0.295 | doc-section | External constraints |\n| 9 | 0.285 | doc-section | Markdown parser (production rules) |\n| 10 | 0.284 | doc-section | External constraints |"
   },
   {
@@ -554,7 +554,7 @@
     "kind": "doc-section",
     "label": "SB7 — what does --strict mode do",
     "score": 0.8314614946560993,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/arch-graph-results.md",
+    "path": "<arch-graph-root>/bench/self-build/arch-graph-results.md",
     "snippet": "# arch-graph Results — Self-Build Bench > SB7 — what does --strict mode do\n\n\n**Category:** D_docs  \n**Verdict:** MISS  \n**minScore:** 0.4  \n**expectedKindIn:** doc-section  \n**expectedLabelHas:** strict, Strict"
   },
   {
@@ -563,7 +563,7 @@
     "kind": "doc-section",
     "label": "Top-3 Results per Query",
     "score": 0.816293748855221,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/README.md",
+    "path": "<arch-graph-root>/bench/self-build/README.md",
     "snippet": "# Public Self-Build Mini-Bench: arch-graph vs graphify > Results > Top-3 Results per Query\n\n**SB7 — what does --strict mode do**\n\narch-graph (MISS): Top result was `CWD discipline` (score=0.348), below threshold. The `--strict` flag is documented inline in README but the semantic query did not surface it.\n\ngraphify (MISS): Returned general files (types.ts, config.ts), no strict-mode specific results."
   },
   {
@@ -572,7 +572,7 @@
     "kind": "doc-section",
     "label": "External constraints",
     "score": 0.7991061218927101,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-closing-tails-design.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-closing-tails-design.md",
     "snippet": "# Design: closing-tails — module recall + virtual-kind exclusion > External constraints\n\n\n- **No retrieval change.** Search results, scoring, embeddings unchanged.\n- **Backward-compat diagnostics**: existing `--strict-recall` flag still\n  exits 1 when any kind with a non-zero \"expected-snippet\" denominator falls\n  below floor. The denominator is now smaller (more honest), but the rule\n  is the same.\n- **Test coverage**: every branch of `isExpectedToHaveSnippet` covered by\n  unit test. Including the regression vector: a future PR removes a path\n  emit from internal modules → recall correctly drops <85% → exit code 1.\n- **Commit policy**: Conventional Commits, no Co-Authored-By, scope = arch-graph.\n- **Branch hygiene**: work in `.claude/worktrees/<auto-name>` (harness-created).\n  Never `git "
   },
   {
@@ -581,7 +581,7 @@
     "kind": "doc-section",
     "label": "Task 2 — Prefix unit-test review",
     "score": 0.7960151416422908,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/2026-05-18-e5-base-migration-design.md",
+    "path": "<arch-graph-root>/docs/plans/2026-05-18-e5-base-migration-design.md",
     "snippet": "# e5-base default-switch migration — design > Acceptance Criteria > Task 2 — Prefix unit-test review\n\n- `makeEmbedder(alias).embed(['x'])` (default mode) — prefix is applied iff `SEMANTIC_MODELS[alias].prefix?.passage` is defined and non-empty.\n- `makeEmbedder(alias).embed(['x'], 'query')` — prefix is applied iff `SEMANTIC_MODELS[alias].prefix?.query` is defined and non-empty.\n- `makeEmbedder(alias).embed(['x'], 'passage')` — same as default.\n- For `minilm` (prefix undefined): input passes through unchanged in both modes.\n- For `e5-base` (prefix defined): exact `passage: ` / `query: ` strings prepended."
   },
   {
@@ -590,7 +590,7 @@
     "kind": "doc-section",
     "label": "EVAL_MODE options",
     "score": 0.7919341729774592,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/REPRODUCE.md",
+    "path": "<arch-graph-root>/bench/REPRODUCE.md",
     "snippet": "# Reproducing the arch-graph benchmarks > Step 3 — Run the arch-graph eval > EVAL_MODE options\n\n\n| Mode | Description |\n|---|---|\n| `per-category` (default) | Routes by category: A_find/B_debug/C_ui → `--code-only`; D_docs/E_arch → `--docs-only`; D_links → mixed |\n| `both-buckets` | Always issues both `--code-only` AND `--docs-only` calls and unions the verdicts. Doubles retrieval cost but removes intent-routing risk. Used in the published headline run. |\n| `fallback` | Naive two-call: tries `--code-only` first; on MISS retries `--docs-only`. Models an LLM with no intent knowledge. |\n| `single` | One search call, no kind-bucket filter. Legacy baseline; doc-section dilutes code queries. |"
   },
   {
@@ -599,7 +599,7 @@
     "kind": "doc-section",
     "label": "Limitations & honesty",
     "score": 0.7916277125809326,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/README.md",
+    "path": "<arch-graph-root>/README.md",
     "snippet": "# arch-graph > Limitations & honesty\n\n- **D1** — Dynamic NATS subjects (`subject.${userId}`) are recorded as `unresolved` in `diagnostics.json`, not invented as edges.\n- **D2** — gRPC / Kafka / SQS — not yet covered; only NATS + BullMQ + HTTP are wired.\n- **D3** — Cross-monorepo links (multi-repo deployments). Single monorepo only today.\n- **D4** — Runtime DI overrides (`{ provide: TOKEN, useFactory }` that resolves at runtime). Static analysis sees the factory call, not its output.\n- **D5** — Decorator metadata from external libs that doesn't follow the NestJS conventions encoded here.\n- **D6** — Inferred type-only edges. Type-level uses are not graph edges; only value-level usages are."
   },
   {
@@ -608,7 +608,7 @@
     "kind": "doc-section",
     "label": "UPDATE — 2026-05-18 evening: scope expanded per user direction (auto-mode)",
     "score": 0.7912114736727945,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/2026-05-18-e5-base-migration-design.md",
+    "path": "<arch-graph-root>/docs/plans/2026-05-18-e5-base-migration-design.md",
     "snippet": "# e5-base default-switch migration — design > UPDATE — 2026-05-18 evening: scope expanded per user direction (auto-mode)\n\n"
   },
   {
@@ -617,7 +617,7 @@
     "kind": "doc-section",
     "label": "Task 12: Interactive init — docs discovery prompts",
     "score": 0.7909387485119448,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
     "snippet": "# doc-section Implementation Plan > Task 12: Interactive init — docs discovery prompts\n\n```ts\nfunction docsBlock(a: WizardAnswers): string {\n    if (a.docs === undefined) return '';\n    const customInclude = a.docs.userInclude.length > 0\n        ? `        include: [${[...DEFAULT_DOC_INCLUDE, ...a.docs.userInclude].map(q).join(', ')}],\\n`\n        : '';\n    const customExclude = a.docs.userExclude.length > 0\n        ? `        exclude: [${a.docs.userExclude.map(q).join(', ')}],\\n`\n        : '';\n    return `    docs: {\\n${customInclude}${customExclude}        respectGitignore: ${a.docs.respectGitignore},\\n        chunkTokens: ${a.docs.chunkTokens},\\n    },\\n`;\n}\n```"
   },
   {
@@ -626,7 +626,7 @@
     "kind": "doc-section",
     "label": "Acceptance Criteria checklist (mirrors design doc)",
     "score": 0.7908958603142581,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
     "snippet": "# doc-section Implementation Plan > Acceptance Criteria checklist (mirrors design doc)\n\n- [ ] **DS-AC1** — `'doc-section'` in NodeKind/NODE_KIND_VALUES/NODE_KIND_CHECK; no exhaustiveness errors anywhere\n- [ ] **DS-AC2** — `arch-graph build` on reference project emits non-empty doc-section bucket; nodes pass shape validation\n- [ ] **DS-AC3** — `arch-graph init` interactive flow writes correct docs config (both gitignore branches)\n- [ ] **DS-AC4** — adaptive split: oversized section → wasSplit:true with chunkOf>1; small → wasSplit:false\n- [ ] **DS-AC5** — code-fence containment: `# foo` inside ` ``` ` produces 0 nodes from those lines\n- [ ] **DS-AC6** — slug collisions: two `## Setup` → `setup`, `setup-1`; ids distinct\n- [ ] **DS-AC7** — frontmatter: valid YAML attaches; broken YAML → diagno"
   },
   {
@@ -635,7 +635,7 @@
     "kind": "doc-section",
     "label": "SB8 — how does code_search differ from docs_search",
     "score": 0.8627279001684177,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/arch-graph-results.md",
+    "path": "<arch-graph-root>/bench/self-build/arch-graph-results.md",
     "snippet": "# arch-graph Results — Self-Build Bench > SB8 — how does code_search differ from docs_search\n\n\n**Category:** D_docs  \n**Verdict:** HIT  \n**minScore:** 0.35  \n**expectedKindIn:** doc-section  \n**expectedLabelHas:** Semantic search, semantic, search, MCP"
   },
   {
@@ -644,7 +644,7 @@
     "kind": "doc-section",
     "label": "Semantic search strategy",
     "score": 0.8512919005191909,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/README.md",
+    "path": "<arch-graph-root>/README.md",
     "snippet": "# arch-graph > CLAUDE.md integration > Semantic search strategy\n\n- **both-buckets** (default, recommended) — `code_search` and `docs_search` are called in parallel on every retrieval, giving the LLM the richest context (~$0.005/query on Sonnet, ~$0.025/query on Opus).\n- **fallback** — `code_search` runs first; `docs_search` is only called on a miss. Halves cost for cost-sensitive projects (~$0.003/query on Sonnet, ~$0.012/query on Opus). Recall is identical to `both-buckets`."
   },
   {
@@ -653,7 +653,7 @@
     "kind": "doc-section",
     "label": "Top-3 Results per Query",
     "score": 0.8462998225560832,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/README.md",
+    "path": "<arch-graph-root>/bench/self-build/README.md",
     "snippet": "# Public Self-Build Mini-Bench: arch-graph vs graphify > Results > Top-3 Results per Query\n\n---\n\n**SB8 — how does code_search differ from docs_search**"
   },
   {
@@ -662,7 +662,7 @@
     "kind": "doc-section",
     "label": "SB8 — how does code_search differ from docs_search",
     "score": 0.8451967010556071,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/arch-graph-results.md",
+    "path": "<arch-graph-root>/bench/self-build/arch-graph-results.md",
     "snippet": "# arch-graph Results — Self-Build Bench > SB8 — how does code_search differ from docs_search\n\n| Rank | Score | Kind | Label |\n|------|-------|------|-------|\n| 1 | 0.639 | doc-section | Semantic search (optional) **HIT** |\n| 2 | 0.552 | doc-section | Task 12: Interactive init — docs discovery prompts |\n| 3 | 0.551 | doc-section | Semantic search strategy |\n| 4 | 0.538 | doc-section | Task 12: Interactive init — docs discovery prompts |\n| 5 | 0.530 | doc-section | Semantic search (optional) |\n| 6 | 0.529 | doc-section | Task 12: Interactive init — docs discovery prompts |\n| 7 | 0.524 | doc-section | Task 12: Interactive init — docs discovery prompts |\n| 8 | 0.513 | doc-section | Semantic search (optional) |\n| 9 | 0.507 | doc-section | Task 12: Interactive init — docs discovery prompts |\n| 1"
   },
   {
@@ -671,7 +671,7 @@
     "kind": "doc-section",
     "label": "Semantic search (optional)",
     "score": 0.8435515497443191,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/README.md",
+    "path": "<arch-graph-root>/README.md",
     "snippet": "# arch-graph > Semantic search (optional)\n\n  Splitting into two buckets removes the dilution effect: when docs are in the same index as code, doc-section nodes can crowd out the relevant code nodes for \"find X\" queries (measured: A_find recall dropped 80% → 30% on project-a; restored to 70% with `code_search`)."
   },
   {
@@ -680,7 +680,7 @@
     "kind": "doc-section",
     "label": "Semantic search (optional)",
     "score": 0.8369157866107564,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/README.md",
+    "path": "<arch-graph-root>/README.md",
     "snippet": "# arch-graph > Semantic search (optional)\n\n  **Override per-project**: write in the project's `CLAUDE.md`:\n\n  ```markdown\n  ## arch-graph search strategy\n\n  Use the **fallback** strategy: call `code_search` first. Only call `docs_search` if the code results don't answer the question. Halves retrieval cost; same hit-rate; agent gets less context.\n  ```"
   },
   {
@@ -689,7 +689,7 @@
     "kind": "doc-section",
     "label": "MCP server",
     "score": 0.8325693385035411,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/README.md",
+    "path": "<arch-graph-root>/README.md",
     "snippet": "# arch-graph > MCP server\n\n**Semantic (3, requires sidecar index):**\n- `code_search` — vector search over code nodes only (services, modules, tables, queues, endpoints, fe-components). Use for \"find code that does X\".\n- `docs_search` — vector search over `doc-section` nodes only (Markdown sections). Use for \"find documentation about Y\".\n- `semantic_search` — mixed bucket (code + docs together). Useful as a fallback when you don't know which bucket the answer lives in, but expect lower precision on mixed corpora."
   },
   {
@@ -698,7 +698,7 @@
     "kind": "doc-section",
     "label": "2026-05-17: `code-vs-docs-v1` (split tools)",
     "score": 0.83158669400822,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/BENCHMARKS.md",
+    "path": "<arch-graph-root>/docs/BENCHMARKS.md",
     "snippet": "# arch-graph benchmarks > Baselines (chronological) > 2026-05-17: `code-vs-docs-v1` (split tools)\n\n\n`code_search` + `docs_search` MCP tools. Both `fallback` and `both-buckets`\nmodes give identical hit-rate (mathematically equivalent for our HIT metric;\ndifference is only LLM context richness)."
   },
   {
@@ -707,7 +707,7 @@
     "kind": "doc-section",
     "label": "Per-Query Results",
     "score": 0.8315553152683779,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/README.md",
+    "path": "<arch-graph-root>/bench/self-build/README.md",
     "snippet": "# Public Self-Build Mini-Bench: arch-graph vs graphify > Results > Per-Query Results\n\n\n| ID | Category | Query | arch-graph | graphify |\n|----|----------|-------|-----------|---------|\n| SB1 | A_find | where is the semantic builder | HIT | MISS |\n| SB2 | A_find | where is the doc-section extractor source file | HIT | HIT |\n| SB3 | A_find | where is the OpenAPI enricher | HIT | MISS |\n| SB4 | B_debug | why might semantic search return zero results | HIT | MISS |\n| SB5 | B_debug | what handles empty markdown files during doc extraction | HIT | HIT |\n| SB6 | B_debug | where is the score floor applied in semantic search | HIT | MISS |\n| SB7 | D_docs | what does --strict mode do | MISS | MISS |\n| SB8 | D_docs | how does code_search differ from docs_search | HIT | HIT |\n| SB9 | D_docs | what is "
   },
   {
@@ -716,7 +716,7 @@
     "kind": "doc-section",
     "label": "Semantic search (optional)",
     "score": 0.8274476631817019,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/README.md",
+    "path": "<arch-graph-root>/README.md",
     "snippet": "# arch-graph > Semantic search (optional)\n\n  **Recommended agent pattern (default): `both-buckets`** — call `code_search` and `docs_search` in parallel for every retrieval. The LLM gets two labeled top-K lists and picks what's useful. Doubles retrieval cost (~$0.005/query on Sonnet, ~$0.025/query on Opus) but eliminates intent-routing risk."
   },
   {
@@ -725,7 +725,7 @@
     "kind": "doc-section",
     "label": "SB9 — what is in the semantic manifest file",
     "score": 0.8774771901343034,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/arch-graph-results.md",
+    "path": "<arch-graph-root>/bench/self-build/arch-graph-results.md",
     "snippet": "# arch-graph Results — Self-Build Bench > SB9 — what is in the semantic manifest file\n\n\n**Category:** D_docs  \n**Verdict:** MISS  \n**minScore:** 0.35  \n**expectedKindIn:** doc-section  \n**expectedLabelHas:** manifest, Manifest"
   },
   {
@@ -734,7 +734,7 @@
     "kind": "doc-section",
     "label": "Top-3 Results per Query",
     "score": 0.8477406141062099,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/README.md",
+    "path": "<arch-graph-root>/bench/self-build/README.md",
     "snippet": "# Public Self-Build Mini-Bench: arch-graph vs graphify > Results > Top-3 Results per Query\n\ngraphify (HIT):\n1. `graph-queries.ts` (src/mcp/graph-queries.ts)\n2. `makeSemanticSearchHandler()` (src/mcp/server.ts)\n3. `server.ts` (src/mcp/server.ts)\n\n---\n\n**SB9 — what is in the semantic manifest file**"
   },
   {
@@ -743,7 +743,7 @@
     "kind": "doc-section",
     "label": "9. Test Plan",
     "score": 0.8440391710315875,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/2026-05-18-incremental-semantic-design.md",
+    "path": "<arch-graph-root>/docs/plans/2026-05-18-incremental-semantic-design.md",
     "snippet": "# Incremental Semantic Re-embed — Design > 9. Test Plan\n\n9. **Hook with `--no-include-semantic`**\n   - Call `hookInstall` with `noIncludeSemantic: true`.\n   - Read the installed hook file.\n   - Assert: hook body does NOT contain `arch-graph semantic build`."
   },
   {
@@ -752,7 +752,7 @@
     "kind": "doc-section",
     "label": "3.1 Compatibility check",
     "score": 0.8428476631123875,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/2026-05-18-incremental-semantic-design.md",
+    "path": "<arch-graph-root>/docs/plans/2026-05-18-incremental-semantic-design.md",
     "snippet": "# Incremental Semantic Re-embed — Design > 3. Algorithm > 3.1 Compatibility check\n\n\nBefore attempting to load a prior index, the builder performs a three-field\ncompatibility check on `semantic/manifest.json`:"
   },
   {
@@ -761,7 +761,7 @@
     "kind": "doc-section",
     "label": "9. Test Plan",
     "score": 0.8406637954387388,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/2026-05-18-incremental-semantic-design.md",
+    "path": "<arch-graph-root>/docs/plans/2026-05-18-incremental-semantic-design.md",
     "snippet": "# Incremental Semantic Re-embed — Design > 9. Test Plan\n\n\nTask 5 must include a dedicated `src/semantic/incremental.test.ts` file plus\nadditions to `src/semantic/builder.test.ts`. The following cases must each be\ncovered by at least one test:"
   },
   {
@@ -770,7 +770,7 @@
     "kind": "doc-section",
     "label": "9. Test Plan",
     "score": 0.8395012663277218,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/2026-05-18-incremental-semantic-design.md",
+    "path": "<arch-graph-root>/docs/plans/2026-05-18-incremental-semantic-design.md",
     "snippet": "# Incremental Semantic Re-embed — Design > 9. Test Plan\n\n8. **Hook with `--include-semantic` (default-on)**\n   - Call `hookInstall` with default args (no `--no-include-semantic`).\n   - Read the installed hook file.\n   - Assert: hook body contains `arch-graph semantic build --quiet || true`."
   },
   {
@@ -779,7 +779,7 @@
     "kind": "doc-section",
     "label": "SB9 — what is in the semantic manifest file",
     "score": 0.8376815055719562,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/arch-graph-results.md",
+    "path": "<arch-graph-root>/bench/self-build/arch-graph-results.md",
     "snippet": "# arch-graph Results — Self-Build Bench > SB9 — what is in the semantic manifest file\n\n| Rank | Score | Kind | Label |\n|------|-------|------|-------|\n| 1 | 0.502 | doc-section | Tokenizer (`semantic/tokenizer.ts`) |\n| 2 | 0.500 | doc-section | Tokenizer (`semantic/tokenizer.ts`) |\n| 3 | 0.494 | doc-section | Tokenizer (`semantic/tokenizer.ts`) |\n| 4 | 0.476 | config-field | ARCH_GRAPH_REGISTRY |\n| 5 | 0.474 | doc-section | Task 2: Tokenizer wrapper (`semantic/tokenizer.ts`) |\n| 6 | 0.466 | doc-section | Task 2: Tokenizer wrapper (`semantic/tokenizer.ts`) |\n| 7 | 0.463 | doc-section | Task 2: Tokenizer wrapper (`semantic/tokenizer.ts`) |\n| 8 | 0.457 | doc-section | Task 2: Tokenizer wrapper (`semantic/tokenizer.ts`) |\n| 9 | 0.453 | doc-section | Tokenizer (`semantic/tokenizer.ts`) |\n| 10 |"
   },
   {
@@ -788,7 +788,7 @@
     "kind": "doc-section",
     "label": "⚪ 7. Semantic extension of `compare --share`",
     "score": 0.837383398455177,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/ROADMAP.md",
+    "path": "<arch-graph-root>/ROADMAP.md",
     "snippet": "# arch-graph roadmap > Strategic options — what's next > ⚪ 7. Semantic extension of `compare --share`\n\n**Mode B — multilingual delta** (extension of A): generate the same templates in two languages (EN + user-picked once via `arch-graph init`); emit two percentages. The gap exposes the multilingual embedder feature in one number. Translation tables (~20 templates per language) are deterministic, no LLM. +0.5 days."
   },
   {
@@ -797,7 +797,7 @@
     "kind": "doc-section",
     "label": "SB1 — where is the semantic builder",
     "score": 0.8371232117905917,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/arch-graph-results.md",
+    "path": "<arch-graph-root>/bench/self-build/arch-graph-results.md",
     "snippet": "# arch-graph Results — Self-Build Bench > SB1 — where is the semantic builder\n\n| Rank | Score | Kind | Label |\n|------|-------|------|-------|\n| 1 | 0.497 | doc-section | Semantic search (optional) **HIT** |\n| 2 | 0.496 | doc-section | Task 13: Semantic build + MCP filter — integration tests |\n| 3 | 0.495 | doc-section | Goal |\n| 4 | 0.474 | doc-section | 🟡 3. Hybrid BM25 + semantic (отложено) |\n| 5 | 0.464 | doc-section | Task 13: Semantic build + MCP filter — integration tests |\n| 6 | 0.462 | doc-section | Design: Semantic sidecar for arch-graph (Variant 3) |\n| 7 | 0.462 | doc-section | Task 13: Semantic build + MCP filter — integration tests |\n| 8 | 0.461 | doc-section | Semantic search (optional) |\n| 9 | 0.458 | doc-section | Task 13: Semantic build + MCP filter — integration tests |\n"
   },
   {
@@ -806,7 +806,7 @@
     "kind": "doc-section",
     "label": "Task 1 — Foundation refactor (types + config + embedder + builder + io + search)",
     "score": 0.8358928023415951,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/2026-05-18-bge-m3-migration-design.md",
+    "path": "<arch-graph-root>/docs/plans/2026-05-18-bge-m3-migration-design.md",
     "snippet": "# BGE-M3 migration — design doc > Acceptance criteria > Task 1 — Foundation refactor (types + config + embedder + builder + io + search)\n\n- AC1.1 Registry exists: `SEMANTIC_MODELS` exported from `src/semantic/types.ts` with entries `minilm` and `bge-m3`, each carrying `{ hubId, dim, pooling, normalize }`. `SemanticModelAlias` is the union of keys.\n- AC1.2 `embedder.ts` takes an alias and dispatches to the right pipeline config; module-level cache is per-alias (Map keyed by alias), so running build with both aliases in the same process is supported.\n- AC1.3 `arch-graph.config.ts` accepts optional `semantic.model: 'minilm' | 'bge-m3'`. Missing field → default `'minilm'`. Invalid value → typed validation error in `validateConfig()`.\n- AC1.4 `manifest.json` persists `{model: hubId, dim}` from "
   },
   {
@@ -815,7 +815,7 @@
     "kind": "doc-section",
     "label": "SB10 — how is the build pipeline structured",
     "score": 0.868939634235666,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/arch-graph-results.md",
+    "path": "<arch-graph-root>/bench/self-build/arch-graph-results.md",
     "snippet": "# arch-graph Results — Self-Build Bench > SB10 — how is the build pipeline structured\n\n\n**Category:** E_arch  \n**Verdict:** HIT  \n**minScore:** 0.4  \n**expectedKindIn:** doc-section  \n**expectedLabelHas:** pipeline, build, Build"
   },
   {
@@ -824,7 +824,7 @@
     "kind": "doc-section",
     "label": "SB10 — how is the build pipeline structured",
     "score": 0.8435761118386877,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/arch-graph-results.md",
+    "path": "<arch-graph-root>/bench/self-build/arch-graph-results.md",
     "snippet": "# arch-graph Results — Self-Build Bench > SB10 — how is the build pipeline structured\n\n| Rank | Score | Kind | Label |\n|------|-------|------|-------|\n| 1 | 0.555 | doc-section | Task 10: Pipeline wiring — call docs extractor + mapper in ` **HIT** |\n| 2 | 0.542 | doc-section | Task 10: Pipeline wiring — call docs extractor + mapper in ` |\n| 3 | 0.527 | doc-section | Task 10: Pipeline wiring — call docs extractor + mapper in ` |\n| 4 | 0.524 | doc-section | Task 10: Pipeline wiring — call docs extractor + mapper in ` |\n| 5 | 0.522 | doc-section | Task 10: Pipeline wiring — call docs extractor + mapper in ` |\n| 6 | 0.517 | doc-section | Task 10: Pipeline wiring — call docs extractor + mapper in ` |\n| 7 | 0.512 | doc-section | Task 10: Pipeline wiring — call docs extractor + mapper in ` |\n| 8 "
   },
   {
@@ -833,7 +833,7 @@
     "kind": "doc-section",
     "label": "Top-3 Results per Query",
     "score": 0.8313356965353367,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/README.md",
+    "path": "<arch-graph-root>/bench/self-build/README.md",
     "snippet": "# Public Self-Build Mini-Bench: arch-graph vs graphify > Results > Top-3 Results per Query\n\ngraphify (HIT):\n1. `build.ts` (src/pipeline/build.ts)\n2. `runBuild()` (src/pipeline/build.ts)\n3. `safeDetectCycles()` (src/pipeline/build.ts)\n\n---\n\n**SB11 — what is the MCP server architecture**"
   },
   {
@@ -842,7 +842,7 @@
     "kind": "doc-section",
     "label": "SB12 — what extractors are wired together in the build",
     "score": 0.8298324847916617,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/arch-graph-results.md",
+    "path": "<arch-graph-root>/bench/self-build/arch-graph-results.md",
     "snippet": "# arch-graph Results — Self-Build Bench > SB12 — what extractors are wired together in the build\n\n\n**Category:** E_arch  \n**Verdict:** HIT  \n**minScore:** 0.35  \n**expectedKindIn:** doc-section  \n**expectedLabelHas:** pipeline, extractor, Extractor, build"
   },
   {
@@ -851,7 +851,7 @@
     "kind": "doc-section",
     "label": "Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`",
     "score": 0.8215115035623853,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
     "snippet": "# doc-section Implementation Plan > Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`\n\nIf `configSchema` requires additional non-default fields, fill them. The point is to give `build()` a valid `ArchGraphConfig` with the docs section populated.\n\n- [ ] **Step 2: Run and verify failure**\n\n```bash\npnpm test src/pipeline/build.test.ts -t \"docs pass\"\n```"
   },
   {
@@ -860,7 +860,7 @@
     "kind": "doc-section",
     "label": "Top-3 Results per Query",
     "score": 0.8213940442520662,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/README.md",
+    "path": "<arch-graph-root>/bench/self-build/README.md",
     "snippet": "# Public Self-Build Mini-Bench: arch-graph vs graphify > Results > Top-3 Results per Query\n\narch-graph (HIT):\n1. [doc-section] `Task 10: Pipeline wiring — call docs extractor + mapper in pipeline/build.ts` (score=0.507)\n2. [doc-section] `Task 10: Pipeline wiring…` (score=0.505)\n3. [doc-section] `Task 10: Pipeline wiring…` (score=0.504)"
   },
   {
@@ -869,7 +869,7 @@
     "kind": "doc-section",
     "label": "Top-3 Results per Query",
     "score": 0.8213316362484938,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/README.md",
+    "path": "<arch-graph-root>/bench/self-build/README.md",
     "snippet": "# Public Self-Build Mini-Bench: arch-graph vs graphify > Results > Top-3 Results per Query\n\narch-graph (HIT):\n1. [doc-section] `Task 10: Pipeline wiring — call docs extractor + mapper in pipeline/build.ts` (score=0.555)\n2. [doc-section] `Task 10: Pipeline wiring…` (score=0.549)\n3. [doc-section] `Build output` — README.md (score=0.531)"
   },
   {
@@ -878,7 +878,7 @@
     "kind": "doc-section",
     "label": "Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`",
     "score": 0.8207699874756745,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
     "snippet": "# doc-section Implementation Plan > Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`\n\n        const docNodes = result.graph.nodes.filter(n => n.kind === 'doc-section');\n        expect(docNodes.length).toBeGreaterThan(0);\n        expect(result.diagnostics.docs).toBeDefined();\n        expect(result.diagnostics.docs!.counts.nodesEmitted).toBe(docNodes.length);\n    });\n});\n```"
   },
   {
@@ -887,7 +887,7 @@
     "kind": "doc-section",
     "label": "Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`",
     "score": 0.8204881349706569,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
     "snippet": "# doc-section Implementation Plan > Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`\n\n\n**Files:**\n- Modify: `src/pipeline/build.ts`\n- Modify or add: `src/pipeline/build.test.ts`\n\n- [ ] **Step 1: Write failing test**\n\nIn `src/pipeline/build.test.ts`, add:"
   },
   {
@@ -896,7 +896,7 @@
     "kind": "doc-section",
     "label": "Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`",
     "score": 0.8171363796182753,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
     "snippet": "# doc-section Implementation Plan > Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`\n\nInside the `build(config: ArchGraphConfig): Promise<BuildResult>` function, AFTER `assembleGraph(...)` populates `graph` and the diagnostics/validation accumulators are initialised, add:"
   },
   {
@@ -905,7 +905,7 @@
     "kind": "doc-section",
     "label": "SB11 — what is the MCP server architecture",
     "score": 0.8858375154683473,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/arch-graph-results.md",
+    "path": "<arch-graph-root>/bench/self-build/arch-graph-results.md",
     "snippet": "# arch-graph Results — Self-Build Bench > SB11 — what is the MCP server architecture\n\n\n**Category:** E_arch  \n**Verdict:** HIT  \n**minScore:** 0.4  \n**expectedKindIn:** doc-section  \n**expectedLabelHas:** MCP server, MCP"
   },
   {
@@ -914,7 +914,7 @@
     "kind": "doc-section",
     "label": "SB11 — what is the MCP server architecture",
     "score": 0.8620588775557962,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/arch-graph-results.md",
+    "path": "<arch-graph-root>/bench/self-build/arch-graph-results.md",
     "snippet": "# arch-graph Results — Self-Build Bench > SB11 — what is the MCP server architecture\n\n| Rank | Score | Kind | Label |\n|------|-------|------|-------|\n| 1 | 0.685 | doc-section | MCP server **HIT** |\n| 2 | 0.644 | doc-section | MCP server |\n| 3 | 0.618 | doc-section | Fallback 1 — MCP server (if installed) |\n| 4 | 0.615 | doc-section | MCP server |\n| 5 | 0.606 | doc-section | MCP server |\n| 6 | 0.531 | doc-section | MCP fallback (if installed) |\n| 7 | 0.516 | doc-section | MCP contract — locked for federation |\n| 8 | 0.478 | doc-section | MCP server |\n| 9 | 0.449 | doc-section | MCP contract (Task 4) — locked for federation |\n| 10 | 0.444 | doc-section | MCP contract (Task 4) — locked for federation |"
   },
   {
@@ -923,7 +923,7 @@
     "kind": "doc-section",
     "label": "Fallback 1 — MCP server (if installed)",
     "score": 0.8497923235229358,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/skill/SKILL.md",
+    "path": "<arch-graph-root>/skill/SKILL.md",
     "snippet": "# /arch-graph > What You Must Do When Invoked > Fallback 1 — MCP server (if installed)\n\n\nIf `arch-graph mcp` is configured in the editor's MCP client, use its typed tools: `subject_publishers`, `subject_subscribers`, `queue_producers`, `queue_consumers`, `service_dependencies`, `service_dependents`, `module_imports`, `table_users`, `path`, `explain`, `query`, `stats`. MCP is slightly more expressive (the `explain` and `query` tools) but requires a running server."
   },
   {
@@ -932,7 +932,7 @@
     "kind": "doc-section",
     "label": "Top-3 Results per Query",
     "score": 0.8415562148931995,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/README.md",
+    "path": "<arch-graph-root>/bench/self-build/README.md",
     "snippet": "# Public Self-Build Mini-Bench: arch-graph vs graphify > Results > Top-3 Results per Query\n\ngraphify (HIT):\n1. `build.ts` (src/pipeline/build.ts)\n2. `runBuild()` (src/pipeline/build.ts)\n3. `safeDetectCycles()` (src/pipeline/build.ts)\n\n---\n\n**SB11 — what is the MCP server architecture**"
   },
   {
@@ -941,7 +941,7 @@
     "kind": "doc-section",
     "label": "MCP server",
     "score": 0.8325724270358547,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/README.md",
+    "path": "<arch-graph-root>/README.md",
     "snippet": "# arch-graph > MCP server\n\nSee [Semantic search](#semantic-search-optional) for setup and the recommended `both-buckets` agent pattern. For unresolved / dynamic call-sites, read `arch-graph-out/diagnostics.json` directly — there is no MCP tool for it."
   },
   {
@@ -950,7 +950,7 @@
     "kind": "doc-section",
     "label": "MCP server",
     "score": 0.8323594962122146,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/README.md",
+    "path": "<arch-graph-root>/README.md",
     "snippet": "# arch-graph > MCP server\n\n**Structural (12):** `subject_publishers`, `subject_subscribers`, `queue_producers`, `queue_consumers`, `service_dependencies`, `service_dependents`, `module_imports`, `table_users`, `path`, `explain`, `query`, `stats`."
   },
   {
@@ -959,7 +959,7 @@
     "kind": "doc-section",
     "label": "MCP fallback (if installed)",
     "score": 0.8258035783818671,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/claude-md.template.md",
+    "path": "<arch-graph-root>/claude-md.template.md",
     "snippet": "# arch-graph (static architecture facts) > MCP fallback (if installed)\n\n\nIf `arch-graph mcp` is available on PATH and the editor has an MCP client configured, the MCP tools can also answer these queries: `subject_publishers`, `subject_subscribers`, `queue_producers`, `queue_consumers`, `service_dependencies`, `service_dependents`, `module_imports`, `table_users`, `path`, `explain`, `query`, `stats`. For unresolved / dynamic call-sites the extractor couldn't pin down, read `arch-graph-out/diagnostics.json` directly — there is no MCP tool for it."
   },
   {
@@ -968,7 +968,7 @@
     "kind": "doc-section",
     "label": "MCP server",
     "score": 0.8250572793745339,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/README.md",
+    "path": "<arch-graph-root>/README.md",
     "snippet": "# arch-graph > MCP server\n\n\nOptional — for editors with an MCP client configured:\n\n```sh\narch-graph mcp   # starts the stdio MCP server backed by arch-graph-out/graph.json\n```\n\nExposes 15 tools — 12 structural + 3 semantic."
   },
   {
@@ -977,7 +977,7 @@
     "kind": "doc-section",
     "label": "MCP server",
     "score": 0.8221496257677703,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/README.md",
+    "path": "<arch-graph-root>/README.md",
     "snippet": "# arch-graph > MCP server\n\nThe CLI query subcommands are preferred over MCP when both are available (no stdio overhead, no server lifecycle)."
   },
   {
@@ -986,7 +986,7 @@
     "kind": "doc-section",
     "label": "Top-3 Results per Query",
     "score": 0.8212707346048126,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/README.md",
+    "path": "<arch-graph-root>/bench/self-build/README.md",
     "snippet": "# Public Self-Build Mini-Bench: arch-graph vs graphify > Results > Top-3 Results per Query\n\narch-graph (HIT):\n1. [doc-section] `MCP server` — README.md (score=0.685)\n2. [doc-section] `MCP server` — README.md (score=0.654)\n3. [doc-section] `MCP contract (Task 4) — locked for federation` — docs/plans/v_2026-05-16-semantic-sidecar-design.md (score=0.638)"
   },
   {
@@ -995,7 +995,7 @@
     "kind": "doc-section",
     "label": "SB12 — what extractors are wired together in the build",
     "score": 0.9003506132485332,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/arch-graph-results.md",
+    "path": "<arch-graph-root>/bench/self-build/arch-graph-results.md",
     "snippet": "# arch-graph Results — Self-Build Bench > SB12 — what extractors are wired together in the build\n\n\n**Category:** E_arch  \n**Verdict:** HIT  \n**minScore:** 0.35  \n**expectedKindIn:** doc-section  \n**expectedLabelHas:** pipeline, extractor, Extractor, build"
   },
   {
@@ -1004,7 +1004,7 @@
     "kind": "doc-section",
     "label": "SB12 — what extractors are wired together in the build",
     "score": 0.8537550405423302,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/arch-graph-results.md",
+    "path": "<arch-graph-root>/bench/self-build/arch-graph-results.md",
     "snippet": "# arch-graph Results — Self-Build Bench > SB12 — what extractors are wired together in the build\n\n| Rank | Score | Kind | Label |\n|------|-------|------|-------|\n| 1 | 0.507 | doc-section | Task 10: Pipeline wiring — call docs extractor + mapper in ` **HIT** |\n| 2 | 0.501 | doc-section | Task 10: Pipeline wiring — call docs extractor + mapper in ` |\n| 3 | 0.493 | doc-section | Task 5: Extractor — file walker + reader + frontmatter (`ext |\n| 4 | 0.487 | doc-section | Task 5: Extractor — file walker + reader + frontmatter (`ext |\n| 5 | 0.485 | doc-section | Task 5: Extractor — file walker + reader + frontmatter (`ext |\n| 6 | 0.481 | doc-section | Test fixtures — pattern |\n| 7 | 0.481 | doc-section | Task 10: Pipeline wiring — call docs extractor + mapper in ` |\n| 8 | 0.477 | doc-section | Ta"
   },
   {
@@ -1013,7 +1013,7 @@
     "kind": "doc-section",
     "label": "Top-3 Results per Query",
     "score": 0.8393053483843947,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/bench/self-build/README.md",
+    "path": "<arch-graph-root>/bench/self-build/README.md",
     "snippet": "# Public Self-Build Mini-Bench: arch-graph vs graphify > Results > Top-3 Results per Query\n\ngraphify (HIT):\n1. `graph-queries.ts` (src/mcp/graph-queries.ts)\n2. `server.ts` (src/mcp/server.ts)\n3. `startMcpServer()` (src/mcp/server.ts)\n\n---\n\n**SB12 — what extractors are wired together in the build**"
   },
   {
@@ -1022,7 +1022,7 @@
     "kind": "doc-section",
     "label": "Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`",
     "score": 0.8347868623825598,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
     "snippet": "# doc-section Implementation Plan > Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`\n\nNote: the existing test fixtures live under `src/__fixtures__/docs/sample/` — `extractDocs` will use them via the fixtureRoot passed in tests."
   },
   {
@@ -1031,7 +1031,7 @@
     "kind": "doc-section",
     "label": "Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`",
     "score": 0.832959962802399,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
     "snippet": "# doc-section Implementation Plan > Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`\n\n        const docNodes = result.graph.nodes.filter(n => n.kind === 'doc-section');\n        expect(docNodes.length).toBeGreaterThan(0);\n        expect(result.diagnostics.docs).toBeDefined();\n        expect(result.diagnostics.docs!.counts.nodesEmitted).toBe(docNodes.length);\n    });\n});\n```"
   },
   {
@@ -1040,7 +1040,7 @@
     "kind": "doc-section",
     "label": "Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`",
     "score": 0.8324886547651098,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
     "snippet": "# doc-section Implementation Plan > Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`\n\nInside the `build(config: ArchGraphConfig): Promise<BuildResult>` function, AFTER `assembleGraph(...)` populates `graph` and the diagnostics/validation accumulators are initialised, add:"
   },
   {
@@ -1049,7 +1049,7 @@
     "kind": "doc-section",
     "label": "Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`",
     "score": 0.8321203260577893,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
     "snippet": "# doc-section Implementation Plan > Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`\n\n        const result = await build(cfg);"
   },
   {
@@ -1058,7 +1058,7 @@
     "kind": "doc-section",
     "label": "Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`",
     "score": 0.8298787952385344,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
     "snippet": "# doc-section Implementation Plan > Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`\n\n```ts\nimport { describe, it, expect } from 'vitest';\nimport { resolve } from 'node:path';\nimport { configSchema } from '../core/config.js';      // adjust to actual path\nimport { build } from './build.js';"
   },
   {
@@ -1067,7 +1067,7 @@
     "kind": "doc-section",
     "label": "Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`",
     "score": 0.8283886213549564,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
     "snippet": "# doc-section Implementation Plan > Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`\n\n```bash\ngit add src/pipeline/build.ts src/pipeline/build.test.ts\ngit commit -m \"feat(arch-graph): wire docs extractor + mapper into build pipeline\"\n```\n\n---"
   },
   {
@@ -1076,7 +1076,7 @@
     "kind": "doc-section",
     "label": "Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`",
     "score": 0.8257546891674429,
-    "path": "/Users/romandubovik/Documents/Projects/arch-graph/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
+    "path": "<arch-graph-root>/docs/plans/v_2026-05-17-doc-section-extractor-implementation.md",
     "snippet": "# doc-section Implementation Plan > Task 10: Pipeline wiring — call docs extractor + mapper in `pipeline/build.ts`\n\nExpected: FAIL — `result.diagnostics.docs` undefined.\n\n- [ ] **Step 3: Wire docs into the pipeline**\n\nIn `src/pipeline/build.ts`, add imports near the top:"
   }
 ]
