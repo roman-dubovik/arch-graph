@@ -291,4 +291,3 @@ describe('runSemanticBuildStep', () => {
         expect(SEMANTIC_SKIP_HINT).toContain('Skipped');
     });
 });
-

@@ -1,7 +1,7 @@
 # arch-graph Baseline Eval — 2026-05-17
 
-**Worktree**: `<arch-graph-root>/.worktrees/feat-search-code-vs-docs`  
-**CLI**: `<arch-graph-root>/.worktrees/feat-search-code-vs-docs/src/cli/index.ts`  
+**Worktree**: `/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-search-code-vs-docs`  
+**CLI**: `/Users/romandubovik/Documents/Projects/arch-graph/.worktrees/feat-search-code-vs-docs/src/cli/index.ts`  
 **k**: 10  
 **mode**: `fallback`  
 **skip_build**: 1  
