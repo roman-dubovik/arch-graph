@@ -182,6 +182,7 @@ export async function extractBullMq(
             collectCallSites(
                 sf,
                 queueNames,
+                numericConsts,
                 injectedQueuesByProp,
                 consumers,
                 repeatAddSites,
@@ -423,14 +424,13 @@ function resolveRegistrationArg(
         const backoffInit = backoffProp?.getInitializer();
         if (backoffInit) {
             const bk = backoffInit.getKind();
-            if (bk === SyntaxKind.NumericLiteral) {
-                defaultBackoff = Number(backoffInit.getText());
-            } else if (bk === SyntaxKind.Identifier) {
-                const resolved = numericConsts.get(backoffInit.getText());
-                if (resolved !== undefined) defaultBackoff = resolved;
-            } else if (bk === SyntaxKind.ObjectLiteralExpression) {
+            if (bk === SyntaxKind.ObjectLiteralExpression) {
                 // Store raw text representation for diagnostic purposes
                 defaultBackoff = backoffInit.getText().slice(0, 120);
+            } else {
+                // NumericLiteral, Identifier, AsExpression, ParenthesizedExpression — all via readNumeric
+                const resolved = readNumeric(backoffInit, numericConsts);
+                if (resolved !== undefined) defaultBackoff = resolved;
             }
         }
 
@@ -481,6 +481,7 @@ function resolveRegistrationArg(
 function collectCallSites(
     sf: SourceFile,
     _queueNames: QueueNameIndex,
+    numericConsts: NumericConstIndex,
     injectedQueuesByProp: Map<string, string>,
     consumers: BullMqProcessorSite[],
     repeatAddSites: BullMqRepeatAddSite[],
@@ -575,19 +576,24 @@ function collectCallSites(
                                         });
                                     }
                                 }
-                                // Non-literal `every` (variable, template, expression):
-                                // no ms value stored, but push to unresolvedRepeatExpressions
-                                // so operators can see it. Literal numeric `every` is silently
-                                // accepted (hasRepeat is set on the queue node via the site).
+                                // `every` field: try to resolve via readNumeric (covers numeric
+                                // literals, exported consts, wrapped/as-expression variants).
+                                // Only push to unresolvedRepeatExpressions if genuinely not
+                                // statically resolvable (runtime var, template, expression).
                                 const everyProp = findProp(repeatObj, 'every');
                                 if (everyProp !== null) {
                                     const everyInit = everyProp.getInitializer();
-                                    if (everyInit !== undefined && everyInit.getKind() !== SyntaxKind.NumericLiteral) {
-                                        unresolvedRepeatExpressions.push({
-                                            location,
-                                            queueName,
-                                            rawExpression: '<every: ' + everyInit.getText().slice(0, 60) + '>',
-                                        });
+                                    if (everyInit !== undefined) {
+                                        const everyResolved = readNumeric(everyInit, numericConsts);
+                                        if (everyResolved === undefined) {
+                                            // Genuinely unresolvable — record as diagnostic
+                                            unresolvedRepeatExpressions.push({
+                                                location,
+                                                queueName,
+                                                rawExpression: '<every: ' + everyInit.getText().slice(0, 60) + '>',
+                                            });
+                                        }
+                                        // If resolved → silently accept; no value stored (repeatEveryMs removed)
                                     }
                                 }
                             }

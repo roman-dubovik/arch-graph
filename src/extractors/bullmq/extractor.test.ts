@@ -1455,3 +1455,78 @@ describe('FIX K — Pass 2 aliased Job import fallback', () => {
         expect(entries.length).toBe(0);
     });
 });
+
+// ---------------------------------------------------------------------------
+// FIX L — backoff + every consistency via readNumeric
+// ---------------------------------------------------------------------------
+
+describe('FIX L — backoff via readNumeric + every false-positive elimination', () => {
+    it('backoff: BACKOFF_CONST (where BACKOFF_CONST=500) → defaultBackoff === 500', async () => {
+        const p = new Project({
+            useInMemoryFileSystem: true,
+            compilerOptions: { target: 99, module: 99, moduleResolution: 100, strict: false },
+        });
+        p.createSourceFile('/app/apps/test-svc/src/constants.ts', `
+            export const BACKOFF_CONST = 500;
+        `);
+        p.createSourceFile('/app/apps/test-svc/src/queue.module.ts', `
+            import { BullModule } from '@nestjs/bullmq';
+            import { BACKOFF_CONST } from './constants';
+            BullModule.registerQueue({
+                name: 'retry-q',
+                defaultJobOptions: { backoff: BACKOFF_CONST },
+            });
+        `);
+        const result = await extractBullMq(makeConfig(), p);
+        const reg = result.registrations.find(
+            (r) => r.queue.kind !== 'unresolved' && r.queue.name === 'retry-q',
+        );
+        expect(reg).toBeDefined();
+        expect(reg?.defaultBackoff).toBe(500);
+    });
+
+    it('repeat: { every: POLL_INTERVAL_MS } (resolvable exported const) → NO entry in unresolvedRepeatExpressions', async () => {
+        const source = `
+            import { InjectQueue } from '@nestjs/bullmq';
+            export const POLL_INTERVAL_MS = 5000;
+            export class PollerService {
+                constructor(
+                    @InjectQueue('poll-queue') private readonly pollQueue: any,
+                ) {}
+                async start() {
+                    this.pollQueue.add('poll', {}, { repeat: { every: POLL_INTERVAL_MS } });
+                }
+            }
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project);
+        // POLL_INTERVAL_MS is an exported const = 5000, readNumeric resolves it
+        // → should NOT appear in unresolvedRepeatExpressions
+        const unresolvedEvery = result.unresolvedRepeatExpressions.filter(
+            (u) => u.rawExpression.includes('every'),
+        );
+        expect(unresolvedEvery.length).toBe(0);
+    });
+
+    it('repeat: { every: someRuntimeVar } (not in index) → DOES populate unresolvedRepeatExpressions', async () => {
+        const source = `
+            import { InjectQueue } from '@nestjs/bullmq';
+            export class PollerService {
+                constructor(
+                    @InjectQueue('runtime-q') private readonly runtimeQueue: any,
+                ) {}
+                async start() {
+                    const intervalMs = computeInterval();
+                    this.runtimeQueue.add('task', {}, { repeat: { every: intervalMs } });
+                }
+            }
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project);
+        // intervalMs is a local var, not an exported const → genuinely unresolvable
+        const unresolvedEvery = result.unresolvedRepeatExpressions.filter(
+            (u) => u.rawExpression.includes('every'),
+        );
+        expect(unresolvedEvery.length).toBeGreaterThan(0);
+    });
+});
