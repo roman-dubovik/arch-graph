@@ -1,9 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { Project } from 'ts-morph';
+import { mkdirSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { extractBullMq } from './extractor.js';
 import { mapBullMqToGraph } from '../../mapper/bullmq-to-graph.js';
 import { OwnershipRegistry } from '../../core/service-registry.js';
 import type { ArchGraphConfig } from '../../core/config.js';
+import { runBuild } from '../../pipeline/build.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -894,5 +898,143 @@ describe('AC3c.5 (optional) — queue.add with non-literal cron populates unreso
         // Unresolved diagnostic
         expect(result.unresolvedRepeatExpressions.length).toBeGreaterThan(0);
         expect(result.unresolvedRepeatExpressions[0]!.queueName).toBe('dynamic-jobs');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// FIX F — new test coverage
+// ---------------------------------------------------------------------------
+
+describe('FIX F.1 — parseInt(process.env.X, 10) || N fallback resolves', () => {
+    it('parseInt fallback resolves workerConcurrencyFallback and env var', async () => {
+        const source = `
+            const factory = new WorkerFactory();
+            factory.createWorker('q-parse', { concurrency: parseInt(process.env.PARSE_WORKERS, 10) || 5 });
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project);
+        const reg = result.registrations.find(
+            (r) => r.queue.kind !== 'unresolved' && r.queue.name === 'q-parse',
+        );
+        expect(reg).toBeDefined();
+        const mutableReg = reg as unknown as Record<string, unknown>;
+        expect(mutableReg['workerConcurrencyFallback']).toBe(5);
+        expect(mutableReg['workerConcurrencyEnvVar']).toBe('PARSE_WORKERS');
+    });
+});
+
+describe('FIX F.2 — non-literal every populates unresolvedRepeatExpressions with <every: marker', () => {
+    it('queue.add with non-literal every records diagnostic with <every: prefix', async () => {
+        const source = `
+            import { InjectQueue } from '@nestjs/bullmq';
+            import { BullModule } from '@nestjs/bullmq';
+
+            const someVar = 5000;
+            BullModule.registerQueue({ name: 'every-var-queue' });
+
+            class EveryScheduler {
+                constructor(@InjectQueue('every-var-queue') private everyQueue: any) {}
+
+                async schedule() {
+                    await this.everyQueue.add('j', {}, { repeat: { every: someVar } });
+                }
+            }
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project);
+
+        expect(result.unresolvedRepeatExpressions.length).toBeGreaterThan(0);
+        const entry = result.unresolvedRepeatExpressions.find(
+            (e) => e.queueName === 'every-var-queue',
+        );
+        expect(entry).toBeDefined();
+        expect(entry!.rawExpression).toContain('<every:');
+    });
+});
+
+describe('FIX F.3 — pipeline E2E: jobData written to queue node meta when withTypes=true', () => {
+    it('runBuild with withTypes=true writes jobData to queue node meta', async () => {
+        // Create a real temp fixture that runBuild can walk
+        const tmpRoot = mkdtempSync(join(tmpdir(), 'arch-graph-test-'));
+        try {
+            const appDir = join(tmpRoot, 'apps', 'job-svc', 'src');
+            mkdirSync(appDir, { recursive: true });
+            writeFileSync(join(appDir, 'processor.ts'), `
+                import { Processor, Process } from '@nestjs/bullmq';
+                import { BullModule } from '@nestjs/bullmq';
+
+                interface Job<T = any> { data: T; }
+
+                BullModule.registerQueue({ name: 'typed-queue' });
+
+                @Processor('typed-queue')
+                class TypedProcessor {
+                    @Process()
+                    async handle(job: Job<{ orderId: string; amount: number }>): Promise<void> {}
+                }
+            `);
+            const cfg: ArchGraphConfig = {
+                id: 'e2e-test',
+                root: tmpRoot,
+                appsGlob: 'apps/**',
+            } as unknown as ArchGraphConfig;
+            const result = await runBuild(cfg, { withTypes: true });
+            const queueNode = result.graph.nodes.find((n) => n.id === 'queue:typed-queue');
+            expect(queueNode).toBeDefined();
+            const jobData = queueNode?.meta?.['jobData'] as Array<unknown> | undefined;
+            expect(jobData).toBeDefined();
+            expect(jobData!.length).toBeGreaterThan(0);
+        } finally {
+            rmSync(tmpRoot, { recursive: true, force: true });
+        }
+    });
+});
+
+describe('FIX F.4 — multiple @Process methods on same queue dedup by (processorClass, methodName)', () => {
+    it('two @Process methods on same queue give 2 distinct jobDataTypes entries', async () => {
+        const source = `
+            import { Processor, Process } from '@nestjs/bullmq';
+
+            interface Job<T = any> { data: T; }
+
+            @Processor('multi-process')
+            class MultiProcessProcessor {
+                @Process('type-a')
+                async handleA(job: Job<{ aField: string }>): Promise<void> {}
+
+                @Process('type-b')
+                async handleB(job: Job<{ bField: number }>): Promise<void> {}
+            }
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project, { withTypes: true });
+
+        const entries = result.jobDataTypes.filter((j) => j.queueName === 'multi-process');
+        expect(entries.length).toBe(2);
+        const methodNames = entries.map((e) => e.methodName).sort();
+        expect(methodNames).toEqual(['handleA', 'handleB']);
+    });
+});
+
+describe('FIX F.5 — factory-merge: existing BullModule registration enriched with workerConcurrencyFallback', () => {
+    it('createWorker merges fallback onto existing BullModule.registerQueue entry', async () => {
+        const source = `
+            import { BullModule } from '@nestjs/bullmq';
+
+            BullModule.registerQueue({ name: 'q' });
+
+            const factory = new WorkerFactory();
+            factory.createWorker('q', { concurrency: process.env.Q_WORKERS ?? 7 });
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project);
+
+        // Should be exactly 1 registration (merged, not duplicated)
+        const qRegs = result.registrations.filter(
+            (r) => r.queue.kind !== 'unresolved' && r.queue.name === 'q',
+        );
+        expect(qRegs.length).toBe(1);
+        const mutableReg = qRegs[0] as unknown as Record<string, unknown>;
+        expect(mutableReg['workerConcurrencyFallback']).toBe(7);
     });
 });
