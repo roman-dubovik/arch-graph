@@ -634,6 +634,16 @@ table.bench-table {
   transform: translateY(-2px);
   border-color: var(--border-strong);
 }
+@media (min-width: 900px) {
+  .domain-grid {
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-auto-flow: row dense;
+  }
+  .domain-card-feature {
+    grid-column: 3;
+    grid-row: 1 / span 3;
+  }
+}
 .domain-head {
   display: flex;
   align-items: center;
