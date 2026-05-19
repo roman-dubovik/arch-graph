@@ -176,14 +176,11 @@ export function dynamicSiteToCronScheduleSite(
     ds: DynamicSchedulerSite,
     owner: string,
 ): CronScheduleSite | null {
-    // Skip: no expression and no meaningful raw text
-    if (ds.expression === null && ds.rawExpression.trim().length === 0) {
-        return null;
-    }
-
-    // Skip: addCronJob where the second arg was not `new CronJob(...)` and expression is null
-    // (pre-constructed job passed as variable — we can't know the expression)
-    if (ds.method === 'addCronJob' && ds.expression === null) {
+    // Skip: expression is null — argument was not statically resolvable.
+    // For addCronJob: second arg was not `new CronJob(...)` (pre-constructed job variable).
+    // For addInterval/addTimeout: second arg was not a numeric literal.
+    // In all cases we cannot determine the expression — drop and let caller record as unresolved.
+    if (ds.expression === null) {
         return null;
     }
 

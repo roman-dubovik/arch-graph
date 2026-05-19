@@ -141,6 +141,33 @@ describe('extractCronSchedule', () => {
         );
         expect(dynInterval).toBeDefined();
     });
+
+    it('SchedulerRegistry.addTimeout(name, ms) → dynamic site with timeout category', async () => {
+        const project = makeProject();
+        const { sites } = await extractCronSchedule(makeConfig(), project);
+        // addDynamicTimeoutMs uses a numeric literal — should produce a site
+        const dynTimeout = sites.find(
+            (s) =>
+                s.category === 'timeout' &&
+                s.owner.startsWith('dynamic:') &&
+                s.expression === '10000',
+        );
+        expect(dynTimeout).toBeDefined();
+        expect(dynTimeout?.name).toBe('dynamicTimeoutMs');
+    });
+
+    it('unresolvable addCronJob (pre-constructed job) is dropped and recorded in diagnostics', async () => {
+        const project = makeProject();
+        const { sites, diagnostics } = await extractCronSchedule(makeConfig(), project);
+        // addDynamicTimeout passes `{} as unknown` (not new CronJob) — should be dropped
+        const badSite = sites.find(
+            (s) => s.owner === 'dynamic:dynamicTimeout',
+        );
+        expect(badSite).toBeUndefined();
+        // Should appear in diagnostics.unresolved
+        const dropped = diagnostics.unresolved.find((d) => d.owner === 'dynamic:dynamicTimeout');
+        expect(dropped).toBeDefined();
+    });
 });
 
 // ---------------------------------------------------------------------------
@@ -174,10 +201,9 @@ describe('mapCronScheduleToGraph', () => {
         const { sites } = await extractCronSchedule(makeConfig(), project);
         const registry = makeRegistry();
         const { edges } = mapCronScheduleToGraph(sites, registry);
-        if (edges.length > 0) {
-            for (const edge of edges) {
-                expect(edge.kind).toBe('cron-triggers');
-            }
+        expect(edges.length).toBeGreaterThan(0);
+        for (const edge of edges) {
+            expect(edge.kind).toBe('cron-triggers');
         }
     });
 

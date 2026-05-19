@@ -57,20 +57,26 @@ export const CRON_RECALL_FLOOR = 0.9;
 // ---------------------------------------------------------------------------
 
 // @Cron(string | CronExpression.X | identifier)
-const CRON_RE =
+// Exported for testing.
+export const CRON_RE =
     /@Cron\s*\(\s*(?:([A-Za-z_][\w.]*|['"`][^'"`]*['"`]))/gs;
 
 // @Interval(ms) or @Interval(name, ms)
-const INTERVAL_RE =
+// Exported for testing.
+export const INTERVAL_RE =
     /@Interval\s*\(\s*(?:([A-Za-z_][\w.]*|['"`][^'"`]*['"`]|\d+))/gs;
 
 // @Timeout(ms) or @Timeout(name, ms)
-const TIMEOUT_RE =
+// Exported for testing.
+export const TIMEOUT_RE =
     /@Timeout\s*\(\s*(?:([A-Za-z_][\w.]*|['"`][^'"`]*['"`]|\d+))/gs;
 
-// SchedulerRegistry.addCronJob / addInterval / addTimeout
-const SCHEDULER_REGISTRY_RE =
-    /SchedulerRegistry\s*[.)][^(]*\.\s*add(?:CronJob|Interval|Timeout)\s*\(/gs;
+// SchedulerRegistry.addCronJob / addInterval / addTimeout — receiver-agnostic.
+// Matches `this.schedulerRegistry.addCronJob(...)`, `registry.addInterval(...)`, etc.
+// The old pattern required "SchedulerRegistry" literal and thus missed lowercase-var idioms.
+// Exported for testing.
+export const SCHEDULER_REGISTRY_RE =
+    /\.\s*add(?:CronJob|Interval|Timeout)\s*\(/gs;
 
 // ---------------------------------------------------------------------------
 // Enumeration
@@ -82,11 +88,15 @@ export async function enumerateCronScheduleGroundTruth(
     const out: CronScheduleGroundTruthEntry[] = [];
 
     for await (const { file, content } of iterateSourceFiles(cfg, 'cron-schedule GT')) {
+        const hasDynamic =
+            content.includes('addCronJob') ||
+            content.includes('addInterval') ||
+            content.includes('addTimeout');
         if (
             !content.includes('@Cron') &&
             !content.includes('@Interval') &&
             !content.includes('@Timeout') &&
-            !content.includes('SchedulerRegistry')
+            !hasDynamic
         ) continue;
 
         const stripped = stripComments(content);

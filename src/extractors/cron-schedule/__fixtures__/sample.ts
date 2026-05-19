@@ -81,6 +81,10 @@ export class DynamicTaskService {
     addDynamicTimeout() {
         this.schedulerRegistry.addTimeout('dynamicTimeout', {} as unknown);
     }
+
+    addDynamicTimeoutMs() {
+        this.schedulerRegistry.addTimeout('dynamicTimeoutMs', 10000);
+    }
 }
 
 // ── Test class D: mixed — both @Cron and @Interval on different methods ──────
