@@ -412,15 +412,13 @@ function resolveRegistrationArg(
 // ---------------------------------------------------------------------------
 
 /**
- * Walk all CallExpressions in the source file to find:
- *   1. `.add(jobName, data, { repeat: ... })` — contributes to hasRepeat
- *   2. `.on('event', handler)` on known queue/worker receivers
- *   3. catch-block `.add('dlq', ...)` calls inside @Process methods
- *
- * Receiver resolution: use per-file injectedQueuesByProp map (from @InjectQueue).
- * If receiver is `this.propName`, look up `propName` in the map.
- * Also handles `new Queue('name', ...)` / `new Worker('name', ...)` inline instances
- * by walking the AST for the binding.
+ * Collects call sites for repeat-add, catch-block-add, and event-listener
+ * patterns. Receiver resolution uses the per-file `injectedQueuesByProp` map
+ * (built from `@InjectQueue` sites) and handles `this.propName` and bare
+ * property-name patterns. Anything else (inline `new Queue(...)`, external
+ * variables) is unresolved and either lands in `unresolvedEventListeners` /
+ * `unresolvedCatchBlockSites` or is silently skipped for repeat-add sites
+ * (no diagnostic emitted for that path — `hasRepeat` would just stay false).
  */
 function collectCallSites(
     sf: SourceFile,
