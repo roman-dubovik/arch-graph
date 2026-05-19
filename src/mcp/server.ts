@@ -75,6 +75,7 @@ const EDGE_KIND_CHECK: Record<EdgeKind, null> = {
     'config-read-by': null,
     'entity-has-field': null,
     'scoped': null,
+    'cron-triggers': null,
 };
 const EDGE_KIND_VALUES = Object.keys(EDGE_KIND_CHECK) as [EdgeKind, ...EdgeKind[]];
 

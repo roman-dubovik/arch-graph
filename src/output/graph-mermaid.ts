@@ -34,7 +34,7 @@ export type MermaidSliceMode =
     | { kind: 'per-service' }
     | { kind: 'domain'; domain: DomainKey };
 
-export type DomainKey = 'nats' | 'bullmq' | 'typeorm' | 'http' | 'di' | 'ts-import' | 'lib' | 'fe' | 'endpoint' | 'config' | 'scoped';
+export type DomainKey = 'nats' | 'bullmq' | 'typeorm' | 'http' | 'di' | 'ts-import' | 'lib' | 'fe' | 'endpoint' | 'config' | 'scoped' | 'cron';
 
 export interface MermaidWriteOptions {
     /** Slicing mode. Defaults to `{ kind: 'full' }`. */
@@ -156,6 +156,7 @@ const NODE_KIND_META: Record<NodeKind, NodeKindMeta> = {
     'fe-route': { subgraphId: 'fe_routes', subgraphLabel: 'FE routes', cssClass: 'fe', order: 16 },
     'fe-hook': { subgraphId: 'fe_hooks', subgraphLabel: 'FE hooks', cssClass: 'fe', order: 17 },
     'doc-section': { subgraphId: 'docs', subgraphLabel: 'Docs', cssClass: 'docs', order: 18 },
+    'cron-schedule': { subgraphId: 'cron_schedules', subgraphLabel: 'Cron schedules', cssClass: 'cron', order: 19 },
 };
 
 const SUBGRAPH_ORDER: NodeKind[] = (Object.keys(NODE_KIND_META) as NodeKind[]).sort(
@@ -207,6 +208,7 @@ const EDGE_SYNTAX: Record<EdgeKind, string> = {
     'config-read-by': '-.->|config-read|',
     'entity-has-field': '--o|has-field|',
     'scoped': '-.->|scoped|',
+    'cron-triggers': '-.->|triggers|',
 };
 
 /**
@@ -243,6 +245,7 @@ const EDGE_DOMAIN: Record<EdgeKind, DomainKey> = {
     'config-read-by': 'config',
     'entity-has-field': 'typeorm',
     'scoped': 'scoped',
+    'cron-triggers': 'cron',
 };
 
 /**
@@ -282,6 +285,10 @@ function nodeDeclaration(node: GraphNode, idMap: Map<string, string>): string {
             return `${id}["${label}"]`;
         case 'fe-route':
             return `${id}(["${label}"])`;
+        case 'cron-schedule':
+            return `${id}(["${label}"])`;
+        case 'doc-section':
+            return `${id}["${label}"]`;
     }
 }
 
@@ -297,6 +304,8 @@ const CLASS_DEFS = [
     'classDef config fill:#fff7ed,stroke:#c2410c,color:#7c2d12;',
     'classDef scoped fill:#ecfdf5,stroke:#059669,color:#064e3b;',
     'classDef fe fill:#fce7f3,stroke:#be185d,color:#831843;',
+    'classDef docs fill:#f0fdf4,stroke:#16a34a,color:#14532d;',
+    'classDef cron fill:#fef9c3,stroke:#a16207,color:#713f12;',
 ].join('\n    ');
 
 export function renderMermaid(
@@ -579,7 +588,7 @@ export function parseSliceMode(raw: string): MermaidSliceMode {
         const key = raw.slice('domain:'.length);
         if (!isDomainKey(key)) {
             throw new Error(
-                `unknown mermaid-slice domain '${key}'; valid: nats, bullmq, typeorm, http, di, ts-import, lib, endpoint, config, scoped`,
+                `unknown mermaid-slice domain '${key}'; valid: nats, bullmq, typeorm, http, di, ts-import, lib, endpoint, config, scoped, cron`,
             );
         }
         return { kind: 'domain', domain: key };
@@ -600,7 +609,8 @@ function isDomainKey(s: string): s is DomainKey {
         s === 'lib' ||
         s === 'endpoint' ||
         s === 'config' ||
-        s === 'scoped'
+        s === 'scoped' ||
+        s === 'cron'
     );
 }
 

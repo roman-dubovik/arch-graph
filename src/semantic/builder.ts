@@ -430,6 +430,21 @@ export function buildEmbedText(node: GraphNode, snippet: string): string {
         text = `${text}\n${i18nText}`;
     }
 
+    // For cron-schedule nodes, append expression + resolved expression + human-readable.
+    // Enables "find all hourly jobs" / "find midnight cron" style queries.
+    if (node.kind === 'cron-schedule' && node.meta) {
+        const parts: string[] = [];
+        const expr = node.meta['expression'] as string | undefined;
+        const resolved = node.meta['resolvedExpression'] as string | undefined;
+        const humanReadable = node.meta['humanReadable'] as string | undefined;
+        if (expr) parts.push(expr);
+        if (resolved && resolved !== expr) parts.push(resolved);
+        if (humanReadable) parts.push(humanReadable);
+        if (parts.length > 0) {
+            text += '\n' + parts.join(' ');
+        }
+    }
+
     // For endpoint nodes with OpenAPI info, append description/summary/tags/paramSummary.
     // Helps when endpoint paths are dynamic (e.g. `/<dynamic>/...`) but the YAML has
     // rich descriptions — especially Russian ones on project-c.

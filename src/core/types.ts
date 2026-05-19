@@ -86,7 +86,9 @@ export type NodeKind =
     /** STUB: extractor returns empty in v1 — see B8 in design doc */
     | 'scoped-marker'
     | 'db-entity-field'
-    | 'doc-section';
+    | 'doc-section'
+    /** @nestjs/schedule cron jobs, intervals, and timeouts. */
+    | 'cron-schedule';
 
 /**
  * Exhaustiveness-gate pattern for NodeKind.
@@ -113,6 +115,7 @@ const NODE_KIND_CHECK: Record<NodeKind, null> = {
     'scoped-marker': null,
     'db-entity-field': null,
     'doc-section': null,
+    'cron-schedule': null,
 };
 
 /** All valid NodeKind values — used for runtime validation and zod enum schemas. */
@@ -145,7 +148,9 @@ export type EdgeKind =
     | 'config-read-by'
     | 'entity-has-field'
     /** STUB: reserved for forward-compat — no scoped edges emitted in v1; see B8 in design doc */
-    | 'scoped';
+    | 'scoped'
+    /** @nestjs/schedule cron-schedule triggers an owner service/lib. */
+    | 'cron-triggers';
 
 export interface GraphNode {
     id: string;
@@ -486,6 +491,8 @@ export interface DiagnosticsReport {
     docs?: DocsDiagnostics;
     /** OpenAPI YAML enrichment diagnostics — populated by the enrichment pass in `runBuild`. */
     openapi?: OpenApiDiagnostics;
+    /** Cron-schedule domain diagnostics (mapper-level: unowned sites + category counts). */
+    cron?: CronScheduleDiagnostics;
     /**
      * Populated only when `arch-graph semantic build` has been run.
      * Optional so plain `arch-graph build` keeps the same diagnostics.json
@@ -637,6 +644,8 @@ export interface BuildValidation {
     dbEntityFields?: DbEntityFieldsValidationResult;
     /** Docs-domain validation report. */
     docs?: DocsValidationReport;
+    /** Cron-schedule domain validation report. */
+    cron?: import('../validation/cron-schedule-validator.js').CronScheduleValidationReport;
 }
 
 // ============================================================================
@@ -774,6 +783,67 @@ export interface BullMqValidationReport {
 
 export function queueNameOf(ref: BullMqQueueRef): string | null {
     return ref.kind === 'unresolved' ? null : ref.name;
+}
+
+// ============================================================================
+// Cron-schedule-domain types (@nestjs/schedule)
+// ============================================================================
+
+/**
+ * Mapper-level diagnostics for the cron-schedule domain.
+ * Mirrors `BullMqDiagnostics` shape — unowned sites + category counts.
+ */
+export interface CronScheduleDiagnostics {
+    /** Sites whose file falls outside apps/ and libs/ (no owner found). */
+    unowned: CronScheduleSite[];
+    /**
+     * Sites dropped because the expression argument could not be statically resolved.
+     * Populated by the extractor (passed through build.ts) when present.
+     */
+    unresolved?: import('../extractors/cron-schedule/extractor.js').UnresolvedCronSite[];
+    /**
+     * Sites where the options argument was non-literal (name not extractable).
+     * Site is still emitted; name field will be absent.
+     */
+    unresolvedOptions?: import('../extractors/cron-schedule/extractor.js').UnresolvedOptionsSite[];
+    /**
+     * Call sites skipped because the receiver variable name did not match
+     * LIKELY_SCHEDULER_RECEIVER_RE — surfaced for operator debugging.
+     */
+    filteredByReceiver?: import('../extractors/cron-schedule/extractor.js').FilteredByReceiverSite[];
+    counts: {
+        totalSites: number;
+        cron: number;
+        interval: number;
+        timeout: number;
+        dynamic: number;
+        unowned: number;
+        nodesEmitted: number;
+        edgesEmitted: number;
+    };
+}
+
+/**
+ * One cron/interval/timeout site found in source.
+ *
+ *   - `cron`     — `@Cron(expression)` decorator on a class method
+ *   - `interval` — `@Interval(ms)` decorator on a class method
+ *   - `timeout`  — `@Timeout(ms)` decorator on a class method
+ *   - `dynamic`  — `SchedulerRegistry.addCronJob/addInterval/addTimeout(...)` call
+ */
+export interface CronScheduleSite {
+    /** "ClassName.methodName" for decorator sites; "dynamic:<name>" for registry sites. */
+    owner: string;
+    /** Optional job/interval/timeout name from options arg or first string arg. */
+    name?: string;
+    /** Raw first argument text (string literal value or identifier text or ms as string). */
+    expression: string;
+    /** Resolved cron string (for CronExpression.X enum lookups) or undefined if unresolvable. */
+    resolvedExpression?: string;
+    /** Human-readable label for well-known CronExpression aliases; undefined for custom expressions. */
+    humanReadable?: string;
+    category: 'cron' | 'interval' | 'timeout' | 'dynamic';
+    location: SourceLoc;
 }
 
 // ============================================================================

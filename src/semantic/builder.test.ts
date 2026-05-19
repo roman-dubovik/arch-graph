@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ArchGraph, GraphNode } from '../core/types.js';
 import { inMemoryProject } from '../__fixtures__/in-memory-project.js';
-import { buildSemanticIndex } from './builder.js';
+import { buildSemanticIndex, buildEmbedText } from './builder.js';
 import { semanticSearch } from './search.js';
 import type { SemanticDiagnostics } from './types.js';
 import { SEMANTIC_DIM, SEMANTIC_MODEL, SEMANTIC_SCHEMA_VERSION, SKIPPED_NODES_CAP } from './types.js';
@@ -1063,5 +1063,79 @@ describe('buildSemanticIndex — AC-7-F OpenAPI info in embed text', () => {
         // Only one extra line was appended
         const lines = embedText.split('\n');
         expect(lines).toHaveLength(2); // "DELETE /items/:id endpoint" + "Удаление элемента"
+    });
+});
+
+// ---------------------------------------------------------------------------
+// buildEmbedText — cron-schedule node
+// ---------------------------------------------------------------------------
+
+describe('buildEmbedText — cron-schedule node', () => {
+    it('includes kind, label, expression, resolvedExpression, and humanReadable', () => {
+        const node: GraphNode = {
+            id: 'cron-schedule:cron:0 * * * *',
+            kind: 'cron-schedule',
+            label: 'every hour',
+            meta: {
+                expression: 'CronExpression.EVERY_HOUR',
+                resolvedExpression: '0 * * * *',
+                humanReadable: 'every hour',
+                category: 'cron',
+            },
+        };
+        const text = buildEmbedText(node, '');
+        expect(text).toContain('cron-schedule');
+        expect(text).toContain('every hour');
+        expect(text).toContain('CronExpression.EVERY_HOUR');
+        expect(text).toContain('0 * * * *');
+    });
+
+    it('resolvedExpression appears only once when it differs from expression', () => {
+        const node: GraphNode = {
+            id: 'cron-schedule:cron:0 * * * *',
+            kind: 'cron-schedule',
+            label: 'hourly',
+            meta: {
+                expression: 'CronExpression.EVERY_HOUR',
+                resolvedExpression: '0 * * * *',
+                humanReadable: 'every hour',
+                category: 'cron',
+            },
+        };
+        const text = buildEmbedText(node, '');
+        const occurrences = text.split('0 * * * *').length - 1;
+        expect(occurrences).toBe(1);
+    });
+
+    it('resolvedExpression omitted from appended block when equal to expression (no duplicate)', () => {
+        const node: GraphNode = {
+            id: 'cron-schedule:cron:0 0 * * *',
+            kind: 'cron-schedule',
+            label: 'midnight',
+            meta: {
+                expression: '0 0 * * *',
+                resolvedExpression: '0 0 * * *',
+                category: 'cron',
+            },
+        };
+        const text = buildEmbedText(node, '');
+        // expression == resolvedExpression → resolvedExpression not appended again
+        const occurrences = text.split('0 0 * * *').length - 1;
+        expect(occurrences).toBe(1);
+    });
+
+    it('cron-schedule node without humanReadable still includes expression', () => {
+        const node: GraphNode = {
+            id: 'cron-schedule:cron:0 0 * * *',
+            kind: 'cron-schedule',
+            label: '0 0 * * *',
+            meta: {
+                expression: '0 0 * * *',
+                category: 'cron',
+            },
+        };
+        const text = buildEmbedText(node, '');
+        expect(text).toContain('0 0 * * *');
+        expect(text).toContain('cron-schedule');
     });
 });
