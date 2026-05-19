@@ -150,7 +150,11 @@ export type EdgeKind =
     /** STUB: reserved for forward-compat — no scoped edges emitted in v1; see B8 in design doc */
     | 'scoped'
     /** @nestjs/schedule cron-schedule triggers an owner service/lib. */
-    | 'cron-triggers';
+    | 'cron-triggers'
+    /** BullMQ: queue X routes failed jobs into queue Y (DLQ heuristic). */
+    | 'queue-fails-into'
+    /** BullMQ: a queue or worker event listener cross-links owner → queue. */
+    | 'queue-event-listener';
 
 export interface GraphNode {
     id: string;
@@ -709,6 +713,8 @@ export interface BullMqInjectionSite extends BullMqSiteBase {
 export interface BullMqProcessorSite extends BullMqSiteBase {
     role: 'consumer';
     className: string;
+    /** Concurrency value from `@Processor({ concurrency: N })` options object. */
+    concurrency?: number;
 }
 
 /**
@@ -723,6 +729,64 @@ export interface BullMqQueueRegistration {
     queue: BullMqQueueRef;
     api: 'registerQueue' | 'registerQueueAsync';
     location: SourceLoc;
+    /** Top-level concurrency option on `registerQueue({ concurrency: N, ... })`. */
+    concurrency?: number;
+    /** `defaultJobOptions.delay` — default delay (ms) for every job added to this queue. */
+    defaultDelay?: number;
+    /** `defaultJobOptions.attempts` — default retry attempts for every job. */
+    defaultAttempts?: number;
+    /**
+     * `defaultJobOptions.backoff` — raw backoff config. Stored as-is because it can be
+     * a number (fixed delay ms) or an object `{ type, delay }`.
+     */
+    defaultBackoff?: unknown;
+    /** True when `defaultJobOptions.repeat` is present in the registration options. */
+    hasDefaultRepeat?: boolean;
+    /**
+     * Queue name from `defaultJobOptions.failOver` — the queue that receives jobs when
+     * this queue exhausts all retry attempts. Used by the mapper to emit a
+     * `queue-fails-into` edge (MUST-detect case).
+     */
+    failOverTarget?: string;
+}
+
+/**
+ * `queue.add(jobName, data, { repeat: ... })` call site — contributes to
+ * `hasRepeat` on the queue node meta.
+ */
+export interface BullMqRepeatAddSite {
+    role: 'repeat-add';
+    /** Resolved queue name this `.add()` was called on. */
+    queueName: string;
+    location: SourceLoc;
+}
+
+/**
+ * `.on('event', handler)` call site on a Queue or Worker instance.
+ * Emits a `queue-event-listener` edge from the owning service/lib to the queue.
+ */
+export interface BullMqEventListenerSite {
+    role: 'event-listener';
+    /** Resolved queue name derived from the receiver variable. */
+    queueName: string;
+    /** BullMQ event name (e.g. 'failed', 'completed', 'stalled'). */
+    event: string;
+    location: SourceLoc;
+    /** Source file path — used by the mapper for owner resolution. */
+    file: string;
+}
+
+/**
+ * Catch-block `.add('dlq-name', ...)` heuristic site inside a `@Process` method.
+ * Emits a `queue-fails-into` edge from processor queue → DLQ queue.
+ */
+export interface BullMqCatchBlockAddSite {
+    role: 'catch-block-add';
+    /** Queue name of the processor that contains the catch block. */
+    processorQueueName: string;
+    /** Literal job/DLQ name from the `.add(name, ...)` first argument. */
+    dlqName: string;
+    location: SourceLoc;
 }
 
 export type BullMqSite = BullMqInjectionSite | BullMqProcessorSite | BullMqQueueRegistration;
@@ -735,6 +799,16 @@ export interface BullMqDiagnostics {
     unresolved: BullMqSite[];
     /** Producer/consumer sites outside apps/ and libs/. Registrations have no owner. */
     unowned: Array<BullMqInjectionSite | BullMqProcessorSite>;
+    /**
+     * `failOver` references that could not be resolved to a known queue name
+     * (dynamic string, variable, template literal).
+     */
+    unresolvedFailOver?: Array<{ location: SourceLoc; raw: string }>;
+    /**
+     * Event-listener sites whose receiver queue could not be resolved.
+     * Emitted as diagnostics rather than edges.
+     */
+    unresolvedEventListeners?: Array<{ location: SourceLoc; receiverText: string; event: string }>;
     counts: {
         producers: number;
         consumers: number;

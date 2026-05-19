@@ -209,6 +209,8 @@ const EDGE_SYNTAX: Record<EdgeKind, string> = {
     'entity-has-field': '--o|has-field|',
     'scoped': '-.->|scoped|',
     'cron-triggers': '-.->|triggers|',
+    'queue-fails-into': '-.->|fails-into|',
+    'queue-event-listener': '-.->|event-listener|',
 };
 
 /**
@@ -246,6 +248,8 @@ const EDGE_DOMAIN: Record<EdgeKind, DomainKey> = {
     'entity-has-field': 'typeorm',
     'scoped': 'scoped',
     'cron-triggers': 'cron',
+    'queue-fails-into': 'bullmq',
+    'queue-event-listener': 'bullmq',
 };
 
 /**
