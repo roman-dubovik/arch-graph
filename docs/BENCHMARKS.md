@@ -183,8 +183,12 @@ Sources:
 ### 2026-05-19: e5-base vs fresh-graphify (head-to-head re-run)
 
 Full 103-query head-to-head re-run with e5-base as default embedder and fresh
-graphify graphs (code-only rebuild via `graphify update`). Mirrors the
-2026-05-17 methodology exactly — both-buckets mode, k=10, SKIP_BUILD=1.
+graphify graphs rebuilt from scratch with **LLM semantic extraction** (Claude
+Haiku backend) on a scope-corrected corpus. Both-buckets mode, k=10, SKIP_BUILD=1.
+
+Two simultaneous changes to graphify vs the 2026-05-17 baseline:
+1. **Scope correction:** excluded `.next/` build artifacts, `.worktrees/`, `tmp/` — removed ~56K noise nodes from project-a, ~13.5K from project-b-2.0, ~11.2K from project-b. Clean sizes: project-a=10,586 nodes, project-b=11,462 nodes, project-c=6,199 nodes.
+2. **LLM semantic extraction:** 131 + 80 + 7 priority docs extracted with `claude-haiku-4-5`; remaining docs used inline heading extraction.
 
 #### arch-graph (e5-base, both-buckets)
 
@@ -197,53 +201,50 @@ graphify graphs (code-only rebuild via `graphify update`). Mirrors the
 
 **Δ vs 2026-05-17 (MiniLM):** RU +7.8 pp (67% → 74.8%), EN +16.5 pp (67% → 83.5%).
 
-#### graphify (code-only rebuild, lenient criterion)
+#### graphify (full LLM rebuild, scope-corrected, lenient criterion)
 
 | project | RU hits/total | RU hit-rate | EN hits/total | EN hit-rate |
 |---------|---------------|-------------|---------------|-------------|
-| project-a | 15/49 | 30.6% | 45/49 | 91.8% |
-| project-b | 13/29 | 44.8% | 27/29 | 93.1% |
-| project-c | 8/25 | 32.0% | 22/25 | 88.0% |
-| **all** | **36/103** | **35.0%** | **94/103** | **91.3%** |
+| project-a | 11/49 | 22.4% | 38/49 | 77.6% |
+| project-b | 9/29 | 31.0% | 23/29 | 79.3% |
+| project-c | 1/25 | 4.0% | 22/25 | 88.0% |
+| **all** | **21/103** | **20.4%** | **83/103** | **80.6%** |
 
-Graphify scores are **unchanged** from the 2026-05-17 baseline (not an
-embedding-based system; graphify EN lenient criterion is not affected by
-graph structure changes within the same codebase).
+**Δ vs 2026-05-17:** RU −14.6 pp (35.0% → 20.4%), EN lenient −10.7 pp (91.3% → 80.6%).
+Both drops are driven by scope correction removing noise nodes that previously
+inflated substring-match hits (confirmed: zero `.next/` nodes in prior baseline JSONL).
 
 #### Strict apples-to-apples EN re-score (69 scoreable queries)
 
 | project | GF strict | AG strict | GF Δ | AG Δ |
 |---------|-----------|-----------|------|------|
-| project-a | 24/33 = 72.7% | 29/33 = 87.9% | ~0 pp | +24.3 pp |
-| project-b | 7/18 = 38.9% | 14/18 = 77.8% | +11.1 pp | +27.8 pp |
-| project-c | 6/18 = 33.3% | 9/18 = 50.0% | −11.1 pp | +11.1 pp |
-| **all** | **37/69 = 53.6%** | **52/69 = 75.4%** | **~+1 pp** | **+21.8 pp** |
+| project-a | 20/33 = 60.6% | 29/33 = 87.9% | −12.1 pp | +24.3 pp |
+| project-b | 8/18 = 44.4% | 14/18 = 77.8% | +16.7 pp | +27.8 pp |
+| project-c | 11/18 = 61.1% | 9/18 = 50.0% | +16.7 pp | +11.1 pp |
+| **all** | **39/69 = 56.5%** | **52/69 = 75.4%** | **+2.9 pp** | **+21.8 pp** |
 
 Per-category strict EN:
 
 | Category | GF strict | AG strict |
 |----------|-----------|-----------|
-| A_find | 16/30 = 53.3% | 22/30 = 73.3% |
+| A_find | 17/30 = 56.7% | 22/30 = 73.3% |
 | B_debug | 4/8 = 50.0% | 7/8 = 87.5% |
-| C_ui | 7/10 = 70.0% | 10/10 = 100.0% |
-| E_arch | 7/11 = 63.6% | 6/11 = 54.5% |
+| C_ui | 9/10 = 90.0% | 10/10 = 100.0% |
+| E_arch | 6/11 = 54.5% | 6/11 = 54.5% |
 | D_docs | 3/10 = 30.0% | 7/10 = 70.0% |
 
-**Key finding:** the 2026-05-17 near-tie on EN strict (GF 56.5% vs AG 53.6%)
-is superseded. With e5-base, arch-graph leads by **+21.8 pp** (75.4% vs 53.6%).
-The C_ui reversal is the largest single-category shift: AG 20% → 100% (+80 pp
-strict) on 10 scoreable UI queries. D_docs also reversed: AG 50% → 70% vs
-GF 30% (unchanged).
-
-**Caveat:** graphify project-c strict dropped −11.1 pp due to BFS non-determinism
-after the code-only graph rebuild (same root cause documented in
-`bench/REVALIDATION-2026-05-18.md`). The GF strict range across snapshots is
-approximately 50–57%; the 53.6% here falls within that range.
+**Key findings:**
+- arch-graph leads graphify by **+18.9 pp on strict EN** (75.4% vs 56.5%), and by **+54.4 pp on RU** (74.8% vs 20.4%).
+- GF EN strict improved **+2.9 pp** (53.6% → 56.5%) from LLM semantic extraction.
+- C_ui: GF improved 70% → 90% (+20 pp) with LLM doc nodes; AG holds 100%.
+- E_arch: tied at 54.5% — GF lost its prior +9.1 pp advantage.
+- D_docs gap persists: AG 70% vs GF 30%.
+- GF strict uses label-only matching (no kind check); AG requires kind ∈ expectedKindIn.
 
 Sources:
 - Memo: [`docs/comparisons/2026-05-19-arch-graph-vs-graphify-eval.md`](comparisons/2026-05-19-arch-graph-vs-graphify-eval.md)
 - arch-graph results: `scripts/eval/results-2026-05-19-both-buckets-e5-base.md`, `…-en.md`
-- graphify raw: `/tmp/revalidate-graphify-ru-2026-05-19.jsonl`, `/tmp/revalidate-graphify-en-2026-05-19.jsonl`, `/tmp/revalidate-graphify-en-strict-2026-05-19.jsonl`
+- graphify raw: `/tmp/graphify-fresh-ru-2026-05-19.jsonl`, `/tmp/graphify-fresh-en-2026-05-19.jsonl`
 
 ## Per-feature attribution (rule of thumb)
 
