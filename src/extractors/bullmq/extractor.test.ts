@@ -1038,3 +1038,537 @@ describe('FIX F.5 — factory-merge: existing BullModule registration enriched w
         expect(mutableReg['workerConcurrencyFallback']).toBe(7);
     });
 });
+
+// ---------------------------------------------------------------------------
+// Capability A — NumericConstIndex
+// ---------------------------------------------------------------------------
+
+describe('NumericConstIndex — concurrency via const identifier in @Processor', () => {
+    it('resolves concurrency: CONCURRENCY_CONST in @Processor(NAME, { concurrency: CONST })', async () => {
+        const p = new Project({
+            useInMemoryFileSystem: true,
+            compilerOptions: { target: 99, module: 99, moduleResolution: 100, strict: false },
+        });
+        p.createSourceFile('/app/apps/test-svc/src/constants.ts', `
+            export const AUDIO_CONCURRENCY = 5;
+        `);
+        p.createSourceFile('/app/apps/test-svc/src/audio.processor.ts', `
+            import { Processor } from '@nestjs/bullmq';
+            import { AUDIO_CONCURRENCY } from './constants';
+            export const AUDIO_QUEUE = 'audio';
+            @Processor(AUDIO_QUEUE, { concurrency: AUDIO_CONCURRENCY })
+            export class AudioProcessor {}
+        `);
+        const result = await extractBullMq(makeConfig(), p);
+        const consumer = result.consumers.find((c) => c.className === 'AudioProcessor');
+        expect(consumer).toBeDefined();
+        expect(consumer?.concurrency).toBe(5);
+    });
+});
+
+describe('NumericConstIndex — defaultAttempts via const identifier in registerQueue', () => {
+    it('resolves defaultJobOptions.attempts: ATTEMPTS_CONST from exported const', async () => {
+        const p = new Project({
+            useInMemoryFileSystem: true,
+            compilerOptions: { target: 99, module: 99, moduleResolution: 100, strict: false },
+        });
+        p.createSourceFile('/app/apps/test-svc/src/constants.ts', `
+            export const RETRY_ATTEMPTS = 7;
+        `);
+        p.createSourceFile('/app/apps/test-svc/src/queue.module.ts', `
+            import { BullModule } from '@nestjs/bullmq';
+            import { RETRY_ATTEMPTS } from './constants';
+            BullModule.registerQueue({
+                name: 'email',
+                defaultJobOptions: { attempts: RETRY_ATTEMPTS },
+            });
+        `);
+        const result = await extractBullMq(makeConfig(), p);
+        const reg = result.registrations.find(
+            (r) => r.queue.kind !== 'unresolved' && r.queue.name === 'email',
+        );
+        expect(reg).toBeDefined();
+        expect(reg?.defaultAttempts).toBe(7);
+    });
+});
+
+describe('NumericConstIndex — unresolved runtime identifier stays undefined, no diagnostic', () => {
+    it('concurrency: runtimeVar (not an exported const) → concurrency undefined, no diagnostic', async () => {
+        const source = `
+            import { Processor } from '@nestjs/bullmq';
+            const runtimeVar = Math.random() > 0.5 ? 3 : 5;
+            @Processor('dynamic', { concurrency: runtimeVar })
+            export class DynamicProcessor {}
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project);
+        const consumer = result.consumers.find((c) => c.className === 'DynamicProcessor');
+        expect(consumer).toBeDefined();
+        // concurrency should be undefined — runtimeVar is not an exported numeric const
+        expect(consumer?.concurrency).toBeUndefined();
+        // no diagnostic emitted for silently-unresolved numeric identifiers
+        // (verify no entry in unresolvedFailOver or other diagnostic arrays)
+        expect(result.unresolvedFailOver.length).toBe(0);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Capability B — WorkerHost.process() override
+// ---------------------------------------------------------------------------
+
+describe('Capability B — WorkerHost.process() override detected without @Process decorator', () => {
+    it('process(job: Job<T>) method in @Processor class without @Process is detected', async () => {
+        const source = `
+            import { Processor, WorkerHost } from '@nestjs/bullmq';
+
+            interface Job<T = any> { data: T; }
+
+            @Processor('audio')
+            export class AudioConsumer extends WorkerHost {
+                async process(job: Job<{ url: string }>): Promise<void> {}
+            }
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project, { withTypes: true });
+        expect(result.jobDataTypes.length).toBe(1);
+        expect(result.jobDataTypes[0]!.methodName).toBe('process');
+        expect(result.jobDataTypes[0]!.queueName).toBe('audio');
+    });
+});
+
+describe('Capability B — @Process-decorated method still resolves (regression)', () => {
+    it('explicit @Process decorator method is still resolved with withTypes=true', async () => {
+        const source = `
+            import { Processor, Process } from '@nestjs/bullmq';
+
+            interface Job<T = any> { data: T; }
+
+            @Processor('orders')
+            export class OrdersProcessor {
+                @Process()
+                async handle(job: Job<{ orderId: string }>): Promise<void> {}
+            }
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project, { withTypes: true });
+        expect(result.jobDataTypes.length).toBe(1);
+        expect(result.jobDataTypes[0]!.methodName).toBe('handle');
+    });
+});
+
+describe('Capability B — dedup: @Process + override process() in same class emits only one entry', () => {
+    it('class with both @Process and override process() emits only the @Process entry (first-seen wins)', async () => {
+        const source = `
+            import { Processor, Process, WorkerHost } from '@nestjs/bullmq';
+
+            interface Job<T = any> { data: T; }
+
+            @Processor('payments')
+            export class PaymentsProcessor extends WorkerHost {
+                @Process()
+                async process(job: Job<{ amount: number }>): Promise<void> {}
+            }
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project, { withTypes: true });
+        const entries = result.jobDataTypes.filter((j) => j.queueName === 'payments');
+        // Must not duplicate: @Process pass sets 'process' in emittedNames, blocking pass 2
+        expect(entries.length).toBe(1);
+        expect(entries[0]!.methodName).toBe('process');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// FIX H — NumericConstIndex resolves parseInt/Number env-fallback at const-decl level
+// ---------------------------------------------------------------------------
+
+describe('FIX H — NumericConstIndex env-fallback parseInt/Number patterns', () => {
+    it('export const X = parseInt(process.env.Y ?? \'5\', 10) → X=5, concurrency resolved', async () => {
+        const p = new Project({
+            useInMemoryFileSystem: true,
+            compilerOptions: { target: 99, module: 99, moduleResolution: 100, strict: false },
+        });
+        p.createSourceFile('/app/apps/test-svc/src/constants.ts', `
+            export const WORKER_CONCURRENCY = parseInt(process.env.WORKER_CONCURRENCY ?? '5', 10);
+        `);
+        p.createSourceFile('/app/apps/test-svc/src/worker.processor.ts', `
+            import { Processor } from '@nestjs/bullmq';
+            import { WORKER_CONCURRENCY } from './constants';
+            @Processor('work', { concurrency: WORKER_CONCURRENCY })
+            export class WorkerProcessor {}
+        `);
+        const result = await extractBullMq(makeConfig(), p);
+        const consumer = result.consumers.find((c) => c.className === 'WorkerProcessor');
+        expect(consumer).toBeDefined();
+        expect(consumer?.concurrency).toBe(5);
+    });
+
+    it('export const X = Number(process.env.Y) ?? 10 → X=10', async () => {
+        const p = new Project({
+            useInMemoryFileSystem: true,
+            compilerOptions: { target: 99, module: 99, moduleResolution: 100, strict: false },
+        });
+        p.createSourceFile('/app/apps/test-svc/src/constants.ts', `
+            export const POOL_SIZE = Number(process.env.POOL_SIZE) ?? 10;
+        `);
+        p.createSourceFile('/app/apps/test-svc/src/pool.processor.ts', `
+            import { Processor } from '@nestjs/bullmq';
+            import { POOL_SIZE } from './constants';
+            @Processor('pool', { concurrency: POOL_SIZE })
+            export class PoolProcessor {}
+        `);
+        const result = await extractBullMq(makeConfig(), p);
+        const consumer = result.consumers.find((c) => c.className === 'PoolProcessor');
+        expect(consumer).toBeDefined();
+        expect(consumer?.concurrency).toBe(10);
+    });
+
+    it('export const X = parseInt(process.env.Y, 10) || 15 → X=15', async () => {
+        const p = new Project({
+            useInMemoryFileSystem: true,
+            compilerOptions: { target: 99, module: 99, moduleResolution: 100, strict: false },
+        });
+        p.createSourceFile('/app/apps/test-svc/src/constants.ts', `
+            export const CONCURRENCY = parseInt(process.env.CONCURRENCY, 10) || 15;
+        `);
+        p.createSourceFile('/app/apps/test-svc/src/fallback.processor.ts', `
+            import { Processor } from '@nestjs/bullmq';
+            import { CONCURRENCY } from './constants';
+            @Processor('fallback', { concurrency: CONCURRENCY })
+            export class FallbackProcessor {}
+        `);
+        const result = await extractBullMq(makeConfig(), p);
+        const consumer = result.consumers.find((c) => c.className === 'FallbackProcessor');
+        expect(consumer).toBeDefined();
+        expect(consumer?.concurrency).toBe(15);
+    });
+
+    it('export const X = parseInt(process.env.Y ?? someNonLiteral, 10) → NOT indexed (no static fallback)', async () => {
+        const p = new Project({
+            useInMemoryFileSystem: true,
+            compilerOptions: { target: 99, module: 99, moduleResolution: 100, strict: false },
+        });
+        p.createSourceFile('/app/apps/test-svc/src/constants.ts', `
+            const defaultVal = getDefault();
+            export const CONCURRENCY = parseInt(process.env.CONCURRENCY ?? defaultVal, 10);
+        `);
+        p.createSourceFile('/app/apps/test-svc/src/dynamic.processor.ts', `
+            import { Processor } from '@nestjs/bullmq';
+            import { CONCURRENCY } from './constants';
+            @Processor('dynamic2', { concurrency: CONCURRENCY })
+            export class DynamicProcessor2 {}
+        `);
+        const result = await extractBullMq(makeConfig(), p);
+        const consumer = result.consumers.find((c) => c.className === 'DynamicProcessor2');
+        expect(consumer).toBeDefined();
+        // No static fallback → concurrency stays undefined
+        expect(consumer?.concurrency).toBeUndefined();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// FIX J — readNumeric + indexDecl recursive unwrap AsExpression/ParenthesizedExpression
+// ---------------------------------------------------------------------------
+
+describe('FIX J — AsExpression + ParenthesizedExpression unwrap', () => {
+    it('concurrency: (CONCURRENCY as number) → resolves correctly (call-site wrap)', async () => {
+        const p = new Project({
+            useInMemoryFileSystem: true,
+            compilerOptions: { target: 99, module: 99, moduleResolution: 100, strict: false },
+        });
+        p.createSourceFile('/app/apps/test-svc/src/constants.ts', `
+            export const CONCURRENCY = 8;
+        `);
+        p.createSourceFile('/app/apps/test-svc/src/as.processor.ts', `
+            import { Processor } from '@nestjs/bullmq';
+            import { CONCURRENCY } from './constants';
+            @Processor('as-q', { concurrency: (CONCURRENCY as number) })
+            export class AsProcessor {}
+        `);
+        const result = await extractBullMq(makeConfig(), p);
+        const consumer = result.consumers.find((c) => c.className === 'AsProcessor');
+        expect(consumer).toBeDefined();
+        expect(consumer?.concurrency).toBe(8);
+    });
+
+    it('export const X = (5 as const) → indexed correctly (decl-site wrap)', async () => {
+        const p = new Project({
+            useInMemoryFileSystem: true,
+            compilerOptions: { target: 99, module: 99, moduleResolution: 100, strict: false },
+        });
+        p.createSourceFile('/app/apps/test-svc/src/constants.ts', `
+            export const AS_CONST_VAL = (5 as const);
+        `);
+        p.createSourceFile('/app/apps/test-svc/src/asconst.processor.ts', `
+            import { Processor } from '@nestjs/bullmq';
+            import { AS_CONST_VAL } from './constants';
+            @Processor('as-const-q', { concurrency: AS_CONST_VAL })
+            export class AsConstProcessor {}
+        `);
+        const result = await extractBullMq(makeConfig(), p);
+        const consumer = result.consumers.find((c) => c.className === 'AsConstProcessor');
+        expect(consumer).toBeDefined();
+        expect(consumer?.concurrency).toBe(5);
+    });
+
+    it('export const X = ((5)) → indexed correctly (double paren)', async () => {
+        const p = new Project({
+            useInMemoryFileSystem: true,
+            compilerOptions: { target: 99, module: 99, moduleResolution: 100, strict: false },
+        });
+        p.createSourceFile('/app/apps/test-svc/src/constants.ts', `
+            export const DOUBLE_PAREN = ((5));
+        `);
+        p.createSourceFile('/app/apps/test-svc/src/doubleparen.processor.ts', `
+            import { Processor } from '@nestjs/bullmq';
+            import { DOUBLE_PAREN } from './constants';
+            @Processor('dp-q', { concurrency: DOUBLE_PAREN })
+            export class DoubleParenProcessor {}
+        `);
+        const result = await extractBullMq(makeConfig(), p);
+        const consumer = result.consumers.find((c) => c.className === 'DoubleParenProcessor');
+        expect(consumer).toBeDefined();
+        expect(consumer?.concurrency).toBe(5);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// FIX I — Pass 3 heritage type-arg fallback for BaseWorkerHost<T, R>
+// ---------------------------------------------------------------------------
+
+describe('FIX I — Pass 3 heritage type-arg fallback', () => {
+    it('class extends BaseWorkerHost<IMyData, void> → jobDataTypes entry with methodName <heritage>', async () => {
+        const source = `
+            import { Processor } from '@nestjs/bullmq';
+
+            interface IMyData { userId: string; action: string; }
+            class BaseWorkerHost<T, R> {}
+
+            @Processor('notifications')
+            export class NotificationProcessor extends BaseWorkerHost<IMyData, void> {}
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project, { withTypes: true });
+        const entry = result.jobDataTypes.find((j) => j.queueName === 'notifications');
+        expect(entry).toBeDefined();
+        expect(entry?.typeName).toBe('IMyData');
+        expect(entry?.methodName).toBe('<heritage>');
+        expect(entry?.fields).toContain('userId');
+        expect(entry?.fields).toContain('action');
+    });
+
+    it('class extends WorkerHost<{ inline: string; foo: number }> → inline type fields resolved', async () => {
+        const source = `
+            import { Processor } from '@nestjs/bullmq';
+
+            class WorkerHost<T> {}
+
+            @Processor('inline-q')
+            export class InlineProcessor extends WorkerHost<{ inline: string; foo: number }> {}
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project, { withTypes: true });
+        const entry = result.jobDataTypes.find((j) => j.queueName === 'inline-q');
+        expect(entry).toBeDefined();
+        expect(entry?.methodName).toBe('<heritage>');
+        expect(entry?.fields).toContain('inline');
+        expect(entry?.fields).toContain('foo');
+    });
+
+    it('class with local process override → Pass 2 wins, Pass 3 skipped (only 1 entry)', async () => {
+        const source = `
+            import { Processor } from '@nestjs/bullmq';
+
+            interface DifferentType { value: number; }
+            class BaseWorkerHost<T, R> {}
+
+            interface Job<T = any> { data: T; }
+
+            @Processor('override-q')
+            export class OverrideProcessor extends BaseWorkerHost<{ should: string }, void> {
+                async process(job: Job<DifferentType>): Promise<void> {}
+            }
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project, { withTypes: true });
+        const entries = result.jobDataTypes.filter((j) => j.queueName === 'override-q');
+        // Pass 2 fired (local process()), Pass 3 skipped
+        expect(entries.length).toBe(1);
+        expect(entries[0]!.methodName).toBe('process');
+        expect(entries[0]!.typeName).toBe('DifferentType');
+    });
+
+    it('class extends SomeNonGenericClass → no Pass 3 entry (no type args)', async () => {
+        const source = `
+            import { Processor } from '@nestjs/bullmq';
+
+            class SomeNonGenericClass {}
+
+            @Processor('no-generic-q')
+            export class NoGenericProcessor extends SomeNonGenericClass {}
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project, { withTypes: true });
+        const entries = result.jobDataTypes.filter((j) => j.queueName === 'no-generic-q');
+        expect(entries.length).toBe(0);
+    });
+
+    it('FIX N: Pass 3 skipped when Pass 2 has process() override, even if type resolution fails', async () => {
+        const source = `
+            import { Processor } from '@nestjs/bullmq';
+
+            interface IBase { id: number; }
+            class BaseWorkerHost<T, R> {}
+            interface BullJob<T> { data: T; }
+
+            @Processor('partial-resolve-q')
+            export class PartialResolveProcessor extends BaseWorkerHost<IBase, void> {
+                async process(job: BullJob<unknown>): Promise<void> {}
+            }
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project, { withTypes: true });
+        const entries = result.jobDataTypes.filter((j) => j.queueName === 'partial-resolve-q');
+        // Pass 2 attempted (found process() method), so Pass 3 should NOT fire
+        // Even if Pass 2 didn't emit an entry (type args unresolvable), no <heritage> should appear
+        const heritageEntry = entries.find((e) => e.methodName === '<heritage>');
+        expect(heritageEntry).toBeUndefined();
+    });
+
+    it('FIX N: Pass 3 skipped when class has process(nonJobType) override', async () => {
+        const source = `
+            import { Processor } from '@nestjs/bullmq';
+
+            interface IBase { id: number; }
+            class BaseWorkerHost<T, R> {}
+
+            @Processor('non-job-type-q')
+            export class NonJobTypeProcessor extends BaseWorkerHost<IBase, void> {
+                async process(job: number): Promise<void> {}
+            }
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project, { withTypes: true });
+        const entries = result.jobDataTypes.filter((j) => j.queueName === 'non-job-type-q');
+        // Pass 2 encountered process() but it's not Job-typed, so didn't emit
+        // Pass 3 should NOT fire because process() override exists (even if not Job-typed)
+        expect(entries.length).toBe(0);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// FIX K — Pass 2 handles aliased Job imports via type-checker
+// ---------------------------------------------------------------------------
+
+describe('FIX K — Pass 2 aliased Job import fallback', () => {
+    it('BullJob<MyData> alias of Job<T> → resolved to jobDataTypes entry', async () => {
+        const source = `
+            import { Processor } from '@nestjs/bullmq';
+
+            interface Job<T = any> { data: T; }
+            type BullJob<T = any> = Job<T>;
+
+            interface MyData { orderId: string; amount: number; }
+
+            @Processor('aliased-q')
+            export class AliasedProcessor {
+                async process(job: BullJob<MyData>): Promise<void> {}
+            }
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project, { withTypes: true });
+        // BullJob<MyData> is an alias for Job<T>; type-checker resolves symbol name to 'Job'
+        const entry = result.jobDataTypes.find((j) => j.queueName === 'aliased-q');
+        expect(entry).toBeDefined();
+    });
+
+    it('process(job: number) — not Job-typed → silently skipped', async () => {
+        const source = `
+            import { Processor } from '@nestjs/bullmq';
+
+            @Processor('non-job-q')
+            export class NonJobProcessor {
+                async process(job: number): Promise<void> {}
+            }
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project, { withTypes: true });
+        const entries = result.jobDataTypes.filter((j) => j.queueName === 'non-job-q');
+        expect(entries.length).toBe(0);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// FIX L — backoff + every consistency via readNumeric
+// ---------------------------------------------------------------------------
+
+describe('FIX L — backoff via readNumeric + every false-positive elimination', () => {
+    it('backoff: BACKOFF_CONST (where BACKOFF_CONST=500) → defaultBackoff === 500', async () => {
+        const p = new Project({
+            useInMemoryFileSystem: true,
+            compilerOptions: { target: 99, module: 99, moduleResolution: 100, strict: false },
+        });
+        p.createSourceFile('/app/apps/test-svc/src/constants.ts', `
+            export const BACKOFF_CONST = 500;
+        `);
+        p.createSourceFile('/app/apps/test-svc/src/queue.module.ts', `
+            import { BullModule } from '@nestjs/bullmq';
+            import { BACKOFF_CONST } from './constants';
+            BullModule.registerQueue({
+                name: 'retry-q',
+                defaultJobOptions: { backoff: BACKOFF_CONST },
+            });
+        `);
+        const result = await extractBullMq(makeConfig(), p);
+        const reg = result.registrations.find(
+            (r) => r.queue.kind !== 'unresolved' && r.queue.name === 'retry-q',
+        );
+        expect(reg).toBeDefined();
+        expect(reg?.defaultBackoff).toBe(500);
+    });
+
+    it('repeat: { every: POLL_INTERVAL_MS } (resolvable exported const) → NO entry in unresolvedRepeatExpressions', async () => {
+        const source = `
+            import { InjectQueue } from '@nestjs/bullmq';
+            export const POLL_INTERVAL_MS = 5000;
+            export class PollerService {
+                constructor(
+                    @InjectQueue('poll-queue') private readonly pollQueue: any,
+                ) {}
+                async start() {
+                    this.pollQueue.add('poll', {}, { repeat: { every: POLL_INTERVAL_MS } });
+                }
+            }
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project);
+        // POLL_INTERVAL_MS is an exported const = 5000, readNumeric resolves it
+        // → should NOT appear in unresolvedRepeatExpressions
+        const unresolvedEvery = result.unresolvedRepeatExpressions.filter(
+            (u) => u.rawExpression.includes('every'),
+        );
+        expect(unresolvedEvery.length).toBe(0);
+    });
+
+    it('repeat: { every: someRuntimeVar } (not in index) → DOES populate unresolvedRepeatExpressions', async () => {
+        const source = `
+            import { InjectQueue } from '@nestjs/bullmq';
+            export class PollerService {
+                constructor(
+                    @InjectQueue('runtime-q') private readonly runtimeQueue: any,
+                ) {}
+                async start() {
+                    const intervalMs = computeInterval();
+                    this.runtimeQueue.add('task', {}, { repeat: { every: intervalMs } });
+                }
+            }
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project);
+        // intervalMs is a local var, not an exported const → genuinely unresolvable
+        const unresolvedEvery = result.unresolvedRepeatExpressions.filter(
+            (u) => u.rawExpression.includes('every'),
+        );
+        expect(unresolvedEvery.length).toBeGreaterThan(0);
+    });
+});

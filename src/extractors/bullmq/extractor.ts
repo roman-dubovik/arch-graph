@@ -1,8 +1,10 @@
 import {
+    AsExpression,
     CallExpression,
     Decorator,
     Node,
     ObjectLiteralExpression,
+    ParenthesizedExpression,
     Project,
     PropertyAssignment,
     SourceFile,
@@ -23,6 +25,7 @@ import type {
     SourceLoc,
 } from '../../core/types.js';
 import { isExcludedSourceFile } from '../shared.js';
+import { buildNumericConstIndex, NumericConstIndex } from './numeric-const-index.js';
 import { buildQueueNameIndex, QueueNameIndex } from './queue-name-index.js';
 
 export { isExcludedSourceFile };
@@ -105,6 +108,7 @@ export async function extractBullMq(
     options: ExtractBullMqOptions = {},
 ): Promise<ExtractBullMqResult> {
     const queueNames = buildQueueNameIndex(project);
+    const numericConsts = buildNumericConstIndex(project);
     const producers: BullMqInjectionSite[] = [];
     const consumers: BullMqProcessorSite[] = [];
     const registrations: BullMqQueueRegistration[] = [];
@@ -138,7 +142,7 @@ export async function extractBullMq(
                     const procDec = cls.getDecorator('Processor');
                     if (procDec) {
                         consumers.push(
-                            buildProcessorSite(enclosingClass ?? '<anonymous>', procDec, queueNames),
+                            buildProcessorSite(enclosingClass ?? '<anonymous>', procDec, queueNames, numericConsts),
                         );
                     }
                 }
@@ -170,7 +174,7 @@ export async function extractBullMq(
         }
 
         if (hasBullModule) {
-            collectRegistrations(sf, queueNames, registrations, unresolvedFailOver);
+            collectRegistrations(sf, queueNames, numericConsts, registrations, unresolvedFailOver);
         }
 
         // Collect .on() and .add() call sites for event listeners, repeat detection, and DLQ heuristic
@@ -178,6 +182,7 @@ export async function extractBullMq(
             collectCallSites(
                 sf,
                 queueNames,
+                numericConsts,
                 injectedQueuesByProp,
                 consumers,
                 repeatAddSites,
@@ -192,7 +197,7 @@ export async function extractBullMq(
         // Worker factory env-fallback concurrency detection
         // Detects: factory.createWorker('queue-name', { concurrency: process.env.X ?? 5 })
         if (text.includes('createWorker')) {
-            collectWorkerFactorySites(sf, queueNames, registrations);
+            collectWorkerFactorySites(sf, queueNames, numericConsts, registrations);
         }
     }
 
@@ -251,6 +256,7 @@ function buildProcessorSite(
     className: string,
     dec: Decorator,
     queueNames: QueueNameIndex,
+    numericConsts: NumericConstIndex,
 ): BullMqProcessorSite {
     const sf = dec.getSourceFile();
     const pos = sf.getLineAndColumnAtPos(dec.getStart());
@@ -265,9 +271,7 @@ function buildProcessorSite(
             const obj = firstArg as ObjectLiteralExpression;
             const concurrencyProp = findProp(obj, 'concurrency');
             const init = concurrencyProp?.getInitializer();
-            if (init?.getKind() === SyntaxKind.NumericLiteral) {
-                concurrency = Number(init.getText());
-            }
+            if (init !== undefined) concurrency = readNumeric(init, numericConsts);
         }
         // Also check second arg (options object when first arg is queue name string)
         if (args.length >= 2) {
@@ -276,9 +280,7 @@ function buildProcessorSite(
                 const obj = secondArg as ObjectLiteralExpression;
                 const concurrencyProp = findProp(obj, 'concurrency');
                 const init = concurrencyProp?.getInitializer();
-                if (init?.getKind() === SyntaxKind.NumericLiteral) {
-                    concurrency = Number(init.getText());
-                }
+                if (init !== undefined) concurrency = readNumeric(init, numericConsts);
             }
         }
     }
@@ -342,6 +344,7 @@ function resolveQueueArg(node: Node, queueNames: QueueNameIndex): BullMqQueueRef
 function collectRegistrations(
     sf: SourceFile,
     queueNames: QueueNameIndex,
+    numericConsts: NumericConstIndex,
     out: BullMqQueueRegistration[],
     unresolvedFailOver: Array<{ location: SourceLoc; raw: string }>,
 ): void {
@@ -359,7 +362,7 @@ function collectRegistrations(
         const location = { file: sf.getFilePath(), line: pos.line, column: pos.column };
 
         for (const arg of call.getArguments()) {
-            out.push(resolveRegistrationArg(arg, queueNames, api, location, unresolvedFailOver));
+            out.push(resolveRegistrationArg(arg, queueNames, numericConsts, api, location, unresolvedFailOver));
         }
     });
 }
@@ -367,6 +370,7 @@ function collectRegistrations(
 function resolveRegistrationArg(
     arg: Node,
     queueNames: QueueNameIndex,
+    numericConsts: NumericConstIndex,
     api: 'registerQueue' | 'registerQueueAsync',
     location: SourceLoc,
     unresolvedFailOver: Array<{ location: SourceLoc; raw: string }>,
@@ -401,9 +405,7 @@ function resolveRegistrationArg(
 
     const concurrencyProp = findProp(obj, 'concurrency');
     const concurrencyInit = concurrencyProp?.getInitializer();
-    if (concurrencyInit?.getKind() === SyntaxKind.NumericLiteral) {
-        concurrency = Number(concurrencyInit.getText());
-    }
+    if (concurrencyInit !== undefined) concurrency = readNumeric(concurrencyInit, numericConsts);
 
     const defaultJobOptionsProp = findProp(obj, 'defaultJobOptions');
     const djoInit = defaultJobOptionsProp?.getInitializer();
@@ -412,25 +414,23 @@ function resolveRegistrationArg(
 
         const delayProp = findProp(djo, 'delay');
         const delayInit = delayProp?.getInitializer();
-        if (delayInit?.getKind() === SyntaxKind.NumericLiteral) {
-            defaultDelay = Number(delayInit.getText());
-        }
+        if (delayInit !== undefined) defaultDelay = readNumeric(delayInit, numericConsts);
 
         const attemptsProp = findProp(djo, 'attempts');
         const attemptsInit = attemptsProp?.getInitializer();
-        if (attemptsInit?.getKind() === SyntaxKind.NumericLiteral) {
-            defaultAttempts = Number(attemptsInit.getText());
-        }
+        if (attemptsInit !== undefined) defaultAttempts = readNumeric(attemptsInit, numericConsts);
 
         const backoffProp = findProp(djo, 'backoff');
         const backoffInit = backoffProp?.getInitializer();
         if (backoffInit) {
             const bk = backoffInit.getKind();
-            if (bk === SyntaxKind.NumericLiteral) {
-                defaultBackoff = Number(backoffInit.getText());
-            } else if (bk === SyntaxKind.ObjectLiteralExpression) {
+            if (bk === SyntaxKind.ObjectLiteralExpression) {
                 // Store raw text representation for diagnostic purposes
                 defaultBackoff = backoffInit.getText().slice(0, 120);
+            } else {
+                // NumericLiteral, Identifier, AsExpression, ParenthesizedExpression — all via readNumeric
+                const resolved = readNumeric(backoffInit, numericConsts);
+                if (resolved !== undefined) defaultBackoff = resolved;
             }
         }
 
@@ -481,6 +481,7 @@ function resolveRegistrationArg(
 function collectCallSites(
     sf: SourceFile,
     _queueNames: QueueNameIndex,
+    numericConsts: NumericConstIndex,
     injectedQueuesByProp: Map<string, string>,
     consumers: BullMqProcessorSite[],
     repeatAddSites: BullMqRepeatAddSite[],
@@ -575,19 +576,24 @@ function collectCallSites(
                                         });
                                     }
                                 }
-                                // Non-literal `every` (variable, template, expression):
-                                // no ms value stored, but push to unresolvedRepeatExpressions
-                                // so operators can see it. Literal numeric `every` is silently
-                                // accepted (hasRepeat is set on the queue node via the site).
+                                // `every` field: try to resolve via readNumeric (covers numeric
+                                // literals, exported consts, wrapped/as-expression variants).
+                                // Only push to unresolvedRepeatExpressions if genuinely not
+                                // statically resolvable (runtime var, template, expression).
                                 const everyProp = findProp(repeatObj, 'every');
                                 if (everyProp !== null) {
                                     const everyInit = everyProp.getInitializer();
-                                    if (everyInit !== undefined && everyInit.getKind() !== SyntaxKind.NumericLiteral) {
-                                        unresolvedRepeatExpressions.push({
-                                            location,
-                                            queueName,
-                                            rawExpression: '<every: ' + everyInit.getText().slice(0, 60) + '>',
-                                        });
+                                    if (everyInit !== undefined) {
+                                        const everyResolved = readNumeric(everyInit, numericConsts);
+                                        if (everyResolved === undefined) {
+                                            // Genuinely unresolvable — record as diagnostic
+                                            unresolvedRepeatExpressions.push({
+                                                location,
+                                                queueName,
+                                                rawExpression: '<every: ' + everyInit.getText().slice(0, 60) + '>',
+                                            });
+                                        }
+                                        // If resolved → silently accept; no value stored (repeatEveryMs removed)
                                     }
                                 }
                             }
@@ -691,6 +697,7 @@ function findProcessorQueueForFile(
 function collectWorkerFactorySites(
     sf: SourceFile,
     queueNames: QueueNameIndex,
+    numericConsts: NumericConstIndex,
     registrations: BullMqQueueRegistration[],
 ): void {
     sf.forEachDescendant((node) => {
@@ -719,7 +726,7 @@ function collectWorkerFactorySites(
         const concInit = concProp.getInitializer();
         if (!concInit) return;
 
-        const resolved = resolveEnvFallback(concInit);
+        const resolved = resolveEnvFallback(concInit, numericConsts);
         if (!resolved) return;
 
         // Store on existing registration (first-seen wins) or append synthetic entry
@@ -761,7 +768,7 @@ function collectWorkerFactorySites(
  *
  * Returns `{ envVar, fallback }` or `null` if the pattern is not recognised.
  */
-function resolveEnvFallback(node: Node): { envVar: string; fallback: number } | null {
+function resolveEnvFallback(node: Node, numericConsts: NumericConstIndex): { envVar: string; fallback: number } | null {
     const kind = node.getKind();
 
     // Binary expression: LHS ?? RHS  or  LHS || RHS
@@ -771,8 +778,8 @@ function resolveEnvFallback(node: Node): { envVar: string; fallback: number } | 
         if (op !== '??' && op !== '||') return null;
 
         const right = bin.getRight();
-        if (right.getKind() !== SyntaxKind.NumericLiteral) return null;
-        const fallback = Number(right.getText());
+        const fallback = readNumeric(right, numericConsts);
+        if (fallback === undefined) return null;
 
         const left = bin.getLeft();
         const envVar = extractEnvVar(left);
@@ -863,6 +870,11 @@ function resolveJobDataTypes(
         const cls = sf.getClasses().find((c) => c.getName() === consumer.className);
         if (!cls) continue;
 
+        // Track method names already emitted to prevent duplicate entries when a
+        // class has BOTH a @Process-decorated method AND an override `process` method.
+        const emittedNames = new Set<string>();
+
+        // PASS 1 — @Process-decorated methods (legacy @nestjs/bull pattern)
         for (const method of cls.getMethods()) {
             const processDecorator = method.getDecorator('Process');
             if (!processDecorator) continue;
@@ -871,57 +883,185 @@ function resolveJobDataTypes(
             if (params.length === 0) continue;
 
             const firstParam = params[0]!;
-            try {
-                const typeNode = firstParam.getTypeNode();
-                if (!typeNode) continue;
-
-                // Type text e.g. "Job<MyData>" or "Job<{ foo: string }>"
-                const typeText = typeNode.getText();
-                if (!typeText.startsWith('Job<') || !typeText.endsWith('>')) continue;
-
-                // Extract the type argument text
-                const innerText = typeText.slice(4, -1).trim();
-
-                let typeName: string;
-                let fields: string[] = [];
-
-                if (innerText.startsWith('{')) {
-                    // Inline object literal type
-                    typeName = '<inline>';
-                    // Extract depth-1 property names from inline type literal
-                    fields = extractInlineTypeFields(innerText);
-                } else {
-                    // Named type — use ts-morph type-checker for field resolution
-                    typeName = innerText;
-                    const paramType = firstParam.getType();
-                    // paramType is Job<X> — get type arguments
-                    const typeArgs = paramType.getTypeArguments();
-                    if (typeArgs.length > 0) {
-                        const dataType = typeArgs[0]!;
-                        fields = dataType
-                            .getProperties()
-                            .map((p) => p.getName())
-                            .filter((n) => !n.startsWith('__'));
-                    }
-                }
-
-                out.push({
-                    queueName,
-                    processorClass: consumer.className,
-                    methodName: method.getName(),
-                    typeName,
-                    fields,
-                });
-            } catch (err) {
-                // Type-checker pass is best-effort — record failure in diagnostics
-                unresolvedOut.push({
-                    queueName,
-                    processorClass: consumer.className,
-                    methodName: method.getName(),
-                    reason: err instanceof Error ? err.message : String(err),
-                });
+            const resolved = resolveJobParamType(firstParam, queueName, consumer.className, method.getName(), unresolvedOut);
+            if (resolved !== null) {
+                out.push(resolved);
+                emittedNames.add(method.getName());
             }
         }
+
+        // PASS 2 — WorkerHost.process() override (modern @nestjs/bullmq v3+ pattern).
+        // Detects any method named `process` in a @Processor-decorated class whose
+        // first parameter type starts with `Job<` (textual gate) OR whose parameter
+        // type's symbol name is 'Job' (type-checker fallback for aliased imports:
+        //   `import { Job as BullJob } from 'bullmq'`).
+        // Not-Job-typed overrides (process(x: number)) are silently skipped.
+        if (!emittedNames.has('process')) {
+            const overrideMethod = cls.getMethod('process');
+            if (overrideMethod && !overrideMethod.getDecorator('Process')) {
+                const params = overrideMethod.getParameters();
+                if (params.length > 0) {
+                    // Mark that this class HAS a process() override attempt, regardless of
+                    // whether Pass 2 succeeds. This prevents Pass 3 from emitting a heritage entry,
+                    // because the override's semantics (Job-typed or not) are authoritative.
+                    emittedNames.add('process');
+
+                    const firstParam = params[0]!;
+                    const typeNode = firstParam.getTypeNode();
+                    const typeText = typeNode?.getText() ?? '';
+                    // Textual gate: direct Job<X> pattern
+                    let isJobTyped = typeText.startsWith('Job<');
+                    // Type-checker fallback: handles `import { Job as BullJob }`
+                    // getSymbol() on a Job alias still returns the underlying Job symbol
+                    if (!isJobTyped) {
+                        try {
+                            const paramType = firstParam.getType();
+                            isJobTyped = (paramType as unknown as { getSymbol?: () => { getName?: () => string } | undefined }).getSymbol?.()?.getName?.() === 'Job';
+                        } catch {
+                            // type-checker failure — leave isJobTyped false
+                        }
+                    }
+                    if (isJobTyped) {
+                        const resolved = resolveJobParamType(
+                            firstParam,
+                            queueName,
+                            consumer.className,
+                            'process',
+                            unresolvedOut,
+                        );
+                        if (resolved !== null) {
+                            out.push(resolved);
+                        }
+                    }
+                }
+            }
+        }
+
+        // PASS 3 — Heritage type-arg fallback for `class extends BaseWorkerHost<T, R>` /
+        // `WorkerHost<T, R>` patterns where the subclass does NOT override `process()`
+        // locally. When Pass 1 + Pass 2 produced zero entries for this class (emittedNames
+        // is empty), the first type argument of the heritage clause IS the job-data type.
+        if (emittedNames.size === 0) {
+            try {
+                const heritageClauses = cls.getHeritageClauses();
+                if (heritageClauses.length > 0) {
+                    // Find extends clause (token === ExtendsKeyword = 96)
+                    const extendsClause = heritageClauses.find(
+                        (h) => h.getToken() === SyntaxKind.ExtendsKeyword,
+                    ) ?? heritageClauses[0]!;
+                    const typeNodes = extendsClause.getTypeNodes();
+                    if (typeNodes.length > 0) {
+                        const baseType = typeNodes[0]!;
+                        const typeArgs = baseType.getTypeArguments();
+                        if (typeArgs.length >= 1) {
+                            const firstTypeArg = typeArgs[0]!;
+                            const typeName = firstTypeArg.getText().trim();
+                            // Skip bare generics (T, R, etc.) and any/unknown
+                            if (typeName && !typeName.match(/^[A-Z]$/) && typeName !== 'unknown' && typeName !== 'any') {
+                                let fields: string[] = [];
+                                if (typeName.startsWith('{')) {
+                                    // Inline type literal
+                                    fields = extractInlineTypeFields(typeName);
+                                } else {
+                                    // Named type — use type-checker for field resolution
+                                    try {
+                                        const dataType = firstTypeArg.getType();
+                                        fields = dataType
+                                            .getProperties()
+                                            .map((p) => p.getName())
+                                            .filter((n) => !n.startsWith('__'));
+                                    } catch {
+                                        // best-effort — fields stays empty
+                                    }
+                                }
+                                out.push({
+                                    queueName,
+                                    processorClass: consumer.className,
+                                    methodName: '<heritage>',
+                                    typeName,
+                                    fields,
+                                });
+                            }
+                        }
+                    }
+                }
+            } catch {
+                // best-effort — skip on any AST/type-checker failure
+            }
+        }
+    }
+}
+
+/**
+ * Shared helper: resolves `Job<DataType>` generic from a method's first parameter.
+ * Returns a `BullMqJobDataType` on success, `null` if the type cannot be resolved
+ * (in which case an entry is appended to `unresolvedOut`).
+ */
+function resolveJobParamType(
+    firstParam: { getTypeNode: () => { getText: () => string } | undefined; getType: () => { getTypeArguments: () => Array<{ getProperties: () => Array<{ getName: () => string }> }> } },
+    queueName: string,
+    processorClass: string,
+    methodName: string,
+    unresolvedOut: Array<{ queueName: string; processorClass: string; methodName: string; reason: string }>,
+): BullMqJobDataType | null {
+    try {
+        const typeNode = firstParam.getTypeNode();
+        if (!typeNode) return null;
+
+        // Type text e.g. "Job<MyData>" or "Job<{ foo: string }>" or "BullJob<MyData>" (alias)
+        const typeText = typeNode.getText();
+
+        let typeName: string;
+        let fields: string[] = [];
+
+        if (typeText.startsWith('Job<') && typeText.endsWith('>')) {
+            // Fast path: textual `Job<X>` pattern
+            const innerText = typeText.slice(4, -1).trim();
+            if (innerText.startsWith('{')) {
+                // Inline object literal type
+                typeName = '<inline>';
+                fields = extractInlineTypeFields(innerText);
+            } else {
+                // Named type — use ts-morph type-checker for field resolution
+                typeName = innerText;
+                const paramType = firstParam.getType();
+                const typeArgs = paramType.getTypeArguments();
+                if (typeArgs.length > 0) {
+                    const dataType = typeArgs[0]!;
+                    fields = dataType
+                        .getProperties()
+                        .map((p) => p.getName())
+                        .filter((n) => !n.startsWith('__'));
+                }
+            }
+        } else {
+            // Fallback path: aliased type (e.g. `BullJob<MyData>` where BullJob = Job<T>).
+            // getSymbol()?.getName() === 'Job' gate already confirmed in Pass 2 caller;
+            // here we extract type args via type-checker and typeNode for the typeName text.
+            const paramType = firstParam.getType();
+            const typeArgs = paramType.getTypeArguments();
+            if (typeArgs.length === 0) return null;
+            const dataType = typeArgs[0]!;
+            // Get textual type arg from the AST type node (not the paramType) for cleaner name
+            const typeNodeTypeArgs = (typeNode as unknown as { getTypeArguments?: () => Array<{ getText: () => string }> }).getTypeArguments?.() ?? [];
+            const dataTypeSymbolName = (dataType as unknown as { getSymbol?: () => { getName?: () => string } | undefined }).getSymbol?.()?.getName?.() ?? '<unknown>';
+            typeName = typeNodeTypeArgs.length > 0 ? (typeNodeTypeArgs[0]!.getText().trim()) : dataTypeSymbolName;
+            fields = dataType
+                .getProperties()
+                .map((p) => p.getName())
+                .filter((n) => !n.startsWith('__'));
+        }
+
+        return { queueName, processorClass, methodName, typeName, fields };
+    } catch (err) {
+        // Type-checker pass is best-effort — record failure in diagnostics
+        unresolvedOut.push({
+            queueName,
+            processorClass,
+            methodName,
+            reason: err instanceof Error ? err.message : String(err),
+        });
+        return null;
     }
 }
 
@@ -960,6 +1100,25 @@ function extractInlineTypeFields(typeText: string): string[] {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Read a numeric value from a node: accepts `NumericLiteral` directly,
+ * resolves an `Identifier` via `NumericConstIndex`, or recursively unwraps
+ * `AsExpression` / `ParenthesizedExpression` wrappers.
+ * Returns `undefined` for any other kind (dynamic expressions, runtime calls,
+ * etc.) — callers silently treat `undefined` as "not resolved".
+ */
+function readNumeric(node: Node, idx: NumericConstIndex, depth = 0): number | undefined {
+    if (depth > 4) return undefined; // pathological nesting guard
+    const k = node.getKind();
+    if (k === SyntaxKind.NumericLiteral) return Number(node.getText());
+    if (k === SyntaxKind.Identifier) return idx.get(node.getText());
+    if (k === SyntaxKind.AsExpression || k === SyntaxKind.ParenthesizedExpression) {
+        const inner = (node as AsExpression | ParenthesizedExpression).getExpression();
+        if (inner) return readNumeric(inner, idx, depth + 1);
+    }
+    return undefined;
+}
 
 function findProp(obj: ObjectLiteralExpression, name: string): PropertyAssignment | null {
     for (const prop of obj.getProperties()) {

@@ -110,5 +110,11 @@
 
   {"id":"B26","query":"checkout process docs order services","project":"project-c","category":"D_links","expectedKindIn":[],"expectedLabelHas":[],"minScore":0.40},
   {"id":"B27","query":"promo codes docs promo services","project":"project-c","category":"D_links","expectedKindIn":[],"expectedLabelHas":[],"minScore":0.40},
-  {"id":"B28","query":"delivery logistics docs DeliveryService","project":"project-c","category":"D_links","expectedKindIn":[],"expectedLabelHas":[],"minScore":0.40}
+  {"id":"B28","query":"delivery logistics docs DeliveryService","project":"project-c","category":"D_links","expectedKindIn":[],"expectedLabelHas":[],"minScore":0.40},
+
+  {"id":"BQ1","query":"where do failed jobs go which queue handles dead-letter messages","project":"project-b","category":"A_find","expectedKindIn":["queue"],"expectedLabelHas":["dlq","failed","dead","retry"],"minScore":0.40},
+  {"id":"BQ2","query":"who listens to queue completion events job event handlers","project":"project-b","category":"A_find","expectedKindIn":["service","lib","controller"],"expectedLabelHas":["completed","failed","listener","event"],"minScore":0.40},
+  {"id":"BQ3","query":"which jobs are scheduled via queue add repeat cron schedule","project":"project-b","category":"A_find","expectedKindIn":["cron-schedule","queue"],"expectedLabelHas":["repeat","cron","schedule"],"minScore":0.40},
+  {"id":"BQ4","query":"what data does the email notification queue processor accept job data types","project":"project-b","category":"A_find","expectedKindIn":["queue"],"expectedLabelHas":["email","notification","jobData","job"],"minScore":0.40},
+  {"id":"BQ5","query":"what concurrency is set for the notification queue worker","project":"project-b","category":"A_find","expectedKindIn":["queue"],"expectedLabelHas":["concurrency","worker","notification"],"minScore":0.40}
 ]
