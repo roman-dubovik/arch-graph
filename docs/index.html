@@ -364,15 +364,15 @@
           </div>
           <div class="bench-card">
             <p class="bench-card-label">How it works</p>
-            <p class="bench-card-row"><span class="bench-card-tool">Embedder</span><span class="bench-card-num mono" style="font-size:0.85em;">MiniLM-L12-v2</span></p>
-            <p class="bench-card-row dim"><span class="bench-card-tool">Dim · Index</span><span class="bench-card-num mono" style="font-size:0.85em;white-space:nowrap;">384 · cosine</span></p>
-            <p class="bench-card-foot"><code>Xenova/paraphrase-multilingual-MiniLM-L12-v2</code> via <code>transformers.js</code>. Deterministic given the same graph. Embeddings persist as <code>arch-graph-out/semantic/embeddings.jsonl</code> with a <code>manifest.json</code> tracking <code>graphHash</code> for stale detection.</p>
+            <p class="bench-card-row"><span class="bench-card-tool">Embedder</span><span class="bench-card-num mono" style="font-size:0.85em;">multilingual-e5-base</span></p>
+            <p class="bench-card-row dim"><span class="bench-card-tool">Dim · Index</span><span class="bench-card-num mono" style="font-size:0.85em;white-space:nowrap;">768 · cosine</span></p>
+            <p class="bench-card-foot"><code>Xenova/multilingual-e5-base</code> via <code>transformers.js</code> with passage/query prefixes. Schema v2 with per-node <code>contentHash</code> enables incremental re-embed — typical commit reuses unchanged vectors in ~5–19 s vs ~25 min full rebuild. Persisted as <code>arch-graph-out/semantic/embeddings.jsonl</code> + <code>manifest.json</code> (model · dim · <code>graphHash</code> for stale detection).</p>
           </div>
           <div class="bench-card">
             <p class="bench-card-label">Three MCP tools</p>
             <p class="bench-card-row"><span class="bench-card-tool">code_search</span><span class="bench-card-num mono" style="font-size:0.85em;">code only</span></p>
             <p class="bench-card-row dim"><span class="bench-card-tool">docs_search</span><span class="bench-card-num mono" style="font-size:0.85em;">docs only</span></p>
-            <p class="bench-card-foot"><code>semantic_search</code> covers the union. Split exists because mixing buckets drops A_find recall: 80% → 30%. With split: 70% restored. Baseline hit-rate across 103 eval queries: 47% → 67%.</p>
+            <p class="bench-card-foot"><code>semantic_search</code> covers the union. Split exists because mixing buckets drops A_find recall: 80% → 30%. With split: 70% restored. Baseline hit-rate across 103 eval queries: 47% → 67% → <strong>75% with e5-base</strong> (C_ui 36% → 82%).</p>
           </div>
           <div class="bench-card">
             <p class="bench-card-label">vs graphify on the same suite</p>

@@ -137,6 +137,49 @@ isn't wasted — enum-resolver gave +16pp on B_debug for project-a, and
 OpenAPI/multi-file locales improve embedding quality for queries we
 DON'T have in this corpus.
 
+### 2026-05-18: `e5-base-default-v1` (embedder swap + incremental re-embed)
+
+Default embedder switched from `Xenova/paraphrase-multilingual-MiniLM-L12-v2`
+(384-dim) to `Xenova/multilingual-e5-base` (768-dim, passage/query prefixes).
+Registry narrowed to `minilm | e5-base`; `bge-m3` and `arctic-m` aliases
+removed (explored, not adopted — see Deferred section of ROADMAP).
+
+| project | hits/total | hit-rate | Δ vs prior |
+|---|---|---|---|
+| project-a | 39/49 | **79%** | +10pp (was 69%) |
+| project-b | 24/29 | **82%** | +7pp (was 75%) |
+| project-c | 14/25 | **56%** | +4pp (was 52%) |
+| **all** | **77/103** | **75%** | **+8pp overall** |
+
+**C_ui per-category aggregate: 36% → 82% (+46pp)** — confirms the C_ui
+ceiling diagnosis (embedder bottleneck, not snippet content). A_find +3pp
+aggregate. D_docs, D_links unchanged at saturation. E_arch unchanged on
+project-c and project-b (eval-corpus hygiene issue — ground truth assumes
+NestJS `*Controller`/`*Service` naming that those repos don't follow);
+project-a E_arch 75% (+25pp).
+
+**Build cost trade-offs (post-migration):**
+
+| Project (nodes) | Structural | Semantic full | Incremental no-op | Speedup |
+|---|---|---|---|---|
+| project-c (2 065) | ~10 s | ~164 s | ~5 s | ×31 |
+| project-b (21 541) | ~22 s | ~21 min | ~19 s | ×68 |
+| project-a (29 527) | ~24 s | ~40 min | ~19 s | ×128 |
+| **Avg** | ~19 s | ~21 min | ~14 s | ~×76 |
+
+Full rebuild: ×1.6 vs MiniLM (41 min vs 25 min on 30K nodes). Incremental
+re-embed (schemaVersion=2, sha256 content-hash) lands together — typical
+commit re-embeds only changed nodes in ~5–19 seconds. **Hook installs with
+semantic auto-rebuild on by default** (`--no-include-semantic` opt-out).
+
+Per-model `recommendedMinScore` calibration: minilm 0.30 (unchanged),
+e5-base 0.55 (intentionally below the 0.83 ± 0.02 typical distribution
+to retain borderline cross-lingual hits).
+
+Sources:
+- [`docs/comparisons/2026-05-18-embedder-evaluation.md`](comparisons/2026-05-18-embedder-evaluation.md) — full eval memo with 4-way comparison (MiniLM / e5-base / BGE-M3 / arctic-m).
+- `scripts/eval/results-2026-05-18-projecta-e5-base.md`, `-projectb-`, `-projectc-` (anonymized; raw output retained locally).
+
 ## Per-feature attribution (rule of thumb)
 
 Approximate impact each feature contributes when isolated. Sum is NOT
@@ -157,9 +200,9 @@ additive — overlaps and ceiling effects matter.
 
 Where the recall budget is still tight, with planned interventions:
 
-- **C_ui project-a 33%, project-b 33%** — embedder linguistic gap RU↔EN. BGE-M3 is the next bet (~+5-10pp expected). See `docs/research/2026-05-17-css-processing-feasibility.md`.
-- **project-c A_find 30%** — should rise after enum-resolver (in flight). Remaining MISSes are likely eval-corpus issues (queries about cart/payment/delivery in a promo-aggregator project). See project-c diagnostic in chat archive.
-- **E_arch project-b 50% / project-c 0%** — needs more sample queries plus possibly architectural-overview indexing (e.g. extract module-graph summaries).
+- **~~C_ui project-a 33%, project-b 33%~~** — **RESOLVED** by `e5-base-default-v1`. Aggregate C_ui 36% → 82% (+46pp). The hypothesis that embedder linguistic gap RU↔EN was the bottleneck is confirmed; BGE-M3 turned out not to be needed (and was unshippable as default: ×6 build cost; see [`docs/comparisons/2026-05-18-embedder-evaluation.md`](comparisons/2026-05-18-embedder-evaluation.md)).
+- **project-c A_find 50%** — eval-corpus mismatch (queries about cart/payment/delivery in a promo-aggregator project where those domains don't exist as graph nodes). Tracked under ROADMAP "Eval corpus hygiene"; ~30 min to rewrite affected queries against project-c's actual domain.
+- **E_arch project-b 0% / project-c 0%** — accepted limitation: ground truth assumes NestJS `*Controller`/`*Service` naming that project-b and project-c don't follow (beribuy uses kebab-case domain names like `be-api-beribuy`; insyra uses different conventions). Embedder returns semantically relevant matches that fail the strict `expectedKindIn` + `expectedLabelHas` ground-truth rule. project-a E_arch is 75% (idiomatic NestJS naming), confirming the eval rule works where the corpus matches. ROADMAP item 4 covers this.
 
 ## Comparison axes for future model swaps
 
