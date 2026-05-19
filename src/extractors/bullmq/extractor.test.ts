@@ -551,3 +551,130 @@ describe('AC3b.3 — queue-event-listener edge', () => {
         expect(listenerEdges).toHaveLength(0);
     });
 });
+
+// ---------------------------------------------------------------------------
+// Round 2 P1 — registerQueueAsync, variadic, mergeQueueMeta, unownedEventListeners
+// ---------------------------------------------------------------------------
+
+describe('Round 2 P1 — registerQueueAsync, variadic, mergeQueueMeta, unownedEventListeners', () => {
+    it('registerQueueAsync emits registration with api=\'registerQueueAsync\'', async () => {
+        const source = `
+            import { BullModule } from '@nestjs/bullmq';
+            BullModule.registerQueueAsync({ name: 'email' });
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project);
+        expect(result.registrations.length).toBe(1);
+        expect(result.registrations[0]!.api).toBe('registerQueueAsync');
+
+        // thread through mapper and assert api propagated to queue node meta
+        const registry = makeRegistry();
+        const mapped = mapBullMqToGraph(
+            result.producers,
+            result.consumers,
+            result.registrations,
+            registry,
+        );
+        const queueNode = mapped.nodes.find((n) => n.id === 'queue:email');
+        expect(queueNode?.meta?.['api']).toBe('registerQueueAsync');
+    });
+
+    it('variadic registerQueue(a, b) registers both queues', async () => {
+        const source = `
+            import { BullModule } from '@nestjs/bullmq';
+            BullModule.registerQueue({ name: 'q1' }, { name: 'q2' });
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project);
+        expect(result.registrations.length).toBe(2);
+        const names = result.registrations
+            .map((r) => (r.queue.kind !== 'unresolved' ? r.queue.name : null))
+            .filter(Boolean);
+        expect(names).toContain('q1');
+        expect(names).toContain('q2');
+    });
+
+    it('mergeQueueMeta: first-seen wins for numerics, OR for hasRepeat', async () => {
+        // Two registerQueue calls for the same queue name in the same project.
+        // First call: attempts=3, no repeat.
+        // Second call: attempts=7, with repeat — hasRepeat should OR to true.
+        const p = new Project({
+            useInMemoryFileSystem: true,
+            compilerOptions: { target: 99, module: 99, moduleResolution: 100, strict: false },
+        });
+        p.createSourceFile('/app/apps/test-svc/src/module-a.ts', `
+            import { BullModule } from '@nestjs/bullmq';
+            BullModule.registerQueue({
+                name: 'shared',
+                defaultJobOptions: { attempts: 3 },
+            });
+        `);
+        p.createSourceFile('/app/apps/test-svc/src/module-b.ts', `
+            import { BullModule } from '@nestjs/bullmq';
+            BullModule.registerQueue({
+                name: 'shared',
+                defaultJobOptions: { attempts: 7, repeat: { cron: '0 * * * *' } },
+            });
+        `);
+        const result = await extractBullMq(makeConfig(), p);
+        const registry = makeRegistry();
+        const mapped = mapBullMqToGraph(
+            result.producers,
+            result.consumers,
+            result.registrations,
+            registry,
+        );
+        const queueNode = mapped.nodes.find((n) => n.id === 'queue:shared');
+        expect(queueNode).toBeDefined();
+        // first-seen wins for numeric
+        expect(queueNode?.meta?.['defaultAttempts']).toBe(3);
+        // OR rule for boolean
+        expect(queueNode?.meta?.['hasRepeat']).toBe(true);
+    });
+
+    it('unownedEventListeners populated when listener file has no resolved owner', async () => {
+        // Queue is registered inside a known app root; listener lives at /elsewhere/monitor.ts
+        // which is outside all known roots → ownership.findOwner returns { kind: 'unknown' }.
+        const p = new Project({
+            useInMemoryFileSystem: true,
+            compilerOptions: { target: 99, module: 99, moduleResolution: 100, strict: false },
+        });
+        p.createSourceFile('/app/apps/test-svc/src/module.ts', `
+            import { BullModule } from '@nestjs/bullmq';
+            BullModule.registerQueue({ name: 'alerts' });
+        `);
+        p.createSourceFile('/elsewhere/monitor.ts', `
+            import { InjectQueue } from '@nestjs/bullmq';
+
+            class AlertMonitor {
+                constructor(@InjectQueue('alerts') private alertsQueue: any) {}
+
+                init() {
+                    this.alertsQueue.on('failed', (job: any, err: Error) => {
+                        console.error(err);
+                    });
+                }
+            }
+        `);
+        const result = await extractBullMq(makeConfig(), p);
+        // The listener site should be resolved (queue name known via @InjectQueue)
+        expect(result.eventListenerSites.length).toBeGreaterThan(0);
+
+        const registry = makeRegistry(); // only knows /app/apps/test-svc and /app/apps/other-svc
+        const mapped = mapBullMqToGraph(
+            result.producers,
+            result.consumers,
+            result.registrations,
+            registry,
+            result.repeatAddSites,
+            result.eventListenerSites,
+        );
+        // No queue-event-listener edge should be emitted for the unowned listener
+        const listenerEdges = mapped.edges.filter((e) => e.kind === 'queue-event-listener');
+        expect(listenerEdges).toHaveLength(0);
+        // unownedEventListeners diagnostic should be populated
+        expect(mapped.diagnostics.unownedEventListeners?.length).toBe(1);
+        expect(mapped.diagnostics.unownedEventListeners?.[0]?.queueName).toBe('alerts');
+        expect(mapped.diagnostics.unownedEventListeners?.[0]?.event).toBe('failed');
+    });
+});
