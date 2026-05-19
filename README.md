@@ -29,7 +29,7 @@
 
 ## What's new (May 2026)
 
-Twelve features shipped on `main` in May 2026:
+Thirteen features shipped on `main` in May 2026:
 
 - **`doc-section-v1`** — Markdown files are now indexed as first-class `doc-section` graph nodes alongside code, enabling semantic search over your project's documentation.
 - **`code-vs-docs-v1`** — Semantic search splits into `code_search` and `docs_search` MCP tools, eliminating the dilution effect where docs crowded out code results (measured: A_find recall 80% → 30% → 70%).
@@ -43,6 +43,7 @@ Twelve features shipped on `main` in May 2026:
 - **`cron-v1`** *(2026-05-19)* — new extractor for `@nestjs/schedule` decorators (`@Cron`, `@Interval`, `@Timeout`) and `SchedulerRegistry.add*` dynamic registrations. New NodeKind `cron-schedule` with `expression` / `resolvedExpression` / `humanReadable` meta + new EdgeKind `cron-triggers`. Surfaces «what runs on a schedule?» semantic queries. Validated on insyra (2 sites extracted: `nightly-quality-check`, `weekly-retention-cleanup`). 33 new tests; 3 review rounds.
 - **`bullmq-extras-v1`** *(2026-05-19)* — BullMQ Phase 1 extras: queue meta (`concurrency`, `defaultDelay/Attempts/Backoff`, `hasRepeat`) + new edges `queue-fails-into` (DLQ heuristic) and `queue-event-listener`.
 - **`bullmq-types-v1`** *(2026-05-19)* — BullMQ Phase 2: `--with-types` flag resolves `Job<DataType>` generics via ts-morph type-checker; worker factory env-fallback concurrency; cross-enrichment `queue.add(repeat: cron)` → `cron-schedule` node + edge `queue-repeat`.
+- **`bullmq-realworld-v1`** *(2026-05-19)* — Real-world recall fixes for modern `@nestjs/bullmq` patterns: `WorkerHost.process()` detection (Pass 2 + heritage type-arg Pass 3 for `class extends BaseWorkerHost<T,R>`); `NumericConstIndex` resolves `parseInt(process.env.X ?? 'N', 10)` env-fallback consts at decl level; aliased `Job` import detection via type-checker. Plus 5 new BullMQ eval queries.
 
 Plus a refreshed head-to-head benchmark on 103 fuzzy-intent queries vs graphify with **e5-base default + full LLM rebuild on graphify side + scope correction** (`bench-2026-05-19` tag): arch-graph **74.8% / 75.4%** (RU / EN strict) vs graphify **20.4% / 56.5%** — **+54.4 pp RU** (multilingual win) and **+18.9 pp EN strict** (semantic vs BFS-keyword). Prior graphify lenient numbers were inflated by `.next/` / `.worktrees/` / `tmp/` noise nodes the default graphify scan picked up; arch-graph excludes them by convention via `appsGlob`/`libsGlob`. See [`docs/comparisons/2026-05-19-arch-graph-vs-graphify-eval.md`](docs/comparisons/2026-05-19-arch-graph-vs-graphify-eval.md), [`bench/REPRODUCE.md`](bench/REPRODUCE.md) and [`bench/self-build/README.md`](bench/self-build/README.md).
 
