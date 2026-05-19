@@ -290,6 +290,30 @@ export function mapBullMqToGraph(
         }
     }
 
+    // -------------------------------------------------------------------------
+    // BullMQ default concurrency injection
+    // Queues with at least one consumer but no explicit concurrency value get
+    // concurrency: 1 with a source marker (BullMQ documented default).
+    // Only runs after all queue nodes and consumer/producer/register sites are
+    // fully resolved so the guard is accurate.
+    // -------------------------------------------------------------------------
+    for (const queueNode of queueNodes.values()) {
+        const queueName = queueNode.label;
+        const hasConsumer = consumers.some(
+            (c) =>
+                c.queue.kind !== 'unresolved' &&
+                c.queue.name === queueName &&
+                ownership.findOwner(c.location.file).kind !== 'unknown',
+        );
+        if (hasConsumer && queueNode.meta?.['concurrency'] === undefined) {
+            queueNode.meta = {
+                ...(queueNode.meta ?? {}),
+                concurrency: 1,
+                concurrencySource: 'bullmq-default',
+            };
+        }
+    }
+
     return {
         nodes: [...ownerNodes.values(), ...queueNodes.values(), ...cronNodes.values()],
         edges: [...edges.values()],
