@@ -49,6 +49,11 @@ interface ParsedArgs {
      * on failures.
      */
     strict: boolean;
+    /**
+     * Enable the ts-morph type-checker pass that resolves `Job<DataType>` generics
+     * for BullMQ `@Process` methods. Off by default (performance constraint).
+     */
+    withTypes: boolean;
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
@@ -59,6 +64,7 @@ function parseArgs(argv: string[]): ParsedArgs {
     let mermaidSlice: MermaidSliceMode | undefined;
     let quiet = false;
     let strict = false;
+    let withTypes = false;
 
     for (let i = 0; i < rest.length; i++) {
         const a = rest[i]!;
@@ -80,9 +86,11 @@ function parseArgs(argv: string[]): ParsedArgs {
             quiet = true;
         } else if (a === '--strict') {
             strict = true;
+        } else if (a === '--with-types') {
+            withTypes = true;
         }
     }
-    return { cmd: cmd ?? '', config, out, only, mermaidSlice, quiet, strict };
+    return { cmd: cmd ?? '', config, out, only, mermaidSlice, quiet, strict, withTypes };
 }
 
 const HELP = `
@@ -523,7 +531,7 @@ async function cmdBuild(args: ParsedArgs): Promise<void> {
         process.exit(2);
     }
     const cfg = await loadConfigWithContext(args.config);
-    const result = await runBuild(cfg);
+    const result = await runBuild(cfg, { withTypes: args.withTypes });
 
     const outDir = resolve(args.out);
     await writeGraphJson(result.graph, `${outDir}/graph.json`);

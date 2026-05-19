@@ -56,6 +56,16 @@ export interface BuildResult {
     validation: BuildValidation;
 }
 
+export interface BuildOptions {
+    /**
+     * When true, enables the ts-morph type-checker pass that resolves
+     * `Job<DataType>` generic parameters for BullMQ `@Process` methods.
+     * Gated behind this flag because it is O(n) on source files.
+     * Default: false.
+     */
+    withTypes?: boolean;
+}
+
 /**
  * Wrapper around `detectCycles` that degrades gracefully on RangeError (stack
  * overflow on very large graphs) and re-throws any other unexpected error.
@@ -103,7 +113,7 @@ export function safeDetectCycles(
  *   4. Merge graph parts into final ArchGraph
  *   5. Compose top-level diagnostics + validation reports
  */
-export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
+export async function runBuild(cfg: ArchGraphConfig, buildOptions: BuildOptions = {}): Promise<BuildResult> {
     process.stdout.write(`\n=== ${cfg.id} ===\n`);
     process.stdout.write(`root: ${cfg.root}\n`);
 
@@ -223,7 +233,7 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
     // ---- BullMQ domain ----
     process.stdout.write(`extracting BullMQ...\n`);
     t0 = Date.now();
-    const bullmq = await stage(`[${cfg.id}] bullmq.extract`, () => extractBullMq(cfg, project));
+    const bullmq = await stage(`[${cfg.id}] bullmq.extract`, () => extractBullMq(cfg, project, { withTypes: buildOptions.withTypes }));
     process.stdout.write(
         `  ${bullmq.producers.length} @InjectQueue, ${bullmq.consumers.length} @Processor, ${bullmq.registrations.length} registerQueue in ${Date.now() - t0}ms\n`,
     );
@@ -255,7 +265,29 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         bullmq.unresolvedFailOver,
         bullmq.unresolvedEventListeners,
         bullmq.unresolvedCatchBlockSites,
+        bullmq.unresolvedRepeatExpressions,
     );
+    // Enrich queue nodes with job-data types when --with-types was active
+    if (buildOptions.withTypes && bullmq.jobDataTypes.length > 0) {
+        for (const jd of bullmq.jobDataTypes) {
+            const queueId = `queue:${jd.queueName}`;
+            const queueNode = bullmqMapped.nodes.find((n) => n.id === queueId);
+            if (queueNode) {
+                // Append to existing jobData array or create it (first-seen-wins per queue+method)
+                const existing = (queueNode.meta?.['jobData'] as Array<unknown> | undefined) ?? [];
+                const alreadyPresent = existing.some(
+                    (e) => (e as { methodName: string }).methodName === jd.methodName
+                        && (e as { processorClass: string }).processorClass === jd.processorClass,
+                );
+                if (!alreadyPresent) {
+                    queueNode.meta = {
+                        ...(queueNode.meta ?? {}),
+                        jobData: [...existing, { typeName: jd.typeName, fields: jd.fields, processorClass: jd.processorClass, methodName: jd.methodName }],
+                    };
+                }
+            }
+        }
+    }
     process.stdout.write(
         `  nodes: ${bullmqMapped.nodes.length}, edges: ${bullmqMapped.edges.length}` +
         `, unresolved: ${bullmqMapped.diagnostics.counts.unresolved}` +
@@ -263,7 +295,9 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         `, unresolvedFailOver: ${bullmqMapped.diagnostics.counts.unresolvedFailOver}` +
         `, unresolvedCatchBlockSites: ${bullmqMapped.diagnostics.counts.unresolvedCatchBlockSites}` +
         `, unresolvedEventListeners: ${bullmqMapped.diagnostics.counts.unresolvedEventListeners}` +
-        `, unownedEventListeners: ${bullmqMapped.diagnostics.counts.unownedEventListeners}\n`,
+        `, unownedEventListeners: ${bullmqMapped.diagnostics.counts.unownedEventListeners}` +
+        `, unresolvedRepeatExpressions: ${bullmqMapped.diagnostics.counts.unresolvedRepeatExpressions}` +
+        `, jobDataTypes: ${bullmq.jobDataTypes.length}\n`,
     );
 
     // ---- Cron-schedule domain ----
