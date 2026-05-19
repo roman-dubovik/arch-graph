@@ -554,9 +554,8 @@ function collectCallSites(
                                 jobName = (firstArg as StringLiteral).getLiteralText();
                             }
 
-                            // Try to extract literal cron expression or numeric every-ms
+                            // Try to extract literal cron expression
                             let repeatExpression: string | undefined;
-                            let repeatEveryMs: number | undefined;
                             const repeatInit = repeatProp.getInitializer();
                             if (repeatInit?.getKind() === SyntaxKind.ObjectLiteralExpression) {
                                 const repeatObj = repeatInit as ObjectLiteralExpression;
@@ -576,13 +575,6 @@ function collectCallSites(
                                         });
                                     }
                                 }
-                                const everyProp = findProp(repeatObj, 'every');
-                                if (everyProp !== null) {
-                                    const everyInit = everyProp.getInitializer();
-                                    if (everyInit?.getKind() === SyntaxKind.NumericLiteral) {
-                                        repeatEveryMs = Number(everyInit.getText());
-                                    }
-                                }
                             }
 
                             repeatAddSites.push({
@@ -591,7 +583,6 @@ function collectCallSites(
                                 location,
                                 ...(jobName !== undefined ? { jobName } : {}),
                                 ...(repeatExpression !== undefined ? { repeatExpression } : {}),
-                                ...(repeatEveryMs !== undefined ? { repeatEveryMs } : {}),
                             });
                         }
                     }

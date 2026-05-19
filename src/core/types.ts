@@ -758,7 +758,8 @@ export interface BullMqQueueRegistration {
  *
  * For cross-enrichment (Task 3c): if the `repeat` option contains a literal
  * cron expression (`{ cron: '...' }`), it is captured in `repeatExpression`.
- * If `repeat` uses `{ every: N }` instead, `repeatEveryMs` is captured.
+ * The `{ every: N }` pattern is detected for `hasRepeat` purposes but the ms
+ * value is not stored (not consumed by the mapper).
  * Non-literal expressions are recorded in the extractor's
  * `unresolvedRepeatExpressions` diagnostic array (no cron-schedule node emitted).
  */
@@ -771,8 +772,6 @@ export interface BullMqRepeatAddSite {
     jobName?: string;
     /** Literal cron expression from `{ repeat: { cron: '<expr>' } }`, if present. */
     repeatExpression?: string;
-    /** Numeric interval from `{ repeat: { every: N } }`, if present. */
-    repeatEveryMs?: number;
 }
 
 /**
