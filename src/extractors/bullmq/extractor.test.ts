@@ -1265,3 +1265,69 @@ describe('FIX H — NumericConstIndex env-fallback parseInt/Number patterns', ()
         expect(consumer?.concurrency).toBeUndefined();
     });
 });
+
+// ---------------------------------------------------------------------------
+// FIX J — readNumeric + indexDecl recursive unwrap AsExpression/ParenthesizedExpression
+// ---------------------------------------------------------------------------
+
+describe('FIX J — AsExpression + ParenthesizedExpression unwrap', () => {
+    it('concurrency: (CONCURRENCY as number) → resolves correctly (call-site wrap)', async () => {
+        const p = new Project({
+            useInMemoryFileSystem: true,
+            compilerOptions: { target: 99, module: 99, moduleResolution: 100, strict: false },
+        });
+        p.createSourceFile('/app/apps/test-svc/src/constants.ts', `
+            export const CONCURRENCY = 8;
+        `);
+        p.createSourceFile('/app/apps/test-svc/src/as.processor.ts', `
+            import { Processor } from '@nestjs/bullmq';
+            import { CONCURRENCY } from './constants';
+            @Processor('as-q', { concurrency: (CONCURRENCY as number) })
+            export class AsProcessor {}
+        `);
+        const result = await extractBullMq(makeConfig(), p);
+        const consumer = result.consumers.find((c) => c.className === 'AsProcessor');
+        expect(consumer).toBeDefined();
+        expect(consumer?.concurrency).toBe(8);
+    });
+
+    it('export const X = (5 as const) → indexed correctly (decl-site wrap)', async () => {
+        const p = new Project({
+            useInMemoryFileSystem: true,
+            compilerOptions: { target: 99, module: 99, moduleResolution: 100, strict: false },
+        });
+        p.createSourceFile('/app/apps/test-svc/src/constants.ts', `
+            export const AS_CONST_VAL = (5 as const);
+        `);
+        p.createSourceFile('/app/apps/test-svc/src/asconst.processor.ts', `
+            import { Processor } from '@nestjs/bullmq';
+            import { AS_CONST_VAL } from './constants';
+            @Processor('as-const-q', { concurrency: AS_CONST_VAL })
+            export class AsConstProcessor {}
+        `);
+        const result = await extractBullMq(makeConfig(), p);
+        const consumer = result.consumers.find((c) => c.className === 'AsConstProcessor');
+        expect(consumer).toBeDefined();
+        expect(consumer?.concurrency).toBe(5);
+    });
+
+    it('export const X = ((5)) → indexed correctly (double paren)', async () => {
+        const p = new Project({
+            useInMemoryFileSystem: true,
+            compilerOptions: { target: 99, module: 99, moduleResolution: 100, strict: false },
+        });
+        p.createSourceFile('/app/apps/test-svc/src/constants.ts', `
+            export const DOUBLE_PAREN = ((5));
+        `);
+        p.createSourceFile('/app/apps/test-svc/src/doubleparen.processor.ts', `
+            import { Processor } from '@nestjs/bullmq';
+            import { DOUBLE_PAREN } from './constants';
+            @Processor('dp-q', { concurrency: DOUBLE_PAREN })
+            export class DoubleParenProcessor {}
+        `);
+        const result = await extractBullMq(makeConfig(), p);
+        const consumer = result.consumers.find((c) => c.className === 'DoubleParenProcessor');
+        expect(consumer).toBeDefined();
+        expect(consumer?.concurrency).toBe(5);
+    });
+});

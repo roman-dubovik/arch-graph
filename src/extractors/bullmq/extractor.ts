@@ -1,8 +1,10 @@
 import {
+    AsExpression,
     CallExpression,
     Decorator,
     Node,
     ObjectLiteralExpression,
+    ParenthesizedExpression,
     Project,
     PropertyAssignment,
     SourceFile,
@@ -1008,15 +1010,21 @@ function extractInlineTypeFields(typeText: string): string[] {
 // ---------------------------------------------------------------------------
 
 /**
- * Read a numeric value from a node: accepts `NumericLiteral` directly or
- * resolves an `Identifier` via `NumericConstIndex`. Returns `undefined` for
- * any other kind (dynamic expressions, runtime calls, etc.) — callers silently
- * treat `undefined` as "not resolved".
+ * Read a numeric value from a node: accepts `NumericLiteral` directly,
+ * resolves an `Identifier` via `NumericConstIndex`, or recursively unwraps
+ * `AsExpression` / `ParenthesizedExpression` wrappers.
+ * Returns `undefined` for any other kind (dynamic expressions, runtime calls,
+ * etc.) — callers silently treat `undefined` as "not resolved".
  */
-function readNumeric(node: Node, idx: NumericConstIndex): number | undefined {
+function readNumeric(node: Node, idx: NumericConstIndex, depth = 0): number | undefined {
+    if (depth > 4) return undefined; // pathological nesting guard
     const k = node.getKind();
     if (k === SyntaxKind.NumericLiteral) return Number(node.getText());
     if (k === SyntaxKind.Identifier) return idx.get(node.getText());
+    if (k === SyntaxKind.AsExpression || k === SyntaxKind.ParenthesizedExpression) {
+        const inner = (node as AsExpression | ParenthesizedExpression).getExpression();
+        if (inner) return readNumeric(inner, idx, depth + 1);
+    }
     return undefined;
 }
 
