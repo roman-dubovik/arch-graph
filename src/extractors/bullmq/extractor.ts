@@ -886,8 +886,10 @@ function resolveJobDataTypes(
 
         // PASS 2 — WorkerHost.process() override (modern @nestjs/bullmq v3+ pattern).
         // Detects any method named `process` in a @Processor-decorated class whose
-        // first parameter type starts with `Job<` — extends WorkerHost / BaseWorkerHost
-        // is NOT required as a guard (structural shape is sufficient).
+        // first parameter type starts with `Job<` (textual gate) OR whose parameter
+        // type's symbol name is 'Job' (type-checker fallback for aliased imports:
+        //   `import { Job as BullJob } from 'bullmq'`).
+        // Not-Job-typed overrides (process(x: number)) are silently skipped.
         if (!emittedNames.has('process')) {
             const overrideMethod = cls.getMethod('process');
             if (overrideMethod && !overrideMethod.getDecorator('Process')) {
@@ -896,7 +898,19 @@ function resolveJobDataTypes(
                     const firstParam = params[0]!;
                     const typeNode = firstParam.getTypeNode();
                     const typeText = typeNode?.getText() ?? '';
-                    if (typeText.startsWith('Job<')) {
+                    // Textual gate: direct Job<X> pattern
+                    let isJobTyped = typeText.startsWith('Job<');
+                    // Type-checker fallback: handles `import { Job as BullJob }`
+                    // getSymbol() on a Job alias still returns the underlying Job symbol
+                    if (!isJobTyped) {
+                        try {
+                            const paramType = firstParam.getType();
+                            isJobTyped = (paramType as unknown as { getSymbol?: () => { getName?: () => string } | undefined }).getSymbol?.()?.getName?.() === 'Job';
+                        } catch {
+                            // type-checker failure — leave isJobTyped false
+                        }
+                    }
+                    if (isJobTyped) {
                         const resolved = resolveJobParamType(
                             firstParam,
                             queueName,
@@ -906,9 +920,63 @@ function resolveJobDataTypes(
                         );
                         if (resolved !== null) {
                             out.push(resolved);
+                            emittedNames.add('process');
                         }
                     }
                 }
+            }
+        }
+
+        // PASS 3 — Heritage type-arg fallback for `class extends BaseWorkerHost<T, R>` /
+        // `WorkerHost<T, R>` patterns where the subclass does NOT override `process()`
+        // locally. When Pass 1 + Pass 2 produced zero entries for this class (emittedNames
+        // is empty), the first type argument of the heritage clause IS the job-data type.
+        if (emittedNames.size === 0) {
+            try {
+                const heritageClauses = cls.getHeritageClauses();
+                if (heritageClauses.length > 0) {
+                    // Find extends clause (token === ExtendsKeyword = 96)
+                    const extendsClause = heritageClauses.find(
+                        (h) => h.getToken() === SyntaxKind.ExtendsKeyword,
+                    ) ?? heritageClauses[0]!;
+                    const typeNodes = extendsClause.getTypeNodes();
+                    if (typeNodes.length > 0) {
+                        const baseType = typeNodes[0]!;
+                        const typeArgs = baseType.getTypeArguments();
+                        if (typeArgs.length >= 1) {
+                            const firstTypeArg = typeArgs[0]!;
+                            const typeName = firstTypeArg.getText().trim();
+                            // Skip bare generics (T, R, etc.) and any/unknown
+                            if (typeName && !typeName.match(/^[A-Z]$/) && typeName !== 'unknown' && typeName !== 'any') {
+                                let fields: string[] = [];
+                                if (typeName.startsWith('{')) {
+                                    // Inline type literal
+                                    fields = extractInlineTypeFields(typeName);
+                                } else {
+                                    // Named type — use type-checker for field resolution
+                                    try {
+                                        const dataType = firstTypeArg.getType();
+                                        fields = dataType
+                                            .getProperties()
+                                            .map((p) => p.getName())
+                                            .filter((n) => !n.startsWith('__'));
+                                    } catch {
+                                        // best-effort — fields stays empty
+                                    }
+                                }
+                                out.push({
+                                    queueName,
+                                    processorClass: consumer.className,
+                                    methodName: '<heritage>',
+                                    typeName,
+                                    fields,
+                                });
+                            }
+                        }
+                    }
+                }
+            } catch {
+                // best-effort — skip on any AST/type-checker failure
             }
         }
     }
@@ -930,34 +998,48 @@ function resolveJobParamType(
         const typeNode = firstParam.getTypeNode();
         if (!typeNode) return null;
 
-        // Type text e.g. "Job<MyData>" or "Job<{ foo: string }>"
+        // Type text e.g. "Job<MyData>" or "Job<{ foo: string }>" or "BullJob<MyData>" (alias)
         const typeText = typeNode.getText();
-        if (!typeText.startsWith('Job<') || !typeText.endsWith('>')) return null;
-
-        // Extract the type argument text
-        const innerText = typeText.slice(4, -1).trim();
 
         let typeName: string;
         let fields: string[] = [];
 
-        if (innerText.startsWith('{')) {
-            // Inline object literal type
-            typeName = '<inline>';
-            // Extract depth-1 property names from inline type literal
-            fields = extractInlineTypeFields(innerText);
-        } else {
-            // Named type — use ts-morph type-checker for field resolution
-            typeName = innerText;
-            const paramType = firstParam.getType();
-            // paramType is Job<X> — get type arguments
-            const typeArgs = paramType.getTypeArguments();
-            if (typeArgs.length > 0) {
-                const dataType = typeArgs[0]!;
-                fields = dataType
-                    .getProperties()
-                    .map((p) => p.getName())
-                    .filter((n) => !n.startsWith('__'));
+        if (typeText.startsWith('Job<') && typeText.endsWith('>')) {
+            // Fast path: textual `Job<X>` pattern
+            const innerText = typeText.slice(4, -1).trim();
+            if (innerText.startsWith('{')) {
+                // Inline object literal type
+                typeName = '<inline>';
+                fields = extractInlineTypeFields(innerText);
+            } else {
+                // Named type — use ts-morph type-checker for field resolution
+                typeName = innerText;
+                const paramType = firstParam.getType();
+                const typeArgs = paramType.getTypeArguments();
+                if (typeArgs.length > 0) {
+                    const dataType = typeArgs[0]!;
+                    fields = dataType
+                        .getProperties()
+                        .map((p) => p.getName())
+                        .filter((n) => !n.startsWith('__'));
+                }
             }
+        } else {
+            // Fallback path: aliased type (e.g. `BullJob<MyData>` where BullJob = Job<T>).
+            // getSymbol()?.getName() === 'Job' gate already confirmed in Pass 2 caller;
+            // here we extract type args via type-checker and typeNode for the typeName text.
+            const paramType = firstParam.getType();
+            const typeArgs = paramType.getTypeArguments();
+            if (typeArgs.length === 0) return null;
+            const dataType = typeArgs[0]!;
+            // Get textual type arg from the AST type node (not the paramType) for cleaner name
+            const typeNodeTypeArgs = (typeNode as unknown as { getTypeArguments?: () => Array<{ getText: () => string }> }).getTypeArguments?.() ?? [];
+            const dataTypeSymbolName = (dataType as unknown as { getSymbol?: () => { getName?: () => string } | undefined }).getSymbol?.()?.getName?.() ?? '<unknown>';
+            typeName = typeNodeTypeArgs.length > 0 ? (typeNodeTypeArgs[0]!.getText().trim()) : dataTypeSymbolName;
+            fields = dataType
+                .getProperties()
+                .map((p) => p.getName())
+                .filter((n) => !n.startsWith('__'));
         }
 
         return { queueName, processorClass, methodName, typeName, fields };

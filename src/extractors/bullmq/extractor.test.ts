@@ -1331,3 +1331,127 @@ describe('FIX J — AsExpression + ParenthesizedExpression unwrap', () => {
         expect(consumer?.concurrency).toBe(5);
     });
 });
+
+// ---------------------------------------------------------------------------
+// FIX I — Pass 3 heritage type-arg fallback for BaseWorkerHost<T, R>
+// ---------------------------------------------------------------------------
+
+describe('FIX I — Pass 3 heritage type-arg fallback', () => {
+    it('class extends BaseWorkerHost<IMyData, void> → jobDataTypes entry with methodName <heritage>', async () => {
+        const source = `
+            import { Processor } from '@nestjs/bullmq';
+
+            interface IMyData { userId: string; action: string; }
+            class BaseWorkerHost<T, R> {}
+
+            @Processor('notifications')
+            export class NotificationProcessor extends BaseWorkerHost<IMyData, void> {}
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project, { withTypes: true });
+        const entry = result.jobDataTypes.find((j) => j.queueName === 'notifications');
+        expect(entry).toBeDefined();
+        expect(entry?.typeName).toBe('IMyData');
+        expect(entry?.methodName).toBe('<heritage>');
+        expect(entry?.fields).toContain('userId');
+        expect(entry?.fields).toContain('action');
+    });
+
+    it('class extends WorkerHost<{ inline: string; foo: number }> → inline type fields resolved', async () => {
+        const source = `
+            import { Processor } from '@nestjs/bullmq';
+
+            class WorkerHost<T> {}
+
+            @Processor('inline-q')
+            export class InlineProcessor extends WorkerHost<{ inline: string; foo: number }> {}
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project, { withTypes: true });
+        const entry = result.jobDataTypes.find((j) => j.queueName === 'inline-q');
+        expect(entry).toBeDefined();
+        expect(entry?.methodName).toBe('<heritage>');
+        expect(entry?.fields).toContain('inline');
+        expect(entry?.fields).toContain('foo');
+    });
+
+    it('class with local process override → Pass 2 wins, Pass 3 skipped (only 1 entry)', async () => {
+        const source = `
+            import { Processor } from '@nestjs/bullmq';
+
+            interface DifferentType { value: number; }
+            class BaseWorkerHost<T, R> {}
+
+            interface Job<T = any> { data: T; }
+
+            @Processor('override-q')
+            export class OverrideProcessor extends BaseWorkerHost<{ should: string }, void> {
+                async process(job: Job<DifferentType>): Promise<void> {}
+            }
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project, { withTypes: true });
+        const entries = result.jobDataTypes.filter((j) => j.queueName === 'override-q');
+        // Pass 2 fired (local process()), Pass 3 skipped
+        expect(entries.length).toBe(1);
+        expect(entries[0]!.methodName).toBe('process');
+        expect(entries[0]!.typeName).toBe('DifferentType');
+    });
+
+    it('class extends SomeNonGenericClass → no Pass 3 entry (no type args)', async () => {
+        const source = `
+            import { Processor } from '@nestjs/bullmq';
+
+            class SomeNonGenericClass {}
+
+            @Processor('no-generic-q')
+            export class NoGenericProcessor extends SomeNonGenericClass {}
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project, { withTypes: true });
+        const entries = result.jobDataTypes.filter((j) => j.queueName === 'no-generic-q');
+        expect(entries.length).toBe(0);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// FIX K — Pass 2 handles aliased Job imports via type-checker
+// ---------------------------------------------------------------------------
+
+describe('FIX K — Pass 2 aliased Job import fallback', () => {
+    it('BullJob<MyData> alias of Job<T> → resolved to jobDataTypes entry', async () => {
+        const source = `
+            import { Processor } from '@nestjs/bullmq';
+
+            interface Job<T = any> { data: T; }
+            type BullJob<T = any> = Job<T>;
+
+            interface MyData { orderId: string; amount: number; }
+
+            @Processor('aliased-q')
+            export class AliasedProcessor {
+                async process(job: BullJob<MyData>): Promise<void> {}
+            }
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project, { withTypes: true });
+        // BullJob<MyData> is an alias for Job<T>; type-checker resolves symbol name to 'Job'
+        const entry = result.jobDataTypes.find((j) => j.queueName === 'aliased-q');
+        expect(entry).toBeDefined();
+    });
+
+    it('process(job: number) — not Job-typed → silently skipped', async () => {
+        const source = `
+            import { Processor } from '@nestjs/bullmq';
+
+            @Processor('non-job-q')
+            export class NonJobProcessor {
+                async process(job: number): Promise<void> {}
+            }
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project, { withTypes: true });
+        const entries = result.jobDataTypes.filter((j) => j.queueName === 'non-job-q');
+        expect(entries.length).toBe(0);
+    });
+});
