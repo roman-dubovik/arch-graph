@@ -1412,6 +1412,48 @@ describe('FIX I — Pass 3 heritage type-arg fallback', () => {
         const entries = result.jobDataTypes.filter((j) => j.queueName === 'no-generic-q');
         expect(entries.length).toBe(0);
     });
+
+    it('FIX N: Pass 3 skipped when Pass 2 has process() override, even if type resolution fails', async () => {
+        const source = `
+            import { Processor } from '@nestjs/bullmq';
+
+            interface IBase { id: number; }
+            class BaseWorkerHost<T, R> {}
+            interface BullJob<T> { data: T; }
+
+            @Processor('partial-resolve-q')
+            export class PartialResolveProcessor extends BaseWorkerHost<IBase, void> {
+                async process(job: BullJob<unknown>): Promise<void> {}
+            }
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project, { withTypes: true });
+        const entries = result.jobDataTypes.filter((j) => j.queueName === 'partial-resolve-q');
+        // Pass 2 attempted (found process() method), so Pass 3 should NOT fire
+        // Even if Pass 2 didn't emit an entry (type args unresolvable), no <heritage> should appear
+        const heritageEntry = entries.find((e) => e.methodName === '<heritage>');
+        expect(heritageEntry).toBeUndefined();
+    });
+
+    it('FIX N: Pass 3 skipped when class has process(nonJobType) override', async () => {
+        const source = `
+            import { Processor } from '@nestjs/bullmq';
+
+            interface IBase { id: number; }
+            class BaseWorkerHost<T, R> {}
+
+            @Processor('non-job-type-q')
+            export class NonJobTypeProcessor extends BaseWorkerHost<IBase, void> {
+                async process(job: number): Promise<void> {}
+            }
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project, { withTypes: true });
+        const entries = result.jobDataTypes.filter((j) => j.queueName === 'non-job-type-q');
+        // Pass 2 encountered process() but it's not Job-typed, so didn't emit
+        // Pass 3 should NOT fire because process() override exists (even if not Job-typed)
+        expect(entries.length).toBe(0);
+    });
 });
 
 // ---------------------------------------------------------------------------

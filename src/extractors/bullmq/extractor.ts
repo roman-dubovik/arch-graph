@@ -901,6 +901,11 @@ function resolveJobDataTypes(
             if (overrideMethod && !overrideMethod.getDecorator('Process')) {
                 const params = overrideMethod.getParameters();
                 if (params.length > 0) {
+                    // Mark that this class HAS a process() override attempt, regardless of
+                    // whether Pass 2 succeeds. This prevents Pass 3 from emitting a heritage entry,
+                    // because the override's semantics (Job-typed or not) are authoritative.
+                    emittedNames.add('process');
+
                     const firstParam = params[0]!;
                     const typeNode = firstParam.getTypeNode();
                     const typeText = typeNode?.getText() ?? '';
@@ -926,7 +931,6 @@ function resolveJobDataTypes(
                         );
                         if (resolved !== null) {
                             out.push(resolved);
-                            emittedNames.add('process');
                         }
                     }
                 }
