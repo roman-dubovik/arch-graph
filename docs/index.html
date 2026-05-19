@@ -751,7 +751,7 @@ arch-graph build --strict            # CI gate: exit 3 if recall drops below flo
     <section class="section section-domains" id="domains" aria-labelledby="domains-title">
       <div class="container">
         <p class="section-eyebrow">What it knows</p>
-        <h2 id="domains-title" class="section-title">Six domains. Gated on every build.</h2>
+        <h2 id="domains-title" class="section-title">Seven domains. Gated on every build.</h2>
         <p class="section-lead">Each card is one extractor pass — a typed walk over the NestJS decorators / call shapes that domain uses. Coverage is boolean here (the extractor exists or it doesn't); per-domain recall is measured separately in the bench above and gated by <code>arch-graph build --strict</code>.</p>
 
         <ul class="domain-grid" role="list">
@@ -816,6 +816,26 @@ arch-graph build --strict            # CI gate: exit 3 if recall drops below flo
             <ul class="domain-edges mono">
               <li>queue-produce</li>
               <li>queue-consume</li>
+            </ul>
+          </li>
+
+          <li class="domain-card reveal">
+            <div class="domain-head">
+              <span class="domain-icon" aria-hidden="true">
+                <svg viewBox="0 0 32 32" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="16" cy="16" r="11"></circle>
+                  <path d="M16 9v7l5 3"></path>
+                  <path d="M16 3v2"></path>
+                  <path d="M16 27v2"></path>
+                  <path d="M3 16h2"></path>
+                  <path d="M27 16h2"></path>
+                </svg>
+              </span>
+              <h3>Cron schedule <span class="domain-tag mono" style="opacity:.6;font-weight:400;">cron-v1</span></h3>
+            </div>
+            <p class="domain-blurb"><code>@nestjs/schedule</code> decorators (<code>@Cron</code>, <code>@Interval</code>, <code>@Timeout</code>) plus dynamic <code>SchedulerRegistry.add*</code> registrations. Each site becomes a <code>cron-schedule</code> node with the expression resolved against <code>CronExpression</code> aliases when possible. Per-site diagnostics (<code>unresolved</code>, <code>unresolvedOptions</code>, <code>filteredByReceiver</code>) surface non-literal arguments without losing visibility.</p>
+            <ul class="domain-edges mono">
+              <li>cron-triggers</li>
             </ul>
           </li>
 
