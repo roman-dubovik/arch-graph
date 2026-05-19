@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Project } from 'ts-morph';
 import { extractCronSchedule } from './extractor.js';
@@ -6,7 +7,16 @@ import { mapCronScheduleToGraph } from '../../mapper/cron-schedule-to-graph.js';
 import { OwnershipRegistry } from '../../core/service-registry.js';
 import type { ArchGraphConfig } from '../../core/config.js';
 
-const FIXTURE_PATH = join(import.meta.dirname ?? __dirname, '__fixtures__/sample.ts');
+// ---------------------------------------------------------------------------
+// Fixture setup — use in-memory FS so path-based exclusions (/.worktrees/)
+// don't interfere when tests run inside a git worktree.
+// ---------------------------------------------------------------------------
+
+const FIXTURE_DISK_PATH = join(import.meta.dirname ?? __dirname, '__fixtures__/sample.ts');
+const FIXTURE_SOURCE = readFileSync(FIXTURE_DISK_PATH, 'utf8');
+
+/** Virtual absolute path used when seeding the in-memory project. */
+const VIRTUAL_FIXTURE_PATH = '/app/src/tasks/sample.ts';
 
 function makeConfig(root = '/app'): ArchGraphConfig {
     return {
@@ -17,15 +27,17 @@ function makeConfig(root = '/app'): ArchGraphConfig {
 }
 
 function makeProject(): Project {
-    const p = new Project({ useInMemoryFileSystem: false });
-    p.addSourceFileAtPath(FIXTURE_PATH);
+    const p = new Project({
+        useInMemoryFileSystem: true,
+        compilerOptions: { target: 99, module: 99, moduleResolution: 100, strict: false },
+    });
+    p.createSourceFile(VIRTUAL_FIXTURE_PATH, FIXTURE_SOURCE);
     return p;
 }
 
-function makeRegistry(root = '/'): OwnershipRegistry {
-    const fixtureDir = join(import.meta.dirname ?? __dirname, '__fixtures__');
+function makeRegistry(root = '/app'): OwnershipRegistry {
     return new OwnershipRegistry(root, [
-        { id: 'test-svc', rootDir: fixtureDir, tsconfigPath: null, entryFile: null },
+        { id: 'test-svc', rootDir: '/app/src/tasks', tsconfigPath: null, entryFile: null },
     ], []);
 }
 
@@ -224,5 +236,72 @@ describe('mapCronScheduleToGraph', () => {
         const { nodes } = mapCronScheduleToGraph([hourlySite!], registry);
         const cronNode = nodes.find((n) => n.kind === 'cron-schedule');
         expect(cronNode?.meta?.['humanReadable']).toBe('every hour');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Round-2 diagnostic tests (FIX 2A / 2B / 2C)
+// ---------------------------------------------------------------------------
+
+describe('round-2 diagnostics', () => {
+    it('FIX 2A — @Interval(MS_CONST) with non-literal identifier → site dropped, entry in diagnostics.unresolved', async () => {
+        const project = makeProject();
+        const { sites, diagnostics } = await extractCronSchedule(makeConfig(), project);
+
+        // No site should be emitted for UnresolvableService.handleIntervalConst
+        const emitted = sites.find((s) => s.owner === 'UnresolvableService.handleIntervalConst');
+        expect(emitted).toBeUndefined();
+
+        // But an entry should appear in diagnostics.unresolved
+        const entry = diagnostics.unresolved.find(
+            (d) => d.owner === 'UnresolvableService.handleIntervalConst',
+        );
+        expect(entry).toBeDefined();
+        expect(entry?.decoratorName).toMatch(/@Interval/);
+    });
+
+    it('FIX 2B — @Cron(EVERY_HOUR, optionsVar) with variable options → site emitted, entry in diagnostics.unresolvedOptions', async () => {
+        const project = makeProject();
+        const { sites, diagnostics } = await extractCronSchedule(makeConfig(), project);
+
+        // Site IS emitted (expression is resolvable even though options aren't)
+        const emitted = sites.find((s) => s.owner === 'UnresolvableService.handleCronWithVarOptions');
+        expect(emitted).toBeDefined();
+        expect(emitted?.expression).toBeTruthy();
+
+        // Options entry should appear in diagnostics.unresolvedOptions
+        const optEntry = diagnostics.unresolvedOptions.find(
+            (d) => d.owner === 'UnresolvableService.handleCronWithVarOptions',
+        );
+        expect(optEntry).toBeDefined();
+    });
+
+    it('FIX 2C — this.cron.addCronJob(...) with receiver matching LIKELY_SCHEDULER_RECEIVER_RE → site IS emitted', async () => {
+        const project = makeProject();
+        const { sites } = await extractCronSchedule(makeConfig(), project);
+
+        const cronReceiverSite = sites.find(
+            (s) => s.category === 'dynamic' && s.expression === '0 12 * * *',
+        );
+        expect(cronReceiverSite).toBeDefined();
+        expect(cronReceiverSite?.name).toBe('cronReceiverJob');
+    });
+
+    it('FIX 2C — this.unrelated.addInterval(...) with non-scheduler receiver → site NOT emitted, entry in diagnostics.filteredByReceiver', async () => {
+        const project = makeProject();
+        const { sites, diagnostics } = await extractCronSchedule(makeConfig(), project);
+
+        // No site for unrelated receiver
+        const unrelatedSite = sites.find(
+            (s) => s.category === 'interval' && s.name === 'unrelatedInterval',
+        );
+        expect(unrelatedSite).toBeUndefined();
+
+        // Should appear in filteredByReceiver diagnostic
+        const filtered = diagnostics.filteredByReceiver.find(
+            (d) => d.receiverText.toLowerCase().includes('unrelated'),
+        );
+        expect(filtered).toBeDefined();
+        expect(filtered?.method).toBe('addInterval');
     });
 });

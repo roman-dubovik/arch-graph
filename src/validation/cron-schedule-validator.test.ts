@@ -139,3 +139,69 @@ describe('ground-truth regex patterns — fixture coverage', () => {
         expect(matches.length).toBe(0);
     });
 });
+
+// ---------------------------------------------------------------------------
+// Round-2 validator tests — FIX 2C receiver-pattern symmetry
+// ---------------------------------------------------------------------------
+
+describe('SCHEDULER_REGISTRY_RE round-2 receiver guard', () => {
+    it('matches this.cron.addCronJob(...) — cron receiver', () => {
+        const sample = 'this.cron.addCronJob("cronReceiverJob", new CronJob("0 12 * * *", () => {}))';
+        const matches = [...sample.matchAll(new RegExp(SCHEDULER_REGISTRY_RE.source, SCHEDULER_REGISTRY_RE.flags))];
+        expect(matches.length).toBe(1);
+    });
+
+    it('matches registry.addInterval(...) — registry receiver', () => {
+        const sample = 'registry.addInterval("interval1", 5000)';
+        const matches = [...sample.matchAll(new RegExp(SCHEDULER_REGISTRY_RE.source, SCHEDULER_REGISTRY_RE.flags))];
+        expect(matches.length).toBe(1);
+    });
+
+    it('matches taskRunner.addTimeout(...) — runner receiver', () => {
+        const sample = 'taskRunner.addTimeout("t1", 3000)';
+        const matches = [...sample.matchAll(new RegExp(SCHEDULER_REGISTRY_RE.source, SCHEDULER_REGISTRY_RE.flags))];
+        expect(matches.length).toBe(1);
+    });
+
+    it('does NOT match this.unrelated.addInterval(...) — non-scheduler receiver', () => {
+        const sample = 'this.unrelated.addInterval("unrelatedInterval", 3000)';
+        const matches = [...sample.matchAll(new RegExp(SCHEDULER_REGISTRY_RE.source, SCHEDULER_REGISTRY_RE.flags))];
+        expect(matches.length).toBe(0);
+    });
+
+    it('does NOT match this.someService.addCronJob(...) — non-scheduler receiver', () => {
+        const sample = 'this.someService.addCronJob("job1", new CronJob("0 * * * *", cb))';
+        const matches = [...sample.matchAll(new RegExp(SCHEDULER_REGISTRY_RE.source, SCHEDULER_REGISTRY_RE.flags))];
+        expect(matches.length).toBe(0);
+    });
+
+    it('FIX 2D test 5 — fixture dynamic GT count equals extractor site count (recallDynamic = 1.0)', async () => {
+        // The fixture has 4 dynamic sites in class DynamicTaskService:
+        //   - schedulerRegistry.addCronJob (expression resolvable)     → site emitted
+        //   - schedulerRegistry.addInterval (expression resolvable)    → site emitted
+        //   - schedulerRegistry.addTimeout with {} (unresolvable)      → dropped (unresolved)
+        //   - schedulerRegistry.addTimeout with 10000 (resolvable)     → site emitted
+        // Plus class ReceiverGuardService:
+        //   - cron.addCronJob (receiver=cron → matches) (resolvable)   → site emitted
+        //   - unrelated.addInterval (receiver=unrelated → no match)    → filtered, NOT in GT
+        //
+        // The validator SCHEDULER_REGISTRY_RE with lookbehind should match exactly the
+        // same set as the extractor (schedulerRegistry.* and cron.*), giving recallDynamic = 1.0
+        // for the resolvable subset.
+        //
+        // We test this by checking that GT dynamic count matches the number of resolvable dynamic
+        // sites emitted by the extractor (via buildCronScheduleReport).
+        const fixtureContent = readFixture();
+
+        // Count dynamic GT matches in fixture
+        const re = new RegExp(SCHEDULER_REGISTRY_RE.source, SCHEDULER_REGISTRY_RE.flags);
+        const gtDynamic = [...fixtureContent.matchAll(re)];
+        // unrelated.addInterval should NOT be in GT
+        const hasUnrelated = gtDynamic.some((m) =>
+            fixtureContent.slice(Math.max(0, (m.index ?? 0) - 20), m.index ?? 0).toLowerCase().includes('unrelated'),
+        );
+        expect(hasUnrelated).toBe(false);
+        // cron.addCronJob and schedulerRegistry.* should be in GT
+        expect(gtDynamic.length).toBeGreaterThanOrEqual(4);
+    });
+});

@@ -71,12 +71,17 @@ export const INTERVAL_RE =
 export const TIMEOUT_RE =
     /@Timeout\s*\(\s*(?:([A-Za-z_][\w.]*|['"`][^'"`]*['"`]|\d+))/gs;
 
-// SchedulerRegistry.addCronJob / addInterval / addTimeout — receiver-agnostic.
-// Matches `this.schedulerRegistry.addCronJob(...)`, `registry.addInterval(...)`, etc.
-// The old pattern required "SchedulerRegistry" literal and thus missed lowercase-var idioms.
+// SchedulerRegistry.addCronJob / addInterval / addTimeout — requires a scheduler-like receiver.
+// Uses a lookbehind that mirrors LIKELY_SCHEDULER_RECEIVER_RE from constants.ts to ensure
+// symmetric counting between extractor (ts-morph guard) and validator (GT regex).
+//
+// Matches: `this.schedulerRegistry.addCronJob(...)`, `registry.addInterval(...)`,
+//          `this.cron.addCronJob(...)`, `taskRunner.addTimeout(...)`, etc.
+// Does NOT match: `this.unrelated.addCronJob(...)`, `builder.addInterval(...)`.
+//
 // Exported for testing.
 export const SCHEDULER_REGISTRY_RE =
-    /\.\s*add(?:CronJob|Interval|Timeout)\s*\(/gs;
+    /(?<=(?:scheduler|registry|cron|tasks|jobs|runner|timer|sched)[A-Za-z0-9_]*)\.add(?:CronJob|Interval|Timeout)\s*\(/gis;
 
 // ---------------------------------------------------------------------------
 // Enumeration

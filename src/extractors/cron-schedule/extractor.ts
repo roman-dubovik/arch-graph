@@ -15,7 +15,10 @@ import { CRON_EXPRESSION_MAP } from './constants.js';
 import {
     buildSchedulerRegistryIndex,
     dynamicSiteToCronScheduleSite,
+    type FilteredByReceiverSite,
 } from './scheduler-registry-index.js';
+
+export type { FilteredByReceiverSite };
 
 /** A site whose expression argument could not be statically resolved. */
 export interface UnresolvedCronSite {
@@ -24,6 +27,8 @@ export interface UnresolvedCronSite {
     line: number;
     /** Raw text of the unresolvable argument (truncated to 80 chars). */
     raw: string;
+    /** Decorator/context name for distinguishing cases (e.g. '@Interval (v1 name-only)'). */
+    decoratorName?: string;
 }
 
 /** A site whose options argument is a non-literal (variable/spread) — data-loss warning. */
@@ -41,6 +46,8 @@ export interface ExtractCronScheduleResult {
         unresolved: UnresolvedCronSite[];
         /** Sites where the options arg is non-literal (name not extractable, but site emitted). */
         unresolvedOptions: UnresolvedOptionsSite[];
+        /** Dynamic call sites filtered out because receiver name did not match scheduler pattern. */
+        filteredByReceiver: FilteredByReceiverSite[];
     };
 }
 
@@ -89,10 +96,10 @@ export async function extractCronSchedule(
                         const site = buildCronSite(owner, dec, sf.getFilePath(), unresolved, unresolvedOptions);
                         if (site) sites.push(site);
                     } else if (decName === 'Interval') {
-                        const site = buildIntervalTimeoutSite(owner, dec, sf.getFilePath(), 'interval');
+                        const site = buildIntervalTimeoutSite(owner, dec, sf.getFilePath(), 'interval', unresolved);
                         if (site) sites.push(site);
                     } else if (decName === 'Timeout') {
-                        const site = buildIntervalTimeoutSite(owner, dec, sf.getFilePath(), 'timeout');
+                        const site = buildIntervalTimeoutSite(owner, dec, sf.getFilePath(), 'timeout', unresolved);
                         if (site) sites.push(site);
                     }
                 }
@@ -101,7 +108,7 @@ export async function extractCronSchedule(
     }
 
     // Pass 2 — dynamic SchedulerRegistry sites
-    const dynamicSites = buildSchedulerRegistryIndex(project);
+    const { sites: dynamicSites, filteredByReceiver } = buildSchedulerRegistryIndex(project);
     for (const ds of dynamicSites) {
         const site = dynamicSiteToCronScheduleSite(ds, `dynamic:${ds.name ?? 'unnamed'}`);
         if (site !== null) {
@@ -116,7 +123,7 @@ export async function extractCronSchedule(
         }
     }
 
-    return { sites, diagnostics: { unresolved, unresolvedOptions } };
+    return { sites, diagnostics: { unresolved, unresolvedOptions, filteredByReceiver } };
 }
 
 // ---------------------------------------------------------------------------
@@ -147,6 +154,7 @@ function buildCronSite(
             file: filePath,
             line: pos.line,
             raw: firstArg.getText().slice(0, 80),
+            decoratorName: '@Cron',
         });
         return null;
     }
@@ -195,6 +203,7 @@ function buildIntervalTimeoutSite(
     dec: Decorator,
     filePath: string,
     category: 'interval' | 'timeout',
+    unresolvedOut: UnresolvedCronSite[],
 ): CronScheduleSite | null {
     const args = dec.getArguments();
     if (args.length === 0) return null;
@@ -202,6 +211,7 @@ function buildIntervalTimeoutSite(
     const sf = dec.getSourceFile();
     const pos = sf.getLineAndColumnAtPos(dec.getStart());
     const location = { file: filePath, line: pos.line, column: pos.column };
+    const decoratorName = category === 'interval' ? '@Interval' : '@Timeout';
 
     // First arg can be: number literal (ms) OR string (name for older nestjs/schedule API).
     // Per NestJS docs: @Interval(name?, milliseconds). In v3+ it's just (name, ms) or (ms).
@@ -214,10 +224,25 @@ function buildIntervalTimeoutSite(
         if (k === SyntaxKind.NumericLiteral) {
             expression = arg.getText();
         } else if (k === SyntaxKind.StringLiteral || k === SyntaxKind.NoSubstitutionTemplateLiteral) {
-            // Name-only call (unusual) — skip
+            // Name-only call (v1 API) — drop, but record in diagnostics
+            unresolvedOut.push({
+                owner,
+                file: filePath,
+                line: pos.line,
+                raw: arg.getText().slice(0, 80),
+                decoratorName: `${decoratorName} (v1 name-only)`,
+            });
             return null;
+        } else {
+            // Non-literal (variable, call expression, etc.) — push to diagnostics
+            unresolvedOut.push({
+                owner,
+                file: filePath,
+                line: pos.line,
+                raw: arg.getText().slice(0, 80),
+                decoratorName,
+            });
         }
-        // Non-literal (variable, call expression, etc.) — skip, not resolvable
     } else if (args.length >= 2) {
         // @Interval(name, ms) or @Timeout(name, ms)
         const maybeNameArg = args[0]!;
@@ -231,8 +256,16 @@ function buildIntervalTimeoutSite(
             expression = maybeMs.getText();
         } else if (maybeMs.getKind() === SyntaxKind.NumericLiteral) {
             expression = maybeMs.getText();
+        } else {
+            // Other non-literal patterns — push to diagnostics
+            unresolvedOut.push({
+                owner,
+                file: filePath,
+                line: pos.line,
+                raw: args.map((a) => a.getText()).join(', ').slice(0, 80),
+                decoratorName,
+            });
         }
-        // Other non-literal patterns — expression stays null → skip below
     }
 
     // Drop the site when expression is not resolvable

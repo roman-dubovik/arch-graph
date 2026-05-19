@@ -8,7 +8,7 @@ import {
 } from 'ts-morph';
 
 import type { CronScheduleSite } from '../../core/types.js';
-import { CRON_EXPRESSION_MAP } from './constants.js';
+import { CRON_EXPRESSION_MAP, LIKELY_SCHEDULER_RECEIVER_RE } from './constants.js';
 
 /**
  * Pre-pass: find dynamic `SchedulerRegistry` registrations:
@@ -38,8 +38,23 @@ export interface DynamicSchedulerSite {
     rawExpression: string;
 }
 
-export function buildSchedulerRegistryIndex(project: Project): DynamicSchedulerSite[] {
+/** A call site filtered out because the receiver variable name did not match
+ * LIKELY_SCHEDULER_RECEIVER_RE — surfaced as diagnostic for operator debugging. */
+export interface FilteredByReceiverSite {
+    file: string;
+    line: number;
+    receiverText: string;
+    method: string;
+}
+
+export interface SchedulerRegistryIndexResult {
+    sites: DynamicSchedulerSite[];
+    filteredByReceiver: FilteredByReceiverSite[];
+}
+
+export function buildSchedulerRegistryIndex(project: Project): SchedulerRegistryIndexResult {
     const sites: DynamicSchedulerSite[] = [];
+    const filteredByReceiver: FilteredByReceiverSite[] = [];
 
     for (const sf of project.getSourceFiles()) {
         if (isExcludedForIndex(sf)) continue;
@@ -49,13 +64,17 @@ export function buildSchedulerRegistryIndex(project: Project): DynamicSchedulerS
             !text.includes('addInterval') &&
             !text.includes('addTimeout')
         ) continue;
-        collectDynamicSites(sf, sites);
+        collectDynamicSites(sf, sites, filteredByReceiver);
     }
 
-    return sites;
+    return { sites, filteredByReceiver };
 }
 
-function collectDynamicSites(sf: SourceFile, out: DynamicSchedulerSite[]): void {
+function collectDynamicSites(
+    sf: SourceFile,
+    out: DynamicSchedulerSite[],
+    filteredByReceiverOut: FilteredByReceiverSite[],
+): void {
     sf.forEachDescendant((node) => {
         if (node.getKind() !== SyntaxKind.CallExpression) return;
         const call = node as CallExpression;
@@ -73,8 +92,19 @@ function collectDynamicSites(sf: SourceFile, out: DynamicSchedulerSite[]): void 
         // Receiver-name guard: only emit if the receiver name suggests a scheduler/registry.
         // This prevents phantom nodes for unrelated methods named addInterval/addTimeout
         // (e.g. EventEmitter.addInterval or custom builders).
-        const receiverText = propAccess.getExpression().getText().toLowerCase();
-        if (!receiverText.includes('scheduler') && !receiverText.includes('registry')) return;
+        // Uses the shared LIKELY_SCHEDULER_RECEIVER_RE for symmetric coverage with the validator.
+        const receiverText = propAccess.getExpression().getText();
+        if (!LIKELY_SCHEDULER_RECEIVER_RE.test(receiverText)) {
+            // Record filtered site for diagnostics
+            const pos = sf.getLineAndColumnAtPos(call.getStart());
+            filteredByReceiverOut.push({
+                file: sf.getFilePath(),
+                line: pos.line,
+                receiverText,
+                method: methodName,
+            });
+            return;
+        }
 
         const args = call.getArguments();
         if (args.length < 1) return;

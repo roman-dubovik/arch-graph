@@ -801,6 +801,16 @@ export interface CronScheduleDiagnostics {
      * Populated by the extractor (passed through build.ts) when present.
      */
     unresolved?: import('../extractors/cron-schedule/extractor.js').UnresolvedCronSite[];
+    /**
+     * Sites where the options argument was non-literal (name not extractable).
+     * Site is still emitted; name field will be absent.
+     */
+    unresolvedOptions?: import('../extractors/cron-schedule/extractor.js').UnresolvedOptionsSite[];
+    /**
+     * Call sites skipped because the receiver variable name did not match
+     * LIKELY_SCHEDULER_RECEIVER_RE — surfaced for operator debugging.
+     */
+    filteredByReceiver?: import('../extractors/cron-schedule/extractor.js').FilteredByReceiverSite[];
     counts: {
         totalSites: number;
         cron: number;

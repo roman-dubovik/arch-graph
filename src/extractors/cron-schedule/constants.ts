@@ -15,6 +15,17 @@ export const SCHEDULER_REGISTRY_METHODS = ['addCronJob', 'addInterval', 'addTime
 export type SchedulerRegistryMethod = (typeof SCHEDULER_REGISTRY_METHODS)[number];
 
 /**
+ * Receiver-variable pattern: covers common NestJS scheduler/registry idioms.
+ * Used in both the extractor (ts-morph guard) and the validator (GT regex lookbehind)
+ * to ensure symmetric counting.
+ *
+ * Matches variable names that suggest a scheduler or registry role:
+ *   schedulerRegistry, this.cron, taskRunner, jobsService, timerManager, etc.
+ */
+export const LIKELY_SCHEDULER_RECEIVER_RE =
+    /(?:scheduler|registry|cron|tasks|jobs|runner|timer|sched)/i;
+
+/**
  * Subset of CronExpression enum values from @nestjs/schedule.
  * Maps enum member name → cron string + optional human-readable label.
  */

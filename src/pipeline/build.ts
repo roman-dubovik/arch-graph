@@ -564,6 +564,8 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         cron: {
             ...cronMapped.diagnostics,
             unresolved: cron.diagnostics.unresolved,
+            unresolvedOptions: cron.diagnostics.unresolvedOptions,
+            filteredByReceiver: cron.diagnostics.filteredByReceiver,
         },
     };
     const docsValidation = validateDocs(docsDiagnostics, graph.nodes);

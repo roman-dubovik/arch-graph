@@ -98,3 +98,41 @@ export class MixedTaskService {
 
 // ── Empty class — should produce no sites ────────────────────────────────────
 export class EmptyService {}
+
+// ── Test class E: unresolvable decorator args (round-2 diagnostics) ──────────
+declare const MS_CONST: number;
+declare const optionsVar: { name: string; timeZone: string };
+
+export class UnresolvableService {
+    @Interval(MS_CONST)
+    handleIntervalConst() {
+        // MS_CONST is not a literal — should appear in diagnostics.unresolved
+    }
+
+    @Cron(CronExpression.EVERY_HOUR, optionsVar)
+    handleCronWithVarOptions() {
+        // optionsVar is not an object literal — site emitted, appears in diagnostics.unresolvedOptions
+    }
+}
+
+// ── Test class F: receiver-name variants for guard symmetry ──────────────────
+declare class UnrelatedService {
+    addInterval(name: string, ms: number): void;
+}
+
+export class ReceiverGuardService {
+    constructor(
+        private readonly cron: SchedulerRegistry,
+        private readonly unrelated: UnrelatedService,
+    ) {}
+
+    addViaCronReceiver() {
+        // 'cron' matches LIKELY_SCHEDULER_RECEIVER_RE → should be emitted as a site
+        this.cron.addCronJob('cronReceiverJob', new CronJob('0 12 * * *', () => {}));
+    }
+
+    addViaUnrelatedReceiver() {
+        // 'unrelated' does NOT match LIKELY_SCHEDULER_RECEIVER_RE → filtered, recorded in filteredByReceiver
+        this.unrelated.addInterval('unrelatedInterval', 3000);
+    }
+}
