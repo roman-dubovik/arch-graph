@@ -1829,4 +1829,32 @@ describe('BullMQ default concurrency injection', () => {
         expect(queueNode?.meta?.['concurrency']).toBeUndefined();
         expect(queueNode?.meta?.['concurrencySource']).toBeUndefined();
     });
+
+    it('Injection skipped when only consumer is unowned (concurrency stays undefined)', async () => {
+        const source = `
+            import { Processor } from '@nestjs/bullmq';
+            import { BullModule } from '@nestjs/bullmq';
+
+            BullModule.registerQueue({ name: 'q' });
+
+            @Processor('q', { concurrency: 10 })
+            class QProcessor {}
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project);
+        // Create registry with no known app/lib roots, so all consumers are unowned
+        const registry = new OwnershipRegistry('/app', [], []);
+        const mapped = mapBullMqToGraph(
+            result.producers,
+            result.consumers,
+            result.registrations,
+            registry,
+        );
+        const queueNode = mapped.nodes.find((n) => n.id === 'queue:q');
+        expect(queueNode).toBeDefined();
+        // Even though the processor has concurrency: 10, it's unowned so it's skipped in main loop.
+        // Injection should see no owned consumers and skip the default.
+        expect(queueNode?.meta?.['concurrency']).toBeUndefined();
+        expect(queueNode?.meta?.['concurrencySource']).toBeUndefined();
+    });
 });

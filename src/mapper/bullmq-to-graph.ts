@@ -300,7 +300,10 @@ export function mapBullMqToGraph(
     for (const queueNode of queueNodes.values()) {
         const queueName = queueNode.label;
         const hasConsumer = consumers.some(
-            (c) => c.queue.kind !== 'unresolved' && c.queue.name === queueName,
+            (c) =>
+                c.queue.kind !== 'unresolved' &&
+                c.queue.name === queueName &&
+                ownership.findOwner(c.location.file).kind !== 'unknown',
         );
         if (hasConsumer && queueNode.meta?.['concurrency'] === undefined) {
             queueNode.meta = {
