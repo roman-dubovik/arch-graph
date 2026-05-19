@@ -75,6 +75,16 @@ export interface ExtractBullMqResult {
      * `options.withTypes === true`. Empty array otherwise.
      */
     jobDataTypes: BullMqJobDataType[];
+    /**
+     * @Process methods for which the type-checker pass failed to resolve the
+     * `Job<DataType>` generic parameter. Populated only when `withTypes === true`.
+     */
+    unresolvedJobDataTypes: Array<{
+        queueName: string;
+        processorClass: string;
+        methodName: string;
+        reason: string;
+    }>;
     queueNames: QueueNameIndex;
 }
 
@@ -189,8 +199,14 @@ export async function extractBullMq(
     // Job-data type resolution — only when withTypes is explicitly enabled.
     // This pass invokes the ts-morph type-checker which is O(n) on source files.
     const jobDataTypes: BullMqJobDataType[] = [];
+    const unresolvedJobDataTypes: Array<{
+        queueName: string;
+        processorClass: string;
+        methodName: string;
+        reason: string;
+    }> = [];
     if (options.withTypes === true) {
-        resolveJobDataTypes(project, consumers, jobDataTypes);
+        resolveJobDataTypes(project, consumers, jobDataTypes, unresolvedJobDataTypes);
     }
 
     return {
@@ -205,6 +221,7 @@ export async function extractBullMq(
         unresolvedCatchBlockSites,
         unresolvedRepeatExpressions,
         jobDataTypes,
+        unresolvedJobDataTypes,
         queueNames,
     };
 }
@@ -809,6 +826,7 @@ function resolveJobDataTypes(
     project: Project,
     consumers: BullMqProcessorSite[],
     out: BullMqJobDataType[],
+    unresolvedOut: Array<{ queueName: string; processorClass: string; methodName: string; reason: string }>,
 ): void {
     for (const consumer of consumers) {
         if (consumer.queue.kind === 'unresolved') continue;
@@ -872,8 +890,14 @@ function resolveJobDataTypes(
                     typeName,
                     fields,
                 });
-            } catch {
-                // Type-checker pass is best-effort — skip silently on any failure
+            } catch (err) {
+                // Type-checker pass is best-effort — record failure in diagnostics
+                unresolvedOut.push({
+                    queueName,
+                    processorClass: consumer.className,
+                    methodName: method.getName(),
+                    reason: err instanceof Error ? err.message : String(err),
+                });
             }
         }
     }

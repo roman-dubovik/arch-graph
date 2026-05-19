@@ -266,6 +266,7 @@ export async function runBuild(cfg: ArchGraphConfig, buildOptions: BuildOptions 
         bullmq.unresolvedEventListeners,
         bullmq.unresolvedCatchBlockSites,
         bullmq.unresolvedRepeatExpressions,
+        bullmq.unresolvedJobDataTypes,
     );
     // Enrich queue nodes with job-data types when --with-types was active
     if (buildOptions.withTypes && bullmq.jobDataTypes.length > 0) {
@@ -297,7 +298,8 @@ export async function runBuild(cfg: ArchGraphConfig, buildOptions: BuildOptions 
         `, unresolvedEventListeners: ${bullmqMapped.diagnostics.counts.unresolvedEventListeners}` +
         `, unownedEventListeners: ${bullmqMapped.diagnostics.counts.unownedEventListeners}` +
         `, unresolvedRepeatExpressions: ${bullmqMapped.diagnostics.counts.unresolvedRepeatExpressions}` +
-        `, jobDataTypes: ${bullmq.jobDataTypes.length}\n`,
+        `, jobDataTypes: ${bullmq.jobDataTypes.length}` +
+        `, unresolvedJobDataTypes: ${bullmqMapped.diagnostics.counts.unresolvedJobDataTypes}\n`,
     );
 
     // ---- Cron-schedule domain ----

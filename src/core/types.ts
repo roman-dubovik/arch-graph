@@ -842,6 +842,17 @@ export interface BullMqDiagnostics {
      * is emitted for these; they are recorded here for diagnostics only.
      */
     unresolvedRepeatExpressions?: Array<{ location: SourceLoc; queueName: string; rawExpression: string }>;
+    /**
+     * `@Process` methods for which the type-checker pass (`--with-types`) failed
+     * to resolve the `Job<DataType>` generic parameter. Populated only when
+     * `--with-types` is active; absent otherwise.
+     */
+    unresolvedJobDataTypes?: Array<{
+        queueName: string;
+        processorClass: string;
+        methodName: string;
+        reason: string;
+    }>;
     counts: {
         producers: number;
         consumers: number;
@@ -856,6 +867,8 @@ export interface BullMqDiagnostics {
         unownedEventListeners: number;
         unresolvedCatchBlockSites: number;
         unresolvedRepeatExpressions: number;
+        /** Number of `@Process` methods where the type-checker pass failed. 0 when `--with-types` is off. */
+        unresolvedJobDataTypes: number;
     };
 }
 

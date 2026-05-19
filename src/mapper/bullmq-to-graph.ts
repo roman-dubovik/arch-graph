@@ -45,6 +45,7 @@ export function mapBullMqToGraph(
     unresolvedEventListeners: Array<{ location: SourceLoc; receiverText: string; event: string }> = [],
     unresolvedCatchBlockSites: Array<{ location: SourceLoc; receiverText: string; processorQueueName: string }> = [],
     unresolvedRepeatExpressions: Array<{ location: SourceLoc; queueName: string; rawExpression: string }> = [],
+    unresolvedJobDataTypes: Array<{ queueName: string; processorClass: string; methodName: string; reason: string }> = [],
 ): MapBullMqResult {
     const ownerNodes = new Map<string, GraphNode>();
     const queueNodes = new Map<string, GraphNode>();
@@ -297,6 +298,7 @@ export function mapBullMqToGraph(
             ...(unresolvedCatchBlockSites.length > 0 ? { unresolvedCatchBlockSites } : {}),
             ...(unownedEventListeners.length > 0 ? { unownedEventListeners } : {}),
             ...(unresolvedRepeatExpressions.length > 0 ? { unresolvedRepeatExpressions } : {}),
+            ...(unresolvedJobDataTypes.length > 0 ? { unresolvedJobDataTypes } : {}),
             counts: {
                 producers: producers.length,
                 consumers: consumers.length,
@@ -311,6 +313,7 @@ export function mapBullMqToGraph(
                 unownedEventListeners: unownedEventListeners.length,
                 unresolvedCatchBlockSites: unresolvedCatchBlockSites.length,
                 unresolvedRepeatExpressions: unresolvedRepeatExpressions.length,
+                unresolvedJobDataTypes: unresolvedJobDataTypes.length,
             },
         },
     };
