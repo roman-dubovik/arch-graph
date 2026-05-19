@@ -55,6 +55,16 @@ describe('AC3b.1 — queue node meta', () => {
         const consumer = result.consumers.find((c) => c.className === 'PaymentsProcessor');
         expect(consumer).toBeDefined();
         expect(consumer?.concurrency).toBe(5);
+        // Verify mapper propagates @Processor concurrency to queue node meta
+        const registry = makeRegistry();
+        const mapped = mapBullMqToGraph(
+            result.producers,
+            result.consumers,
+            result.registrations,
+            registry,
+        );
+        const queueNode = mapped.nodes.find((n) => n.id === 'queue:payments');
+        expect(queueNode?.meta?.['concurrency']).toBe(5);
     });
 
     it('concurrency parsed from @Processor(name, { concurrency: 3 }) — second arg options', async () => {

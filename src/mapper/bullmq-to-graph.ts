@@ -131,6 +131,13 @@ export function mapBullMqToGraph(
         }
         const ownerId = ensureOwner(ownerNodes, owner);
         const queueId = ensureQueue(queueNodes, c.queue.name);
+        // Propagate @Processor concurrency to queue node meta (first-seen wins)
+        if (c.concurrency !== undefined) {
+            const queueNode = queueNodes.get(queueId)!;
+            if (queueNode.meta?.['concurrency'] === undefined) {
+                queueNode.meta = { ...(queueNode.meta ?? {}), concurrency: c.concurrency };
+            }
+        }
         const key = `queue-consume:${queueId}->${ownerId}`;
         if (!edges.has(key)) {
             edges.set(key, {
