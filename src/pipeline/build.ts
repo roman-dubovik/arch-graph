@@ -244,9 +244,26 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
     }
 
     process.stdout.write(`mapping BullMQ to graph...\n`);
-    const bullmqMapped = mapBullMqToGraph(bullmq.producers, bullmq.consumers, bullmq.registrations, ownership);
+    const bullmqMapped = mapBullMqToGraph(
+        bullmq.producers,
+        bullmq.consumers,
+        bullmq.registrations,
+        ownership,
+        bullmq.repeatAddSites,
+        bullmq.eventListenerSites,
+        bullmq.catchBlockAddSites,
+        bullmq.unresolvedFailOver,
+        bullmq.unresolvedEventListeners,
+        bullmq.unresolvedCatchBlockSites,
+    );
     process.stdout.write(
-        `  nodes: ${bullmqMapped.nodes.length}, edges: ${bullmqMapped.edges.length}, unresolved: ${bullmqMapped.diagnostics.unresolved.length}, unowned: ${bullmqMapped.diagnostics.unowned.length}\n`,
+        `  nodes: ${bullmqMapped.nodes.length}, edges: ${bullmqMapped.edges.length}` +
+        `, unresolved: ${bullmqMapped.diagnostics.counts.unresolved}` +
+        `, unowned: ${bullmqMapped.diagnostics.counts.unowned}` +
+        `, unresolvedFailOver: ${bullmqMapped.diagnostics.counts.unresolvedFailOver}` +
+        `, unresolvedCatchBlockSites: ${bullmqMapped.diagnostics.counts.unresolvedCatchBlockSites}` +
+        `, unresolvedEventListeners: ${bullmqMapped.diagnostics.counts.unresolvedEventListeners}` +
+        `, unownedEventListeners: ${bullmqMapped.diagnostics.counts.unownedEventListeners}\n`,
     );
 
     // ---- Cron-schedule domain ----

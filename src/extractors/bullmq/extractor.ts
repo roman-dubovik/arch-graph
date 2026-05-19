@@ -12,10 +12,14 @@ import {
 
 import type { ArchGraphConfig } from '../../core/config.js';
 import type {
+    BullMqCatchBlockAddSite,
+    BullMqEventListenerSite,
     BullMqInjectionSite,
     BullMqProcessorSite,
     BullMqQueueRef,
     BullMqQueueRegistration,
+    BullMqRepeatAddSite,
+    SourceLoc,
 } from '../../core/types.js';
 import { isExcludedSourceFile } from '../shared.js';
 import { buildQueueNameIndex, QueueNameIndex } from './queue-name-index.js';
@@ -28,6 +32,9 @@ export { isExcludedSourceFile };
  *   - `@InjectQueue(NAME)` (property + ctor-param)            → producer site
  *   - `@Processor(NAME, options?)` (class decorator)          → consumer site
  *   - `BullModule.registerQueue({ name })` / `registerQueueAsync({ name })` → registration
+ *   - `queue.add(jobName, data, { repeat: ... })` call sites  → repeat-add site (hasRepeat)
+ *   - `queue.on('event', handler)` / `worker.on(...)` sites   → event-listener site
+ *   - catch-block `someQueue.add('dlq', ...)` inside @Process → catch-block-add site (DLQ heuristic)
  *
  * Queue-name resolution:
  *   - string literal               → `{ kind: 'literal', name }`
@@ -38,10 +45,25 @@ export { isExcludedSourceFile };
  * `BullModule.forFeature()` factory variants, wrapper producer/consumer classes.
  */
 
+/** BullMQ event names recognised for `queue-event-listener` edge. */
+const BULLMQ_EVENTS = new Set([
+    'failed', 'completed', 'stalled', 'active', 'progress',
+    'waiting', 'drained', 'paused', 'resumed', 'error',
+]);
+
 export interface ExtractBullMqResult {
     producers: BullMqInjectionSite[];
     consumers: BullMqProcessorSite[];
     registrations: BullMqQueueRegistration[];
+    repeatAddSites: BullMqRepeatAddSite[];
+    eventListenerSites: BullMqEventListenerSite[];
+    catchBlockAddSites: BullMqCatchBlockAddSite[];
+    /** Unresolved failOver references — diagnostics only. */
+    unresolvedFailOver: Array<{ location: SourceLoc; raw: string }>;
+    /** Unresolved event-listener receivers — diagnostics only. */
+    unresolvedEventListeners: Array<{ location: SourceLoc; receiverText: string; event: string }>;
+    /** Catch-block .add() sites whose receiver could not be resolved — diagnostics only (no edge). */
+    unresolvedCatchBlockSites: Array<{ location: SourceLoc; receiverText: string; processorQueueName: string }>;
     queueNames: QueueNameIndex;
 }
 
@@ -53,6 +75,12 @@ export async function extractBullMq(
     const producers: BullMqInjectionSite[] = [];
     const consumers: BullMqProcessorSite[] = [];
     const registrations: BullMqQueueRegistration[] = [];
+    const repeatAddSites: BullMqRepeatAddSite[] = [];
+    const eventListenerSites: BullMqEventListenerSite[] = [];
+    const catchBlockAddSites: BullMqCatchBlockAddSite[] = [];
+    const unresolvedFailOver: Array<{ location: SourceLoc; raw: string }> = [];
+    const unresolvedEventListeners: Array<{ location: SourceLoc; receiverText: string; event: string }> = [];
+    const unresolvedCatchBlockSites: Array<{ location: SourceLoc; receiverText: string; processorQueueName: string }> = [];
 
     for (const sf of project.getSourceFiles()) {
         if (isExcludedSourceFile(sf)) continue;
@@ -60,7 +88,12 @@ export async function extractBullMq(
         const hasInject = text.includes('@InjectQueue');
         const hasProcessor = text.includes('@Processor');
         const hasBullModule = text.includes('BullModule.registerQueue');
-        if (!hasInject && !hasProcessor && !hasBullModule) continue;
+        const hasOnCall = text.includes('.on(');
+        const hasAddCall = text.includes('.add(');
+        if (!hasInject && !hasProcessor && !hasBullModule && !hasOnCall && !hasAddCall) continue;
+
+        // Build per-file property→queueName map from @InjectQueue sites (for receiver resolution)
+        const injectedQueuesByProp = new Map<string, string>(); // propertyName → queueName
 
         if (hasInject || hasProcessor) {
             for (const cls of sf.getClasses()) {
@@ -68,9 +101,6 @@ export async function extractBullMq(
 
                 if (hasProcessor) {
                     const procDec = cls.getDecorator('Processor');
-                    // Anonymous classes (`export default @Processor('foo') class { ... }`) have
-                    // no `cls.getName()`. We still emit the site with a sentinel className so the
-                    // GT key matches and the consumer edge is not silently dropped.
                     if (procDec) {
                         consumers.push(
                             buildProcessorSite(enclosingClass ?? '<anonymous>', procDec, queueNames),
@@ -82,13 +112,22 @@ export async function extractBullMq(
                     for (const prop of cls.getProperties()) {
                         const dec = prop.getDecorator('InjectQueue');
                         if (!dec) continue;
-                        producers.push(buildInjectionSite(prop.getName(), dec, queueNames, enclosingClass));
+                        const site = buildInjectionSite(prop.getName(), dec, queueNames, enclosingClass);
+                        producers.push(site);
+                        // Index property → queue for receiver resolution
+                        if (site.queue.kind !== 'unresolved') {
+                            injectedQueuesByProp.set(prop.getName(), site.queue.name);
+                        }
                     }
                     for (const ctor of cls.getConstructors()) {
                         for (const param of ctor.getParameters()) {
                             const dec = param.getDecorator('InjectQueue');
                             if (!dec) continue;
-                            producers.push(buildInjectionSite(param.getName(), dec, queueNames, enclosingClass));
+                            const site = buildInjectionSite(param.getName(), dec, queueNames, enclosingClass);
+                            producers.push(site);
+                            if (site.queue.kind !== 'unresolved') {
+                                injectedQueuesByProp.set(param.getName(), site.queue.name);
+                            }
                         }
                     }
                 }
@@ -96,12 +135,42 @@ export async function extractBullMq(
         }
 
         if (hasBullModule) {
-            collectRegistrations(sf, queueNames, registrations);
+            collectRegistrations(sf, queueNames, registrations, unresolvedFailOver);
+        }
+
+        // Collect .on() and .add() call sites for event listeners, repeat detection, and DLQ heuristic
+        if (hasOnCall || hasAddCall) {
+            collectCallSites(
+                sf,
+                queueNames,
+                injectedQueuesByProp,
+                consumers,
+                repeatAddSites,
+                eventListenerSites,
+                catchBlockAddSites,
+                unresolvedEventListeners,
+                unresolvedCatchBlockSites,
+            );
         }
     }
 
-    return { producers, consumers, registrations, queueNames };
+    return {
+        producers,
+        consumers,
+        registrations,
+        repeatAddSites,
+        eventListenerSites,
+        catchBlockAddSites,
+        unresolvedFailOver,
+        unresolvedEventListeners,
+        unresolvedCatchBlockSites,
+        queueNames,
+    };
 }
+
+// ---------------------------------------------------------------------------
+// Site builders
+// ---------------------------------------------------------------------------
 
 function buildInjectionSite(
     propertyName: string,
@@ -127,11 +196,41 @@ function buildProcessorSite(
 ): BullMqProcessorSite {
     const sf = dec.getSourceFile();
     const pos = sf.getLineAndColumnAtPos(dec.getStart());
+
+    let concurrency: number | undefined;
+
+    // Check for concurrency in the options object form: @Processor({ name: 'x', concurrency: N })
+    const args = dec.getArguments();
+    if (args.length > 0) {
+        const firstArg = args[0]!;
+        if (firstArg.getKind() === SyntaxKind.ObjectLiteralExpression) {
+            const obj = firstArg as ObjectLiteralExpression;
+            const concurrencyProp = findProp(obj, 'concurrency');
+            const init = concurrencyProp?.getInitializer();
+            if (init?.getKind() === SyntaxKind.NumericLiteral) {
+                concurrency = Number(init.getText());
+            }
+        }
+        // Also check second arg (options object when first arg is queue name string)
+        if (args.length >= 2) {
+            const secondArg = args[1]!;
+            if (secondArg.getKind() === SyntaxKind.ObjectLiteralExpression) {
+                const obj = secondArg as ObjectLiteralExpression;
+                const concurrencyProp = findProp(obj, 'concurrency');
+                const init = concurrencyProp?.getInitializer();
+                if (init?.getKind() === SyntaxKind.NumericLiteral) {
+                    concurrency = Number(init.getText());
+                }
+            }
+        }
+    }
+
     return {
         role: 'consumer',
         className,
         queue: resolveDecoratorArg(dec, queueNames),
         location: { file: sf.getFilePath(), line: pos.line, column: pos.column },
+        ...(concurrency !== undefined ? { concurrency } : {}),
     };
 }
 
@@ -154,10 +253,6 @@ function resolveQueueArg(node: Node, queueNames: QueueNameIndex): BullMqQueueRef
         return { kind: 'unresolved', raw: identifier, reason: 'unindexed-identifier' };
     }
     if (kind === SyntaxKind.PropertyAccessExpression) {
-        // Only resolve when the full dotted name is in the index. Tail-only matches
-        // (e.g. `QueueNames.PAYMENT_QUEUE` falling back to an unrelated bare const
-        // `PAYMENT_QUEUE`) would produce wrong graph edges with no diagnostic signal.
-        // Unresolved is honest — it lands in diagnostics and in the resolveRate metric.
         const text = node.getText();
         const value = queueNames.get(text);
         if (value !== undefined) return { kind: 'const', name: value, identifier: text };
@@ -166,7 +261,6 @@ function resolveQueueArg(node: Node, queueNames: QueueNameIndex): BullMqQueueRef
     if (kind === SyntaxKind.ObjectLiteralExpression) {
         // `@nestjs/bullmq` v10+ overloads `@Processor` and `@InjectQueue` with an
         // options-object form: `@Processor({ name: 'payments', concurrency: 3 })`.
-        // The queue name lives in the `name` property — recurse into it.
         const nameProp = findProp(node as ObjectLiteralExpression, 'name');
         const init = nameProp?.getInitializer();
         if (init) return resolveQueueArg(init, queueNames);
@@ -174,6 +268,10 @@ function resolveQueueArg(node: Node, queueNames: QueueNameIndex): BullMqQueueRef
     }
     return { kind: 'unresolved', raw: node.getText().slice(0, 80), reason: 'dynamic-expression' };
 }
+
+// ---------------------------------------------------------------------------
+// Registration collector
+// ---------------------------------------------------------------------------
 
 /**
  * Find `BullModule.registerQueue(...)` / `registerQueueAsync(...)` and read the
@@ -187,6 +285,7 @@ function collectRegistrations(
     sf: SourceFile,
     queueNames: QueueNameIndex,
     out: BullMqQueueRegistration[],
+    unresolvedFailOver: Array<{ location: SourceLoc; raw: string }>,
 ): void {
     sf.forEachDescendant((node) => {
         if (node.getKind() !== SyntaxKind.CallExpression) return;
@@ -202,27 +301,269 @@ function collectRegistrations(
         const location = { file: sf.getFilePath(), line: pos.line, column: pos.column };
 
         for (const arg of call.getArguments()) {
-            out.push({
-                role: 'registration',
-                api,
-                queue: resolveRegistrationArg(arg, queueNames),
-                location,
-            });
+            out.push(resolveRegistrationArg(arg, queueNames, api, location, unresolvedFailOver));
         }
     });
 }
 
-function resolveRegistrationArg(arg: Node, queueNames: QueueNameIndex): BullMqQueueRef {
+function resolveRegistrationArg(
+    arg: Node,
+    queueNames: QueueNameIndex,
+    api: 'registerQueue' | 'registerQueueAsync',
+    location: SourceLoc,
+    unresolvedFailOver: Array<{ location: SourceLoc; raw: string }>,
+): BullMqQueueRegistration {
     if (arg.getKind() !== SyntaxKind.ObjectLiteralExpression) {
-        return { kind: 'unresolved', raw: arg.getText().slice(0, 80), reason: 'non-object-arg' };
+        return {
+            role: 'registration',
+            queue: { kind: 'unresolved', raw: arg.getText().slice(0, 80), reason: 'non-object-arg' },
+            api,
+            location,
+        };
     }
     const obj = arg as ObjectLiteralExpression;
     const nameProp = findProp(obj, 'name');
-    if (!nameProp) return { kind: 'unresolved', raw: '<no-name>', reason: 'no-name-property' };
-    // `findProp` only returns `PropertyAssignment` nodes, which always carry an
-    // initializer — `getInitializer()` is non-null by construction.
-    return resolveQueueArg(nameProp.getInitializer()!, queueNames);
+    if (!nameProp) {
+        return {
+            role: 'registration',
+            queue: { kind: 'unresolved', raw: '<no-name>', reason: 'no-name-property' },
+            api,
+            location,
+        };
+    }
+    const queue = resolveQueueArg(nameProp.getInitializer()!, queueNames);
+
+    // Extract optional extras: concurrency, defaultJobOptions.*
+    let concurrency: number | undefined;
+    let defaultDelay: number | undefined;
+    let defaultAttempts: number | undefined;
+    let defaultBackoff: unknown;
+    let hasDefaultRepeat: true | undefined;
+    let failOverTarget: string | undefined;
+
+    const concurrencyProp = findProp(obj, 'concurrency');
+    const concurrencyInit = concurrencyProp?.getInitializer();
+    if (concurrencyInit?.getKind() === SyntaxKind.NumericLiteral) {
+        concurrency = Number(concurrencyInit.getText());
+    }
+
+    const defaultJobOptionsProp = findProp(obj, 'defaultJobOptions');
+    const djoInit = defaultJobOptionsProp?.getInitializer();
+    if (djoInit?.getKind() === SyntaxKind.ObjectLiteralExpression) {
+        const djo = djoInit as ObjectLiteralExpression;
+
+        const delayProp = findProp(djo, 'delay');
+        const delayInit = delayProp?.getInitializer();
+        if (delayInit?.getKind() === SyntaxKind.NumericLiteral) {
+            defaultDelay = Number(delayInit.getText());
+        }
+
+        const attemptsProp = findProp(djo, 'attempts');
+        const attemptsInit = attemptsProp?.getInitializer();
+        if (attemptsInit?.getKind() === SyntaxKind.NumericLiteral) {
+            defaultAttempts = Number(attemptsInit.getText());
+        }
+
+        const backoffProp = findProp(djo, 'backoff');
+        const backoffInit = backoffProp?.getInitializer();
+        if (backoffInit) {
+            const bk = backoffInit.getKind();
+            if (bk === SyntaxKind.NumericLiteral) {
+                defaultBackoff = Number(backoffInit.getText());
+            } else if (bk === SyntaxKind.ObjectLiteralExpression) {
+                // Store raw text representation for diagnostic purposes
+                defaultBackoff = backoffInit.getText().slice(0, 120);
+            }
+        }
+
+        const repeatProp = findProp(djo, 'repeat');
+        if (repeatProp) {
+            hasDefaultRepeat = true;
+        }
+
+        const failOverProp = findProp(djo, 'failOver');
+        const failOverInit = failOverProp?.getInitializer();
+        if (failOverInit) {
+            const resolved = resolveQueueArg(failOverInit, queueNames);
+            if (resolved.kind !== 'unresolved') {
+                failOverTarget = resolved.name;
+            } else {
+                unresolvedFailOver.push({ location, raw: failOverInit.getText().slice(0, 80) });
+            }
+        }
+    }
+
+    return {
+        role: 'registration',
+        queue,
+        api,
+        location,
+        ...(concurrency !== undefined ? { concurrency } : {}),
+        ...(defaultDelay !== undefined ? { defaultDelay } : {}),
+        ...(defaultAttempts !== undefined ? { defaultAttempts } : {}),
+        ...(defaultBackoff !== undefined ? { defaultBackoff } : {}),
+        ...(hasDefaultRepeat ? { hasDefaultRepeat } : {}),
+        ...(failOverTarget !== undefined ? { failOverTarget } : {}),
+    };
 }
+
+// ---------------------------------------------------------------------------
+// Call-site collector (.on / .add)
+// ---------------------------------------------------------------------------
+
+/**
+ * Collects call sites for repeat-add, catch-block-add, and event-listener
+ * patterns. Receiver resolution uses the per-file `injectedQueuesByProp` map
+ * (built from `@InjectQueue` sites) and handles `this.propName` and bare
+ * property-name patterns. Anything else (inline `new Queue(...)`, external
+ * variables) is unresolved and either lands in `unresolvedEventListeners` /
+ * `unresolvedCatchBlockSites` or is silently skipped for repeat-add sites
+ * (no diagnostic emitted for that path — `hasRepeat` would just stay false).
+ */
+function collectCallSites(
+    sf: SourceFile,
+    _queueNames: QueueNameIndex,
+    injectedQueuesByProp: Map<string, string>,
+    consumers: BullMqProcessorSite[],
+    repeatAddSites: BullMqRepeatAddSite[],
+    eventListenerSites: BullMqEventListenerSite[],
+    catchBlockAddSites: BullMqCatchBlockAddSite[],
+    unresolvedEventListeners: Array<{ location: SourceLoc; receiverText: string; event: string }>,
+    unresolvedCatchBlockSites: Array<{ location: SourceLoc; receiverText: string; processorQueueName: string }>,
+): void {
+    const filePath = sf.getFilePath();
+
+    sf.forEachDescendant((node) => {
+        if (node.getKind() !== SyntaxKind.CallExpression) return;
+        const call = node as CallExpression;
+        const expr = call.getExpression();
+        if (expr.getKind() !== SyntaxKind.PropertyAccessExpression) return;
+
+        const methodName = expr.asKindOrThrow(SyntaxKind.PropertyAccessExpression).getName();
+        const receiverNode = expr.asKindOrThrow(SyntaxKind.PropertyAccessExpression).getExpression();
+        const receiverText = receiverNode.getText();
+
+        const pos = sf.getLineAndColumnAtPos(call.getStart());
+        const location: SourceLoc = { file: filePath, line: pos.line, column: pos.column };
+
+        // -----------------------------------------------------------------------
+        // Case 1: .on('event', handler) — queue-event-listener
+        // -----------------------------------------------------------------------
+        if (methodName === 'on') {
+            const args = call.getArguments();
+            if (args.length < 1) return;
+            const firstArg = args[0]!;
+            const firstArgKind = firstArg.getKind();
+            if (firstArgKind !== SyntaxKind.StringLiteral && firstArgKind !== SyntaxKind.NoSubstitutionTemplateLiteral) return;
+            const eventName = (firstArg as StringLiteral).getLiteralText();
+            if (!BULLMQ_EVENTS.has(eventName)) return;
+
+            const queueName = resolveReceiver(receiverText, injectedQueuesByProp);
+            if (queueName !== null) {
+                eventListenerSites.push({
+                    role: 'event-listener',
+                    queueName,
+                    event: eventName,
+                    location,
+                    file: filePath,
+                });
+            } else {
+                unresolvedEventListeners.push({ location, receiverText, event: eventName });
+            }
+            return;
+        }
+
+        // -----------------------------------------------------------------------
+        // Case 2: .add(jobName, data, { repeat: ... }) — hasRepeat detection
+        // -----------------------------------------------------------------------
+        if (methodName === 'add') {
+            const args = call.getArguments();
+            // .add(name, data, options?) — options is the third arg
+            if (args.length >= 3) {
+                const optionsArg = args[2]!;
+                if (optionsArg.getKind() === SyntaxKind.ObjectLiteralExpression) {
+                    const opts = optionsArg as ObjectLiteralExpression;
+                    if (findProp(opts, 'repeat') !== null) {
+                        const queueName = resolveReceiver(receiverText, injectedQueuesByProp);
+                        if (queueName !== null) {
+                            repeatAddSites.push({ role: 'repeat-add', queueName, location });
+                        }
+                    }
+                }
+            }
+
+            // -----------------------------------------------------------------------
+            // Case 3: catch-block .add('dlq', ...) DLQ heuristic
+            // -----------------------------------------------------------------------
+            // Walk ancestors to see if this call is inside a catch clause
+            let ancestor = call.getParent();
+            let inCatchClause = false;
+            while (ancestor) {
+                if (ancestor.getKind() === SyntaxKind.CatchClause) {
+                    inCatchClause = true;
+                    break;
+                }
+                ancestor = ancestor.getParent();
+            }
+
+            if (inCatchClause && args.length >= 1) {
+                // The first arg of .add() is the job name (which the spec calls "dlq-name" heuristically)
+                const firstArg = args[0]!;
+                const firstArgKind = firstArg.getKind();
+                if (firstArgKind === SyntaxKind.StringLiteral || firstArgKind === SyntaxKind.NoSubstitutionTemplateLiteral) {
+                    // We need to find the processor queue name from consumers array (same file).
+                    const processorQueueName = findProcessorQueueForFile(filePath, consumers);
+                    if (processorQueueName !== null) {
+                        // Receiver is the DLQ queue — resolve it
+                        const dlqQueueName = resolveReceiver(receiverText, injectedQueuesByProp);
+                        if (dlqQueueName !== null) {
+                            catchBlockAddSites.push({
+                                role: 'catch-block-add',
+                                processorQueueName,
+                                dlqName: dlqQueueName, // Use the resolved queue name as DLQ
+                                location,
+                            });
+                        } else {
+                            // Receiver unresolved — do NOT create a phantom queue node; route to diagnostics
+                            unresolvedCatchBlockSites.push({ location, receiverText, processorQueueName });
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+/** Resolve `this.propName` or `this.propName.someMethod` receiver to a queue name. */
+function resolveReceiver(receiverText: string, injectedQueuesByProp: Map<string, string>): string | null {
+    // Handle `this.propName` pattern
+    if (receiverText.startsWith('this.')) {
+        const propName = receiverText.slice(5).split('.')[0]!;
+        const queueName = injectedQueuesByProp.get(propName);
+        if (queueName !== undefined) return queueName;
+    }
+    // Handle bare property name (less common, but some patterns omit `this`)
+    const direct = injectedQueuesByProp.get(receiverText.split('.')[0]!);
+    if (direct !== undefined) return direct;
+    return null;
+}
+
+/** Find the queue name for the processor in the given file (uses same-file consumer). */
+function findProcessorQueueForFile(
+    filePath: string,
+    consumers: BullMqProcessorSite[],
+): string | null {
+    for (const c of consumers) {
+        if (c.location.file === filePath && c.queue.kind !== 'unresolved') {
+            return c.queue.name;
+        }
+    }
+    return null;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function findProp(obj: ObjectLiteralExpression, name: string): PropertyAssignment | null {
     for (const prop of obj.getProperties()) {
@@ -232,4 +573,3 @@ function findProp(obj: ObjectLiteralExpression, name: string): PropertyAssignmen
     }
     return null;
 }
-
