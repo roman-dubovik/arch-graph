@@ -17,8 +17,31 @@ import {
     dynamicSiteToCronScheduleSite,
 } from './scheduler-registry-index.js';
 
+/** A site whose expression argument could not be statically resolved. */
+export interface UnresolvedCronSite {
+    owner: string;
+    file: string;
+    line: number;
+    /** Raw text of the unresolvable argument (truncated to 80 chars). */
+    raw: string;
+}
+
+/** A site whose options argument is a non-literal (variable/spread) — data-loss warning. */
+export interface UnresolvedOptionsSite {
+    owner: string;
+    file: string;
+    line: number;
+    optionsText: string;
+}
+
 export interface ExtractCronScheduleResult {
     sites: CronScheduleSite[];
+    diagnostics: {
+        /** Sites dropped because the cron expression argument could not be resolved. */
+        unresolved: UnresolvedCronSite[];
+        /** Sites where the options arg is non-literal (name not extractable, but site emitted). */
+        unresolvedOptions: UnresolvedOptionsSite[];
+    };
 }
 
 /**
@@ -41,6 +64,8 @@ export async function extractCronSchedule(
     project: Project,
 ): Promise<ExtractCronScheduleResult> {
     const sites: CronScheduleSite[] = [];
+    const unresolved: UnresolvedCronSite[] = [];
+    const unresolvedOptions: UnresolvedOptionsSite[] = [];
 
     // Pass 1 — decorator-based registrations
     for (const sf of project.getSourceFiles()) {
@@ -61,7 +86,7 @@ export async function extractCronSchedule(
                 for (const dec of method.getDecorators()) {
                     const decName = dec.getName();
                     if (decName === 'Cron') {
-                        const site = buildCronSite(owner, dec, sf.getFilePath());
+                        const site = buildCronSite(owner, dec, sf.getFilePath(), unresolved, unresolvedOptions);
                         if (site) sites.push(site);
                     } else if (decName === 'Interval') {
                         const site = buildIntervalTimeoutSite(owner, dec, sf.getFilePath(), 'interval');
@@ -78,10 +103,20 @@ export async function extractCronSchedule(
     // Pass 2 — dynamic SchedulerRegistry sites
     const dynamicSites = buildSchedulerRegistryIndex(project);
     for (const ds of dynamicSites) {
-        sites.push(dynamicSiteToCronScheduleSite(ds, `dynamic:${ds.name ?? 'unnamed'}`));
+        const site = dynamicSiteToCronScheduleSite(ds, `dynamic:${ds.name ?? 'unnamed'}`);
+        if (site !== null) {
+            sites.push(site);
+        } else {
+            unresolved.push({
+                owner: `dynamic:${ds.name ?? 'unnamed'}`,
+                file: ds.location.file,
+                line: ds.location.line,
+                raw: ds.rawExpression,
+            });
+        }
     }
 
-    return { sites };
+    return { sites, diagnostics: { unresolved, unresolvedOptions } };
 }
 
 // ---------------------------------------------------------------------------
@@ -92,6 +127,8 @@ function buildCronSite(
     owner: string,
     dec: Decorator,
     filePath: string,
+    unresolvedOut: UnresolvedCronSite[],
+    unresolvedOptionsOut: UnresolvedOptionsSite[],
 ): CronScheduleSite | null {
     const args = dec.getArguments();
     if (args.length === 0) return null;
@@ -102,6 +139,17 @@ function buildCronSite(
     const location = { file: filePath, line: pos.line, column: pos.column };
 
     const resolved = resolveCronArg(firstArg);
+
+    // Drop the site if expression is unresolvable — push to diagnostics instead
+    if (resolved === null) {
+        unresolvedOut.push({
+            owner,
+            file: filePath,
+            line: pos.line,
+            raw: firstArg.getText().slice(0, 80),
+        });
+        return null;
+    }
 
     // Options object (second arg) — extract `name` if present
     let name: string | undefined;
@@ -116,6 +164,14 @@ function buildCronSite(
                     name = (init as StringLiteral).getLiteralText();
                 }
             }
+        } else {
+            // Options arg is a variable/spread — emit diagnostic note, but still emit the site
+            unresolvedOptionsOut.push({
+                owner,
+                file: filePath,
+                line: pos.line,
+                optionsText: optionsNode.getText().slice(0, 80),
+            });
         }
     }
 
@@ -149,7 +205,7 @@ function buildIntervalTimeoutSite(
 
     // First arg can be: number literal (ms) OR string (name for older nestjs/schedule API).
     // Per NestJS docs: @Interval(name?, milliseconds). In v3+ it's just (name, ms) or (ms).
-    let expression = '<unresolved>';
+    let expression: string | null = null;
     let name: string | undefined;
 
     if (args.length === 1) {
@@ -161,6 +217,7 @@ function buildIntervalTimeoutSite(
             // Name-only call (unusual) — skip
             return null;
         }
+        // Non-literal (variable, call expression, etc.) — skip, not resolvable
     } else if (args.length >= 2) {
         // @Interval(name, ms) or @Timeout(name, ms)
         const maybeNameArg = args[0]!;
@@ -175,13 +232,17 @@ function buildIntervalTimeoutSite(
         } else if (maybeMs.getKind() === SyntaxKind.NumericLiteral) {
             expression = maybeMs.getText();
         }
+        // Other non-literal patterns — expression stays null → skip below
     }
+
+    // Drop the site when expression is not resolvable
+    if (expression === null) return null;
 
     return {
         owner,
         name,
         expression,
-        resolvedExpression: expression !== '<unresolved>' ? expression : undefined,
+        resolvedExpression: expression,
         humanReadable: undefined,
         category,
         location,
@@ -198,7 +259,20 @@ interface ResolvedCronArg {
     humanReadable: string | undefined;
 }
 
-function resolveCronArg(node: Node): ResolvedCronArg {
+/**
+ * Resolve the first argument of a `@Cron(...)` decorator.
+ *
+ * Returns `null` when the argument is a non-static node kind (CallExpression,
+ * TemplateExpression, non-mapped Identifier, etc.) — callers should drop the
+ * site and record it as unresolved diagnostics rather than emitting a node
+ * with a raw/opaque expression.
+ *
+ * Returns a `ResolvedCronArg` for:
+ *   - string literals ('0 0 * * *')
+ *   - `CronExpression.X` PropertyAccessExpression (looked up in CRON_EXPRESSION_MAP)
+ *   - bare Identifiers that match CRON_EXPRESSION_MAP keys
+ */
+function resolveCronArg(node: Node): ResolvedCronArg | null {
     const k = node.getKind();
 
     // String literal: '0 * * * *'
@@ -222,7 +296,8 @@ function resolveCronArg(node: Node): ResolvedCronArg {
                 };
             }
         }
-        return { raw: text, resolved: undefined, humanReadable: undefined };
+        // PropertyAccessExpression not in map (e.g. some other enum reference) — unresolvable
+        return null;
     }
 
     // Identifier (bare name without enum prefix): rare but possible
@@ -236,10 +311,12 @@ function resolveCronArg(node: Node): ResolvedCronArg {
                 humanReadable: mapped.humanReadable,
             };
         }
-        return { raw: text, resolved: undefined, humanReadable: undefined };
+        // Unmapped identifier — unresolvable
+        return null;
     }
 
-    return { raw: node.getText().slice(0, 80), resolved: undefined, humanReadable: undefined };
+    // CallExpression, TemplateExpression, BinaryExpression, etc. — all unresolvable
+    return null;
 }
 
 // ---------------------------------------------------------------------------

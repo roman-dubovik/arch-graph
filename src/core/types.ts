@@ -796,6 +796,11 @@ export function queueNameOf(ref: BullMqQueueRef): string | null {
 export interface CronScheduleDiagnostics {
     /** Sites whose file falls outside apps/ and libs/ (no owner found). */
     unowned: CronScheduleSite[];
+    /**
+     * Sites dropped because the expression argument could not be statically resolved.
+     * Populated by the extractor (passed through build.ts) when present.
+     */
+    unresolved?: import('../extractors/cron-schedule/extractor.js').UnresolvedCronSite[];
     counts: {
         totalSites: number;
         cron: number;

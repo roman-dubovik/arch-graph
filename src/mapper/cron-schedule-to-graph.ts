@@ -109,12 +109,23 @@ export function mapCronScheduleToGraph(
 /**
  * Node ID: `cron-schedule:<category>:<expression-or-owner>`.
  * For decorator-based sites, use the expression (dedup equal expressions).
- * For dynamic sites, include owner to avoid false dedup across different call sites.
+ * For dynamic sites (category 'dynamic'), include owner to avoid false dedup.
+ * For dynamic-registry interval/timeout sites (owner starts with 'dynamic:' but
+ * category is 'interval' or 'timeout'), also include owner — otherwise they
+ * would collide with decorator-emitted sites using the same ms value.
  */
 function buildCronNodeId(site: CronScheduleSite): string {
     const expr = site.resolvedExpression ?? site.expression;
     if (site.category === 'dynamic') {
         return `cron-schedule:dynamic:${site.owner}:${expr}`;
+    }
+    // Dynamic-registry interval/timeout: include owner to prevent dedup collision
+    // with decorator-emitted @Interval/@Timeout sites sharing the same expression.
+    if (
+        (site.category === 'interval' || site.category === 'timeout') &&
+        site.owner.startsWith('dynamic:')
+    ) {
+        return `cron-schedule:${site.category}:${site.owner}:${expr}`;
     }
     return `cron-schedule:${site.category}:${expr}`;
 }

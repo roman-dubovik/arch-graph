@@ -62,12 +62,19 @@ function collectDynamicSites(sf: SourceFile, out: DynamicSchedulerSite[]): void 
         const expr = call.getExpression();
         if (expr.getKind() !== SyntaxKind.PropertyAccessExpression) return;
 
-        const methodName = expr.asKindOrThrow(SyntaxKind.PropertyAccessExpression).getName();
+        const propAccess = expr.asKindOrThrow(SyntaxKind.PropertyAccessExpression);
+        const methodName = propAccess.getName();
         if (
             methodName !== 'addCronJob' &&
             methodName !== 'addInterval' &&
             methodName !== 'addTimeout'
         ) return;
+
+        // Receiver-name guard: only emit if the receiver name suggests a scheduler/registry.
+        // This prevents phantom nodes for unrelated methods named addInterval/addTimeout
+        // (e.g. EventEmitter.addInterval or custom builders).
+        const receiverText = propAccess.getExpression().getText().toLowerCase();
+        if (!receiverText.includes('scheduler') && !receiverText.includes('registry')) return;
 
         const args = call.getArguments();
         if (args.length < 1) return;
@@ -157,11 +164,29 @@ function isExcludedForIndex(sf: SourceFile): boolean {
     return p.endsWith('.d.ts') || p.endsWith('.spec.ts') || p.endsWith('.test.ts');
 }
 
-/** Convert a DynamicSchedulerSite to a partial CronScheduleSite (caller fills owner). */
+/**
+ * Convert a DynamicSchedulerSite to a partial CronScheduleSite (caller fills owner).
+ *
+ * Returns null when the expression is not resolvable AND rawExpression is empty or
+ * non-meaningful (e.g. pre-constructed `addCronJob(name, existingJob)` pattern where
+ * `extractCronJobExpression` returned null and the arg is not `new CronJob`).
+ * Callers should record null returns as unresolved diagnostics.
+ */
 export function dynamicSiteToCronScheduleSite(
     ds: DynamicSchedulerSite,
     owner: string,
-): CronScheduleSite {
+): CronScheduleSite | null {
+    // Skip: no expression and no meaningful raw text
+    if (ds.expression === null && ds.rawExpression.trim().length === 0) {
+        return null;
+    }
+
+    // Skip: addCronJob where the second arg was not `new CronJob(...)` and expression is null
+    // (pre-constructed job passed as variable — we can't know the expression)
+    if (ds.method === 'addCronJob' && ds.expression === null) {
+        return null;
+    }
+
     const category: CronScheduleSite['category'] =
         ds.method === 'addCronJob'
             ? 'dynamic'
