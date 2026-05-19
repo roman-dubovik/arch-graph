@@ -814,6 +814,11 @@ export interface BullMqDiagnostics {
      * No phantom queue node is created; the site is recorded here for diagnostics.
      */
     unresolvedCatchBlockSites?: Array<{ location: SourceLoc; receiverText: string; processorQueueName: string }>;
+    /**
+     * Event-listener sites whose owning file falls outside known apps/libs boundaries.
+     * Recorded here rather than silently dropped.
+     */
+    unownedEventListeners?: Array<{ location: SourceLoc; queueName: string; event: string }>;
     counts: {
         producers: number;
         consumers: number;

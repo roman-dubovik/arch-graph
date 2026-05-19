@@ -210,10 +210,12 @@ export function mapBullMqToGraph(
     // -------------------------------------------------------------------------
     // queue-event-listener edges, with self-loop skip
     // -------------------------------------------------------------------------
+    const unownedEventListeners: Array<{ location: SourceLoc; queueName: string; event: string }> = [];
     for (const site of eventListenerSites) {
         const owner = ownership.findOwner(site.file);
         if (owner.kind === 'unknown') {
-            // unowned — emit to diagnostics (already in unresolvedEventListeners if needed)
+            // owner.kind === 'unknown' — file is outside known apps/libs boundaries. Recorded in unownedEventListeners.
+            unownedEventListeners.push({ location: site.location, queueName: site.queueName, event: site.event });
             continue;
         }
         const ownerId = ownerNodeId(owner);
@@ -252,6 +254,7 @@ export function mapBullMqToGraph(
             ...(unresolvedFailOver.length > 0 ? { unresolvedFailOver } : {}),
             ...(unresolvedEventListeners.length > 0 ? { unresolvedEventListeners } : {}),
             ...(unresolvedCatchBlockSites.length > 0 ? { unresolvedCatchBlockSites } : {}),
+            ...(unownedEventListeners.length > 0 ? { unownedEventListeners } : {}),
             counts: {
                 producers: producers.length,
                 consumers: consumers.length,
