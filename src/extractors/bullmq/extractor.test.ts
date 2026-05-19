@@ -1177,3 +1177,91 @@ describe('Capability B — dedup: @Process + override process() in same class em
         expect(entries[0]!.methodName).toBe('process');
     });
 });
+
+// ---------------------------------------------------------------------------
+// FIX H — NumericConstIndex resolves parseInt/Number env-fallback at const-decl level
+// ---------------------------------------------------------------------------
+
+describe('FIX H — NumericConstIndex env-fallback parseInt/Number patterns', () => {
+    it('export const X = parseInt(process.env.Y ?? \'5\', 10) → X=5, concurrency resolved', async () => {
+        const p = new Project({
+            useInMemoryFileSystem: true,
+            compilerOptions: { target: 99, module: 99, moduleResolution: 100, strict: false },
+        });
+        p.createSourceFile('/app/apps/test-svc/src/constants.ts', `
+            export const WORKER_CONCURRENCY = parseInt(process.env.WORKER_CONCURRENCY ?? '5', 10);
+        `);
+        p.createSourceFile('/app/apps/test-svc/src/worker.processor.ts', `
+            import { Processor } from '@nestjs/bullmq';
+            import { WORKER_CONCURRENCY } from './constants';
+            @Processor('work', { concurrency: WORKER_CONCURRENCY })
+            export class WorkerProcessor {}
+        `);
+        const result = await extractBullMq(makeConfig(), p);
+        const consumer = result.consumers.find((c) => c.className === 'WorkerProcessor');
+        expect(consumer).toBeDefined();
+        expect(consumer?.concurrency).toBe(5);
+    });
+
+    it('export const X = Number(process.env.Y) ?? 10 → X=10', async () => {
+        const p = new Project({
+            useInMemoryFileSystem: true,
+            compilerOptions: { target: 99, module: 99, moduleResolution: 100, strict: false },
+        });
+        p.createSourceFile('/app/apps/test-svc/src/constants.ts', `
+            export const POOL_SIZE = Number(process.env.POOL_SIZE) ?? 10;
+        `);
+        p.createSourceFile('/app/apps/test-svc/src/pool.processor.ts', `
+            import { Processor } from '@nestjs/bullmq';
+            import { POOL_SIZE } from './constants';
+            @Processor('pool', { concurrency: POOL_SIZE })
+            export class PoolProcessor {}
+        `);
+        const result = await extractBullMq(makeConfig(), p);
+        const consumer = result.consumers.find((c) => c.className === 'PoolProcessor');
+        expect(consumer).toBeDefined();
+        expect(consumer?.concurrency).toBe(10);
+    });
+
+    it('export const X = parseInt(process.env.Y, 10) || 15 → X=15', async () => {
+        const p = new Project({
+            useInMemoryFileSystem: true,
+            compilerOptions: { target: 99, module: 99, moduleResolution: 100, strict: false },
+        });
+        p.createSourceFile('/app/apps/test-svc/src/constants.ts', `
+            export const CONCURRENCY = parseInt(process.env.CONCURRENCY, 10) || 15;
+        `);
+        p.createSourceFile('/app/apps/test-svc/src/fallback.processor.ts', `
+            import { Processor } from '@nestjs/bullmq';
+            import { CONCURRENCY } from './constants';
+            @Processor('fallback', { concurrency: CONCURRENCY })
+            export class FallbackProcessor {}
+        `);
+        const result = await extractBullMq(makeConfig(), p);
+        const consumer = result.consumers.find((c) => c.className === 'FallbackProcessor');
+        expect(consumer).toBeDefined();
+        expect(consumer?.concurrency).toBe(15);
+    });
+
+    it('export const X = parseInt(process.env.Y ?? someNonLiteral, 10) → NOT indexed (no static fallback)', async () => {
+        const p = new Project({
+            useInMemoryFileSystem: true,
+            compilerOptions: { target: 99, module: 99, moduleResolution: 100, strict: false },
+        });
+        p.createSourceFile('/app/apps/test-svc/src/constants.ts', `
+            const defaultVal = getDefault();
+            export const CONCURRENCY = parseInt(process.env.CONCURRENCY ?? defaultVal, 10);
+        `);
+        p.createSourceFile('/app/apps/test-svc/src/dynamic.processor.ts', `
+            import { Processor } from '@nestjs/bullmq';
+            import { CONCURRENCY } from './constants';
+            @Processor('dynamic2', { concurrency: CONCURRENCY })
+            export class DynamicProcessor2 {}
+        `);
+        const result = await extractBullMq(makeConfig(), p);
+        const consumer = result.consumers.find((c) => c.className === 'DynamicProcessor2');
+        expect(consumer).toBeDefined();
+        // No static fallback → concurrency stays undefined
+        expect(consumer?.concurrency).toBeUndefined();
+    });
+});
