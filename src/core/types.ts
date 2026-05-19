@@ -784,7 +784,10 @@ export interface BullMqCatchBlockAddSite {
     role: 'catch-block-add';
     /** Queue name of the processor that contains the catch block. */
     processorQueueName: string;
-    /** Literal job/DLQ name from the `.add(name, ...)` first argument. */
+    /** Resolved DLQ queue name — derived from the `.add()` receiver variable
+     *  via the per-file `@InjectQueue` map. The first argument of `.add()`
+     *  (a job-name literal) is no longer used to populate this field after
+     *  the phantom-fallback removal. */
     dlqName: string;
     location: SourceLoc;
 }
