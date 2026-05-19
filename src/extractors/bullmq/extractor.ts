@@ -865,17 +865,34 @@ function extractEnvVar(node: Node): string | null {
  * At depth=0 (EmailMarketingProcessor) the heritage clause has no type args, so
  * we follow the symbol of the base class to its declaration and try depth=1.
  *
- * @param cls       - the class whose heritage should be examined
- * @param depth     - current recursion depth (starts at 0)
- * @param maxDepth  - abort when depth >= maxDepth (default 4)
- * @returns         - `{ typeName, fields }` on success, `null` otherwise
+ * @param cls            - the class whose heritage should be examined
+ * @param depth          - current recursion depth (starts at 0)
+ * @param maxDepth       - abort when depth >= maxDepth (default 4)
+ * @param unresolvedOut  - diagnostic array to receive depth-limit / field-resolve failures
+ * @param queueName      - queue name for diagnostic context
+ * @param processorClass - processor class name for diagnostic context
+ * @returns              - `{ typeName, fields }` on success, `null` otherwise
  */
 function findHeritageJobDataType(
     cls: ClassDeclaration,
     depth: number = 0,
     maxDepth: number = 4,
+    unresolvedOut: Array<{ queueName: string; processorClass: string; methodName: string; reason: string }> = [],
+    queueName: string = '',
+    processorClass: string = '',
 ): { typeName: string; fields: string[] } | null {
-    if (depth >= maxDepth) return null;
+    if (depth >= maxDepth) {
+        // Fix 3 (P1): depth-limit exhaustion is a diagnostic event, not a silent skip.
+        if (unresolvedOut !== undefined && queueName) {
+            unresolvedOut.push({
+                queueName,
+                processorClass,
+                methodName: '<heritage>',
+                reason: `Heritage walk exceeded maxDepth=${maxDepth} (chain too deep)`,
+            });
+        }
+        return null;
+    }
 
     // Find the `extends` clause (prefer ExtendsKeyword, fall back to first clause).
     const heritageClauses = cls.getHeritageClauses();
@@ -895,44 +912,63 @@ function findHeritageJobDataType(
         const firstTypeArg = typeArgs[0]!;
         const typeName = firstTypeArg.getText().trim();
 
-        // Skip bare generics (T, R, …) and any/unknown — not a concrete job-data type.
-        if (!typeName || typeName.match(/^[A-Z]$/) || typeName === 'unknown' || typeName === 'any') {
-            return null;
-        }
+        // Fix 2 (P1): Use ts-morph type-level introspection instead of single-letter regex.
+        // A bare type parameter (T, TData, TResult, TPayload, …) means the concrete binding
+        // lives one level higher in the chain — fall through to the climb logic below.
+        const resolvedType = firstTypeArg.getType();
+        const isBareGeneric = resolvedType.isTypeParameter();
 
-        let fields: string[] = [];
-        if (typeName.startsWith('{')) {
-            // Inline object type literal
-            fields = extractInlineTypeFields(typeName);
-        } else {
-            // Named type — use type-checker to enumerate properties.
-            try {
-                const dataType = firstTypeArg.getType();
-                fields = dataType
-                    .getProperties()
-                    .map((p) => p.getName())
-                    .filter((n) => !n.startsWith('__'));
-            } catch {
-                // best-effort — fields stays empty
+        if (!isBareGeneric && typeName !== 'unknown' && typeName !== 'any' && typeName) {
+            // Concrete type found — resolve fields and return.
+            let fields: string[] = [];
+            if (typeName.startsWith('{')) {
+                // Inline object type literal
+                fields = extractInlineTypeFields(typeName);
+            } else {
+                // Named type — use type-checker to enumerate properties.
+                // Fix 4 (P1): record diagnostic when field resolution fails so callers know
+                // the typeName was resolved but properties are unavailable.
+                try {
+                    const dataType = firstTypeArg.getType();
+                    fields = dataType
+                        .getProperties()
+                        .map((p) => p.getName())
+                        .filter((n) => !n.startsWith('__'));
+                } catch (err) {
+                    unresolvedOut.push({
+                        queueName,
+                        processorClass,
+                        methodName: '<heritage>',
+                        reason: `Field resolution failed for type "${typeName}": ${err instanceof Error ? err.message : String(err)}`,
+                    });
+                    // fields stays empty — partial result still emitted (typeName is preserved)
+                }
             }
+            return { typeName, fields };
         }
-        return { typeName, fields };
+        // Bare generic or any/unknown — fall through to climb below.
     }
 
-    // No type args at this level — climb to the parent class declaration.
+    // No type args at this level, OR the first type arg was a bare generic.
+    // Climb to the parent class declaration.
+    // Fix 1 (P0): narrow the try/catch to ONLY the type-checker symbol-resolution call.
+    // Recursive calls propagate normally so bugs surface; only the symbol lookup is caught.
+    let baseSymbol: import('ts-morph').Symbol | undefined;
     try {
-        const baseSymbol = baseType.getType().getSymbol();
-        if (!baseSymbol) return null;
-
-        for (const decl of baseSymbol.getDeclarations()) {
-            if (decl.getKind() === SyntaxKind.ClassDeclaration) {
-                const parentClass = decl as ClassDeclaration;
-                const result = findHeritageJobDataType(parentClass, depth + 1, maxDepth);
-                if (result !== null) return result;
-            }
-        }
+        baseSymbol = baseType.getType().getSymbol();
     } catch {
-        // type-checker failure — bail out silently
+        // type-checker resolution failed — acceptable silent skip
+        return null;
+    }
+    if (!baseSymbol) return null;
+
+    const classDecls = baseSymbol.getDeclarations()
+        .filter((d) => d.getKind() === SyntaxKind.ClassDeclaration) as ClassDeclaration[];
+
+    for (const decl of classDecls) {
+        // Let recursive call propagate — bugs surface; only type-checker errors are caught above.
+        const result = findHeritageJobDataType(decl, depth + 1, maxDepth, unresolvedOut, queueName, processorClass);
+        if (result !== null) return result;
     }
 
     return null;
@@ -1032,19 +1068,24 @@ function resolveJobDataTypes(
         // 2-level patterns (EmailMarketingProcessor → BaseEmailProcessor → BaseWorkerHost<T,R>)
         // are also resolved.
         if (emittedNames.size === 0) {
-            try {
-                const heritageResult = findHeritageJobDataType(cls);
-                if (heritageResult !== null) {
-                    out.push({
-                        queueName,
-                        processorClass: consumer.className,
-                        methodName: '<heritage>',
-                        typeName: heritageResult.typeName,
-                        fields: heritageResult.fields,
-                    });
-                }
-            } catch {
-                // best-effort — skip on any AST/type-checker failure
+            // Outer try/catch intentionally removed: Fix 1 narrowed the inner catches to only
+            // type-checker symbol-resolution failures. Let any unexpected errors surface here.
+            const heritageResult = findHeritageJobDataType(
+                cls,
+                0,
+                4,
+                unresolvedOut,
+                queueName,
+                consumer.className,
+            );
+            if (heritageResult !== null) {
+                out.push({
+                    queueName,
+                    processorClass: consumer.className,
+                    methodName: '<heritage>',
+                    typeName: heritageResult.typeName,
+                    fields: heritageResult.fields,
+                });
             }
         }
     }
