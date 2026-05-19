@@ -733,12 +733,14 @@ arch-graph init</code></pre>
               <span class="step-num">3</span>
               <h3>Stays in lockstep automatically</h3>
             </div>
-            <p>The init wizard installs a pre-commit hook by default — every commit re-builds the graph and incrementally re-embeds only changed nodes (~5–19 s on a typical commit, vs ~25 min full rebuild). Emits <code>graph.json</code>, <code>diagnostics.json</code>, <code>validation.json</code>, <code>graph.mermaid</code>, plus an advisory recall table per domain. Manual rebuild stays available for ad-hoc runs or CI.</p>
+            <p>The init wizard installs a pre-commit hook by default. On every commit it does a fresh structural pass (always cheap — ts-morph only, no LLM) and an <strong>incremental semantic re-embed</strong> — only nodes whose <code>contentHash</code> changed get re-vectorised. Typical commit: ~5–19 s. Full semantic rebuild (~25 min on 30K nodes) is reserved for model swaps or schema bumps and stays a one-flag opt-in. Each build emits <code>graph.json</code>, <code>diagnostics.json</code>, <code>validation.json</code>, <code>graph.mermaid</code>, plus an advisory recall table per domain.</p>
             <div class="code-block">
               <button class="copy-btn" type="button" aria-label="Copy build command">Copy</button>
-              <pre><code class="lang-sh">arch-graph hook install        # pre-commit: structural + incremental semantic
-arch-graph build               # manual: advisory, always exit 0
-arch-graph build --strict      # CI: exit 3 if recall drops below floor</code></pre>
+              <pre><code class="lang-sh">arch-graph hook install              # pre-commit: structural + incremental semantic (default)
+arch-graph build                     # manual structural; advisory exit 0
+arch-graph semantic build            # manual semantic; incremental by default
+arch-graph semantic build --full     # full re-embed (model swap / schema bump)
+arch-graph build --strict            # CI gate: exit 3 if recall drops below floor</code></pre>
             </div>
           </li>
         </ol>
