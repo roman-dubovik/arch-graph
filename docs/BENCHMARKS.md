@@ -180,6 +180,72 @@ Sources:
 - [`docs/comparisons/2026-05-18-embedder-evaluation.md`](comparisons/2026-05-18-embedder-evaluation.md) — full eval memo with 4-way comparison (MiniLM / e5-base / BGE-M3 / arctic-m).
 - `scripts/eval/results-2026-05-18-projecta-e5-base.md`, `-projectb-`, `-projectc-` (anonymized; raw output retained locally).
 
+### 2026-05-19: e5-base vs fresh-graphify (head-to-head re-run)
+
+Full 103-query head-to-head re-run with e5-base as default embedder and fresh
+graphify graphs rebuilt from scratch with **LLM semantic extraction** (Claude
+Haiku backend) on a scope-corrected corpus. Both-buckets mode, k=10, SKIP_BUILD=1.
+
+Two simultaneous changes to graphify vs the 2026-05-17 baseline:
+1. **Scope correction:** excluded `.next/` build artifacts, `.worktrees/`, `tmp/` — removed ~56K noise nodes from project-a, ~13.5K from project-b-2.0, ~11.2K from project-b. Clean sizes: project-a=10,586 nodes, project-b=11,462 nodes, project-c=6,199 nodes.
+2. **LLM semantic extraction:** 131 + 80 + 7 priority docs extracted with `claude-haiku-4-5`; remaining docs used inline heading extraction.
+
+#### arch-graph (e5-base, both-buckets)
+
+| project | RU hits/total | RU hit-rate | EN hits/total | EN hit-rate |
+|---------|---------------|-------------|---------------|-------------|
+| project-a | 39/49 | 79.6% | 45/49 | 91.8% |
+| project-b | 24/29 | 82.8% | 25/29 | 86.2% |
+| project-c | 14/25 | 56.0% | 16/25 | 64.0% |
+| **all** | **77/103** | **74.8%** | **86/103** | **83.5%** |
+
+**Δ vs 2026-05-17 (MiniLM):** RU +7.8 pp (67% → 74.8%), EN +16.5 pp (67% → 83.5%).
+
+#### graphify (full LLM rebuild, scope-corrected, lenient criterion)
+
+| project | RU hits/total | RU hit-rate | EN hits/total | EN hit-rate |
+|---------|---------------|-------------|---------------|-------------|
+| project-a | 11/49 | 22.4% | 38/49 | 77.6% |
+| project-b | 9/29 | 31.0% | 23/29 | 79.3% |
+| project-c | 1/25 | 4.0% | 22/25 | 88.0% |
+| **all** | **21/103** | **20.4%** | **83/103** | **80.6%** |
+
+**Δ vs 2026-05-17:** RU −14.6 pp (35.0% → 20.4%), EN lenient −10.7 pp (91.3% → 80.6%).
+Both drops are driven by scope correction removing noise nodes that previously
+inflated substring-match hits (confirmed: zero `.next/` nodes in prior baseline JSONL).
+
+#### Strict apples-to-apples EN re-score (69 scoreable queries)
+
+| project | GF strict | AG strict | GF Δ | AG Δ |
+|---------|-----------|-----------|------|------|
+| project-a | 20/33 = 60.6% | 29/33 = 87.9% | −12.1 pp | +24.3 pp |
+| project-b | 8/18 = 44.4% | 14/18 = 77.8% | +16.7 pp | +27.8 pp |
+| project-c | 11/18 = 61.1% | 9/18 = 50.0% | +16.7 pp | +11.1 pp |
+| **all** | **39/69 = 56.5%** | **52/69 = 75.4%** | **+2.9 pp** | **+21.8 pp** |
+
+Per-category strict EN:
+
+| Category | GF strict | AG strict |
+|----------|-----------|-----------|
+| A_find | 17/30 = 56.7% | 22/30 = 73.3% |
+| B_debug | 4/8 = 50.0% | 7/8 = 87.5% |
+| C_ui | 9/10 = 90.0% | 10/10 = 100.0% |
+| E_arch | 6/11 = 54.5% | 6/11 = 54.5% |
+| D_docs | 3/10 = 30.0% | 7/10 = 70.0% |
+
+**Key findings:**
+- arch-graph leads graphify by **+18.9 pp on strict EN** (75.4% vs 56.5%), and by **+54.4 pp on RU** (74.8% vs 20.4%).
+- GF EN strict improved **+2.9 pp** (53.6% → 56.5%) from LLM semantic extraction.
+- C_ui: GF improved 70% → 90% (+20 pp) with LLM doc nodes; AG holds 100%.
+- E_arch: tied at 54.5% — GF lost its prior +9.1 pp advantage.
+- D_docs gap persists: AG 70% vs GF 30%.
+- GF strict uses label-only matching (no kind check); AG requires kind ∈ expectedKindIn.
+
+Sources:
+- Memo: [`docs/comparisons/2026-05-19-arch-graph-vs-graphify-eval.md`](comparisons/2026-05-19-arch-graph-vs-graphify-eval.md)
+- arch-graph results: `scripts/eval/results-2026-05-19-both-buckets-e5-base.md`, `…-en.md`
+- graphify raw: `/tmp/graphify-fresh-ru-2026-05-19.jsonl`, `/tmp/graphify-fresh-en-2026-05-19.jsonl`
+
 ## Per-feature attribution (rule of thumb)
 
 Approximate impact each feature contributes when isolated. Sum is NOT
@@ -202,7 +268,7 @@ Where the recall budget is still tight, with planned interventions:
 
 - **~~C_ui project-a 33%, project-b 33%~~** — **RESOLVED** by `e5-base-default-v1`. Aggregate C_ui 36% → 82% (+46pp). The hypothesis that embedder linguistic gap RU↔EN was the bottleneck is confirmed; BGE-M3 turned out not to be needed (and was unshippable as default: ×6 build cost; see [`docs/comparisons/2026-05-18-embedder-evaluation.md`](comparisons/2026-05-18-embedder-evaluation.md)).
 - **project-c A_find 50%** — eval-corpus mismatch (queries about cart/payment/delivery in a promo-aggregator project where those domains don't exist as graph nodes). Tracked under ROADMAP "Eval corpus hygiene"; ~30 min to rewrite affected queries against project-c's actual domain.
-- **E_arch project-b 0% / project-c 0%** — accepted limitation: ground truth assumes NestJS `*Controller`/`*Service` naming that project-b and project-c don't follow (beribuy uses kebab-case domain names like `be-api-beribuy`; insyra uses different conventions). Embedder returns semantically relevant matches that fail the strict `expectedKindIn` + `expectedLabelHas` ground-truth rule. project-a E_arch is 75% (idiomatic NestJS naming), confirming the eval rule works where the corpus matches. ROADMAP item 4 covers this.
+- **E_arch project-b 0% / project-c 0%** — accepted limitation: ground truth assumes NestJS `*Controller`/`*Service` naming that project-b and project-c don't follow (project-c uses kebab-case domain names like `be-api-project-c`; project-b uses different conventions). Embedder returns semantically relevant matches that fail the strict `expectedKindIn` + `expectedLabelHas` ground-truth rule. project-a E_arch is 75% (idiomatic NestJS naming), confirming the eval rule works where the corpus matches. ROADMAP item 4 covers this.
 
 ## Comparison axes for future model swaps
 
