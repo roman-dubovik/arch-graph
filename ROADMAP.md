@@ -58,6 +58,16 @@ See [`docs/comparisons/2026-05-18-embedder-evaluation.md`](./docs/comparisons/20
 | `cron-v1` | `@nestjs/schedule` extractor: `@Cron` / `@Interval` / `@Timeout` + `SchedulerRegistry.add*` dynamic registrations. New NodeKind `cron-schedule` + EdgeKind `cron-triggers`. Per-site diagnostics: `unresolved`, `unresolvedOptions`, `filteredByReceiver`. Shared `LIKELY_SCHEDULER_RECEIVER_RE` between extractor + validator for symmetric recall. 33 new tests; 3 review rounds. Validated on insyra (2 sites). |
 | `bench-2026-05-19` | Refreshed head-to-head vs graphify with **e5-base default + full LLM rebuild on graphify side + scope correction** (`.next/` / `.worktrees/` / `tmp/` excluded). arch-graph 74.8% / 75.4% (RU / EN strict) vs graphify 20.4% / 56.5%. **+54.4 pp RU**, **+18.9 pp EN strict** apples-to-apples. Prior graphify lenient numbers were inflated by build-artifact noise the default graphify scan ingested; arch-graph excludes via `appsGlob`/`libsGlob`. Memo: [`docs/comparisons/2026-05-19-arch-graph-vs-graphify-eval.md`](./docs/comparisons/2026-05-19-arch-graph-vs-graphify-eval.md). |
 
+### BullMQ semantic deepening (2026-05-19)
+
+| Tag | What |
+|-----|------|
+| `bullmq-extras-v1` | Phase 1 extras: queue meta (`concurrency`, `defaultDelay/Attempts/Backoff`, `hasRepeat`); new EdgeKinds `queue-fails-into` (DLQ heuristic — MUST `registerQueue.failOver`, MAY catch-block `.add()`) and `queue-event-listener` (queue.on / worker.on with cross-owner edges + self-loop skip). Rich diagnostics: `unresolvedFailOver`, `unresolvedCatchBlockSites`, `unresolvedEventListeners`, `unownedEventListeners`. 20 new tests, 3 review rounds. |
+| `bullmq-types-v1` | Phase 2 + cross-enrichment: `--with-types` CLI flag (default off, perf-gated) for `Job<DataType>` resolution via ts-morph type-checker; worker factory env-fallback concurrency (`workerConcurrencyEnvVar` / `workerConcurrencyFallback`). New EdgeKind `queue-repeat` from `queue.add(..., { repeat: { cron } })` → `cron-schedule` node (cross-domain link). 12 new tests, 3 review rounds. |
+| `bullmq-realworld-v1` | Real-world recall on modern `@nestjs/bullmq` patterns: `WorkerHost.process()` detection (Pass 2 local override + Pass 3 heritage type-arg for `extends BaseWorkerHost<T,R>`); `NumericConstIndex` sister to `QueueNameIndex` resolves `parseInt(process.env.X ?? 'N', 10)` env-fallback consts at decl level; aliased `Job` import via type-checker fallback. Plus 5 new BullMQ eval queries (BQ1-BQ5). Insyra: jobData 0→6/8, concurrency 0→5/8. 3 review rounds. |
+| `bullmq-realworld-v2` | Closes 2-level inheritance gap: `EmailMarketingProcessor extends BaseEmailProcessor extends BaseWorkerHost<T,R>` via recursive heritage walk (max depth 4). Plus `Type.isTypeParameter()` (replacing single-letter regex for multi-char bare generics like `TData/TResult`), depth-limit + field-resolve diagnostics, `any`/`unknown` termination, multi-declaration dedup. Insyra: jobData 6/8 → **8/8 (100%)**. 3 review rounds (1P0/3P1 → 0P0/2P1 → 0P0/0P1). |
+| `bullmq-realworld-v3` | Inject BullMQ default `concurrency: 1` with explicit `concurrencySource: 'bullmq-default'` marker for queues with consumers but no @Processor concurrency option. Unowned consumers correctly excluded (aligned with main-loop unowned guard). Insyra: concurrency 5/8 → **8/8 (100%)** — 5 from code + 3 from bullmq-default. Discriminator preserves data fidelity. |
+
 ## Recall trajectory (103-query bench, 3 NestJS monorepos)
 
 | Run | Mode | Model | Recall |
@@ -94,11 +104,10 @@ The previously suggested floor of 0.78 was rejected: it would have filtered vali
 
 A handful of project-c eval queries reference domains that don't exist in that codebase (e.g. I15 expects `provider`/`service` with label `"Auth"` but those nodes don't exist in insyra's graph either — only `useAuth` fe-hook). Rewrite affected queries (~30 min) for cleaner per-project recall numbers — doesn't affect any other project.
 
-### 5. Additional NodeKinds — partial progress
+### 5. Additional NodeKinds — GraphQL remaining
 
 - ~~Cron schedule semantics~~ — **SHIPPED** (`cron-v1`, 2026-05-19). NodeKind `cron-schedule` + EdgeKind `cron-triggers`. Covers `@Cron` / `@Interval` / `@Timeout` + `SchedulerRegistry.add*`.
-- ~~**Extended BullMQ**~~ — **SHIPPED** (`bullmq-extras-v1` Phase 1 + `bullmq-types-v1` Phase 2 + cross-enrichment, 2026-05-19). Phase 1: queue meta (`concurrency`, `defaultDelay/Attempts/Backoff`, `hasRepeat`) + new edges `queue-fails-into` (DLQ heuristic) and `queue-event-listener`. Phase 2: `--with-types` flag resolves `Job<DataType>` generics via ts-morph type-checker (`jobData`); worker factory env-fallback concurrency (`workerConcurrencyEnvVar` / `workerConcurrencyFallback`). Cross-enrichment: `queue.add(..., { repeat: { cron } })` → `cron-schedule` node + `queue-repeat` edge. Design: [`docs/plans/2026-05-19-ui-bench-cron-bullmq-design.md`](./docs/plans/2026-05-19-ui-bench-cron-bullmq-design.md).
-  - Real-world recall validation on insyra (3338-file monorepo): jobDataTypes 0→8/8 (100%) [bullmq-realworld-v2 closed the 2-level inheritance gap], queue.concurrency 0→**8/8 (100%, v3)** — 5 from code + 3 injected as bullmq-default (concurrencySource marker). The 3/8 unresolved queue.concurrency cases are processors WITHOUT a `concurrency` option in their `@Processor` decorator (correct extractor behavior, not a gap) — resolved via default injection with source marker.
+- ~~**Extended BullMQ**~~ — **SHIPPED** (5 tags: `bullmq-extras-v1`, `bullmq-types-v1`, `bullmq-realworld-v1/v2/v3`, all 2026-05-19). Phase 1 + Phase 2 + cross-enrichment with cron-schedule, plus 3 rounds of real-world recall hardening on insyra (3338-file NestJS+BullMQ monorepo). Final insyra recall: jobData **8/8 (100%)**, queue.concurrency **8/8 (100%)** — 5 from code + 3 from `bullmq-default` injection with `concurrencySource` marker. Design: [`docs/plans/v_2026-05-19-ui-bench-cron-bullmq-design.md`](./docs/plans/v_2026-05-19-ui-bench-cron-bullmq-design.md).
 - ⚪ GraphQL endpoints — by request, ~1-2 days.
 
 ### ⚪ 6. Broader eval corpus
