@@ -862,6 +862,11 @@ function resolveJobDataTypes(
         const cls = sf.getClasses().find((c) => c.getName() === consumer.className);
         if (!cls) continue;
 
+        // Track method names already emitted to prevent duplicate entries when a
+        // class has BOTH a @Process-decorated method AND an override `process` method.
+        const emittedNames = new Set<string>();
+
+        // PASS 1 — @Process-decorated methods (legacy @nestjs/bull pattern)
         for (const method of cls.getMethods()) {
             const processDecorator = method.getDecorator('Process');
             if (!processDecorator) continue;
@@ -870,57 +875,99 @@ function resolveJobDataTypes(
             if (params.length === 0) continue;
 
             const firstParam = params[0]!;
-            try {
-                const typeNode = firstParam.getTypeNode();
-                if (!typeNode) continue;
-
-                // Type text e.g. "Job<MyData>" or "Job<{ foo: string }>"
-                const typeText = typeNode.getText();
-                if (!typeText.startsWith('Job<') || !typeText.endsWith('>')) continue;
-
-                // Extract the type argument text
-                const innerText = typeText.slice(4, -1).trim();
-
-                let typeName: string;
-                let fields: string[] = [];
-
-                if (innerText.startsWith('{')) {
-                    // Inline object literal type
-                    typeName = '<inline>';
-                    // Extract depth-1 property names from inline type literal
-                    fields = extractInlineTypeFields(innerText);
-                } else {
-                    // Named type — use ts-morph type-checker for field resolution
-                    typeName = innerText;
-                    const paramType = firstParam.getType();
-                    // paramType is Job<X> — get type arguments
-                    const typeArgs = paramType.getTypeArguments();
-                    if (typeArgs.length > 0) {
-                        const dataType = typeArgs[0]!;
-                        fields = dataType
-                            .getProperties()
-                            .map((p) => p.getName())
-                            .filter((n) => !n.startsWith('__'));
-                    }
-                }
-
-                out.push({
-                    queueName,
-                    processorClass: consumer.className,
-                    methodName: method.getName(),
-                    typeName,
-                    fields,
-                });
-            } catch (err) {
-                // Type-checker pass is best-effort — record failure in diagnostics
-                unresolvedOut.push({
-                    queueName,
-                    processorClass: consumer.className,
-                    methodName: method.getName(),
-                    reason: err instanceof Error ? err.message : String(err),
-                });
+            const resolved = resolveJobParamType(firstParam, queueName, consumer.className, method.getName(), unresolvedOut);
+            if (resolved !== null) {
+                out.push(resolved);
+                emittedNames.add(method.getName());
             }
         }
+
+        // PASS 2 — WorkerHost.process() override (modern @nestjs/bullmq v3+ pattern).
+        // Detects any method named `process` in a @Processor-decorated class whose
+        // first parameter type starts with `Job<` — extends WorkerHost / BaseWorkerHost
+        // is NOT required as a guard (structural shape is sufficient).
+        if (!emittedNames.has('process')) {
+            const overrideMethod = cls.getMethod('process');
+            if (overrideMethod && !overrideMethod.getDecorator('Process')) {
+                const params = overrideMethod.getParameters();
+                if (params.length > 0) {
+                    const firstParam = params[0]!;
+                    const typeNode = firstParam.getTypeNode();
+                    const typeText = typeNode?.getText() ?? '';
+                    if (typeText.startsWith('Job<')) {
+                        const resolved = resolveJobParamType(
+                            firstParam,
+                            queueName,
+                            consumer.className,
+                            'process',
+                            unresolvedOut,
+                        );
+                        if (resolved !== null) {
+                            out.push(resolved);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Shared helper: resolves `Job<DataType>` generic from a method's first parameter.
+ * Returns a `BullMqJobDataType` on success, `null` if the type cannot be resolved
+ * (in which case an entry is appended to `unresolvedOut`).
+ */
+function resolveJobParamType(
+    firstParam: { getTypeNode: () => { getText: () => string } | undefined; getType: () => { getTypeArguments: () => Array<{ getProperties: () => Array<{ getName: () => string }> }> } },
+    queueName: string,
+    processorClass: string,
+    methodName: string,
+    unresolvedOut: Array<{ queueName: string; processorClass: string; methodName: string; reason: string }>,
+): BullMqJobDataType | null {
+    try {
+        const typeNode = firstParam.getTypeNode();
+        if (!typeNode) return null;
+
+        // Type text e.g. "Job<MyData>" or "Job<{ foo: string }>"
+        const typeText = typeNode.getText();
+        if (!typeText.startsWith('Job<') || !typeText.endsWith('>')) return null;
+
+        // Extract the type argument text
+        const innerText = typeText.slice(4, -1).trim();
+
+        let typeName: string;
+        let fields: string[] = [];
+
+        if (innerText.startsWith('{')) {
+            // Inline object literal type
+            typeName = '<inline>';
+            // Extract depth-1 property names from inline type literal
+            fields = extractInlineTypeFields(innerText);
+        } else {
+            // Named type — use ts-morph type-checker for field resolution
+            typeName = innerText;
+            const paramType = firstParam.getType();
+            // paramType is Job<X> — get type arguments
+            const typeArgs = paramType.getTypeArguments();
+            if (typeArgs.length > 0) {
+                const dataType = typeArgs[0]!;
+                fields = dataType
+                    .getProperties()
+                    .map((p) => p.getName())
+                    .filter((n) => !n.startsWith('__'));
+            }
+        }
+
+        return { queueName, processorClass, methodName, typeName, fields };
+    } catch (err) {
+        // Type-checker pass is best-effort — record failure in diagnostics
+        unresolvedOut.push({
+            queueName,
+            processorClass,
+            methodName,
+            reason: err instanceof Error ? err.message : String(err),
+        });
+        return null;
     }
 }
 
