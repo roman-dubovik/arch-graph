@@ -161,7 +161,7 @@ Verified safe:
 
 Phase B agent will:
 1. Start on `chore/great-squash` (this branch — first commit will be this audit doc).
-2. Run `git -C /Users/romandubovik/Documents/Projects/arch-graph merge --squash develop`.
+2. Run `git -C <arch-graph-root> merge --squash develop`.
 3. Resolve 47 conflicts per priority table above; gate triple = take main; semantic/* = take develop; rest = manual.
 4. Anonymization scrub (AC2.1) over full working tree post-resolve.
 5. Run `pnpm test` + `npx tsc --noEmit 2>&1 | grep -v __fixtures__ | grep -cE 'error TS'`. Expect tests ≥ 1432, tsc ≤ 5.
