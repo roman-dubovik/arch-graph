@@ -1,6 +1,6 @@
 # arch-graph roadmap
 
-_Last updated: 2026-05-18_
+_Last updated: 2026-05-19_
 
 No ETAs. Order within a section is rough priority, not a commitment.
 
@@ -51,6 +51,13 @@ A deterministic TypeScript architecture-graph builder for NestJS monorepos with 
 
 See [`docs/comparisons/2026-05-18-embedder-evaluation.md`](./docs/comparisons/2026-05-18-embedder-evaluation.md) for the full evaluation memo.
 
+### Cron extractor + bench refresh (2026-05-19)
+
+| Tag | What |
+|-----|------|
+| `cron-v1` | `@nestjs/schedule` extractor: `@Cron` / `@Interval` / `@Timeout` + `SchedulerRegistry.add*` dynamic registrations. New NodeKind `cron-schedule` + EdgeKind `cron-triggers`. Per-site diagnostics: `unresolved`, `unresolvedOptions`, `filteredByReceiver`. Shared `LIKELY_SCHEDULER_RECEIVER_RE` between extractor + validator for symmetric recall. 33 new tests; 3 review rounds. Validated on insyra (2 sites). |
+| `bench-2026-05-19` | Refreshed head-to-head vs graphify with **e5-base default + full LLM rebuild on graphify side + scope correction** (`.next/` / `.worktrees/` / `tmp/` excluded). arch-graph 74.8% / 75.4% (RU / EN strict) vs graphify 20.4% / 56.5%. **+54.4 pp RU**, **+18.9 pp EN strict** apples-to-apples. Prior graphify lenient numbers were inflated by build-artifact noise the default graphify scan ingested; arch-graph excludes via `appsGlob`/`libsGlob`. Memo: [`docs/comparisons/2026-05-19-arch-graph-vs-graphify-eval.md`](./docs/comparisons/2026-05-19-arch-graph-vs-graphify-eval.md). |
+
 ## Recall trajectory (103-query bench, 3 NestJS monorepos)
 
 | Run | Mode | Model | Recall |
@@ -60,8 +67,10 @@ See [`docs/comparisons/2026-05-18-embedder-evaluation.md`](./docs/comparisons/20
 | vs graphify on the same suite — RU queries | `both-buckets`, K=10 | MiniLM | **arch-graph 67% / graphify 35%** (+32pp) |
 | vs graphify on the same suite — EN-keyword strict | top-10 NODE lines | MiniLM | **arch-graph 53.6% / graphify 56.5%** (near tie) |
 | **Embedder swap (2026-05-18)** | `both-buckets`, K=10 | **e5-base** | **75%** (+6pp vs MiniLM 69%, **C_ui 36→82%**) |
+| **vs graphify refresh (2026-05-19)** — RU | `both-buckets`, K=10 | e5-base | **arch-graph 74.8% / graphify 20.4%** (+54.4 pp) |
+| **vs graphify refresh (2026-05-19)** — EN strict | top-10 NODE lines | e5-base | **arch-graph 75.4% / graphify 56.5%** (+18.9 pp) |
 
-The RU lead is multilingual handling (MiniLM is multilingual; graphify keyword-BFS is English-only). Under EN-keyword strict apples-to-apples scoring the two tools are within 3pp. The e5-base swap added another +6pp aggregate and confirmed the C_ui-ceiling-is-the-embedder hypothesis.
+The RU lead is multilingual handling (MiniLM is multilingual; graphify keyword-BFS is English-only). Under EN-keyword strict apples-to-apples scoring arch-graph now leads by **+18.9 pp** after the e5-base swap (the prior MiniLM-era number was a near-tie). The graphify drop on lenient between 2026-05-17 and 2026-05-19 is **scope correction** (the new methodology excludes `.next/` / `.worktrees/` / `tmp/` from graphify's BFS — those nodes previously inflated substring-match hits).
 
 ## Strategic options — what's next
 
@@ -85,13 +94,11 @@ The previously suggested floor of 0.78 was rejected: it would have filtered vali
 
 A handful of project-c eval queries reference domains that don't exist in that codebase (e.g. I15 expects `provider`/`service` with label `"Auth"` but those nodes don't exist in insyra's graph either — only `useAuth` fe-hook). Rewrite affected queries (~30 min) for cleaner per-project recall numbers — doesn't affect any other project.
 
-### ⚪ 5. Additional NodeKinds on demand
+### 5. Additional NodeKinds — partial progress
 
-- GraphQL endpoints
-- Cron schedule semantics
-- Extended BullMQ (currently captures `Processor`; could broaden)
-
-By request — each extractor is 1–2 days.
+- ~~Cron schedule semantics~~ — **SHIPPED** (`cron-v1`, 2026-05-19). NodeKind `cron-schedule` + EdgeKind `cron-triggers`. Covers `@Cron` / `@Interval` / `@Timeout` + `SchedulerRegistry.add*`.
+- 🟡 **Extended BullMQ** — Phase 1 (concurrency, default delay/attempts/backoff, DLQ heuristic, event-listener edges `queue-fails-into` / `queue-event-listener`) and Phase 2 (job-data type extraction via ts-morph type-checker, worker scaling config) + cross-enrichment (`queue.add(..., { repeat: { cron } })` → `cron-schedule` node) — designed in [`docs/plans/2026-05-19-ui-bench-cron-bullmq-design.md`](./docs/plans/2026-05-19-ui-bench-cron-bullmq-design.md), execution deferred to next focused session. Tags: `bullmq-extras-v1` (Phase 1) + `bullmq-types-v1` (Phase 2 + cross-enrichment).
+- ⚪ GraphQL endpoints — by request, ~1-2 days.
 
 ### ⚪ 6. Broader eval corpus
 

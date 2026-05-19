@@ -29,7 +29,7 @@
 
 ## What's new (May 2026)
 
-Nine features shipped on `main` in May 2026:
+Ten features shipped on `main` in May 2026:
 
 - **`doc-section-v1`** — Markdown files are now indexed as first-class `doc-section` graph nodes alongside code, enabling semantic search over your project's documentation.
 - **`code-vs-docs-v1`** — Semantic search splits into `code_search` and `docs_search` MCP tools, eliminating the dilution effect where docs crowded out code results (measured: A_find recall 80% → 30% → 70%).
@@ -40,8 +40,9 @@ Nine features shipped on `main` in May 2026:
 - **`snippet-fix-all-kinds-v1`** — snippet extraction now works for every node kind (provider, service, controller, fe-component, etc.).
 - **`init-strategy-v1`** — installer wizard prompts for semantic strategy (`both-buckets` / `fallback`) and writes it to the project's `CLAUDE.md`.
 - **`e5-base-default-v1`** *(2026-05-18)* — embedder swapped MiniLM → `multilingual-e5-base` (768-dim, passage/query prefixes). **Aggregate recall 67% → 75% (+8pp)** on 103-query bench across 3 NestJS monorepos; **C_ui 36% → 82% (+46pp)** confirms embedder was the bottleneck. Per-project: project-a 79%, project-b 82%, project-c 56%. Ships together with **incremental re-embed** (typical commit ~5–19 s, ×31–×128 speedup vs full rebuild) and **hook default-on** for auto-rebuild. Registry narrowed to `minilm | e5-base`; `bge-m3` and `arctic-m` aliases removed (explored, not adopted). See [`docs/comparisons/2026-05-18-embedder-evaluation.md`](docs/comparisons/2026-05-18-embedder-evaluation.md).
+- **`cron-v1`** *(2026-05-19)* — new extractor for `@nestjs/schedule` decorators (`@Cron`, `@Interval`, `@Timeout`) and `SchedulerRegistry.add*` dynamic registrations. New NodeKind `cron-schedule` with `expression` / `resolvedExpression` / `humanReadable` meta + new EdgeKind `cron-triggers`. Surfaces «what runs on a schedule?» semantic queries. Validated on insyra (2 sites extracted: `nightly-quality-check`, `weekly-retention-cleanup`). 33 new tests; 3 review rounds.
 
-Plus a head-to-head benchmark on 103 fuzzy-intent queries vs graphify (RU 67% vs 35%, EN strict 53.6% vs 56.5% — near tie under apples-to-apples scoring). See [`bench/REPRODUCE.md`](bench/REPRODUCE.md) and [`bench/self-build/README.md`](bench/self-build/README.md) for the reproducible mini-bench.
+Plus a refreshed head-to-head benchmark on 103 fuzzy-intent queries vs graphify with **e5-base default + full LLM rebuild on graphify side + scope correction** (`bench-2026-05-19` tag): arch-graph **74.8% / 75.4%** (RU / EN strict) vs graphify **20.4% / 56.5%** — **+54.4 pp RU** (multilingual win) and **+18.9 pp EN strict** (semantic vs BFS-keyword). Prior graphify lenient numbers were inflated by `.next/` / `.worktrees/` / `tmp/` noise nodes the default graphify scan picked up; arch-graph excludes them by convention via `appsGlob`/`libsGlob`. See [`docs/comparisons/2026-05-19-arch-graph-vs-graphify-eval.md`](docs/comparisons/2026-05-19-arch-graph-vs-graphify-eval.md), [`bench/REPRODUCE.md`](bench/REPRODUCE.md) and [`bench/self-build/README.md`](bench/self-build/README.md).
 
 ---
 
