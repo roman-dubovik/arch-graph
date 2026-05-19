@@ -382,6 +382,67 @@ describe('AC3b.2 — queue-fails-into edge', () => {
 });
 
 // ---------------------------------------------------------------------------
+// FIX 7 — Unresolved diagnostic paths
+// ---------------------------------------------------------------------------
+
+describe('FIX 7 — unresolved diagnostic paths', () => {
+    it('registerQueue with non-object-arg produces unresolved diagnostic', async () => {
+        const source = `
+            import { BullModule } from '@nestjs/bullmq';
+            BullModule.registerQueue(someVariable);
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project);
+        const unresolved = result.registrations.filter((r) => r.queue.kind === 'unresolved');
+        expect(unresolved.length).toBeGreaterThan(0);
+        const reg = unresolved[0]!;
+        expect(reg.queue.kind).toBe('unresolved');
+        if (reg.queue.kind === 'unresolved') {
+            expect(reg.queue.reason).toBe('non-object-arg');
+        }
+
+        const registry = makeRegistry();
+        const mapped = mapBullMqToGraph(
+            result.producers,
+            result.consumers,
+            result.registrations,
+            registry,
+        );
+        // Unresolved registration should appear in diagnostics, not as a queue node
+        expect(mapped.diagnostics.unresolved.length).toBeGreaterThan(0);
+        const queueNode = mapped.nodes.find((n) => n.kind === 'queue');
+        expect(queueNode).toBeUndefined();
+    });
+
+    it('registerQueue without name property produces unresolved diagnostic', async () => {
+        const source = `
+            import { BullModule } from '@nestjs/bullmq';
+            BullModule.registerQueue({ concurrency: 3 });
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project);
+        const unresolved = result.registrations.filter((r) => r.queue.kind === 'unresolved');
+        expect(unresolved.length).toBeGreaterThan(0);
+        const reg = unresolved[0]!;
+        expect(reg.queue.kind).toBe('unresolved');
+        if (reg.queue.kind === 'unresolved') {
+            expect(reg.queue.reason).toBe('no-name-property');
+        }
+
+        const registry = makeRegistry();
+        const mapped = mapBullMqToGraph(
+            result.producers,
+            result.consumers,
+            result.registrations,
+            registry,
+        );
+        expect(mapped.diagnostics.unresolved.length).toBeGreaterThan(0);
+        const queueNode = mapped.nodes.find((n) => n.kind === 'queue');
+        expect(queueNode).toBeUndefined();
+    });
+});
+
+// ---------------------------------------------------------------------------
 // AC3b.3 — queue-event-listener edge
 // ---------------------------------------------------------------------------
 
@@ -430,6 +491,29 @@ describe('AC3b.3 — queue-event-listener edge', () => {
         expect(listenerEdge).toBeDefined();
         expect(listenerEdge?.to).toBe('queue:notifications');
         expect(listenerEdge?.meta?.['event']).toBe('failed');
+    });
+
+    it('unresolvedEventListeners populated when queue.on receiver is unresolvable', async () => {
+        const source = `
+            import { BullModule } from '@nestjs/bullmq';
+            BullModule.registerQueue({ name: 'notifications' });
+
+            class SomeService {
+                init() {
+                    someUnknownRef.on('failed', (job: any, err: Error) => {
+                        console.error(err);
+                    });
+                }
+            }
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project);
+        // No resolved event-listener site
+        expect(result.eventListenerSites).toHaveLength(0);
+        // unresolvedEventListeners should be populated
+        expect(result.unresolvedEventListeners.length).toBeGreaterThan(0);
+        expect(result.unresolvedEventListeners[0]!.event).toBe('failed');
+        expect(result.unresolvedEventListeners[0]!.receiverText).toBe('someUnknownRef');
     });
 
     it('self-loop .on() is silently dropped (no edge emitted)', async () => {
