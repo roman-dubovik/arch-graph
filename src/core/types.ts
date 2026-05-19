@@ -741,7 +741,7 @@ export interface BullMqQueueRegistration {
      */
     defaultBackoff?: unknown;
     /** True when `defaultJobOptions.repeat` is present in the registration options. */
-    hasDefaultRepeat?: boolean;
+    hasDefaultRepeat?: true;
     /**
      * Queue name from `defaultJobOptions.failOver` — the queue that receives jobs when
      * this queue exhausts all retry attempts. Used by the mapper to emit a

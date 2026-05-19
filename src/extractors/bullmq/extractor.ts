@@ -338,7 +338,7 @@ function resolveRegistrationArg(
     let defaultDelay: number | undefined;
     let defaultAttempts: number | undefined;
     let defaultBackoff: unknown;
-    let hasDefaultRepeat: boolean | undefined;
+    let hasDefaultRepeat: true | undefined;
     let failOverTarget: string | undefined;
 
     const concurrencyProp = findProp(obj, 'concurrency');
