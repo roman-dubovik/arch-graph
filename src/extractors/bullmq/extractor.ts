@@ -575,6 +575,21 @@ function collectCallSites(
                                         });
                                     }
                                 }
+                                // Non-literal `every` (variable, template, expression):
+                                // no ms value stored, but push to unresolvedRepeatExpressions
+                                // so operators can see it. Literal numeric `every` is silently
+                                // accepted (hasRepeat is set on the queue node via the site).
+                                const everyProp = findProp(repeatObj, 'every');
+                                if (everyProp !== null) {
+                                    const everyInit = everyProp.getInitializer();
+                                    if (everyInit !== undefined && everyInit.getKind() !== SyntaxKind.NumericLiteral) {
+                                        unresolvedRepeatExpressions.push({
+                                            location,
+                                            queueName,
+                                            rawExpression: '<every: ' + everyInit.getText().slice(0, 60) + '>',
+                                        });
+                                    }
+                                }
                             }
 
                             repeatAddSites.push({
@@ -772,6 +787,11 @@ function resolveEnvFallback(node: Node): { envVar: string; fallback: number } | 
 /**
  * Extracts the env-var name string from a `process.env.X` or
  * `Number(process.env.X)` / `parseInt(process.env.X, 10)` expression.
+ *
+ * Also handles `Number(process.env.X ?? 'fallback')` — the inner `??` binary
+ * expression is unwrapped by taking the LHS (the env var reference), ignoring
+ * the inner string fallback. The OUTER numeric fallback (from `resolveEnvFallback`)
+ * is what counts as the actual concurrency fallback value.
  */
 function extractEnvVar(node: Node): string | null {
     const kind = node.getKind();
@@ -784,13 +804,24 @@ function extractEnvVar(node: Node): string | null {
     }
 
     // Wrapped: Number(process.env.X) or parseInt(process.env.X, 10)
+    // Also: Number(process.env.X ?? 'fallback') — unwrap the inner ?? binary
     if (kind === SyntaxKind.CallExpression) {
         const call = node as CallExpression;
         const fnExpr = call.getExpression().getText();
         if (fnExpr !== 'Number' && fnExpr !== 'parseInt') return null;
         const firstArg = call.getArguments()[0];
         if (!firstArg) return null;
+        // Recurse — handles both direct process.env.X and inner binary expressions
         return extractEnvVar(firstArg);
+    }
+
+    // Inner binary: process.env.X ?? 'fallback' (or process.env.X ?? someDefault)
+    // Take the LHS (the env var); ignore the inner fallback literal.
+    if (kind === SyntaxKind.BinaryExpression) {
+        const bin = node.asKindOrThrow(SyntaxKind.BinaryExpression);
+        const op = bin.getOperatorToken().getText();
+        if (op !== '??' && op !== '||') return null;
+        return extractEnvVar(bin.getLeft());
     }
 
     return null;

@@ -97,7 +97,7 @@ const HELP = `
 arch-graph — static architecture graph extractor for NestJS monorepos
 
 Usage:
-  arch-graph build      [--config <path>] [--out <dir>] [--only=<extractor>] [--mermaid-slice=<mode>] [--quiet] [--strict]
+  arch-graph build      [--config <path>] [--out <dir>] [--only=<extractor>] [--mermaid-slice=<mode>] [--quiet] [--strict] [--with-types]
   arch-graph diagnose   [--config <path>] [--out <dir>]
   arch-graph init       [--out <path>]
   arch-graph mcp        [--out <dir>]
@@ -160,12 +160,14 @@ Graph query subcommands (read arch-graph-out/graph.json):
   Exit codes for queries: 0=found, 4=not found
 
 Flags:
-  --quiet   Suppress non-error stdout (progress + validation table). Used by
-            the post-commit hook so commits aren't noisy.
-  --strict  CI hard-fail mode: exit 3 if any enabled domain recall falls below
-            floor (≥95%, or ≥80% for imports). The per-domain table is printed
-            in strict mode (good for CI logs) — unless --quiet is also passed,
-            in which case the table is suppressed but exit 3 still fires.
+  --quiet       Suppress non-error stdout (progress + validation table). Used by
+                the post-commit hook so commits aren't noisy.
+  --strict      CI hard-fail mode: exit 3 if any enabled domain recall falls below
+                floor (≥95%, or ≥80% for imports). The per-domain table is printed
+                in strict mode (good for CI logs) — unless --quiet is also passed,
+                in which case the table is suppressed but exit 3 still fires.
+  --with-types  Resolve Job<DataType> generics for @Process methods (ts-morph
+                type-checker pass; off by default, can be slower on large projects).
 
 Defaults:
   --config  ./arch-graph.config.ts
