@@ -1753,3 +1753,80 @@ describe('FIX M — recursive heritage walk (P0+P1 fixes)', () => {
         expect(entry).toBeUndefined();
     });
 });
+
+// ---------------------------------------------------------------------------
+// BullMQ default concurrency injection
+// ---------------------------------------------------------------------------
+
+describe('BullMQ default concurrency injection', () => {
+    it('@Processor without concurrency option + has consumer → meta.concurrency=1, source=bullmq-default', async () => {
+        const source = `
+            import { Processor } from '@nestjs/bullmq';
+            import { BullModule } from '@nestjs/bullmq';
+
+            BullModule.registerQueue({ name: 'q' });
+
+            @Processor('q', { stalledInterval: 60000 })
+            class QProcessor {}
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project);
+        const registry = makeRegistry();
+        const mapped = mapBullMqToGraph(
+            result.producers,
+            result.consumers,
+            result.registrations,
+            registry,
+        );
+        const queueNode = mapped.nodes.find((n) => n.id === 'queue:q');
+        expect(queueNode).toBeDefined();
+        expect(queueNode?.meta?.['concurrency']).toBe(1);
+        expect(queueNode?.meta?.['concurrencySource']).toBe('bullmq-default');
+    });
+
+    it('@Processor with explicit concurrency: 5 → meta.concurrency=5, NO concurrencySource marker', async () => {
+        const source = `
+            import { Processor } from '@nestjs/bullmq';
+            import { BullModule } from '@nestjs/bullmq';
+
+            BullModule.registerQueue({ name: 'q' });
+
+            @Processor('q', { concurrency: 5 })
+            class QProcessor {}
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project);
+        const registry = makeRegistry();
+        const mapped = mapBullMqToGraph(
+            result.producers,
+            result.consumers,
+            result.registrations,
+            registry,
+        );
+        const queueNode = mapped.nodes.find((n) => n.id === 'queue:q');
+        expect(queueNode).toBeDefined();
+        expect(queueNode?.meta?.['concurrency']).toBe(5);
+        expect(queueNode?.meta?.['concurrencySource']).toBeUndefined();
+    });
+
+    it('queue without consumer (declared/produced only) → no concurrency injected', async () => {
+        const source = `
+            import { BullModule } from '@nestjs/bullmq';
+
+            BullModule.registerQueue({ name: 'q' });
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project);
+        const registry = makeRegistry();
+        const mapped = mapBullMqToGraph(
+            result.producers,
+            result.consumers,
+            result.registrations,
+            registry,
+        );
+        const queueNode = mapped.nodes.find((n) => n.id === 'queue:q');
+        expect(queueNode).toBeDefined();
+        expect(queueNode?.meta?.['concurrency']).toBeUndefined();
+        expect(queueNode?.meta?.['concurrencySource']).toBeUndefined();
+    });
+});
