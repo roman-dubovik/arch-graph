@@ -254,6 +254,7 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         bullmq.catchBlockAddSites,
         bullmq.unresolvedFailOver,
         bullmq.unresolvedEventListeners,
+        bullmq.unresolvedCatchBlockSites,
     );
     process.stdout.write(
         `  nodes: ${bullmqMapped.nodes.length}, edges: ${bullmqMapped.edges.length}, unresolved: ${bullmqMapped.diagnostics.unresolved.length}, unowned: ${bullmqMapped.diagnostics.unowned.length}\n`,

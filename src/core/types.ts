@@ -809,6 +809,11 @@ export interface BullMqDiagnostics {
      * Emitted as diagnostics rather than edges.
      */
     unresolvedEventListeners?: Array<{ location: SourceLoc; receiverText: string; event: string }>;
+    /**
+     * Catch-block `.add()` sites whose receiver queue could not be resolved.
+     * No phantom queue node is created; the site is recorded here for diagnostics.
+     */
+    unresolvedCatchBlockSites?: Array<{ location: SourceLoc; receiverText: string; processorQueueName: string }>;
     counts: {
         producers: number;
         consumers: number;

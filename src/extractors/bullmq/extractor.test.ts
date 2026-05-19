@@ -327,7 +327,57 @@ describe('AC3b.2 — queue-fails-into edge', () => {
         );
         expect(failsIntoEdge).toBeDefined();
         expect(failsIntoEdge?.from).toBe('queue:main-queue');
+        expect(failsIntoEdge?.to).toBe('queue:dead-letters');
         expect(failsIntoEdge?.meta?.['source']).toBe('catch-block-add');
+    });
+
+    it('catch-block .add() with unresolved receiver populates unresolvedCatchBlockSites (no phantom queue node)', async () => {
+        const source = `
+            import { Processor, Process } from '@nestjs/bullmq';
+            import { BullModule } from '@nestjs/bullmq';
+
+            BullModule.registerQueue({ name: 'main-queue' });
+
+            @Processor('main-queue')
+            class MainProcessor {
+                @Process()
+                async handle(job: any) {
+                    try {
+                        await doWork(job);
+                    } catch (err) {
+                        await unknownExternalQueue.add('failed-job', job.data);
+                    }
+                }
+            }
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project);
+
+        // No catch-block site should be emitted (receiver unresolved)
+        expect(result.catchBlockAddSites).toHaveLength(0);
+        // unresolvedCatchBlockSites should be populated
+        expect(result.unresolvedCatchBlockSites.length).toBeGreaterThan(0);
+        expect(result.unresolvedCatchBlockSites[0]!.processorQueueName).toBe('main-queue');
+        expect(result.unresolvedCatchBlockSites[0]!.receiverText).toBe('unknownExternalQueue');
+
+        const registry = makeRegistry();
+        const mapped = mapBullMqToGraph(
+            result.producers,
+            result.consumers,
+            result.registrations,
+            registry,
+            result.repeatAddSites,
+            result.eventListenerSites,
+            result.catchBlockAddSites,
+            result.unresolvedFailOver,
+            result.unresolvedEventListeners,
+            result.unresolvedCatchBlockSites,
+        );
+        // No phantom queue node for the unresolved receiver
+        const failsIntoEdge = mapped.edges.find((e) => e.kind === 'queue-fails-into');
+        expect(failsIntoEdge).toBeUndefined();
+        // unresolvedCatchBlockSites should be surfaced in diagnostics
+        expect(mapped.diagnostics.unresolvedCatchBlockSites?.length).toBeGreaterThan(0);
     });
 });
 

@@ -62,6 +62,8 @@ export interface ExtractBullMqResult {
     unresolvedFailOver: Array<{ location: SourceLoc; raw: string }>;
     /** Unresolved event-listener receivers — diagnostics only. */
     unresolvedEventListeners: Array<{ location: SourceLoc; receiverText: string; event: string }>;
+    /** Catch-block .add() sites whose receiver could not be resolved — diagnostics only (no edge). */
+    unresolvedCatchBlockSites: Array<{ location: SourceLoc; receiverText: string; processorQueueName: string }>;
     queueNames: QueueNameIndex;
 }
 
@@ -78,6 +80,7 @@ export async function extractBullMq(
     const catchBlockAddSites: BullMqCatchBlockAddSite[] = [];
     const unresolvedFailOver: Array<{ location: SourceLoc; raw: string }> = [];
     const unresolvedEventListeners: Array<{ location: SourceLoc; receiverText: string; event: string }> = [];
+    const unresolvedCatchBlockSites: Array<{ location: SourceLoc; receiverText: string; processorQueueName: string }> = [];
 
     for (const sf of project.getSourceFiles()) {
         if (isExcludedSourceFile(sf)) continue;
@@ -146,6 +149,7 @@ export async function extractBullMq(
                 eventListenerSites,
                 catchBlockAddSites,
                 unresolvedEventListeners,
+                unresolvedCatchBlockSites,
             );
         }
     }
@@ -159,6 +163,7 @@ export async function extractBullMq(
         catchBlockAddSites,
         unresolvedFailOver,
         unresolvedEventListeners,
+        unresolvedCatchBlockSites,
         queueNames,
     };
 }
@@ -426,6 +431,7 @@ function collectCallSites(
     eventListenerSites: BullMqEventListenerSite[],
     catchBlockAddSites: BullMqCatchBlockAddSite[],
     unresolvedEventListeners: Array<{ location: SourceLoc; receiverText: string; event: string }>,
+    unresolvedCatchBlockSites: Array<{ location: SourceLoc; receiverText: string; processorQueueName: string }>,
 ): void {
     const filePath = sf.getFilePath();
 
@@ -507,15 +513,10 @@ function collectCallSites(
                 const firstArg = args[0]!;
                 const firstArgKind = firstArg.getKind();
                 if (firstArgKind === SyntaxKind.StringLiteral || firstArgKind === SyntaxKind.NoSubstitutionTemplateLiteral) {
-                    const jobName = (firstArg as StringLiteral).getLiteralText();
-                    // Resolve the receiver to find which queue this .add() is called on
-                    // Per design doc: the receiver IS the DLQ, the literal is the job tag
-                    // But per spec interpretation: the edge goes processor-queue → DLQ-queue
-                    // where DLQ is the queue the receiver points to.
                     // We need to find the processor queue name from consumers array (same file).
                     const processorQueueName = findProcessorQueueForFile(filePath, consumers);
                     if (processorQueueName !== null) {
-                        // Receiver is the DLQ queue
+                        // Receiver is the DLQ queue — resolve it
                         const dlqQueueName = resolveReceiver(receiverText, injectedQueuesByProp);
                         if (dlqQueueName !== null) {
                             catchBlockAddSites.push({
@@ -524,15 +525,9 @@ function collectCallSites(
                                 dlqName: dlqQueueName, // Use the resolved queue name as DLQ
                                 location,
                             });
-                        } else if (firstArgKind === SyntaxKind.StringLiteral || firstArgKind === SyntaxKind.NoSubstitutionTemplateLiteral) {
-                            // Fallback: per spec the literal first arg is "dlq-name" if receiver unresolved
-                            // Spec says: "a call shape someQueue.add('<dlq-name>', …)" so first arg IS the DLQ name
-                            catchBlockAddSites.push({
-                                role: 'catch-block-add',
-                                processorQueueName,
-                                dlqName: jobName,
-                                location,
-                            });
+                        } else {
+                            // Receiver unresolved — do NOT create a phantom queue node; route to diagnostics
+                            unresolvedCatchBlockSites.push({ location, receiverText, processorQueueName });
                         }
                     }
                 }

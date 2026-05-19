@@ -43,6 +43,7 @@ export function mapBullMqToGraph(
     catchBlockAddSites: BullMqCatchBlockAddSite[] = [],
     unresolvedFailOver: Array<{ location: SourceLoc; raw: string }> = [],
     unresolvedEventListeners: Array<{ location: SourceLoc; receiverText: string; event: string }> = [],
+    unresolvedCatchBlockSites: Array<{ location: SourceLoc; receiverText: string; processorQueueName: string }> = [],
 ): MapBullMqResult {
     const ownerNodes = new Map<string, GraphNode>();
     const queueNodes = new Map<string, GraphNode>();
@@ -250,6 +251,7 @@ export function mapBullMqToGraph(
             unowned,
             ...(unresolvedFailOver.length > 0 ? { unresolvedFailOver } : {}),
             ...(unresolvedEventListeners.length > 0 ? { unresolvedEventListeners } : {}),
+            ...(unresolvedCatchBlockSites.length > 0 ? { unresolvedCatchBlockSites } : {}),
             counts: {
                 producers: producers.length,
                 consumers: consumers.length,
