@@ -843,6 +843,29 @@ describe('AC3c.3 — queue.add with literal cron creates cron-schedule node + qu
     });
 });
 
+describe('extractInlineTypeFields — depth-1 only', () => {
+    it('returns depth-1 fields only, excluding nested type properties', async () => {
+        // Fixture: @Process() async handle(job: Job<{ outer: { inner: string }; top: number }>): Promise<void> {}
+        // After FIX A, depth-1 scanner must return ['outer', 'top'], NOT ['outer', 'inner', 'top']
+        const source = `
+            import { Processor, Process } from '@nestjs/bullmq';
+            @Processor('nested-type-queue')
+            class NestedTypeProcessor {
+                @Process()
+                async handle(job: Job<{ outer: { inner: string }; top: number }>): Promise<void> {}
+            }
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project, { withTypes: true });
+        expect(result.jobDataTypes.length).toBeGreaterThanOrEqual(1);
+        const jd = result.jobDataTypes.find((j) => j.queueName === 'nested-type-queue');
+        expect(jd).toBeDefined();
+        // Must NOT include 'inner' — depth-1 only
+        expect(jd?.fields).toEqual(['outer', 'top']);
+        expect(jd?.fields).not.toContain('inner');
+    });
+});
+
 describe('AC3c.5 (optional) — queue.add with non-literal cron populates unresolvedRepeatExpressions', () => {
     it('non-literal cron expression goes to unresolvedRepeatExpressions diagnostic', async () => {
         const source = `

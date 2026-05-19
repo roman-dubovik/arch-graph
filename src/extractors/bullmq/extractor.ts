@@ -882,16 +882,31 @@ function resolveJobDataTypes(
 /**
  * Extract depth-1 property names from an inline TypeScript object-literal type.
  * e.g. `{ foo: string; bar: number; baz?: boolean }` → `['foo', 'bar', 'baz']`
- * Simple regex-based approach — avoids a full AST parse on the type text.
+ * e.g. `{ outer: { inner: string }; top: number }` → `['outer', 'top']` (NOT 'inner')
+ *
+ * Uses a character-by-character brace-depth scanner to enforce "depth-1 only":
+ * properties of nested types (depth > 1) are excluded.
  */
 function extractInlineTypeFields(typeText: string): string[] {
     const fields: string[] = [];
-    // Match `identifierName?:` or `identifierName:` at depth-1
+    const seen = new Set<string>();
     const re = /\b([a-zA-Z_$][a-zA-Z0-9_$]*)\??:/g;
     let match: RegExpExecArray | null;
     while ((match = re.exec(typeText)) !== null) {
-        const name = match[1]!;
-        if (!fields.includes(name)) fields.push(name);
+        const prefix = typeText.slice(0, match.index);
+        let depth = 0;
+        for (const ch of prefix) {
+            if (ch === '{') depth++;
+            else if (ch === '}') depth--;
+        }
+        if (depth === 1) {
+            const name = match[1]!;
+            if (!seen.has(name)) {
+                seen.add(name);
+                fields.push(name);
+            }
+        }
+        if (fields.length > 64) break;   // pathological-type guard
     }
     return fields;
 }
