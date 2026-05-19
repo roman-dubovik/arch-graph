@@ -7,6 +7,7 @@ import { discoverOwnership } from '../core/service-registry.js';
 import type { ArchGraph, BuildValidation, CyclesDiagnostics, DiagnosticsReport } from '../core/types.js';
 import { extractDocs } from '../extractors/docs/extract-docs.js';
 import { extractBullMq } from '../extractors/bullmq/extractor.js';
+import { extractCronSchedule } from '../extractors/cron-schedule/extractor.js';
 import { extractDi } from '../extractors/di/extractor.js';
 import { extractFe } from '../extractors/fe/extractor.js';
 import { extractHttp } from '../extractors/http/extractor.js';
@@ -19,6 +20,7 @@ import { extractScoped } from '../extractors/scoped/extractor.js';
 import { extractEntityFields } from '../extractors/typeorm/fields.js';
 import { mapDocsToGraph } from '../mapper/docs-to-graph.js';
 import { mapBullMqToGraph } from '../mapper/bullmq-to-graph.js';
+import { mapCronScheduleToGraph } from '../mapper/cron-schedule-to-graph.js';
 import { mapDiToGraph } from '../mapper/di-to-graph.js';
 import { mapFeToGraph } from '../mapper/fe-to-graph.js';
 import { mapHttpToGraph } from '../mapper/http-to-graph.js';
@@ -30,6 +32,7 @@ import { mapConfigToGraph } from '../mapper/config-to-graph.js';
 import { mapEntityFieldsToGraph } from '../mapper/entity-fields-to-graph.js';
 import { buildClassIndex } from '../extractors/di/class-index.js';
 import { enumerateBullMqGroundTruth, buildBullMqReport } from '../validation/bullmq-validator.js';
+import { enumerateCronScheduleGroundTruth, buildCronScheduleReport } from '../validation/cron-schedule-validator.js';
 import { enumerateDiGroundTruth, buildDiReport } from '../validation/di-validator.js';
 import { enumerateFeGroundTruth, buildFeReport } from '../validation/fe-validator.js';
 import { enumerateHandlers } from '../validation/handlers.js';
@@ -246,6 +249,31 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         `  nodes: ${bullmqMapped.nodes.length}, edges: ${bullmqMapped.edges.length}, unresolved: ${bullmqMapped.diagnostics.unresolved.length}, unowned: ${bullmqMapped.diagnostics.unowned.length}\n`,
     );
 
+    // ---- Cron-schedule domain ----
+    process.stdout.write(`extracting cron-schedule...\n`);
+    t0 = Date.now();
+    const cron = await stage(`[${cfg.id}] cron.extract`, () => extractCronSchedule(cfg, project));
+    process.stdout.write(`  ${cron.sites.length} cron-schedule sites in ${Date.now() - t0}ms\n`);
+
+    process.stdout.write(`validating cron-schedule against ground truth...\n`);
+    const cronGT = await stage(`[${cfg.id}] cron.GT`, () => enumerateCronScheduleGroundTruth(cfg));
+    const cronValidation = buildCronScheduleReport(cron.sites, cronGT);
+    {
+        const v = cronValidation.summary;
+        process.stdout.write(
+            `  recallCron=${pct(v.recallCron)} recallInterval=${pct(v.recallInterval)} recallTimeout=${pct(v.recallTimeout)} recallDynamic=${pct(v.recallDynamic)} overall=${pct(v.recallOverall)}\n`,
+        );
+    }
+
+    process.stdout.write(`mapping cron-schedule to graph...\n`);
+    const cronMapped = mapCronScheduleToGraph(cron.sites, ownership);
+    {
+        const c = cronMapped.diagnostics.counts;
+        process.stdout.write(
+            `  nodes: ${cronMapped.nodes.length}, edges: ${cronMapped.edges.length}, cron: ${c.cron}, interval: ${c.interval}, timeout: ${c.timeout}, dynamic: ${c.dynamic}, unowned: ${c.unowned}\n`,
+        );
+    }
+
     // ---- DI domain ----
     process.stdout.write(`extracting DI...\n`);
     t0 = Date.now();
@@ -426,6 +454,7 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
         natsMapped,
         typeormMapped,
         bullmqMapped,
+        cronMapped,
         diMapped,
         httpMapped,
         importsMapped,

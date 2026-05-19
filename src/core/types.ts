@@ -86,7 +86,9 @@ export type NodeKind =
     /** STUB: extractor returns empty in v1 — see B8 in design doc */
     | 'scoped-marker'
     | 'db-entity-field'
-    | 'doc-section';
+    | 'doc-section'
+    /** @nestjs/schedule cron jobs, intervals, and timeouts. */
+    | 'cron-schedule';
 
 /**
  * Exhaustiveness-gate pattern for NodeKind.
@@ -113,6 +115,7 @@ const NODE_KIND_CHECK: Record<NodeKind, null> = {
     'scoped-marker': null,
     'db-entity-field': null,
     'doc-section': null,
+    'cron-schedule': null,
 };
 
 /** All valid NodeKind values — used for runtime validation and zod enum schemas. */
@@ -145,7 +148,9 @@ export type EdgeKind =
     | 'config-read-by'
     | 'entity-has-field'
     /** STUB: reserved for forward-compat — no scoped edges emitted in v1; see B8 in design doc */
-    | 'scoped';
+    | 'scoped'
+    /** @nestjs/schedule cron-schedule triggers an owner service/lib. */
+    | 'cron-triggers';
 
 export interface GraphNode {
     id: string;
@@ -774,6 +779,33 @@ export interface BullMqValidationReport {
 
 export function queueNameOf(ref: BullMqQueueRef): string | null {
     return ref.kind === 'unresolved' ? null : ref.name;
+}
+
+// ============================================================================
+// Cron-schedule-domain types (@nestjs/schedule)
+// ============================================================================
+
+/**
+ * One cron/interval/timeout site found in source.
+ *
+ *   - `cron`     — `@Cron(expression)` decorator on a class method
+ *   - `interval` — `@Interval(ms)` decorator on a class method
+ *   - `timeout`  — `@Timeout(ms)` decorator on a class method
+ *   - `dynamic`  — `SchedulerRegistry.addCronJob/addInterval/addTimeout(...)` call
+ */
+export interface CronScheduleSite {
+    /** "ClassName.methodName" for decorator sites; "dynamic:<name>" for registry sites. */
+    owner: string;
+    /** Optional job/interval/timeout name from options arg or first string arg. */
+    name?: string;
+    /** Raw first argument text (string literal value or identifier text or ms as string). */
+    expression: string;
+    /** Resolved cron string (for CronExpression.X enum lookups) or undefined if unresolvable. */
+    resolvedExpression?: string;
+    /** Human-readable label for well-known CronExpression aliases; undefined for custom expressions. */
+    humanReadable?: string;
+    category: 'cron' | 'interval' | 'timeout' | 'dynamic';
+    location: SourceLoc;
 }
 
 // ============================================================================
