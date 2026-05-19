@@ -244,7 +244,17 @@ export async function runBuild(cfg: ArchGraphConfig): Promise<BuildResult> {
     }
 
     process.stdout.write(`mapping BullMQ to graph...\n`);
-    const bullmqMapped = mapBullMqToGraph(bullmq.producers, bullmq.consumers, bullmq.registrations, ownership);
+    const bullmqMapped = mapBullMqToGraph(
+        bullmq.producers,
+        bullmq.consumers,
+        bullmq.registrations,
+        ownership,
+        bullmq.repeatAddSites,
+        bullmq.eventListenerSites,
+        bullmq.catchBlockAddSites,
+        bullmq.unresolvedFailOver,
+        bullmq.unresolvedEventListeners,
+    );
     process.stdout.write(
         `  nodes: ${bullmqMapped.nodes.length}, edges: ${bullmqMapped.edges.length}, unresolved: ${bullmqMapped.diagnostics.unresolved.length}, unowned: ${bullmqMapped.diagnostics.unowned.length}\n`,
     );
