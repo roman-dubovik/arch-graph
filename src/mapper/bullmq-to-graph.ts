@@ -173,7 +173,9 @@ export function mapBullMqToGraph(
         // Decision: each repeat-add site creates its own node (no deduplication
         // across sites — per design doc "deduplication is OUT of scope").
         if (r.repeatExpression !== undefined) {
-            const fileSlug = r.location.file.replace(/^.*\/src\//, 'src/').replace(/\//g, '_');
+            const fileSlug = r.location.file.includes('/src/')
+                ? r.location.file.replace(/^.*\/src\//, 'src/').replace(/\//g, '_')
+                : r.location.file.split('/').filter(Boolean).slice(-2).join('_');
             const jobPart = r.jobName ? `:${r.jobName}` : '';
             const cronNodeId = `cron-schedule:queue-repeat:${r.queueName}${jobPart}:${fileSlug}:${r.location.line}`;
             if (!cronNodes.has(cronNodeId)) {
