@@ -44,9 +44,13 @@ export function mapBullMqToGraph(
     unresolvedFailOver: Array<{ location: SourceLoc; raw: string }> = [],
     unresolvedEventListeners: Array<{ location: SourceLoc; receiverText: string; event: string }> = [],
     unresolvedCatchBlockSites: Array<{ location: SourceLoc; receiverText: string; processorQueueName: string }> = [],
+    unresolvedRepeatExpressions: Array<{ location: SourceLoc; queueName: string; rawExpression: string }> = [],
+    unresolvedJobDataTypes: Array<{ queueName: string; processorClass: string; methodName: string; reason: string }> = [],
 ): MapBullMqResult {
     const ownerNodes = new Map<string, GraphNode>();
     const queueNodes = new Map<string, GraphNode>();
+    /** cron-schedule nodes created by BullMQ cross-enrichment (queue-repeat sites). */
+    const cronNodes = new Map<string, GraphNode>();
     const edges = new Map<string, GraphEdge>();
     const unresolved: BullMqDiagnostics['unresolved'] = [];
     const unowned: BullMqDiagnostics['unowned'] = [];
@@ -157,12 +161,53 @@ export function mapBullMqToGraph(
     }
 
     // -------------------------------------------------------------------------
-    // Apply hasRepeat from repeat-add sites
+    // Apply hasRepeat from repeat-add sites + cross-enrichment: cron-schedule nodes
     // -------------------------------------------------------------------------
     for (const r of repeatAddSites) {
         const queueId = `queue:${r.queueName}`;
         const node = queueNodes.get(queueId) ?? ensureQueueNode(queueNodes, r.queueName);
         node.meta = { ...(node.meta ?? {}), hasRepeat: true };
+
+        // Cross-enrichment: if a literal cron expression is present, emit a
+        // cron-schedule node + queue-repeat edge (queue → cron-schedule).
+        // Decision: each repeat-add site creates its own node (no deduplication
+        // across sites — per design doc "deduplication is OUT of scope").
+        if (r.repeatExpression !== undefined) {
+            const fileSlug = r.location.file.includes('/src/')
+                ? r.location.file.replace(/^.*\/src\//, 'src/').replace(/\//g, '_')
+                : r.location.file.split('/').filter(Boolean).slice(-2).join('_');
+            const jobPart = r.jobName ? `:${r.jobName}` : '';
+            const cronNodeId = `cron-schedule:queue-repeat:${r.queueName}${jobPart}:${fileSlug}:${r.location.line}`;
+            if (!cronNodes.has(cronNodeId)) {
+                cronNodes.set(cronNodeId, {
+                    id: cronNodeId,
+                    kind: 'cron-schedule',
+                    label: r.repeatExpression,
+                    meta: {
+                        expression: r.repeatExpression,
+                        resolvedExpression: r.repeatExpression,
+                        category: 'queue-repeat',
+                        source: 'BullMqRepeatAddSite',
+                        location: { file: r.location.file, line: r.location.line },
+                    },
+                });
+            }
+            const edgeKey = `queue-repeat:${queueId}->${cronNodeId}`;
+            if (!edges.has(edgeKey)) {
+                edges.set(edgeKey, {
+                    id: edgeKey,
+                    from: queueId,
+                    to: cronNodeId,
+                    kind: 'queue-repeat',
+                    file: r.location.file,
+                    line: r.location.line,
+                    meta: {
+                        ...(r.jobName !== undefined ? { jobName: r.jobName } : {}),
+                        repeatExpression: r.repeatExpression,
+                    },
+                });
+            }
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -246,7 +291,7 @@ export function mapBullMqToGraph(
     }
 
     return {
-        nodes: [...ownerNodes.values(), ...queueNodes.values()],
+        nodes: [...ownerNodes.values(), ...queueNodes.values(), ...cronNodes.values()],
         edges: [...edges.values()],
         diagnostics: {
             unresolved,
@@ -255,6 +300,8 @@ export function mapBullMqToGraph(
             ...(unresolvedEventListeners.length > 0 ? { unresolvedEventListeners } : {}),
             ...(unresolvedCatchBlockSites.length > 0 ? { unresolvedCatchBlockSites } : {}),
             ...(unownedEventListeners.length > 0 ? { unownedEventListeners } : {}),
+            ...(unresolvedRepeatExpressions.length > 0 ? { unresolvedRepeatExpressions } : {}),
+            ...(unresolvedJobDataTypes.length > 0 ? { unresolvedJobDataTypes } : {}),
             counts: {
                 producers: producers.length,
                 consumers: consumers.length,
@@ -268,6 +315,8 @@ export function mapBullMqToGraph(
                 unresolvedFailOver: unresolvedFailOver.length,
                 unownedEventListeners: unownedEventListeners.length,
                 unresolvedCatchBlockSites: unresolvedCatchBlockSites.length,
+                unresolvedRepeatExpressions: unresolvedRepeatExpressions.length,
+                unresolvedJobDataTypes: unresolvedJobDataTypes.length,
             },
         },
     };

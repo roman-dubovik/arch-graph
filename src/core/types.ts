@@ -154,7 +154,9 @@ export type EdgeKind =
     /** BullMQ: queue X routes failed jobs into queue Y (DLQ heuristic). */
     | 'queue-fails-into'
     /** BullMQ: a queue or worker event listener cross-links owner → queue. */
-    | 'queue-event-listener';
+    | 'queue-event-listener'
+    /** BullMQ cross-enrichment: queue.add(..., { repeat: { cron: '...' } }) → cron-schedule node. */
+    | 'queue-repeat';
 
 export interface GraphNode {
     id: string;
@@ -753,12 +755,23 @@ export interface BullMqQueueRegistration {
 /**
  * `queue.add(jobName, data, { repeat: ... })` call site — contributes to
  * `hasRepeat` on the queue node meta.
+ *
+ * For cross-enrichment (Task 3c): if the `repeat` option contains a literal
+ * cron expression (`{ cron: '...' }`), it is captured in `repeatExpression`.
+ * The `{ every: N }` pattern is detected for `hasRepeat` purposes but the ms
+ * value is not stored (not consumed by the mapper).
+ * Non-literal expressions are recorded in the extractor's
+ * `unresolvedRepeatExpressions` diagnostic array (no cron-schedule node emitted).
  */
 export interface BullMqRepeatAddSite {
     role: 'repeat-add';
     /** Resolved queue name this `.add()` was called on. */
     queueName: string;
     location: SourceLoc;
+    /** First arg of `.add()` — the job name, if it is a string literal. */
+    jobName?: string;
+    /** Literal cron expression from `{ repeat: { cron: '<expr>' } }`, if present. */
+    repeatExpression?: string;
 }
 
 /**
@@ -822,6 +835,23 @@ export interface BullMqDiagnostics {
      * Recorded here rather than silently dropped.
      */
     unownedEventListeners?: Array<{ location: SourceLoc; queueName: string; event: string }>;
+    /**
+     * `queue.add(...)` repeat sites where `{ repeat: { cron: X } }` uses a
+     * non-literal expression (variable, template literal). No cron-schedule node
+     * is emitted for these; they are recorded here for diagnostics only.
+     */
+    unresolvedRepeatExpressions?: Array<{ location: SourceLoc; queueName: string; rawExpression: string }>;
+    /**
+     * `@Process` methods for which the type-checker pass (`--with-types`) failed
+     * to resolve the `Job<DataType>` generic parameter. Populated only when
+     * `--with-types` is active; absent otherwise.
+     */
+    unresolvedJobDataTypes?: Array<{
+        queueName: string;
+        processorClass: string;
+        methodName: string;
+        reason: string;
+    }>;
     counts: {
         producers: number;
         consumers: number;
@@ -835,7 +865,31 @@ export interface BullMqDiagnostics {
         unresolvedFailOver: number;
         unownedEventListeners: number;
         unresolvedCatchBlockSites: number;
+        unresolvedRepeatExpressions: number;
+        /** Number of `@Process` methods where the type-checker pass failed. 0 when `--with-types` is off. */
+        unresolvedJobDataTypes: number;
     };
+}
+
+/**
+ * Resolved job-data type for a single `@Process` method.
+ * Populated only when `--with-types` is active (via the type-checker pass).
+ */
+export interface BullMqJobDataType {
+    /** Resolved queue name for the processor. */
+    queueName: string;
+    /** Processor class name. */
+    processorClass: string;
+    /** `@Process` method name. */
+    methodName: string;
+    /**
+     * Type name of the `Job<DataType>` generic parameter.
+     * `'<inline>'` when the type is an inline object literal (e.g. `Job<{ foo: string }>`).
+     * The actual type name otherwise (e.g. `'MyData'`).
+     */
+    typeName: string;
+    /** Depth-1 property names of the resolved data type. Empty array when not resolvable. */
+    fields: string[];
 }
 
 export interface BullMqGroundTruthEntry {

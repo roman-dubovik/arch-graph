@@ -78,6 +78,7 @@ const EDGE_KIND_CHECK: Record<EdgeKind, null> = {
     'cron-triggers': null,
     'queue-fails-into': null,
     'queue-event-listener': null,
+    'queue-repeat': null,
 };
 const EDGE_KIND_VALUES = Object.keys(EDGE_KIND_CHECK) as [EdgeKind, ...EdgeKind[]];
 

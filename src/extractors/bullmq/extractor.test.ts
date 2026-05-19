@@ -1,9 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { Project } from 'ts-morph';
+import { mkdirSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { extractBullMq } from './extractor.js';
 import { mapBullMqToGraph } from '../../mapper/bullmq-to-graph.js';
 import { OwnershipRegistry } from '../../core/service-registry.js';
 import type { ArchGraphConfig } from '../../core/config.js';
+import { runBuild } from '../../pipeline/build.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -676,5 +680,361 @@ describe('Round 2 P1 — registerQueueAsync, variadic, mergeQueueMeta, unownedEv
         expect(mapped.diagnostics.unownedEventListeners?.length).toBe(1);
         expect(mapped.diagnostics.unownedEventListeners?.[0]?.queueName).toBe('alerts');
         expect(mapped.diagnostics.unownedEventListeners?.[0]?.event).toBe('failed');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// AC3c — Task 3c specs
+// ---------------------------------------------------------------------------
+
+describe('AC3c.1 — @Process method with Job<MyData> resolves typeName + fields when withTypes=true', () => {
+    it('resolves typeName and depth-1 fields for named Job<T> parameter', async () => {
+        const source = `
+            import { Processor, Process } from '@nestjs/bullmq';
+
+            interface PaymentData {
+                userId: string;
+                amount: number;
+                currency: string;
+            }
+
+            // Minimal Job stub so ts-morph can resolve the type arg
+            interface Job<T = any> { data: T; }
+
+            @Processor('payments')
+            class PaymentsProcessor {
+                @Process()
+                async handle(job: Job<PaymentData>) {}
+            }
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project, { withTypes: true });
+        expect(result.jobDataTypes.length).toBeGreaterThan(0);
+        const jd = result.jobDataTypes[0]!;
+        expect(jd.queueName).toBe('payments');
+        expect(jd.processorClass).toBe('PaymentsProcessor');
+        expect(jd.typeName).toBe('PaymentData');
+        // Fields from the PaymentData interface
+        expect(jd.fields).toContain('userId');
+        expect(jd.fields).toContain('amount');
+        expect(jd.fields).toContain('currency');
+    });
+
+    it('resolves typeName=<inline> and fields for inline Job<{...}> parameter', async () => {
+        const source = `
+            import { Processor, Process } from '@nestjs/bullmq';
+            interface Job<T = any> { data: T; }
+
+            @Processor('notifications')
+            class NotifProcessor {
+                @Process()
+                async handle(job: Job<{ recipientId: string; message: string }>) {}
+            }
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project, { withTypes: true });
+        expect(result.jobDataTypes.length).toBeGreaterThan(0);
+        const jd = result.jobDataTypes[0]!;
+        expect(jd.typeName).toBe('<inline>');
+        expect(jd.fields).toContain('recipientId');
+        expect(jd.fields).toContain('message');
+    });
+});
+
+describe('AC3c.1 (negative) — --with-types off skips job-data resolution', () => {
+    it('jobDataTypes is empty when withTypes is not set', async () => {
+        const source = `
+            import { Processor, Process } from '@nestjs/bullmq';
+            interface Job<T = any> { data: T; }
+
+            @Processor('payments')
+            class PaymentsProcessor {
+                @Process()
+                async handle(job: Job<{ userId: string }>) {}
+            }
+        `;
+        const project = makeProject(source);
+        // default options — withTypes is false
+        const result = await extractBullMq(makeConfig(), project);
+        expect(result.jobDataTypes).toHaveLength(0);
+    });
+});
+
+describe('AC3c.2 — worker factory env-fallback concurrency resolves to numeric default', () => {
+    it('process.env.X ?? 7 resolves fallback=7 with the env-var name', async () => {
+        const source = `
+            const factory = new WorkerFactory();
+            factory.createWorker('analytics', { concurrency: process.env.ANALYTICS_CONCURRENCY ?? 7 });
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project);
+        const reg = result.registrations.find(
+            (r) => r.queue.kind !== 'unresolved' && r.queue.name === 'analytics',
+        );
+        expect(reg).toBeDefined();
+        const mutableReg = reg as unknown as Record<string, unknown>;
+        expect(mutableReg['workerConcurrencyFallback']).toBe(7);
+        expect(mutableReg['workerConcurrencyEnvVar']).toBe('ANALYTICS_CONCURRENCY');
+    });
+
+    it('Number(process.env.X) || 10 resolves fallback=10', async () => {
+        const source = `
+            const factory = new WorkerFactory();
+            factory.createWorker('emails', { concurrency: Number(process.env.EMAIL_WORKERS) || 10 });
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project);
+        const reg = result.registrations.find(
+            (r) => r.queue.kind !== 'unresolved' && r.queue.name === 'emails',
+        );
+        expect(reg).toBeDefined();
+        const mutableReg = reg as unknown as Record<string, unknown>;
+        expect(mutableReg['workerConcurrencyFallback']).toBe(10);
+        expect(mutableReg['workerConcurrencyEnvVar']).toBe('EMAIL_WORKERS');
+    });
+});
+
+describe('AC3c.3 — queue.add with literal cron creates cron-schedule node + queue-repeat edge', () => {
+    it('emits cron-schedule node and queue-repeat edge for literal cron expression', async () => {
+        const source = `
+            import { InjectQueue } from '@nestjs/bullmq';
+            import { BullModule } from '@nestjs/bullmq';
+
+            BullModule.registerQueue({ name: 'reports' });
+
+            class ReportScheduler {
+                constructor(@InjectQueue('reports') private reportsQueue: any) {}
+
+                async schedule() {
+                    await this.reportsQueue.add('daily', {}, { repeat: { cron: '0 0 * * *' } });
+                }
+            }
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project);
+        const repeatSite = result.repeatAddSites.find((s) => s.queueName === 'reports');
+        expect(repeatSite).toBeDefined();
+        expect(repeatSite?.repeatExpression).toBe('0 0 * * *');
+        expect(repeatSite?.jobName).toBe('daily');
+
+        const registry = makeRegistry();
+        const mapped = mapBullMqToGraph(
+            result.producers,
+            result.consumers,
+            result.registrations,
+            registry,
+            result.repeatAddSites,
+            result.eventListenerSites,
+            result.catchBlockAddSites,
+            result.unresolvedFailOver,
+            result.unresolvedEventListeners,
+            result.unresolvedCatchBlockSites,
+            result.unresolvedRepeatExpressions,
+        );
+
+        // Cron-schedule node must exist
+        const cronNode = mapped.nodes.find((n) => n.kind === 'cron-schedule');
+        expect(cronNode).toBeDefined();
+        expect(cronNode?.meta?.['expression']).toBe('0 0 * * *');
+        expect(cronNode?.meta?.['category']).toBe('queue-repeat');
+
+        // queue-repeat edge must exist
+        const repeatEdge = mapped.edges.find((e) => e.kind === 'queue-repeat');
+        expect(repeatEdge).toBeDefined();
+        expect(repeatEdge?.from).toBe('queue:reports');
+        expect(repeatEdge?.to).toBe(cronNode?.id);
+        expect(repeatEdge?.meta?.['repeatExpression']).toBe('0 0 * * *');
+    });
+});
+
+describe('extractInlineTypeFields — depth-1 only', () => {
+    it('returns depth-1 fields only, excluding nested type properties', async () => {
+        // Fixture: @Process() async handle(job: Job<{ outer: { inner: string }; top: number }>): Promise<void> {}
+        // After FIX A, depth-1 scanner must return ['outer', 'top'], NOT ['outer', 'inner', 'top']
+        const source = `
+            import { Processor, Process } from '@nestjs/bullmq';
+            @Processor('nested-type-queue')
+            class NestedTypeProcessor {
+                @Process()
+                async handle(job: Job<{ outer: { inner: string }; top: number }>): Promise<void> {}
+            }
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project, { withTypes: true });
+        expect(result.jobDataTypes.length).toBeGreaterThanOrEqual(1);
+        const jd = result.jobDataTypes.find((j) => j.queueName === 'nested-type-queue');
+        expect(jd).toBeDefined();
+        // Must NOT include 'inner' — depth-1 only
+        expect(jd?.fields).toEqual(['outer', 'top']);
+        expect(jd?.fields).not.toContain('inner');
+    });
+});
+
+describe('AC3c.5 (optional) — queue.add with non-literal cron populates unresolvedRepeatExpressions', () => {
+    it('non-literal cron expression goes to unresolvedRepeatExpressions diagnostic', async () => {
+        const source = `
+            import { InjectQueue } from '@nestjs/bullmq';
+            import { BullModule } from '@nestjs/bullmq';
+
+            const DYNAMIC_CRON = process.env.CRON_EXPR;
+            BullModule.registerQueue({ name: 'dynamic-jobs' });
+
+            class DynamicScheduler {
+                constructor(@InjectQueue('dynamic-jobs') private jobsQueue: any) {}
+
+                async schedule() {
+                    await this.jobsQueue.add('task', {}, { repeat: { cron: DYNAMIC_CRON } });
+                }
+            }
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project);
+
+        // Should record as unresolved — not as repeatExpression
+        const repeatSite = result.repeatAddSites.find((s) => s.queueName === 'dynamic-jobs');
+        expect(repeatSite).toBeDefined();
+        expect(repeatSite?.repeatExpression).toBeUndefined();
+
+        // Unresolved diagnostic
+        expect(result.unresolvedRepeatExpressions.length).toBeGreaterThan(0);
+        expect(result.unresolvedRepeatExpressions[0]!.queueName).toBe('dynamic-jobs');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// FIX F — new test coverage
+// ---------------------------------------------------------------------------
+
+describe('FIX F.1 — parseInt(process.env.X, 10) || N fallback resolves', () => {
+    it('parseInt fallback resolves workerConcurrencyFallback and env var', async () => {
+        const source = `
+            const factory = new WorkerFactory();
+            factory.createWorker('q-parse', { concurrency: parseInt(process.env.PARSE_WORKERS, 10) || 5 });
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project);
+        const reg = result.registrations.find(
+            (r) => r.queue.kind !== 'unresolved' && r.queue.name === 'q-parse',
+        );
+        expect(reg).toBeDefined();
+        const mutableReg = reg as unknown as Record<string, unknown>;
+        expect(mutableReg['workerConcurrencyFallback']).toBe(5);
+        expect(mutableReg['workerConcurrencyEnvVar']).toBe('PARSE_WORKERS');
+    });
+});
+
+describe('FIX F.2 — non-literal every populates unresolvedRepeatExpressions with <every: marker', () => {
+    it('queue.add with non-literal every records diagnostic with <every: prefix', async () => {
+        const source = `
+            import { InjectQueue } from '@nestjs/bullmq';
+            import { BullModule } from '@nestjs/bullmq';
+
+            const someVar = 5000;
+            BullModule.registerQueue({ name: 'every-var-queue' });
+
+            class EveryScheduler {
+                constructor(@InjectQueue('every-var-queue') private everyQueue: any) {}
+
+                async schedule() {
+                    await this.everyQueue.add('j', {}, { repeat: { every: someVar } });
+                }
+            }
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project);
+
+        expect(result.unresolvedRepeatExpressions.length).toBeGreaterThan(0);
+        const entry = result.unresolvedRepeatExpressions.find(
+            (e) => e.queueName === 'every-var-queue',
+        );
+        expect(entry).toBeDefined();
+        expect(entry!.rawExpression).toContain('<every:');
+    });
+});
+
+describe('FIX F.3 — pipeline E2E: jobData written to queue node meta when withTypes=true', () => {
+    it('runBuild with withTypes=true writes jobData to queue node meta', async () => {
+        // Create a real temp fixture that runBuild can walk
+        const tmpRoot = mkdtempSync(join(tmpdir(), 'arch-graph-test-'));
+        try {
+            const appDir = join(tmpRoot, 'apps', 'job-svc', 'src');
+            mkdirSync(appDir, { recursive: true });
+            writeFileSync(join(appDir, 'processor.ts'), `
+                import { Processor, Process } from '@nestjs/bullmq';
+                import { BullModule } from '@nestjs/bullmq';
+
+                interface Job<T = any> { data: T; }
+
+                BullModule.registerQueue({ name: 'typed-queue' });
+
+                @Processor('typed-queue')
+                class TypedProcessor {
+                    @Process()
+                    async handle(job: Job<{ orderId: string; amount: number }>): Promise<void> {}
+                }
+            `);
+            const cfg: ArchGraphConfig = {
+                id: 'e2e-test',
+                root: tmpRoot,
+                appsGlob: 'apps/**',
+            } as unknown as ArchGraphConfig;
+            const result = await runBuild(cfg, { withTypes: true });
+            const queueNode = result.graph.nodes.find((n) => n.id === 'queue:typed-queue');
+            expect(queueNode).toBeDefined();
+            const jobData = queueNode?.meta?.['jobData'] as Array<unknown> | undefined;
+            expect(jobData).toBeDefined();
+            expect(jobData!.length).toBeGreaterThan(0);
+        } finally {
+            rmSync(tmpRoot, { recursive: true, force: true });
+        }
+    });
+});
+
+describe('FIX F.4 — multiple @Process methods on same queue dedup by (processorClass, methodName)', () => {
+    it('two @Process methods on same queue give 2 distinct jobDataTypes entries', async () => {
+        const source = `
+            import { Processor, Process } from '@nestjs/bullmq';
+
+            interface Job<T = any> { data: T; }
+
+            @Processor('multi-process')
+            class MultiProcessProcessor {
+                @Process('type-a')
+                async handleA(job: Job<{ aField: string }>): Promise<void> {}
+
+                @Process('type-b')
+                async handleB(job: Job<{ bField: number }>): Promise<void> {}
+            }
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project, { withTypes: true });
+
+        const entries = result.jobDataTypes.filter((j) => j.queueName === 'multi-process');
+        expect(entries.length).toBe(2);
+        const methodNames = entries.map((e) => e.methodName).sort();
+        expect(methodNames).toEqual(['handleA', 'handleB']);
+    });
+});
+
+describe('FIX F.5 — factory-merge: existing BullModule registration enriched with workerConcurrencyFallback', () => {
+    it('createWorker merges fallback onto existing BullModule.registerQueue entry', async () => {
+        const source = `
+            import { BullModule } from '@nestjs/bullmq';
+
+            BullModule.registerQueue({ name: 'q' });
+
+            const factory = new WorkerFactory();
+            factory.createWorker('q', { concurrency: process.env.Q_WORKERS ?? 7 });
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project);
+
+        // Should be exactly 1 registration (merged, not duplicated)
+        const qRegs = result.registrations.filter(
+            (r) => r.queue.kind !== 'unresolved' && r.queue.name === 'q',
+        );
+        expect(qRegs.length).toBe(1);
+        const mutableReg = qRegs[0] as unknown as Record<string, unknown>;
+        expect(mutableReg['workerConcurrencyFallback']).toBe(7);
     });
 });

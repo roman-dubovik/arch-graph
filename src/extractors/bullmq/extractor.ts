@@ -15,6 +15,7 @@ import type {
     BullMqCatchBlockAddSite,
     BullMqEventListenerSite,
     BullMqInjectionSite,
+    BullMqJobDataType,
     BullMqProcessorSite,
     BullMqQueueRef,
     BullMqQueueRegistration,
@@ -64,12 +65,44 @@ export interface ExtractBullMqResult {
     unresolvedEventListeners: Array<{ location: SourceLoc; receiverText: string; event: string }>;
     /** Catch-block .add() sites whose receiver could not be resolved — diagnostics only (no edge). */
     unresolvedCatchBlockSites: Array<{ location: SourceLoc; receiverText: string; processorQueueName: string }>;
+    /**
+     * repeat-add sites whose `{ repeat: { cron: X } }` uses a non-literal expression.
+     * No cron-schedule node is emitted; recorded here for diagnostics only.
+     */
+    unresolvedRepeatExpressions: Array<{ location: SourceLoc; queueName: string; rawExpression: string }>;
+    /**
+     * Job-data type information for each @Process method — populated only when
+     * `options.withTypes === true`. Empty array otherwise.
+     */
+    jobDataTypes: BullMqJobDataType[];
+    /**
+     * @Process methods for which the type-checker pass failed to resolve the
+     * `Job<DataType>` generic parameter. Populated only when `withTypes === true`.
+     */
+    unresolvedJobDataTypes: Array<{
+        queueName: string;
+        processorClass: string;
+        methodName: string;
+        reason: string;
+    }>;
     queueNames: QueueNameIndex;
+}
+
+export interface ExtractBullMqOptions {
+    /**
+     * When true, activates the ts-morph type-checker pass that resolves
+     * `Job<DataType>` generic type parameters for each `@Process` method.
+     * Gated behind this flag because the type-checker pass is O(n) on the
+     * number of source files — can be ×2 slower on large projects.
+     * Default: false.
+     */
+    withTypes?: boolean;
 }
 
 export async function extractBullMq(
     _cfg: ArchGraphConfig,
     project: Project,
+    options: ExtractBullMqOptions = {},
 ): Promise<ExtractBullMqResult> {
     const queueNames = buildQueueNameIndex(project);
     const producers: BullMqInjectionSite[] = [];
@@ -81,6 +114,7 @@ export async function extractBullMq(
     const unresolvedFailOver: Array<{ location: SourceLoc; raw: string }> = [];
     const unresolvedEventListeners: Array<{ location: SourceLoc; receiverText: string; event: string }> = [];
     const unresolvedCatchBlockSites: Array<{ location: SourceLoc; receiverText: string; processorQueueName: string }> = [];
+    const unresolvedRepeatExpressions: Array<{ location: SourceLoc; queueName: string; rawExpression: string }> = [];
 
     for (const sf of project.getSourceFiles()) {
         if (isExcludedSourceFile(sf)) continue;
@@ -90,7 +124,8 @@ export async function extractBullMq(
         const hasBullModule = text.includes('BullModule.registerQueue');
         const hasOnCall = text.includes('.on(');
         const hasAddCall = text.includes('.add(');
-        if (!hasInject && !hasProcessor && !hasBullModule && !hasOnCall && !hasAddCall) continue;
+        const hasCreateWorker = text.includes('createWorker');
+        if (!hasInject && !hasProcessor && !hasBullModule && !hasOnCall && !hasAddCall && !hasCreateWorker) continue;
 
         // Build per-file property→queueName map from @InjectQueue sites (for receiver resolution)
         const injectedQueuesByProp = new Map<string, string>(); // propertyName → queueName
@@ -150,8 +185,28 @@ export async function extractBullMq(
                 catchBlockAddSites,
                 unresolvedEventListeners,
                 unresolvedCatchBlockSites,
+                unresolvedRepeatExpressions,
             );
         }
+
+        // Worker factory env-fallback concurrency detection
+        // Detects: factory.createWorker('queue-name', { concurrency: process.env.X ?? 5 })
+        if (text.includes('createWorker')) {
+            collectWorkerFactorySites(sf, queueNames, registrations);
+        }
+    }
+
+    // Job-data type resolution — only when withTypes is explicitly enabled.
+    // This pass invokes the ts-morph type-checker which is O(n) on source files.
+    const jobDataTypes: BullMqJobDataType[] = [];
+    const unresolvedJobDataTypes: Array<{
+        queueName: string;
+        processorClass: string;
+        methodName: string;
+        reason: string;
+    }> = [];
+    if (options.withTypes === true) {
+        resolveJobDataTypes(project, consumers, jobDataTypes, unresolvedJobDataTypes);
     }
 
     return {
@@ -164,6 +219,9 @@ export async function extractBullMq(
         unresolvedFailOver,
         unresolvedEventListeners,
         unresolvedCatchBlockSites,
+        unresolvedRepeatExpressions,
+        jobDataTypes,
+        unresolvedJobDataTypes,
         queueNames,
     };
 }
@@ -430,6 +488,7 @@ function collectCallSites(
     catchBlockAddSites: BullMqCatchBlockAddSite[],
     unresolvedEventListeners: Array<{ location: SourceLoc; receiverText: string; event: string }>,
     unresolvedCatchBlockSites: Array<{ location: SourceLoc; receiverText: string; processorQueueName: string }>,
+    unresolvedRepeatExpressions: Array<{ location: SourceLoc; queueName: string; rawExpression: string }>,
 ): void {
     const filePath = sf.getFilePath();
 
@@ -474,7 +533,7 @@ function collectCallSites(
         }
 
         // -----------------------------------------------------------------------
-        // Case 2: .add(jobName, data, { repeat: ... }) — hasRepeat detection
+        // Case 2: .add(jobName, data, { repeat: ... }) — hasRepeat detection + cron extraction
         // -----------------------------------------------------------------------
         if (methodName === 'add') {
             const args = call.getArguments();
@@ -483,10 +542,63 @@ function collectCallSites(
                 const optionsArg = args[2]!;
                 if (optionsArg.getKind() === SyntaxKind.ObjectLiteralExpression) {
                     const opts = optionsArg as ObjectLiteralExpression;
-                    if (findProp(opts, 'repeat') !== null) {
+                    const repeatProp = findProp(opts, 'repeat');
+                    if (repeatProp !== null) {
                         const queueName = resolveReceiver(receiverText, injectedQueuesByProp);
                         if (queueName !== null) {
-                            repeatAddSites.push({ role: 'repeat-add', queueName, location });
+                            // Resolve job name (first arg) if it is a string literal
+                            let jobName: string | undefined;
+                            const firstArg = args[0]!;
+                            if (firstArg.getKind() === SyntaxKind.StringLiteral
+                                || firstArg.getKind() === SyntaxKind.NoSubstitutionTemplateLiteral) {
+                                jobName = (firstArg as StringLiteral).getLiteralText();
+                            }
+
+                            // Try to extract literal cron expression
+                            let repeatExpression: string | undefined;
+                            const repeatInit = repeatProp.getInitializer();
+                            if (repeatInit?.getKind() === SyntaxKind.ObjectLiteralExpression) {
+                                const repeatObj = repeatInit as ObjectLiteralExpression;
+                                const cronProp = findProp(repeatObj, 'cron');
+                                if (cronProp !== null) {
+                                    const cronInit = cronProp.getInitializer();
+                                    const cronKind = cronInit?.getKind();
+                                    if (cronKind === SyntaxKind.StringLiteral
+                                        || cronKind === SyntaxKind.NoSubstitutionTemplateLiteral) {
+                                        repeatExpression = (cronInit as StringLiteral).getLiteralText();
+                                    } else if (cronInit !== undefined) {
+                                        // Non-literal — record as unresolved diagnostic
+                                        unresolvedRepeatExpressions.push({
+                                            location,
+                                            queueName,
+                                            rawExpression: cronInit.getText().slice(0, 120),
+                                        });
+                                    }
+                                }
+                                // Non-literal `every` (variable, template, expression):
+                                // no ms value stored, but push to unresolvedRepeatExpressions
+                                // so operators can see it. Literal numeric `every` is silently
+                                // accepted (hasRepeat is set on the queue node via the site).
+                                const everyProp = findProp(repeatObj, 'every');
+                                if (everyProp !== null) {
+                                    const everyInit = everyProp.getInitializer();
+                                    if (everyInit !== undefined && everyInit.getKind() !== SyntaxKind.NumericLiteral) {
+                                        unresolvedRepeatExpressions.push({
+                                            location,
+                                            queueName,
+                                            rawExpression: '<every: ' + everyInit.getText().slice(0, 60) + '>',
+                                        });
+                                    }
+                                }
+                            }
+
+                            repeatAddSites.push({
+                                role: 'repeat-add',
+                                queueName,
+                                location,
+                                ...(jobName !== undefined ? { jobName } : {}),
+                                ...(repeatExpression !== undefined ? { repeatExpression } : {}),
+                            });
                         }
                     }
                 }
@@ -559,6 +671,290 @@ function findProcessorQueueForFile(
         }
     }
     return null;
+}
+
+// ---------------------------------------------------------------------------
+// Worker factory env-fallback concurrency
+// ---------------------------------------------------------------------------
+
+/**
+ * Detects the factory-style worker creation pattern and resolves the numeric
+ * env-var fallback for concurrency:
+ *   factory.createWorker('queue-name', { concurrency: process.env.X ?? 5 })
+ *   factory.createWorker('queue-name', { concurrency: Number(process.env.X) || 10 })
+ *   factory.createWorker('queue-name', { concurrency: parseInt(process.env.X, 10) || 10 })
+ *
+ * The resolved values are stored as `workerConcurrencyFallback` and
+ * `workerConcurrencyEnvVar` on the matching existing registration (first-seen
+ * wins) or as a synthetic registration entry if none is found.
+ */
+function collectWorkerFactorySites(
+    sf: SourceFile,
+    queueNames: QueueNameIndex,
+    registrations: BullMqQueueRegistration[],
+): void {
+    sf.forEachDescendant((node) => {
+        if (node.getKind() !== SyntaxKind.CallExpression) return;
+        const call = node as CallExpression;
+        const expr = call.getExpression();
+        if (expr.getKind() !== SyntaxKind.PropertyAccessExpression) return;
+        const methodName = expr.asKindOrThrow(SyntaxKind.PropertyAccessExpression).getName();
+        if (methodName !== 'createWorker') return;
+
+        const args = call.getArguments();
+        if (args.length < 2) return;
+
+        // First arg: queue name
+        const queueNameRef = resolveQueueArg(args[0]!, queueNames);
+        if (queueNameRef.kind === 'unresolved') return;
+        const queueName = queueNameRef.name;
+
+        // Second arg: options object
+        const optsArg = args[1]!;
+        if (optsArg.getKind() !== SyntaxKind.ObjectLiteralExpression) return;
+        const opts = optsArg as ObjectLiteralExpression;
+        const concProp = findProp(opts, 'concurrency');
+        if (!concProp) return;
+
+        const concInit = concProp.getInitializer();
+        if (!concInit) return;
+
+        const resolved = resolveEnvFallback(concInit);
+        if (!resolved) return;
+
+        // Store on existing registration (first-seen wins) or append synthetic entry
+        const existing = registrations.find(
+            (r) => r.queue.kind !== 'unresolved' && r.queue.name === queueName,
+        );
+        if (existing) {
+            const mutableReg = existing as unknown as Record<string, unknown>;
+            if (mutableReg['workerConcurrencyFallback'] === undefined) {
+                mutableReg['workerConcurrencyFallback'] = resolved.fallback;
+                mutableReg['workerConcurrencyEnvVar'] = resolved.envVar;
+            }
+        } else {
+            const sfPath = sf.getFilePath();
+            const pos = sf.getLineAndColumnAtPos(call.getStart());
+            const syntheticReg: BullMqQueueRegistration & {
+                workerConcurrencyFallback?: number;
+                workerConcurrencyEnvVar?: string;
+            } = {
+                role: 'registration',
+                queue: queueNameRef,
+                api: 'registerQueue',
+                location: { file: sfPath, line: pos.line, column: pos.column },
+                workerConcurrencyFallback: resolved.fallback,
+                workerConcurrencyEnvVar: resolved.envVar,
+            };
+            registrations.push(syntheticReg);
+        }
+    });
+}
+
+/**
+ * Resolves the numeric fallback from a worker concurrency expression.
+ *
+ * Supported patterns:
+ *   - `process.env.X ?? <literal>`
+ *   - `Number(process.env.X) || <literal>`
+ *   - `parseInt(process.env.X, 10) || <literal>`
+ *
+ * Returns `{ envVar, fallback }` or `null` if the pattern is not recognised.
+ */
+function resolveEnvFallback(node: Node): { envVar: string; fallback: number } | null {
+    const kind = node.getKind();
+
+    // Binary expression: LHS ?? RHS  or  LHS || RHS
+    if (kind === SyntaxKind.BinaryExpression) {
+        const bin = node.asKindOrThrow(SyntaxKind.BinaryExpression);
+        const op = bin.getOperatorToken().getText();
+        if (op !== '??' && op !== '||') return null;
+
+        const right = bin.getRight();
+        if (right.getKind() !== SyntaxKind.NumericLiteral) return null;
+        const fallback = Number(right.getText());
+
+        const left = bin.getLeft();
+        const envVar = extractEnvVar(left);
+        if (envVar === null) return null;
+
+        return { envVar, fallback };
+    }
+
+    return null;
+}
+
+/**
+ * Extracts the env-var name string from a `process.env.X` or
+ * `Number(process.env.X)` / `parseInt(process.env.X, 10)` expression.
+ *
+ * Also handles `Number(process.env.X ?? 'fallback')` — the inner `??` binary
+ * expression is unwrapped by taking the LHS (the env var reference), ignoring
+ * the inner string fallback. The OUTER numeric fallback (from `resolveEnvFallback`)
+ * is what counts as the actual concurrency fallback value.
+ */
+function extractEnvVar(node: Node): string | null {
+    const kind = node.getKind();
+
+    // Direct: process.env.X
+    if (kind === SyntaxKind.PropertyAccessExpression) {
+        const text = node.getText();
+        const match = text.match(/^process\.env\.([A-Z_a-z][A-Z_a-z0-9]*)$/);
+        return match ? (match[1] ?? null) : null;
+    }
+
+    // Wrapped: Number(process.env.X) or parseInt(process.env.X, 10)
+    // Also: Number(process.env.X ?? 'fallback') — unwrap the inner ?? binary
+    if (kind === SyntaxKind.CallExpression) {
+        const call = node as CallExpression;
+        const fnExpr = call.getExpression().getText();
+        if (fnExpr !== 'Number' && fnExpr !== 'parseInt') return null;
+        const firstArg = call.getArguments()[0];
+        if (!firstArg) return null;
+        // Recurse — handles both direct process.env.X and inner binary expressions
+        return extractEnvVar(firstArg);
+    }
+
+    // Inner binary: process.env.X ?? 'fallback' (or process.env.X ?? someDefault)
+    // Take the LHS (the env var); ignore the inner fallback literal.
+    if (kind === SyntaxKind.BinaryExpression) {
+        const bin = node.asKindOrThrow(SyntaxKind.BinaryExpression);
+        const op = bin.getOperatorToken().getText();
+        if (op !== '??' && op !== '||') return null;
+        return extractEnvVar(bin.getLeft());
+    }
+
+    return null;
+}
+
+// ---------------------------------------------------------------------------
+// Job-data type resolution (--with-types pass)
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolves `Job<DataType>` generic parameter for each `@Process` method.
+ *
+ * For each consumer processor site, walks the methods decorated with `@Process`
+ * and uses ts-morph's type-checker to resolve the first parameter's generic type.
+ *
+ * If the type argument is an object-literal type (anonymous), `typeName` is
+ * set to `'<inline>'`. On any failure, the entry is silently skipped.
+ *
+ * Design choice: if multiple `@Process` methods on different classes target the
+ * same queue, ALL entries are appended (not first-seen dedup). This preserves
+ * per-method resolution for multi-process processor classes.
+ */
+function resolveJobDataTypes(
+    project: Project,
+    consumers: BullMqProcessorSite[],
+    out: BullMqJobDataType[],
+    unresolvedOut: Array<{ queueName: string; processorClass: string; methodName: string; reason: string }>,
+): void {
+    for (const consumer of consumers) {
+        if (consumer.queue.kind === 'unresolved') continue;
+        const queueName = consumer.queue.name;
+
+        // Find source file containing the processor class
+        const sf = project.getSourceFiles().find(
+            (f) => f.getFilePath() === consumer.location.file,
+        );
+        if (!sf) continue;
+
+        const cls = sf.getClasses().find((c) => c.getName() === consumer.className);
+        if (!cls) continue;
+
+        for (const method of cls.getMethods()) {
+            const processDecorator = method.getDecorator('Process');
+            if (!processDecorator) continue;
+
+            const params = method.getParameters();
+            if (params.length === 0) continue;
+
+            const firstParam = params[0]!;
+            try {
+                const typeNode = firstParam.getTypeNode();
+                if (!typeNode) continue;
+
+                // Type text e.g. "Job<MyData>" or "Job<{ foo: string }>"
+                const typeText = typeNode.getText();
+                if (!typeText.startsWith('Job<') || !typeText.endsWith('>')) continue;
+
+                // Extract the type argument text
+                const innerText = typeText.slice(4, -1).trim();
+
+                let typeName: string;
+                let fields: string[] = [];
+
+                if (innerText.startsWith('{')) {
+                    // Inline object literal type
+                    typeName = '<inline>';
+                    // Extract depth-1 property names from inline type literal
+                    fields = extractInlineTypeFields(innerText);
+                } else {
+                    // Named type — use ts-morph type-checker for field resolution
+                    typeName = innerText;
+                    const paramType = firstParam.getType();
+                    // paramType is Job<X> — get type arguments
+                    const typeArgs = paramType.getTypeArguments();
+                    if (typeArgs.length > 0) {
+                        const dataType = typeArgs[0]!;
+                        fields = dataType
+                            .getProperties()
+                            .map((p) => p.getName())
+                            .filter((n) => !n.startsWith('__'));
+                    }
+                }
+
+                out.push({
+                    queueName,
+                    processorClass: consumer.className,
+                    methodName: method.getName(),
+                    typeName,
+                    fields,
+                });
+            } catch (err) {
+                // Type-checker pass is best-effort — record failure in diagnostics
+                unresolvedOut.push({
+                    queueName,
+                    processorClass: consumer.className,
+                    methodName: method.getName(),
+                    reason: err instanceof Error ? err.message : String(err),
+                });
+            }
+        }
+    }
+}
+
+/**
+ * Extract depth-1 property names from an inline TypeScript object-literal type.
+ * e.g. `{ foo: string; bar: number; baz?: boolean }` → `['foo', 'bar', 'baz']`
+ * e.g. `{ outer: { inner: string }; top: number }` → `['outer', 'top']` (NOT 'inner')
+ *
+ * Uses a character-by-character brace-depth scanner to enforce "depth-1 only":
+ * properties of nested types (depth > 1) are excluded.
+ */
+function extractInlineTypeFields(typeText: string): string[] {
+    const fields: string[] = [];
+    const seen = new Set<string>();
+    const re = /\b([a-zA-Z_$][a-zA-Z0-9_$]*)\??:/g;
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(typeText)) !== null) {
+        const prefix = typeText.slice(0, match.index);
+        let depth = 0;
+        for (const ch of prefix) {
+            if (ch === '{') depth++;
+            else if (ch === '}') depth--;
+        }
+        if (depth === 1) {
+            const name = match[1]!;
+            if (!seen.has(name)) {
+                seen.add(name);
+                fields.push(name);
+            }
+        }
+        if (fields.length > 64) break;   // pathological-type guard
+    }
+    return fields;
 }
 
 // ---------------------------------------------------------------------------
