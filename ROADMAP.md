@@ -97,7 +97,7 @@ A handful of project-c eval queries reference domains that don't exist in that c
 ### 5. Additional NodeKinds — partial progress
 
 - ~~Cron schedule semantics~~ — **SHIPPED** (`cron-v1`, 2026-05-19). NodeKind `cron-schedule` + EdgeKind `cron-triggers`. Covers `@Cron` / `@Interval` / `@Timeout` + `SchedulerRegistry.add*`.
-- 🟡 **Extended BullMQ** — Phase 1 (concurrency, default delay/attempts/backoff, DLQ heuristic, event-listener edges `queue-fails-into` / `queue-event-listener`) and Phase 2 (job-data type extraction via ts-morph type-checker, worker scaling config) + cross-enrichment (`queue.add(..., { repeat: { cron } })` → `cron-schedule` node) — designed in [`docs/plans/2026-05-19-ui-bench-cron-bullmq-design.md`](./docs/plans/2026-05-19-ui-bench-cron-bullmq-design.md), execution deferred to next focused session. Tags: `bullmq-extras-v1` (Phase 1) + `bullmq-types-v1` (Phase 2 + cross-enrichment).
+- ~~**Extended BullMQ**~~ — **SHIPPED** (`bullmq-extras-v1` Phase 1 + `bullmq-types-v1` Phase 2 + cross-enrichment, 2026-05-19). Phase 1: queue meta (`concurrency`, `defaultDelay/Attempts/Backoff`, `hasRepeat`) + new edges `queue-fails-into` (DLQ heuristic) and `queue-event-listener`. Phase 2: `--with-types` flag resolves `Job<DataType>` generics via ts-morph type-checker (`jobData`); worker factory env-fallback concurrency (`workerConcurrencyEnvVar` / `workerConcurrencyFallback`). Cross-enrichment: `queue.add(..., { repeat: { cron } })` → `cron-schedule` node + `queue-repeat` edge. Design: [`docs/plans/2026-05-19-ui-bench-cron-bullmq-design.md`](./docs/plans/2026-05-19-ui-bench-cron-bullmq-design.md).
 - ⚪ GraphQL endpoints — by request, ~1-2 days.
 
 ### ⚪ 6. Broader eval corpus

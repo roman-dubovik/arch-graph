@@ -812,10 +812,13 @@ arch-graph build --strict            # CI gate: exit 3 if recall drops below flo
               </span>
               <h3>BullMQ</h3>
             </div>
-            <p class="domain-blurb">Queue boundaries. <code>@InjectQueue</code> producers and <code>@Processor</code> consumers tied to a named queue node.</p>
+            <p class="domain-blurb">Queue boundaries. <code>@InjectQueue</code> producers and <code>@Processor</code> consumers tied to a named queue node. Queue meta includes <code>concurrency</code>, <code>defaultDelay</code>, <code>defaultAttempts</code>, <code>defaultBackoff</code>, <code>hasRepeat</code> (extras-v1); <code>jobData</code> type fields and <code>workerConcurrencyEnvVar</code> / <code>workerConcurrencyFallback</code> (types-v1, requires <code>--with-types</code>).</p>
             <ul class="domain-edges mono">
               <li>queue-produce</li>
               <li>queue-consume</li>
+              <li>queue-fails-into <span class="dim">(DLQ — MUST <code>registerQueue.failOver</code>, MAY catch-block <code>.add()</code>)</span></li>
+              <li>queue-event-listener <span class="dim">(<code>queue.on</code> / <code>worker.on</code>)</span></li>
+              <li>queue-repeat <span class="dim">(<code>queue.add(…, {repeat:{cron}})</code> → <a href="#cron-schedule" style="color:inherit;">cron-schedule</a>)</span></li>
             </ul>
           </li>
 
