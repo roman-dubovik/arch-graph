@@ -882,14 +882,25 @@ function findHeritageJobDataType(
     processorClass: string = '',
 ): { typeName: string; fields: string[] } | null {
     if (depth >= maxDepth) {
-        // Fix 3 (P1): depth-limit exhaustion is a diagnostic event, not a silent skip.
-        if (unresolvedOut !== undefined && queueName) {
-            unresolvedOut.push({
-                queueName,
-                processorClass,
-                methodName: '<heritage>',
-                reason: `Heritage walk exceeded maxDepth=${maxDepth} (chain too deep)`,
-            });
+        // Change 2 (P1): Dedup diagnostic push on multi-declaration symbols
+        // When baseSymbol.getDeclarations() returns >1 ClassDeclaration (ambient + impl),
+        // the loop calls findHeritageJobDataType per declaration. If all hit depth-limit,
+        // each pushes a duplicate diagnostic.
+        if (queueName) {
+            const alreadyRecorded = unresolvedOut.some(
+                (e) => e.queueName === queueName
+                    && e.processorClass === processorClass
+                    && e.methodName === '<heritage>'
+                    && /maxDepth/.test(e.reason),
+            );
+            if (!alreadyRecorded) {
+                unresolvedOut.push({
+                    queueName,
+                    processorClass,
+                    methodName: '<heritage>',
+                    reason: `Heritage walk exceeded maxDepth=${maxDepth} (chain too deep)`,
+                });
+            }
         }
         return null;
     }
@@ -918,8 +929,14 @@ function findHeritageJobDataType(
         const resolvedType = firstTypeArg.getType();
         const isBareGeneric = resolvedType.isTypeParameter();
 
-        if (!isBareGeneric && typeName !== 'unknown' && typeName !== 'any' && typeName) {
-            // Concrete type found — resolve fields and return.
+        // Change 1 (P1): any/unknown/empty should TERMINATE, not climb
+        // These are explicit sentinel types meaning "explicitly unknown", not bare generic params
+        if (typeName === 'unknown' || typeName === 'any' || !typeName) {
+            return null;   // terminal stop — explicit any/unknown is not propagation
+        }
+
+        if (!isBareGeneric) {
+            // Concrete named type or inline literal — resolve fields and return
             let fields: string[] = [];
             if (typeName.startsWith('{')) {
                 // Inline object type literal
@@ -946,7 +963,7 @@ function findHeritageJobDataType(
             }
             return { typeName, fields };
         }
-        // Bare generic or any/unknown — fall through to climb below.
+        // Bare generic — fall through to climb below
     }
 
     // No type args at this level, OR the first type arg was a bare generic.
@@ -1068,8 +1085,9 @@ function resolveJobDataTypes(
         // 2-level patterns (EmailMarketingProcessor → BaseEmailProcessor → BaseWorkerHost<T,R>)
         // are also resolved.
         if (emittedNames.size === 0) {
-            // Outer try/catch intentionally removed: Fix 1 narrowed the inner catches to only
-            // type-checker symbol-resolution failures. Let any unexpected errors surface here.
+            // Change 3 (P2 cleanup): Remove dead unresolvedOut !== undefined guard
+            // unresolvedOut is non-optional Array<...> with default [], so the guard is dead.
+            // Keep only the queueName truthiness check (which guards against empty-string callers).
             const heritageResult = findHeritageJobDataType(
                 cls,
                 0,

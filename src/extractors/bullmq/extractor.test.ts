@@ -1728,4 +1728,28 @@ describe('FIX M — recursive heritage walk (P0+P1 fixes)', () => {
         expect(diag).toBeDefined();
         expect(diag?.reason).toMatch(/depth/i);
     });
+
+    // Test 3: Change 1 — any/unknown type-arg terminates without climbing to parent
+    it('any/unknown type-arg terminates without climbing to parent', async () => {
+        // When AnyProcessor extends MidC<any>, the 'any' is a terminal type,
+        // not a bare generic — should NOT climb to BaseC's IConcreteJobData.
+        const source = `
+            import { Processor } from '@nestjs/bullmq';
+
+            interface IConcreteJobData { orderId: string; }
+
+            class BaseWorkerHost<T, R> {}
+            abstract class BaseC extends BaseWorkerHost<IConcreteJobData, void> {}
+            abstract class MidC<T> extends BaseC {}
+
+            @Processor('any-q')
+            export class AnyProcessor extends MidC<any> {}
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project, { withTypes: true });
+
+        // 'any' is terminal — should NOT resolve to IConcreteJobData
+        const entry = result.jobDataTypes.find((j) => j.queueName === 'any-q');
+        expect(entry).toBeUndefined();
+    });
 });
