@@ -180,6 +180,71 @@ Sources:
 - [`docs/comparisons/2026-05-18-embedder-evaluation.md`](comparisons/2026-05-18-embedder-evaluation.md) — full eval memo with 4-way comparison (MiniLM / e5-base / BGE-M3 / arctic-m).
 - `scripts/eval/results-2026-05-18-projecta-e5-base.md`, `-projectb-`, `-projectc-` (anonymized; raw output retained locally).
 
+### 2026-05-19: e5-base vs fresh-graphify (head-to-head re-run)
+
+Full 103-query head-to-head re-run with e5-base as default embedder and fresh
+graphify graphs (code-only rebuild via `graphify update`). Mirrors the
+2026-05-17 methodology exactly — both-buckets mode, k=10, SKIP_BUILD=1.
+
+#### arch-graph (e5-base, both-buckets)
+
+| project | RU hits/total | RU hit-rate | EN hits/total | EN hit-rate |
+|---------|---------------|-------------|---------------|-------------|
+| project-a | 39/49 | 79.6% | 45/49 | 91.8% |
+| project-b | 24/29 | 82.8% | 25/29 | 86.2% |
+| project-c | 14/25 | 56.0% | 16/25 | 64.0% |
+| **all** | **77/103** | **74.8%** | **86/103** | **83.5%** |
+
+**Δ vs 2026-05-17 (MiniLM):** RU +7.8 pp (67% → 74.8%), EN +16.5 pp (67% → 83.5%).
+
+#### graphify (code-only rebuild, lenient criterion)
+
+| project | RU hits/total | RU hit-rate | EN hits/total | EN hit-rate |
+|---------|---------------|-------------|---------------|-------------|
+| project-a | 15/49 | 30.6% | 45/49 | 91.8% |
+| project-b | 13/29 | 44.8% | 27/29 | 93.1% |
+| project-c | 8/25 | 32.0% | 22/25 | 88.0% |
+| **all** | **36/103** | **35.0%** | **94/103** | **91.3%** |
+
+Graphify scores are **unchanged** from the 2026-05-17 baseline (not an
+embedding-based system; graphify EN lenient criterion is not affected by
+graph structure changes within the same codebase).
+
+#### Strict apples-to-apples EN re-score (69 scoreable queries)
+
+| project | GF strict | AG strict | GF Δ | AG Δ |
+|---------|-----------|-----------|------|------|
+| project-a | 24/33 = 72.7% | 29/33 = 87.9% | ~0 pp | +24.3 pp |
+| project-b | 7/18 = 38.9% | 14/18 = 77.8% | +11.1 pp | +27.8 pp |
+| project-c | 6/18 = 33.3% | 9/18 = 50.0% | −11.1 pp | +11.1 pp |
+| **all** | **37/69 = 53.6%** | **52/69 = 75.4%** | **~+1 pp** | **+21.8 pp** |
+
+Per-category strict EN:
+
+| Category | GF strict | AG strict |
+|----------|-----------|-----------|
+| A_find | 16/30 = 53.3% | 22/30 = 73.3% |
+| B_debug | 4/8 = 50.0% | 7/8 = 87.5% |
+| C_ui | 7/10 = 70.0% | 10/10 = 100.0% |
+| E_arch | 7/11 = 63.6% | 6/11 = 54.5% |
+| D_docs | 3/10 = 30.0% | 7/10 = 70.0% |
+
+**Key finding:** the 2026-05-17 near-tie on EN strict (GF 56.5% vs AG 53.6%)
+is superseded. With e5-base, arch-graph leads by **+21.8 pp** (75.4% vs 53.6%).
+The C_ui reversal is the largest single-category shift: AG 20% → 100% (+80 pp
+strict) on 10 scoreable UI queries. D_docs also reversed: AG 50% → 70% vs
+GF 30% (unchanged).
+
+**Caveat:** graphify project-c strict dropped −11.1 pp due to BFS non-determinism
+after the code-only graph rebuild (same root cause documented in
+`bench/REVALIDATION-2026-05-18.md`). The GF strict range across snapshots is
+approximately 50–57%; the 53.6% here falls within that range.
+
+Sources:
+- Memo: [`docs/comparisons/2026-05-19-arch-graph-vs-graphify-eval.md`](comparisons/2026-05-19-arch-graph-vs-graphify-eval.md)
+- arch-graph results: `scripts/eval/results-2026-05-19-both-buckets-e5-base.md`, `…-en.md`
+- graphify raw: `/tmp/revalidate-graphify-ru-2026-05-19.jsonl`, `/tmp/revalidate-graphify-en-2026-05-19.jsonl`, `/tmp/revalidate-graphify-en-strict-2026-05-19.jsonl`
+
 ## Per-feature attribution (rule of thumb)
 
 Approximate impact each feature contributes when isolated. Sum is NOT
@@ -202,7 +267,7 @@ Where the recall budget is still tight, with planned interventions:
 
 - **~~C_ui project-a 33%, project-b 33%~~** — **RESOLVED** by `e5-base-default-v1`. Aggregate C_ui 36% → 82% (+46pp). The hypothesis that embedder linguistic gap RU↔EN was the bottleneck is confirmed; BGE-M3 turned out not to be needed (and was unshippable as default: ×6 build cost; see [`docs/comparisons/2026-05-18-embedder-evaluation.md`](comparisons/2026-05-18-embedder-evaluation.md)).
 - **project-c A_find 50%** — eval-corpus mismatch (queries about cart/payment/delivery in a promo-aggregator project where those domains don't exist as graph nodes). Tracked under ROADMAP "Eval corpus hygiene"; ~30 min to rewrite affected queries against project-c's actual domain.
-- **E_arch project-b 0% / project-c 0%** — accepted limitation: ground truth assumes NestJS `*Controller`/`*Service` naming that project-b and project-c don't follow (beribuy uses kebab-case domain names like `be-api-beribuy`; insyra uses different conventions). Embedder returns semantically relevant matches that fail the strict `expectedKindIn` + `expectedLabelHas` ground-truth rule. project-a E_arch is 75% (idiomatic NestJS naming), confirming the eval rule works where the corpus matches. ROADMAP item 4 covers this.
+- **E_arch project-b 0% / project-c 0%** — accepted limitation: ground truth assumes NestJS `*Controller`/`*Service` naming that project-b and project-c don't follow (project-c uses kebab-case domain names like `be-api-project-c`; project-b uses different conventions). Embedder returns semantically relevant matches that fail the strict `expectedKindIn` + `expectedLabelHas` ground-truth rule. project-a E_arch is 75% (idiomatic NestJS naming), confirming the eval rule works where the corpus matches. ROADMAP item 4 covers this.
 
 ## Comparison axes for future model swaps
 
