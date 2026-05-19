@@ -211,6 +211,7 @@ const EDGE_SYNTAX: Record<EdgeKind, string> = {
     'cron-triggers': '-.->|triggers|',
     'queue-fails-into': '-.->|fails-into|',
     'queue-event-listener': '-.->|event-listener|',
+    'queue-repeat': '-.->|queue-repeat|',
 };
 
 /**
@@ -250,6 +251,7 @@ const EDGE_DOMAIN: Record<EdgeKind, DomainKey> = {
     'cron-triggers': 'cron',
     'queue-fails-into': 'bullmq',
     'queue-event-listener': 'bullmq',
+    'queue-repeat': 'bullmq',
 };
 
 /**
