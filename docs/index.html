@@ -4,12 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>arch-graph — Static architecture graph for NestJS monorepos</title>
-  <meta name="description" content="arch-graph extracts NATS, BullMQ, TypeORM, NestJS DI, HTTP, TS imports, and Markdown docs from a NestJS monorepo into a typed graph, plus a local multilingual semantic index (Xenova/paraphrase-multilingual-MiniLM-L12-v2). Deterministic structural extraction, zero LLM tokens on both build and query. 67% hit-rate on Russian fuzzy queries vs graphify 35% (103 queries × 3 monorepos)." />
+  <meta name="description" content="arch-graph extracts NATS, BullMQ, TypeORM, NestJS DI, HTTP, TS imports, cron schedules, and Markdown docs from a NestJS monorepo into a typed graph, plus a local multilingual semantic index (Xenova/multilingual-e5-base). Deterministic structural extraction, zero LLM tokens on both build and query. 75% hit-rate on 103 queries x 3 monorepos; +54.4 pp vs graphify on Russian, +18.9 pp on English-keyword strict (2026-05-19)." />
   <meta name="theme-color" content="#0a0a0f" />
 
   <meta property="og:type" content="website" />
   <meta property="og:title" content="arch-graph — Architecture graph + local multilingual semantic search for NestJS" />
-  <meta property="og:description" content="Deterministic structural extraction + local multilingual semantic search. Zero LLM tokens on build AND query. 67% hit-rate on Russian fuzzy queries vs graphify 35% (103 queries × 3 monorepos). EN-keyword apples-to-apples: near tie at 53.6% vs 56.5%." />
+  <meta property="og:description" content="Deterministic structural extraction + local multilingual semantic search (e5-base, 768-dim). Zero LLM tokens on build AND query. 75% hit-rate on 103 queries x 3 monorepos. vs graphify on the same suite: +54.4 pp on Russian (74.8% vs 20.4%) and +18.9 pp on English-keyword strict (75.4% vs 56.5%, 2026-05-19)." />
   <meta property="og:url" content="https://roman-dubovik.github.io/arch-graph/" />
   <meta property="og:image" content="https://roman-dubovik.github.io/arch-graph/assets/arch-graph-social-card.png" />
   <meta property="og:image:width" content="1200" />
