@@ -1038,3 +1038,142 @@ describe('FIX F.5 — factory-merge: existing BullModule registration enriched w
         expect(mutableReg['workerConcurrencyFallback']).toBe(7);
     });
 });
+
+// ---------------------------------------------------------------------------
+// Capability A — NumericConstIndex
+// ---------------------------------------------------------------------------
+
+describe('NumericConstIndex — concurrency via const identifier in @Processor', () => {
+    it('resolves concurrency: CONCURRENCY_CONST in @Processor(NAME, { concurrency: CONST })', async () => {
+        const p = new Project({
+            useInMemoryFileSystem: true,
+            compilerOptions: { target: 99, module: 99, moduleResolution: 100, strict: false },
+        });
+        p.createSourceFile('/app/apps/test-svc/src/constants.ts', `
+            export const AUDIO_CONCURRENCY = 5;
+        `);
+        p.createSourceFile('/app/apps/test-svc/src/audio.processor.ts', `
+            import { Processor } from '@nestjs/bullmq';
+            import { AUDIO_CONCURRENCY } from './constants';
+            export const AUDIO_QUEUE = 'audio';
+            @Processor(AUDIO_QUEUE, { concurrency: AUDIO_CONCURRENCY })
+            export class AudioProcessor {}
+        `);
+        const result = await extractBullMq(makeConfig(), p);
+        const consumer = result.consumers.find((c) => c.className === 'AudioProcessor');
+        expect(consumer).toBeDefined();
+        expect(consumer?.concurrency).toBe(5);
+    });
+});
+
+describe('NumericConstIndex — defaultAttempts via const identifier in registerQueue', () => {
+    it('resolves defaultJobOptions.attempts: ATTEMPTS_CONST from exported const', async () => {
+        const p = new Project({
+            useInMemoryFileSystem: true,
+            compilerOptions: { target: 99, module: 99, moduleResolution: 100, strict: false },
+        });
+        p.createSourceFile('/app/apps/test-svc/src/constants.ts', `
+            export const RETRY_ATTEMPTS = 7;
+        `);
+        p.createSourceFile('/app/apps/test-svc/src/queue.module.ts', `
+            import { BullModule } from '@nestjs/bullmq';
+            import { RETRY_ATTEMPTS } from './constants';
+            BullModule.registerQueue({
+                name: 'email',
+                defaultJobOptions: { attempts: RETRY_ATTEMPTS },
+            });
+        `);
+        const result = await extractBullMq(makeConfig(), p);
+        const reg = result.registrations.find(
+            (r) => r.queue.kind !== 'unresolved' && r.queue.name === 'email',
+        );
+        expect(reg).toBeDefined();
+        expect(reg?.defaultAttempts).toBe(7);
+    });
+});
+
+describe('NumericConstIndex — unresolved runtime identifier stays undefined, no diagnostic', () => {
+    it('concurrency: runtimeVar (not an exported const) → concurrency undefined, no diagnostic', async () => {
+        const source = `
+            import { Processor } from '@nestjs/bullmq';
+            const runtimeVar = Math.random() > 0.5 ? 3 : 5;
+            @Processor('dynamic', { concurrency: runtimeVar })
+            export class DynamicProcessor {}
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project);
+        const consumer = result.consumers.find((c) => c.className === 'DynamicProcessor');
+        expect(consumer).toBeDefined();
+        // concurrency should be undefined — runtimeVar is not an exported numeric const
+        expect(consumer?.concurrency).toBeUndefined();
+        // no diagnostic emitted for silently-unresolved numeric identifiers
+        // (verify no entry in unresolvedFailOver or other diagnostic arrays)
+        expect(result.unresolvedFailOver.length).toBe(0);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Capability B — WorkerHost.process() override
+// ---------------------------------------------------------------------------
+
+describe('Capability B — WorkerHost.process() override detected without @Process decorator', () => {
+    it('process(job: Job<T>) method in @Processor class without @Process is detected', async () => {
+        const source = `
+            import { Processor, WorkerHost } from '@nestjs/bullmq';
+
+            interface Job<T = any> { data: T; }
+
+            @Processor('audio')
+            export class AudioConsumer extends WorkerHost {
+                async process(job: Job<{ url: string }>): Promise<void> {}
+            }
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project, { withTypes: true });
+        expect(result.jobDataTypes.length).toBe(1);
+        expect(result.jobDataTypes[0]!.methodName).toBe('process');
+        expect(result.jobDataTypes[0]!.queueName).toBe('audio');
+    });
+});
+
+describe('Capability B — @Process-decorated method still resolves (regression)', () => {
+    it('explicit @Process decorator method is still resolved with withTypes=true', async () => {
+        const source = `
+            import { Processor, Process } from '@nestjs/bullmq';
+
+            interface Job<T = any> { data: T; }
+
+            @Processor('orders')
+            export class OrdersProcessor {
+                @Process()
+                async handle(job: Job<{ orderId: string }>): Promise<void> {}
+            }
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project, { withTypes: true });
+        expect(result.jobDataTypes.length).toBe(1);
+        expect(result.jobDataTypes[0]!.methodName).toBe('handle');
+    });
+});
+
+describe('Capability B — dedup: @Process + override process() in same class emits only one entry', () => {
+    it('class with both @Process and override process() emits only the @Process entry (first-seen wins)', async () => {
+        const source = `
+            import { Processor, Process, WorkerHost } from '@nestjs/bullmq';
+
+            interface Job<T = any> { data: T; }
+
+            @Processor('payments')
+            export class PaymentsProcessor extends WorkerHost {
+                @Process()
+                async process(job: Job<{ amount: number }>): Promise<void> {}
+            }
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project, { withTypes: true });
+        const entries = result.jobDataTypes.filter((j) => j.queueName === 'payments');
+        // Must not duplicate: @Process pass sets 'process' in emittedNames, blocking pass 2
+        expect(entries.length).toBe(1);
+        expect(entries[0]!.methodName).toBe('process');
+    });
+});
