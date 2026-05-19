@@ -1,6 +1,7 @@
 import {
     AsExpression,
     CallExpression,
+    ClassDeclaration,
     Decorator,
     Node,
     ObjectLiteralExpression,
@@ -851,6 +852,92 @@ function extractEnvVar(node: Node): string | null {
  * same queue, ALL entries are appended (not first-seen dedup). This preserves
  * per-method resolution for multi-process processor classes.
  */
+/**
+ * Recursively walks the inheritance chain of `cls` to find the first type
+ * argument of an `extends BaseWorkerHost<T, R>` / `WorkerHost<T, R>` heritage
+ * clause that carries concrete (non-bare-generic) type arguments.
+ *
+ * The walk is needed for 2-level inheritance patterns:
+ *
+ *   class EmailMarketingProcessor extends BaseEmailProcessor { ... }
+ *   abstract class BaseEmailProcessor extends BaseWorkerHost<IEmailJobData, IEmailJobResult> { ... }
+ *
+ * At depth=0 (EmailMarketingProcessor) the heritage clause has no type args, so
+ * we follow the symbol of the base class to its declaration and try depth=1.
+ *
+ * @param cls       - the class whose heritage should be examined
+ * @param depth     - current recursion depth (starts at 0)
+ * @param maxDepth  - abort when depth >= maxDepth (default 4)
+ * @returns         - `{ typeName, fields }` on success, `null` otherwise
+ */
+function findHeritageJobDataType(
+    cls: ClassDeclaration,
+    depth: number = 0,
+    maxDepth: number = 4,
+): { typeName: string; fields: string[] } | null {
+    if (depth >= maxDepth) return null;
+
+    // Find the `extends` clause (prefer ExtendsKeyword, fall back to first clause).
+    const heritageClauses = cls.getHeritageClauses();
+    if (heritageClauses.length === 0) return null;
+
+    const extendsClause =
+        heritageClauses.find((h) => h.getToken() === SyntaxKind.ExtendsKeyword) ??
+        heritageClauses[0]!;
+
+    const typeNodes = extendsClause.getTypeNodes();
+    if (typeNodes.length === 0) return null;
+
+    const baseType = typeNodes[0]!;
+    const typeArgs = baseType.getTypeArguments();
+
+    if (typeArgs.length >= 1) {
+        const firstTypeArg = typeArgs[0]!;
+        const typeName = firstTypeArg.getText().trim();
+
+        // Skip bare generics (T, R, …) and any/unknown — not a concrete job-data type.
+        if (!typeName || typeName.match(/^[A-Z]$/) || typeName === 'unknown' || typeName === 'any') {
+            return null;
+        }
+
+        let fields: string[] = [];
+        if (typeName.startsWith('{')) {
+            // Inline object type literal
+            fields = extractInlineTypeFields(typeName);
+        } else {
+            // Named type — use type-checker to enumerate properties.
+            try {
+                const dataType = firstTypeArg.getType();
+                fields = dataType
+                    .getProperties()
+                    .map((p) => p.getName())
+                    .filter((n) => !n.startsWith('__'));
+            } catch {
+                // best-effort — fields stays empty
+            }
+        }
+        return { typeName, fields };
+    }
+
+    // No type args at this level — climb to the parent class declaration.
+    try {
+        const baseSymbol = baseType.getType().getSymbol();
+        if (!baseSymbol) return null;
+
+        for (const decl of baseSymbol.getDeclarations()) {
+            if (decl.getKind() === SyntaxKind.ClassDeclaration) {
+                const parentClass = decl as ClassDeclaration;
+                const result = findHeritageJobDataType(parentClass, depth + 1, maxDepth);
+                if (result !== null) return result;
+            }
+        }
+    } catch {
+        // type-checker failure — bail out silently
+    }
+
+    return null;
+}
+
 function resolveJobDataTypes(
     project: Project,
     consumers: BullMqProcessorSite[],
@@ -941,49 +1028,20 @@ function resolveJobDataTypes(
         // `WorkerHost<T, R>` patterns where the subclass does NOT override `process()`
         // locally. When Pass 1 + Pass 2 produced zero entries for this class (emittedNames
         // is empty), the first type argument of the heritage clause IS the job-data type.
+        // `findHeritageJobDataType` walks up to 4 levels of the inheritance chain so that
+        // 2-level patterns (EmailMarketingProcessor → BaseEmailProcessor → BaseWorkerHost<T,R>)
+        // are also resolved.
         if (emittedNames.size === 0) {
             try {
-                const heritageClauses = cls.getHeritageClauses();
-                if (heritageClauses.length > 0) {
-                    // Find extends clause (token === ExtendsKeyword = 96)
-                    const extendsClause = heritageClauses.find(
-                        (h) => h.getToken() === SyntaxKind.ExtendsKeyword,
-                    ) ?? heritageClauses[0]!;
-                    const typeNodes = extendsClause.getTypeNodes();
-                    if (typeNodes.length > 0) {
-                        const baseType = typeNodes[0]!;
-                        const typeArgs = baseType.getTypeArguments();
-                        if (typeArgs.length >= 1) {
-                            const firstTypeArg = typeArgs[0]!;
-                            const typeName = firstTypeArg.getText().trim();
-                            // Skip bare generics (T, R, etc.) and any/unknown
-                            if (typeName && !typeName.match(/^[A-Z]$/) && typeName !== 'unknown' && typeName !== 'any') {
-                                let fields: string[] = [];
-                                if (typeName.startsWith('{')) {
-                                    // Inline type literal
-                                    fields = extractInlineTypeFields(typeName);
-                                } else {
-                                    // Named type — use type-checker for field resolution
-                                    try {
-                                        const dataType = firstTypeArg.getType();
-                                        fields = dataType
-                                            .getProperties()
-                                            .map((p) => p.getName())
-                                            .filter((n) => !n.startsWith('__'));
-                                    } catch {
-                                        // best-effort — fields stays empty
-                                    }
-                                }
-                                out.push({
-                                    queueName,
-                                    processorClass: consumer.className,
-                                    methodName: '<heritage>',
-                                    typeName,
-                                    fields,
-                                });
-                            }
-                        }
-                    }
+                const heritageResult = findHeritageJobDataType(cls);
+                if (heritageResult !== null) {
+                    out.push({
+                        queueName,
+                        processorClass: consumer.className,
+                        methodName: '<heritage>',
+                        typeName: heritageResult.typeName,
+                        fields: heritageResult.fields,
+                    });
                 }
             } catch {
                 // best-effort — skip on any AST/type-checker failure

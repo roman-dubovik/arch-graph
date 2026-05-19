@@ -1457,6 +1457,93 @@ describe('FIX I — Pass 3 heritage type-arg fallback', () => {
 });
 
 // ---------------------------------------------------------------------------
+// FIX J — Pass 3 recursive heritage walk (2-level inheritance)
+// ---------------------------------------------------------------------------
+
+describe('FIX J — Pass 3 recursive heritage walk', () => {
+    it('Pass 3 recursive heritage finds type args at depth-2 (multi-file)', async () => {
+        // EmailMarketingProcessor → BaseEmailProcessor → BaseWorkerHost<IEmailJobData, IEmailJobResult>
+        // The immediate heritage of EmailMarketingProcessor has NO type args; the
+        // recursive walk must climb to BaseEmailProcessor to find IEmailJobData.
+        const p = new Project({
+            useInMemoryFileSystem: true,
+            compilerOptions: { target: 99, module: 99, moduleResolution: 100, strict: false },
+        });
+        p.createSourceFile('/app/apps/test-svc/src/base-email.processor.ts', `
+            import { Processor } from '@nestjs/bullmq';
+
+            export interface IEmailJobData { recipientEmail: string; subject: string; }
+            export interface IEmailJobResult { messageId: string; }
+
+            class BaseWorkerHost<T, R> {}
+
+            export abstract class BaseEmailProcessor extends BaseWorkerHost<IEmailJobData, IEmailJobResult> {}
+        `);
+        p.createSourceFile('/app/apps/test-svc/src/email-marketing.processor.ts', `
+            import { Processor } from '@nestjs/bullmq';
+            import { BaseEmailProcessor } from './base-email.processor';
+
+            @Processor('email-marketing')
+            export class EmailMarketingProcessor extends BaseEmailProcessor {}
+        `);
+        const result = await extractBullMq(makeConfig(), p, { withTypes: true });
+        const entry = result.jobDataTypes.find((j) => j.queueName === 'email-marketing');
+        expect(entry).toBeDefined();
+        expect(entry?.typeName).toBe('IEmailJobData');
+        expect(entry?.methodName).toBe('<heritage>');
+        expect(entry?.fields).toContain('recipientEmail');
+        expect(entry?.fields).toContain('subject');
+    });
+
+    it('Pass 3 recursive walk respects depth limit (chain longer than maxDepth)', async () => {
+        // 5-level chain: D5 → D4 → D3 → D2 → D1 → BaseWorkerHost<IDeepData, void>
+        // Type args only exist at depth 5 (beyond the default maxDepth=4).
+        // Expect NO entry emitted.
+        const source = `
+            import { Processor } from '@nestjs/bullmq';
+
+            interface IDeepData { deep: boolean; }
+            class BaseWorkerHost<T, R> {}
+            abstract class D1 extends BaseWorkerHost<IDeepData, void> {}
+            abstract class D2 extends D1 {}
+            abstract class D3 extends D2 {}
+            abstract class D4 extends D3 {}
+
+            @Processor('deep-chain')
+            export class D5Processor extends D4 {}
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project, { withTypes: true });
+        const entry = result.jobDataTypes.find((j) => j.queueName === 'deep-chain');
+        // D5 → D4 (depth 1) → D3 (depth 2) → D2 (depth 3) → D1 (depth 4) → would be depth 5 to reach BaseWorkerHost
+        // depth limit is 4, so we should NOT reach BaseWorkerHost<IDeepData, void>
+        expect(entry).toBeUndefined();
+    });
+
+    it('Pass 3 recursive walk finds type args within depth limit (3-level chain)', async () => {
+        // 3-level chain: C → B → BaseWorkerHost<IThreeData, void>
+        // Type args at depth 2, well within maxDepth=4. Expect entry emitted.
+        const source = `
+            import { Processor } from '@nestjs/bullmq';
+
+            interface IThreeData { threeField: string; }
+            class BaseWorkerHost<T, R> {}
+            abstract class B extends BaseWorkerHost<IThreeData, void> {}
+
+            @Processor('three-level')
+            export class C extends B {}
+        `;
+        const project = makeProject(source);
+        const result = await extractBullMq(makeConfig(), project, { withTypes: true });
+        const entry = result.jobDataTypes.find((j) => j.queueName === 'three-level');
+        expect(entry).toBeDefined();
+        expect(entry?.typeName).toBe('IThreeData');
+        expect(entry?.methodName).toBe('<heritage>');
+        expect(entry?.fields).toContain('threeField');
+    });
+});
+
+// ---------------------------------------------------------------------------
 // FIX K — Pass 2 handles aliased Job imports via type-checker
 // ---------------------------------------------------------------------------
 
