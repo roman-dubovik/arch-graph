@@ -23,6 +23,7 @@ import type {
     SourceLoc,
 } from '../../core/types.js';
 import { isExcludedSourceFile } from '../shared.js';
+import { buildNumericConstIndex, NumericConstIndex } from './numeric-const-index.js';
 import { buildQueueNameIndex, QueueNameIndex } from './queue-name-index.js';
 
 export { isExcludedSourceFile };
@@ -105,6 +106,7 @@ export async function extractBullMq(
     options: ExtractBullMqOptions = {},
 ): Promise<ExtractBullMqResult> {
     const queueNames = buildQueueNameIndex(project);
+    const numericConsts = buildNumericConstIndex(project);
     const producers: BullMqInjectionSite[] = [];
     const consumers: BullMqProcessorSite[] = [];
     const registrations: BullMqQueueRegistration[] = [];
@@ -138,7 +140,7 @@ export async function extractBullMq(
                     const procDec = cls.getDecorator('Processor');
                     if (procDec) {
                         consumers.push(
-                            buildProcessorSite(enclosingClass ?? '<anonymous>', procDec, queueNames),
+                            buildProcessorSite(enclosingClass ?? '<anonymous>', procDec, queueNames, numericConsts),
                         );
                     }
                 }
@@ -170,7 +172,7 @@ export async function extractBullMq(
         }
 
         if (hasBullModule) {
-            collectRegistrations(sf, queueNames, registrations, unresolvedFailOver);
+            collectRegistrations(sf, queueNames, numericConsts, registrations, unresolvedFailOver);
         }
 
         // Collect .on() and .add() call sites for event listeners, repeat detection, and DLQ heuristic
@@ -192,7 +194,7 @@ export async function extractBullMq(
         // Worker factory env-fallback concurrency detection
         // Detects: factory.createWorker('queue-name', { concurrency: process.env.X ?? 5 })
         if (text.includes('createWorker')) {
-            collectWorkerFactorySites(sf, queueNames, registrations);
+            collectWorkerFactorySites(sf, queueNames, numericConsts, registrations);
         }
     }
 
@@ -251,6 +253,7 @@ function buildProcessorSite(
     className: string,
     dec: Decorator,
     queueNames: QueueNameIndex,
+    numericConsts: NumericConstIndex,
 ): BullMqProcessorSite {
     const sf = dec.getSourceFile();
     const pos = sf.getLineAndColumnAtPos(dec.getStart());
@@ -265,9 +268,7 @@ function buildProcessorSite(
             const obj = firstArg as ObjectLiteralExpression;
             const concurrencyProp = findProp(obj, 'concurrency');
             const init = concurrencyProp?.getInitializer();
-            if (init?.getKind() === SyntaxKind.NumericLiteral) {
-                concurrency = Number(init.getText());
-            }
+            if (init !== undefined) concurrency = readNumeric(init, numericConsts);
         }
         // Also check second arg (options object when first arg is queue name string)
         if (args.length >= 2) {
@@ -276,9 +277,7 @@ function buildProcessorSite(
                 const obj = secondArg as ObjectLiteralExpression;
                 const concurrencyProp = findProp(obj, 'concurrency');
                 const init = concurrencyProp?.getInitializer();
-                if (init?.getKind() === SyntaxKind.NumericLiteral) {
-                    concurrency = Number(init.getText());
-                }
+                if (init !== undefined) concurrency = readNumeric(init, numericConsts);
             }
         }
     }
@@ -342,6 +341,7 @@ function resolveQueueArg(node: Node, queueNames: QueueNameIndex): BullMqQueueRef
 function collectRegistrations(
     sf: SourceFile,
     queueNames: QueueNameIndex,
+    numericConsts: NumericConstIndex,
     out: BullMqQueueRegistration[],
     unresolvedFailOver: Array<{ location: SourceLoc; raw: string }>,
 ): void {
@@ -359,7 +359,7 @@ function collectRegistrations(
         const location = { file: sf.getFilePath(), line: pos.line, column: pos.column };
 
         for (const arg of call.getArguments()) {
-            out.push(resolveRegistrationArg(arg, queueNames, api, location, unresolvedFailOver));
+            out.push(resolveRegistrationArg(arg, queueNames, numericConsts, api, location, unresolvedFailOver));
         }
     });
 }
@@ -367,6 +367,7 @@ function collectRegistrations(
 function resolveRegistrationArg(
     arg: Node,
     queueNames: QueueNameIndex,
+    numericConsts: NumericConstIndex,
     api: 'registerQueue' | 'registerQueueAsync',
     location: SourceLoc,
     unresolvedFailOver: Array<{ location: SourceLoc; raw: string }>,
@@ -401,9 +402,7 @@ function resolveRegistrationArg(
 
     const concurrencyProp = findProp(obj, 'concurrency');
     const concurrencyInit = concurrencyProp?.getInitializer();
-    if (concurrencyInit?.getKind() === SyntaxKind.NumericLiteral) {
-        concurrency = Number(concurrencyInit.getText());
-    }
+    if (concurrencyInit !== undefined) concurrency = readNumeric(concurrencyInit, numericConsts);
 
     const defaultJobOptionsProp = findProp(obj, 'defaultJobOptions');
     const djoInit = defaultJobOptionsProp?.getInitializer();
@@ -412,15 +411,11 @@ function resolveRegistrationArg(
 
         const delayProp = findProp(djo, 'delay');
         const delayInit = delayProp?.getInitializer();
-        if (delayInit?.getKind() === SyntaxKind.NumericLiteral) {
-            defaultDelay = Number(delayInit.getText());
-        }
+        if (delayInit !== undefined) defaultDelay = readNumeric(delayInit, numericConsts);
 
         const attemptsProp = findProp(djo, 'attempts');
         const attemptsInit = attemptsProp?.getInitializer();
-        if (attemptsInit?.getKind() === SyntaxKind.NumericLiteral) {
-            defaultAttempts = Number(attemptsInit.getText());
-        }
+        if (attemptsInit !== undefined) defaultAttempts = readNumeric(attemptsInit, numericConsts);
 
         const backoffProp = findProp(djo, 'backoff');
         const backoffInit = backoffProp?.getInitializer();
@@ -428,6 +423,9 @@ function resolveRegistrationArg(
             const bk = backoffInit.getKind();
             if (bk === SyntaxKind.NumericLiteral) {
                 defaultBackoff = Number(backoffInit.getText());
+            } else if (bk === SyntaxKind.Identifier) {
+                const resolved = numericConsts.get(backoffInit.getText());
+                if (resolved !== undefined) defaultBackoff = resolved;
             } else if (bk === SyntaxKind.ObjectLiteralExpression) {
                 // Store raw text representation for diagnostic purposes
                 defaultBackoff = backoffInit.getText().slice(0, 120);
@@ -691,6 +689,7 @@ function findProcessorQueueForFile(
 function collectWorkerFactorySites(
     sf: SourceFile,
     queueNames: QueueNameIndex,
+    numericConsts: NumericConstIndex,
     registrations: BullMqQueueRegistration[],
 ): void {
     sf.forEachDescendant((node) => {
@@ -719,7 +718,7 @@ function collectWorkerFactorySites(
         const concInit = concProp.getInitializer();
         if (!concInit) return;
 
-        const resolved = resolveEnvFallback(concInit);
+        const resolved = resolveEnvFallback(concInit, numericConsts);
         if (!resolved) return;
 
         // Store on existing registration (first-seen wins) or append synthetic entry
@@ -761,7 +760,7 @@ function collectWorkerFactorySites(
  *
  * Returns `{ envVar, fallback }` or `null` if the pattern is not recognised.
  */
-function resolveEnvFallback(node: Node): { envVar: string; fallback: number } | null {
+function resolveEnvFallback(node: Node, numericConsts: NumericConstIndex): { envVar: string; fallback: number } | null {
     const kind = node.getKind();
 
     // Binary expression: LHS ?? RHS  or  LHS || RHS
@@ -771,8 +770,8 @@ function resolveEnvFallback(node: Node): { envVar: string; fallback: number } | 
         if (op !== '??' && op !== '||') return null;
 
         const right = bin.getRight();
-        if (right.getKind() !== SyntaxKind.NumericLiteral) return null;
-        const fallback = Number(right.getText());
+        const fallback = readNumeric(right, numericConsts);
+        if (fallback === undefined) return null;
 
         const left = bin.getLeft();
         const envVar = extractEnvVar(left);
@@ -960,6 +959,19 @@ function extractInlineTypeFields(typeText: string): string[] {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Read a numeric value from a node: accepts `NumericLiteral` directly or
+ * resolves an `Identifier` via `NumericConstIndex`. Returns `undefined` for
+ * any other kind (dynamic expressions, runtime calls, etc.) — callers silently
+ * treat `undefined` as "not resolved".
+ */
+function readNumeric(node: Node, idx: NumericConstIndex): number | undefined {
+    const k = node.getKind();
+    if (k === SyntaxKind.NumericLiteral) return Number(node.getText());
+    if (k === SyntaxKind.Identifier) return idx.get(node.getText());
+    return undefined;
+}
 
 function findProp(obj: ObjectLiteralExpression, name: string): PropertyAssignment | null {
     for (const prop of obj.getProperties()) {
