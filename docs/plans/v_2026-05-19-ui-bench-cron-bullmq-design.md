@@ -128,7 +128,7 @@ Date: 2026-05-19
 - [ ] **AC2.4:** Memo `docs/comparisons/2026-05-19-arch-graph-vs-graphify-eval.md` создан, структура повторяет 2026-05-17, включая TL;DR + RU + EN strict re-score + caveats. Все числа — фактические из текущего прогона.
 - [ ] **AC2.5:** `docs/index.html` обновлён — числа в head-to-head card (lines 379-380) отражают результаты re-run. Текст в card foot (line 381) обновлён с новой ссылкой на memo от 2026-05-19.
 - [ ] **AC2.6:** `docs/BENCHMARKS.md` — добавлена секция «2026-05-19: e5-base vs fresh-graphify» с таблицей по 3 проектам, RU + EN strict.
-- [ ] **AC2.7:** Никаких утечек реальных имён в коммите (scrub проверен). Verify: grep по platform_*, insyra_*, beribuy.
+- [ ] **AC2.7:** Никаких утечек реальных имён в коммите (scrub проверен). Verify: grep по реальным именам клиентских репо (см. внутреннюю scrub-spec).
 
 ### Task 3a — Cron extractor
 

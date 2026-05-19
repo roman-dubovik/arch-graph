@@ -246,7 +246,7 @@ After Task 7 commits land on main:
 1. **Self-build mini-bench:** `pnpm tsx bench/self-build/run.ts` with new default (e5-base). Numbers stored at `bench/self-build/results/e5-base.json`. Compare against historical MiniLM numbers.
 2. **Full 103-query bench on 3 projects (project-a, project-b, project-c):**
    - `MODEL=e5-base EVAL_MODE=both-buckets bash scripts/run-baseline-eval.sh`
-   - Use existing project paths (PROJECT_A_DIR=/Users/romandubovik/Documents/Projects/platform, PROJECT_B_DIR=/Users/romandubovik/Documents/Projects/insyra, PROJECT_C_DIR=/Users/romandubovik/Documents/Projects/beribuy/beribuy-2.0)
+   - Use existing project paths (PROJECT_A_DIR=/path/to/project-a, PROJECT_B_DIR=/path/to/project-b, PROJECT_C_DIR=/path/to/project-c)
    - Results files go to `/tmp/bge-m3-bench/` so they don't enter the repo (anonymization rule). Per-project aggregate hit-rates extracted to a single anonymized summary in Phase 9 report.
 3. **Incremental perf measurement:**
    - On project-c: time `arch-graph semantic build --full` vs `arch-graph semantic build` (no-op, after first run).

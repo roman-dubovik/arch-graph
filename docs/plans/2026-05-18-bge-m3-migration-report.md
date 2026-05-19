@@ -117,8 +117,8 @@ After BGE-M3 was aborted, `Xenova/multilingual-e5-base` (768-dim, requires `pass
 | Project | Nodes | MiniLM | e5-base | Δ pp | Build (e5-base) |
 |---------|-------|--------|---------|------|-----------------|
 | platform | 29527 | 71% (35/49) | **79% (39/49)** | **+8** ✅ | 41 min |
-| insyra | 21541 | 75% (22/29) | **82% (24/29)** | **+7** ✅ | 27 min |
-| beribuy | 2065 | 56% (14/25) | 56% (14/25) | 0 | 5 min |
+| project-b | 21541 | 75% (22/29) | **82% (24/29)** | **+7** ✅ | 27 min |
+| project-c | 2065 | 56% (14/25) | 56% (14/25) | 0 | 5 min |
 | **Aggregate** | | **71/103 (69%)** | **77/103 (75%)** | **+6** ✅ | |
 
 ### Per-category aggregate (the C_ui hypothesis answer)
@@ -182,7 +182,7 @@ The remainder of this report (below this update) captures the BGE-M3 evaluation 
 
 ### 103-query bench update (2026-05-18, partial)
 
-The 103-query bench was attempted across three reference monorepos. **Only project-c (beribuy-2.0, 2065 nodes) completed both models. project-a (platform, 29527 nodes) and project-b (insyra, 21541 nodes) BGE-M3 builds were aborted after 2h 40min of active embedding** (still running at ~10 CPU cores total, no manifest written) — see UX finding below.
+The 103-query bench was attempted across three reference monorepos. **Only project-c (2065 nodes) completed both models. project-a (29527 nodes) and project-b (21541 nodes) BGE-M3 builds were aborted after 2h 40min of active embedding** (still running at ~10 CPU cores total, no manifest written) — see UX finding below.
 
 #### Project-c numbers (25 queries, both-buckets mode)
 
@@ -207,8 +207,8 @@ The self-build report claimed "412s vs 57s, ~7× slower". That measurement was o
 | Repo size (nodes) | MiniLM build | BGE-M3 build (extrapolated) |
 |---|---|---|
 | 2065 (self / project-c) | ~57 s | ~7 min (measured) |
-| 21541 (insyra-like) | ~20 min | **2–3 hours (aborted at 2h40m)** |
-| 29527 (platform-like) | ~25 min | **3+ hours (aborted at 2h40m)** |
+| 21541 (project-b-like) | ~20 min | **2–3 hours (aborted at 2h40m)** |
+| 29527 (project-a-like) | ~25 min | **3+ hours (aborted at 2h40m)** |
 
 This kills any conversation about switching default to BGE-M3 — even if the 103-query bench eventually shows ≥ 5pp lift, a 3-hour first-time install is unshippable as default UX. A user running `arch-graph init` followed by `arch-graph semantic build` on their company monorepo would be staring at a saturated Mac for an afternoon.
 
@@ -258,7 +258,7 @@ BGE-M3 should remain opt-in via `semantic.model: 'bge-m3'` in `arch-graph.config
 
 ## UPDATE — Arctic Embed M v2.0 spike & 4-way comparison (2026-05-18, evening)
 
-### Sanity bench (project-c, beribuy-2.0, 2065 nodes, mode=both-buckets)
+### Sanity bench (project-c, 2065 nodes, mode=both-buckets)
 
 | Model | A_find | B_debug | C_ui | E_arch | D_docs | D_links | **overall** |
 |---|---|---|---|---|---|---|---|
