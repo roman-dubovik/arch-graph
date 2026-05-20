@@ -53,8 +53,9 @@ trap 'on_exit $?' EXIT
 
 PASS_COUNT=0
 # Steps: install, init, build, stats, queries, integrations, filter-chain edges,
-# semantic build (smoke), uninstall --project --yes, install.sh PTY prompt (N path)
-TOTAL_STEPS=10
+# semantic build (smoke), uninstall --project --yes, install.sh PTY prompt
+# (N path), install.sh → interactive init handoff (Y path)
+TOTAL_STEPS=11
 
 step_start() {
     local num=$1 label=$2
@@ -713,6 +714,65 @@ EXPECT_EOF
     # Verify the N-path didn't auto-run init (no config written into PTY_DIR).
     [ ! -f "$PTY_DIR/arch-graph.config.ts" ] \
         || fail "install.sh PTY prompt: N answer should NOT have run init, but config exists"
+
+step_ok
+fi
+
+# ---------------------------------------------------------------------------
+# Step 11: install.sh interactive PTY prompt — "Y" path reaches init wizard
+# ---------------------------------------------------------------------------
+# Regression guard for `curl | sh`: install.sh reads the initial "yes" from
+# /dev/tty, but stdin for the shell process is still the curl pipe. It must
+# reattach stdin to /dev/tty before exec'ing `arch-graph init`, otherwise init
+# sees non-TTY stdin and silently uses its non-interactive fallback, skipping
+# the Claude skill and hook questions.
+
+step_start 11 "install.sh PTY prompt (Y path)"
+
+if ! command -v expect >/dev/null 2>&1; then
+    printf " SKIP (expect not installed)\n"
+    (( PASS_COUNT++ )) || true
+elif ! /usr/bin/expect -c 'if {[catch {spawn -noecho true} err]} { exit 1 }; expect eof; exit 0' >/dev/null 2>&1; then
+    printf " SKIP (no usable PTY in this environment)\n"
+    (( PASS_COUNT++ )) || true
+else
+    PTY_Y_DIR="$WORK/pty-y-project"
+    mkdir -p "$PTY_Y_DIR"
+    cat > "$PTY_Y_DIR/package.json" <<'EOF'
+{
+    "name": "pty-y-project",
+    "private": true
+}
+EOF
+    PTY_Y_LOG="$WORK/pty-step11.log"
+
+    if ! /usr/bin/expect <<EXPECT_EOF > "$PTY_Y_LOG" 2>&1
+set timeout 30
+cd "$PTY_Y_DIR"
+spawn bash "$INSTALL_SCRIPT"
+expect {
+    -re "Initialise arch-graph in .* \\\[Y/n\\\]" {
+        send "y\r"
+    }
+    timeout { exit 1 }
+    eof { exit 2 }
+}
+expect {
+    -re "Install Claude Code integration" {
+        send "\003"
+    }
+    timeout { exit 3 }
+    eof { exit 4 }
+}
+expect eof
+exit 0
+EXPECT_EOF
+    then
+        echo ""
+        echo "expect run output:"
+        cat "$PTY_Y_LOG"
+        fail "install.sh PTY prompt: Y answer did not reach interactive init wizard"
+    fi
 
     step_ok
 fi

@@ -146,7 +146,7 @@ To initialise arch-graph in a project later:
 
 The wizard writes arch-graph.config.ts and (asks you about each):
   • install the Claude Code skill so agents pick up the graph
-  • install a git pre-push hook that keeps the graph fresh
+  • install a git pre-commit hook that keeps the graph fresh
   • run the first build right away
 
 If your project is tracked in a single repository and you don't want to
@@ -236,7 +236,16 @@ case "$ANSWER" in
         fi
         # Use the full path so we don't depend on $PATH being refreshed in
         # this shell. exec replaces this process — init owns stdio from here.
-        exec "$WRAPPER" init
+        #
+        # When launched as `curl ... | sh`, stdin is the curl pipe. We may have
+        # read the installer's prompt from /dev/tty above, but `arch-graph init`
+        # also needs TTY stdin or it will take its non-interactive fallback and
+        # skip the Claude skill / hook questions.
+        if [ "$PROMPT_FD" = "tty" ]; then
+            exec "$WRAPPER" init </dev/tty
+        else
+            exec "$WRAPPER" init
+        fi
         ;;
     *)
         print_init_hint
