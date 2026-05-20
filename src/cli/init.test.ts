@@ -7,7 +7,7 @@
 //   - Non-interactive path verified via mocked process.stdin.isTTY + writeFile spy.
 
 import { describe, it, expect } from 'vitest';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -17,6 +17,7 @@ import {
     askSnippetTarget,
     askBuildSemantic,
     buildStrategySnippet,
+    ensureArchGraphOutGitignored,
     runSemanticBuildStep,
     writeStrategySnippet,
     SEMANTIC_SKIP_HINT,
@@ -289,5 +290,202 @@ describe('runSemanticBuildStep', () => {
         // users only have one thing to remember.
         expect(SEMANTIC_SKIP_HINT).toContain('arch-graph semantic build');
         expect(SEMANTIC_SKIP_HINT).toContain('Skipped');
+    });
+});
+
+// ─── ensureArchGraphOutGitignored ────────────────────────────────────────────
+
+describe('ensureArchGraphOutGitignored', () => {
+    // T1: arch-graph-out/ already present → already-present, file unchanged.
+    it('T1: already-present entry returns already-present and leaves file untouched', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 'ag-gitignore-test-'));
+        try {
+            const gitignorePath = join(dir, '.gitignore');
+            const original = 'node_modules/\narch-graph-out/\ndist/\n';
+            await writeFile(gitignorePath, original, 'utf8');
+
+            const result = await ensureArchGraphOutGitignored({ repoRoot: dir });
+            expect(result.action).toBe('already-present');
+            const after = await readFile(gitignorePath, 'utf8');
+            expect(after).toBe(original);
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+        }
+    });
+
+    // T2: .gitignore exists without entry, user answers Y → file gains arch-graph-out/.
+    it('T2: existing .gitignore without entry, user Y → adds entry, file ends with newline', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 'ag-gitignore-test-'));
+        try {
+            const gitignorePath = join(dir, '.gitignore');
+            await writeFile(gitignorePath, 'node_modules/\n', 'utf8');
+
+            const rl = makeRl(['y']);
+            const written: string[] = [];
+            const result = await ensureArchGraphOutGitignored({ repoRoot: dir, rl: rl as any, write: (s) => written.push(s) });
+            expect(result.action).toBe('added');
+
+            const content = await readFile(gitignorePath, 'utf8');
+            expect(content).toContain('arch-graph-out/');
+            expect(content.endsWith('\n')).toBe(true);
+            expect(written.join('')).toContain('✓ added arch-graph-out/ to .gitignore');
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+        }
+    });
+
+    // T3: .gitignore exists without entry, user answers N → declined, file unchanged.
+    it('T3: existing .gitignore without entry, user N → declined, file unchanged', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 'ag-gitignore-test-'));
+        try {
+            const gitignorePath = join(dir, '.gitignore');
+            const original = 'node_modules/\n';
+            await writeFile(gitignorePath, original, 'utf8');
+
+            const rl = makeRl(['n']);
+            const result = await ensureArchGraphOutGitignored({ repoRoot: dir, rl: rl as any });
+            expect(result.action).toBe('declined');
+
+            const after = await readFile(gitignorePath, 'utf8');
+            expect(after).toBe(original);
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+        }
+    });
+
+    // T4: No .gitignore, user answers Y → file created with arch-graph-out/\n.
+    it('T4: no .gitignore, user Y → creates file with arch-graph-out/', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 'ag-gitignore-test-'));
+        try {
+            const gitignorePath = join(dir, '.gitignore');
+            const rl = makeRl(['y']);
+            const written: string[] = [];
+            const result = await ensureArchGraphOutGitignored({ repoRoot: dir, rl: rl as any, write: (s) => written.push(s) });
+            expect(result.action).toBe('created');
+
+            const content = await readFile(gitignorePath, 'utf8');
+            expect(content).toBe('arch-graph-out/\n');
+            expect(written.join('')).toContain('✓ created .gitignore with arch-graph-out/');
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+        }
+    });
+
+    // T5: No .gitignore, user answers N → no-gitignore-declined, file does NOT exist.
+    it('T5: no .gitignore, user N → no-gitignore-declined, file not created', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 'ag-gitignore-test-'));
+        try {
+            const gitignorePath = join(dir, '.gitignore');
+            const rl = makeRl(['n']);
+            const result = await ensureArchGraphOutGitignored({ repoRoot: dir, rl: rl as any });
+            expect(result.action).toBe('no-gitignore-declined');
+            expect(existsSync(gitignorePath)).toBe(false);
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+        }
+    });
+
+    // T6: nonInteractive=true with no .gitignore → file created automatically, no prompt.
+    it('T6: nonInteractive=true with missing .gitignore → creates file without prompting', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 'ag-gitignore-test-'));
+        try {
+            const gitignorePath = join(dir, '.gitignore');
+            let promptCalled = false;
+            const rl = {
+                question: async (_prompt: string) => {
+                    promptCalled = true;
+                    return '';
+                },
+            };
+            const result = await ensureArchGraphOutGitignored({ repoRoot: dir, rl: rl as any, nonInteractive: true });
+            expect(result.action).toBe('created');
+            expect(promptCalled).toBe(false);
+            const content = await readFile(gitignorePath, 'utf8');
+            expect(content).toBe('arch-graph-out/\n');
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+        }
+    });
+
+    // T7: .gitignore contains arch-graph-out-backup/ (substring) → NOT a match, entry added.
+    it('T7: substring pattern arch-graph-out-backup/ does NOT count as match', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 'ag-gitignore-test-'));
+        try {
+            const gitignorePath = join(dir, '.gitignore');
+            await writeFile(gitignorePath, 'arch-graph-out-backup/\n', 'utf8');
+
+            const rl = makeRl(['y']);
+            const result = await ensureArchGraphOutGitignored({ repoRoot: dir, rl: rl as any });
+            expect(result.action).toBe('added');
+
+            const content = await readFile(gitignorePath, 'utf8');
+            expect(content).toContain('arch-graph-out/');
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+        }
+    });
+
+    // T8: .gitignore containing only a comment line → NOT a match, entry added.
+    it('T8: comment line # arch-graph-out/ does NOT count as match', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 'ag-gitignore-test-'));
+        try {
+            const gitignorePath = join(dir, '.gitignore');
+            await writeFile(gitignorePath, '# arch-graph-out/\n', 'utf8');
+
+            const rl = makeRl(['y']);
+            const result = await ensureArchGraphOutGitignored({ repoRoot: dir, rl: rl as any });
+            expect(result.action).toBe('added');
+
+            const content = await readFile(gitignorePath, 'utf8');
+            expect(content).toContain('arch-graph-out/');
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+        }
+    });
+
+    // T9: Idempotency — second run returns already-present, no duplicate line.
+    it('T9: idempotent — second run returns already-present and does not duplicate', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 'ag-gitignore-test-'));
+        try {
+            const gitignorePath = join(dir, '.gitignore');
+            // First run: create from scratch.
+            const rl1 = makeRl(['y']);
+            const first = await ensureArchGraphOutGitignored({ repoRoot: dir, rl: rl1 as any, nonInteractive: true });
+            expect(first.action).toBe('created');
+
+            // Second run: should detect and short-circuit.
+            const second = await ensureArchGraphOutGitignored({ repoRoot: dir, nonInteractive: true });
+            expect(second.action).toBe('already-present');
+
+            const content = await readFile(gitignorePath, 'utf8');
+            const occurrences = content.split('arch-graph-out/').length - 1;
+            expect(occurrences).toBe(1);
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+        }
+    });
+
+    // T10: All 6 detection patterns individually trigger already-present.
+    it('T10: all 6 canonical patterns individually trigger already-present', async () => {
+        const patterns = [
+            'arch-graph-out',
+            'arch-graph-out/',
+            '/arch-graph-out',
+            '/arch-graph-out/',
+            '**/arch-graph-out',
+            '**/arch-graph-out/',
+        ];
+        for (const pattern of patterns) {
+            const dir = await mkdtemp(join(tmpdir(), 'ag-gitignore-test-'));
+            try {
+                const gitignorePath = join(dir, '.gitignore');
+                await writeFile(gitignorePath, `node_modules/\n${pattern}\n`, 'utf8');
+
+                const result = await ensureArchGraphOutGitignored({ repoRoot: dir });
+                expect(result.action).toBe('already-present');
+            } finally {
+                await rm(dir, { recursive: true, force: true });
+            }
+        }
     });
 });
