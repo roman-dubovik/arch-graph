@@ -127,6 +127,20 @@ describe('renderMermaid — baseline', () => {
         expect(body).toContain('di');
     });
 
+    it('labels db-relation edges with relation type when metadata is present', () => {
+        const nodes = [
+            makeNode('db-table:orders', 'db-table'),
+            makeNode('db-table:users', 'db-table'),
+        ];
+        const edges: GraphEdge[] = [{
+            ...makeEdge('db-table:orders', 'db-table:users', 'db-relation'),
+            meta: { type: 'ManyToOne' },
+        }];
+        const { body } = renderMermaid(nodes, edges, 200);
+        expect(body).toContain('|ManyToOne|');
+        expect(body).not.toContain('|rel|');
+    });
+
     it('emits classDef lines', () => {
         const nodes = [makeNode('svc:a')];
         const { body } = renderMermaid(nodes, [], 200);

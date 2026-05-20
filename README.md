@@ -221,7 +221,14 @@ export default {
 };
 ```
 
-`mapsTo` must be one of `ManyToOne`, `OneToMany`, `ManyToMany`, or `OneToOne`. The graph stores the normalized decorator in `meta.decorator` and the wrapper name in `meta.sourceDecorator`.
+`mapsTo` must be one of `ManyToOne`, `OneToMany`, `ManyToMany`, or `OneToOne`. For every emitted `db-relation` edge, the graph stores:
+
+- `meta.type` / `meta.decorator` — normalized TypeORM relation kind.
+- `meta.sourceDecorator` — wrapper decorator name when it differs from `meta.type`.
+- `meta.isOwnerSide` — `true` for FK-owner `ManyToOne`, `OneToOne` with `@JoinColumn`, and `ManyToMany` with `@JoinTable`.
+- `meta.joinTableName` — explicit `@JoinTable({ name: '...' })` table name when present. Explicit join tables are also emitted as `db-table` nodes.
+
+Auto-generated `ManyToMany` join table names are not guessed, because TypeORM naming strategies can change them at runtime.
 
 ## Build output
 

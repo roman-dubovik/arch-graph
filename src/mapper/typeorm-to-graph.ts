@@ -149,6 +149,7 @@ export function mapTypeOrmToGraph(
 
         const ownerTableId = `db-table:${ownerTable}`;
         const targetTableId = `db-table:${targetTable}`;
+        const isOwnerSide = relationIsOwnerSide(rel);
 
         // Ensure both table nodes exist
         if (!tableNodes.has(ownerTableId)) {
@@ -175,6 +176,20 @@ export function mapTypeOrmToGraph(
                 },
             });
         }
+        if (rel.decorator === 'ManyToMany' && rel.joinTableName && !tableNodes.has(`db-table:${rel.joinTableName}`)) {
+            tableNodes.set(`db-table:${rel.joinTableName}`, {
+                id: `db-table:${rel.joinTableName}`,
+                kind: 'db-table',
+                label: rel.joinTableName,
+                meta: {
+                    tableSource: 'joinTable',
+                    ownerClass: rel.ownerClass,
+                    targetClass: rel.targetClass,
+                    propertyName: rel.propertyName,
+                    declaredAt: `${rel.location.file}:${rel.location.line}`,
+                },
+            });
+        }
 
         // Edge id uses propertyName as discriminant so two FK columns on the same
         // owner→target pair produce distinct edges (idempotent per property)
@@ -189,7 +204,12 @@ export function mapTypeOrmToGraph(
                 line: rel.location.line,
                 meta: {
                     decorator: rel.decorator,
+                    type: rel.decorator,
+                    isOwnerSide,
                     ...(rel.sourceDecorator ? { sourceDecorator: rel.sourceDecorator } : {}),
+                    ...(rel.joinColumn ? { joinColumn: true } : {}),
+                    ...(rel.joinTable ? { joinTable: true } : {}),
+                    ...(rel.joinTableName ? { joinTableName: rel.joinTableName } : {}),
                     propertyName: rel.propertyName,
                     ownerClass: rel.ownerClass,
                     targetClass: rel.targetClass,
@@ -221,4 +241,11 @@ export function mapTypeOrmToGraph(
             },
         },
     };
+}
+
+function relationIsOwnerSide(rel: TypeOrmRelation): boolean {
+    if (rel.decorator === 'ManyToOne') return true;
+    if (rel.decorator === 'OneToMany') return false;
+    if (rel.decorator === 'OneToOne') return rel.joinColumn === true;
+    return rel.joinTable === true;
 }

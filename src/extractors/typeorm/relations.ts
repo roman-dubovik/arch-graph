@@ -2,6 +2,7 @@ import {
     ArrowFunction,
     CallExpression,
     ClassDeclaration,
+    ObjectLiteralExpression,
     NoSubstitutionTemplateLiteral,
     Project,
     PropertyDeclaration,
@@ -86,6 +87,7 @@ export function extractRelations(
 
                     const propertyName = prop.getName();
                     const resolved = resolveTarget(dec, entityIndex, decoratorSpec.mapsTo);
+                    const joinMeta = extractJoinMetadata(prop);
 
                     // Use the decorator's own source file for location — when the property
                     // is inherited from a base class, it lives in a different file than `sf`.
@@ -94,6 +96,7 @@ export function extractRelations(
                     relations.push({
                         decorator: decoratorSpec.mapsTo,
                         ...(decoratorSpec.name !== decoratorSpec.mapsTo ? { sourceDecorator: decoratorSpec.name } : {}),
+                        ...joinMeta,
                         ownerClass: className,
                         propertyName,
                         location: {
@@ -126,6 +129,39 @@ function buildRelationDecoratorSpecs(typeormConfig: TypeOrmConfig | undefined): 
 
 function isRelationDecoratorKind(value: TypeOrmRelationDecoratorKind): value is RelationDecorator {
     return (RELATION_DECORATORS as readonly string[]).includes(value);
+}
+
+function extractJoinMetadata(prop: PropertyDeclaration): Pick<TypeOrmRelation, 'joinColumn' | 'joinTable' | 'joinTableName'> {
+    const joinColumn = prop.getDecorator('JoinColumn') !== undefined;
+    const joinTableDecorator = prop.getDecorator('JoinTable');
+    if (!joinColumn && !joinTableDecorator) return {};
+
+    const joinTableName = joinTableDecorator ? extractJoinTableName(joinTableDecorator) : undefined;
+    return {
+        ...(joinColumn ? { joinColumn: true } : {}),
+        ...(joinTableDecorator ? { joinTable: true } : {}),
+        ...(joinTableName ? { joinTableName } : {}),
+    };
+}
+
+function extractJoinTableName(dec: import('ts-morph').Decorator): string | undefined {
+    const first = dec.getArguments()[0];
+    if (!first) return undefined;
+    if (first.getKind() !== SyntaxKind.ObjectLiteralExpression) return undefined;
+
+    const obj = first as ObjectLiteralExpression;
+    const prop = obj.getProperty('name');
+    if (!prop || prop.getKind() !== SyntaxKind.PropertyAssignment) return undefined;
+
+    const initializer = prop.asKind(SyntaxKind.PropertyAssignment)?.getInitializer();
+    if (!initializer) return undefined;
+    if (
+        initializer.getKind() === SyntaxKind.StringLiteral ||
+        initializer.getKind() === SyntaxKind.NoSubstitutionTemplateLiteral
+    ) {
+        return (initializer as StringLiteral | NoSubstitutionTemplateLiteral).getLiteralValue();
+    }
+    return undefined;
 }
 
 /**

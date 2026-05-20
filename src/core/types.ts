@@ -240,6 +240,12 @@ export type TypeOrmRelation = {
     decorator: 'ManyToOne' | 'OneToMany' | 'ManyToMany' | 'OneToOne';
     /** Decorator name as written when it differs from `decorator` (custom wrapper alias). */
     sourceDecorator?: string;
+    /** Whether the relation property also has a TypeORM `@JoinColumn` decorator. */
+    joinColumn?: boolean;
+    /** Whether the relation property also has a TypeORM `@JoinTable` decorator. */
+    joinTable?: boolean;
+    /** Explicit join table name from `@JoinTable({ name: '...' })`, when present. */
+    joinTableName?: string;
     /** Class that owns the property bearing the relation decorator. */
     ownerClass: string;
     /** Property name on the owner class. */

@@ -393,7 +393,7 @@ export function renderMermaid(
     for (const e of sortedEdges) {
         const from = idMap.get(e.from) ?? sanitizeId(e.from);
         const to = idMap.get(e.to) ?? sanitizeId(e.to);
-        lines.push(`    ${from} ${EDGE_SYNTAX[e.kind]} ${to}`);
+        lines.push(`    ${from} ${edgeSyntax(e)} ${to}`);
     }
 
     // classDef + class assignments per node (collected after the fact for grouping).
@@ -439,6 +439,13 @@ export function renderMermaid(
     }
 
     return { body: lines.join('\n') + '\n', collisionGroups };
+}
+
+function edgeSyntax(edge: GraphEdge): string {
+    if (edge.kind !== 'db-relation') return EDGE_SYNTAX[edge.kind];
+    const type = edge.meta?.type;
+    if (typeof type !== 'string' || type.length === 0) return EDGE_SYNTAX[edge.kind];
+    return `--o|${escapeMermaidLabel(type)}|`;
 }
 
 // ============================================================================
@@ -649,4 +656,3 @@ async function flushCollisionsFile(dir: string, collisionGroups: CollisionGroup[
     };
     await writeFile(filePath, JSON.stringify(payload, null, 2) + '\n', 'utf8');
 }
-

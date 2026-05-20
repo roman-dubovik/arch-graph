@@ -72,6 +72,28 @@ describe('extractRelations — @ManyToOne', () => {
         expect(rel.targetClass).toBe('User');
         expect(rel.resolvedTarget).not.toBeNull();
     });
+
+    it('detects @JoinColumn on the relation property', () => {
+        const { relations } = setup({
+            '/apps/svc/order.entity.ts': `
+                import { Entity, JoinColumn, ManyToOne } from 'typeorm';
+                @Entity()
+                export class Order {
+                    @ManyToOne(() => User, user => user.orders)
+                    @JoinColumn({ name: 'user_id' })
+                    user: User;
+                }
+            `,
+            '/apps/svc/user.entity.ts': `
+                import { Entity } from 'typeorm';
+                @Entity()
+                export class User {}
+            `,
+        });
+
+        expect(relations).toHaveLength(1);
+        expect(relations[0]?.joinColumn).toBe(true);
+    });
 });
 
 describe('extractRelations — configured relation decorators', () => {
@@ -162,6 +184,29 @@ describe('extractRelations — @ManyToMany', () => {
         expect(rel.ownerClass).toBe('Post');
         expect(rel.targetClass).toBe('Tag');
         expect(rel.resolvedTarget?.className).toBe('Tag');
+    });
+
+    it('detects @JoinTable and explicit join table name on the relation property', () => {
+        const { relations } = setup({
+            '/apps/svc/post.entity.ts': `
+                import { Entity, JoinTable, ManyToMany } from 'typeorm';
+                @Entity()
+                export class Post {
+                    @ManyToMany(() => Tag)
+                    @JoinTable({ name: 'post_tags' })
+                    tags: Tag[];
+                }
+            `,
+            '/apps/svc/tag.entity.ts': `
+                import { Entity } from 'typeorm';
+                @Entity()
+                export class Tag {}
+            `,
+        });
+
+        expect(relations).toHaveLength(1);
+        expect(relations[0]?.joinTable).toBe(true);
+        expect(relations[0]?.joinTableName).toBe('post_tags');
     });
 });
 

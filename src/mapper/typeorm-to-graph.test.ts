@@ -241,6 +241,8 @@ describe('mapTypeOrmToGraph — db-relation edges', () => {
         expect(relEdge?.from).toBe('db-table:orders');
         expect(relEdge?.to).toBe('db-table:users');
         expect(relEdge?.meta?.decorator).toBe('ManyToOne');
+        expect(relEdge?.meta?.type).toBe('ManyToOne');
+        expect(relEdge?.meta?.isOwnerSide).toBe(true);
         expect(relEdge?.meta?.sourceDecorator).toBeUndefined();
         expect(relEdge?.meta?.propertyName).toBe('user');
         expect(relEdge?.meta?.ownerClass).toBe('Order');
@@ -278,6 +280,8 @@ describe('mapTypeOrmToGraph — db-relation edges', () => {
         expect(relEdge?.from).toBe('db-table:orders');
         expect(relEdge?.to).toBe('db-table:users');
         expect(relEdge?.meta?.decorator).toBe('ManyToOne');
+        expect(relEdge?.meta?.type).toBe('ManyToOne');
+        expect(relEdge?.meta?.isOwnerSide).toBe(true);
         expect(relEdge?.meta?.sourceDecorator).toBe('ManyToOneWithIndex');
     });
 
@@ -331,6 +335,39 @@ describe('mapTypeOrmToGraph — db-relation edges', () => {
         const relEdge = result.edges.find((e) => e.kind === 'db-relation');
         expect(relEdge).toBeDefined();
         expect(relEdge?.meta?.decorator).toBe('ManyToMany');
+        expect(relEdge?.meta?.type).toBe('ManyToMany');
+        expect(relEdge?.meta?.isOwnerSide).toBe(false);
+    });
+
+    it('marks owner side and materializes explicit ManyToMany join table metadata', () => {
+        const project = inMemoryProject({
+            '/apps/svc/post.ts': `
+                import { Entity, JoinTable, ManyToMany } from 'typeorm';
+                @Entity('posts')
+                export class Post {
+                    @ManyToMany(() => Tag)
+                    @JoinTable({ name: 'post_tags' })
+                    tags: Tag[];
+                }
+            `,
+            '/apps/svc/tag.ts': `
+                import { Entity } from 'typeorm';
+                @Entity('tags')
+                export class Tag {}
+            `,
+        });
+        const entityIndex = buildEntityIndex(project);
+        const { relations } = extractRelations(project, entityIndex);
+        const result = mapTypeOrmToGraph([], makeOwnership(), [], relations, entityIndex);
+
+        const relEdge = result.edges.find((e) => e.kind === 'db-relation');
+        expect(relEdge).toBeDefined();
+        expect(relEdge?.from).toBe('db-table:posts');
+        expect(relEdge?.to).toBe('db-table:tags');
+        expect(relEdge?.meta?.type).toBe('ManyToMany');
+        expect(relEdge?.meta?.isOwnerSide).toBe(true);
+        expect(relEdge?.meta?.joinTableName).toBe('post_tags');
+        expect(result.nodes.some((n) => n.id === 'db-table:post_tags')).toBe(true);
     });
 
     it('emits OneToOne db-relation edge', () => {
@@ -356,6 +393,35 @@ describe('mapTypeOrmToGraph — db-relation edges', () => {
         const relEdge = result.edges.find((e) => e.kind === 'db-relation');
         expect(relEdge).toBeDefined();
         expect(relEdge?.meta?.decorator).toBe('OneToOne');
+        expect(relEdge?.meta?.type).toBe('OneToOne');
+        expect(relEdge?.meta?.isOwnerSide).toBe(false);
+    });
+
+    it('marks OneToOne with @JoinColumn as owner side', () => {
+        const project = inMemoryProject({
+            '/apps/svc/user.ts': `
+                import { Entity, JoinColumn, OneToOne } from 'typeorm';
+                @Entity()
+                export class User {
+                    @OneToOne(() => Profile)
+                    @JoinColumn()
+                    profile: Profile;
+                }
+            `,
+            '/apps/svc/profile.ts': `
+                import { Entity } from 'typeorm';
+                @Entity()
+                export class Profile {}
+            `,
+        });
+        const entityIndex = buildEntityIndex(project);
+        const { relations } = extractRelations(project, entityIndex);
+        const result = mapTypeOrmToGraph([], makeOwnership(), [], relations, entityIndex);
+
+        const relEdge = result.edges.find((e) => e.kind === 'db-relation');
+        expect(relEdge).toBeDefined();
+        expect(relEdge?.meta?.type).toBe('OneToOne');
+        expect(relEdge?.meta?.isOwnerSide).toBe(true);
     });
 
     it('updates diagnostics.counts.relationsEmitted for emitted db-relation edges', () => {
