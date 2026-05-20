@@ -43,10 +43,7 @@
         "typescript": "^5.4.0",
         "vitest": "^4.1.6"
     },
-    "pnpm": {
-        "onlyBuiltDependencies": [
-            "@xenova/transformers",
-            "sharp"
-        ]
+    "overrides": {
+        "protobufjs": "7.5.8"
     }
 }
