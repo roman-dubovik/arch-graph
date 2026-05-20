@@ -468,7 +468,15 @@ async function atomicWrite(path: string, content: string): Promise<void> {
         await writeFile(tmp, content, 'utf8');
         await rename(tmp, path);
     } catch (err) {
-        await unlink(tmp).catch(() => {});
+        try {
+            await unlink(tmp);
+        } catch (unlinkErr) {
+            const orig = err as Error;
+            const cleanup = unlinkErr as Error;
+            throw new Error(
+                `${orig.message} (additionally, cleanup of ${tmp} failed: ${cleanup.message}; you may need to delete it manually)`,
+            );
+        }
         throw err;
     }
 }
@@ -518,7 +526,7 @@ export async function ensureArchGraphOutGitignored(opts: {
         try {
             content = await readFile(gitignorePath, 'utf8');
         } catch (err) {
-            write('\nWarning: could not read .gitignore — ' + (err as Error).message + '\n  Add arch-graph-out/ to .gitignore manually.\n');
+            process.stderr.write('\nWarning: could not read .gitignore — ' + (err as Error).message + '\n  Add arch-graph-out/ to .gitignore manually.\n');
             return { action: 'declined' };
         }
         const alreadyIgnored = content
@@ -644,7 +652,7 @@ export async function runInitWizard(target: string): Promise<void> {
         try {
             await ensureArchGraphOutGitignored({ repoRoot: dirname(targetPath), nonInteractive: true, write: (s) => process.stdout.write(s) });
         } catch (err) {
-            process.stdout.write('\nWarning: could not update .gitignore — ' + (err as Error).message + '\n  Add arch-graph-out/ to .gitignore manually.\n');
+            process.stderr.write('\nWarning: could not update .gitignore — ' + (err as Error).message + '\n  Add arch-graph-out/ to .gitignore manually.\n');
         }
         return;
     }
@@ -824,7 +832,7 @@ export async function runInitWizard(target: string): Promise<void> {
             write: (s) => output.write(s),
         });
     } catch (err) {
-        output.write('\nWarning: could not update .gitignore — ' + (err as Error).message + '\n  Add arch-graph-out/ to .gitignore manually.\n');
+        process.stderr.write('\nWarning: could not update .gitignore — ' + (err as Error).message + '\n  Add arch-graph-out/ to .gitignore manually.\n');
     }
 
     // ── Next steps ────────────────────────────────────────────────────────────
