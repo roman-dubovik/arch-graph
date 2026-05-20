@@ -732,8 +732,6 @@ export async function runInitWizard(target: string): Promise<void> {
         ? await askSnippetTarget(rl)
         : 'separate';
 
-    rl.close();
-
     // ── Assemble answers & write config ──────────────────────────────────────
     const answers: WizardAnswers = {
         projectId,
@@ -839,6 +837,8 @@ export async function runInitWizard(target: string): Promise<void> {
     } catch (err) {
         process.stderr.write('\nWarning: could not update .gitignore — ' + (err as Error).message + '\n  Add arch-graph-out/ to .gitignore manually.\n');
     }
+
+    rl.close();
 
     // ── Next steps ────────────────────────────────────────────────────────────
     output.write('\nNext steps:\n');

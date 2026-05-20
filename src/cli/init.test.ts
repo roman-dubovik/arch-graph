@@ -7,10 +7,11 @@
 //   - Non-interactive path verified via mocked process.stdin.isTTY + writeFile spy.
 
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import {
     askSemanticStrategy,
@@ -228,6 +229,25 @@ describe('askBuildSemantic', () => {
         const rl = makeRl(['no']);
         const result = await askBuildSemantic(rl as any, () => {});
         expect(result).toBe(false);
+    });
+});
+
+// ─── runInitWizard readline lifecycle ────────────────────────────────────────
+
+describe('runInitWizard readline lifecycle', () => {
+    it('keeps readline open for post-build semantic and .gitignore prompts', () => {
+        const source = readFileSync(resolve('src/cli/init.ts'), 'utf8');
+        const semanticPrompt = source.indexOf('const buildSemantic = await askBuildSemantic');
+        const gitignorePrompt = source.indexOf('await ensureArchGraphOutGitignored({', semanticPrompt);
+
+        expect(semanticPrompt).toBeGreaterThan(-1);
+        expect(gitignorePrompt).toBeGreaterThan(semanticPrompt);
+
+        const beforePostBuildPrompts = source.slice(0, semanticPrompt);
+        const afterGitignorePrompt = source.slice(gitignorePrompt);
+
+        expect(beforePostBuildPrompts).not.toMatch(/^    rl\.close\(\);$/m);
+        expect(afterGitignorePrompt).toMatch(/^    rl\.close\(\);$/m);
     });
 });
 
