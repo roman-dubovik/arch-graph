@@ -51,6 +51,7 @@ function makeRecord(nodeId: string, overrides: Partial<SemanticRecord> = {}): Se
         kind: 'service',
         label: `Label${nodeId}`,
         snippet: `snippet for ${nodeId}`,
+        contentHash: '',
         vector: Array.from({ length: SEMANTIC_DIM }, (_, i) => i / SEMANTIC_DIM),
         ...overrides,
     };

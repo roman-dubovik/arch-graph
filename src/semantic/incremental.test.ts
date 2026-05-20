@@ -44,7 +44,7 @@ afterEach(async () => {
 const DIM = SEMANTIC_MODELS.minilm.dim; // 384
 
 /** Deterministic fake vector seeded by index. */
-function fakeVector(seed: number, dim = DIM): number[] {
+function fakeVector(seed: number, dim: number = DIM): number[] {
     return Array.from({ length: dim }, (_, i) => (seed + i) / dim);
 }
 

@@ -611,7 +611,7 @@ async function setupBuildMocks(testDir: string) {
             model: SEMANTIC_MODEL,
             dim: SEMANTIC_DIM,
             schemaVersion: SEMANTIC_SCHEMA_VERSION,
-            counts: { indexed: 1, skipped: 0, fileReadErrors: 0, transformerErrors: 0, labelErrors: 0 },
+            counts: { indexed: 1, skipped: 0, fileReadErrors: 0, transformerErrors: 0, labelErrors: 0, reused: 0, recomputed: 1 },
             skippedNodes: [],
             skippedNodesTruncated: false,
             indexSizeBytes: 100,

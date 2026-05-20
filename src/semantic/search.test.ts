@@ -99,6 +99,7 @@ function makeRecord(
         kind: kind as SemanticRecord['kind'],
         label: nodeId,
         snippet: '',
+        contentHash: '',
         vector,
         ...overrides,
     };
