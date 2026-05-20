@@ -8,7 +8,7 @@
 
 import { existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { appendFile, readFile, rename, writeFile } from 'node:fs/promises';
+import { appendFile, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { createInterface } from 'node:readline/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import { stdin as input, stdout as output } from 'node:process';
@@ -460,6 +460,25 @@ export async function askSnippetTarget(rl: Rl): Promise<SnippetTarget> {
     return 'separate'; // default
 }
 
+// ─── .gitignore helpers ───────────────────────────────────────────────────────
+
+async function atomicWrite(path: string, content: string): Promise<void> {
+    const tmp = path + '.tmp';
+    try {
+        await writeFile(tmp, content, 'utf8');
+        await rename(tmp, path);
+    } catch (err) {
+        await unlink(tmp).catch(() => {});
+        throw err;
+    }
+}
+
+async function shouldProceed(nonInteractive: boolean, rl: Rl | undefined, prompt: string): Promise<boolean> {
+    if (nonInteractive) return true;
+    if (!rl) return false;  // safety: nothing to prompt with
+    return askYesNo(rl, prompt, true);
+}
+
 // ─── .gitignore helper ────────────────────────────────────────────────────────
 
 /** The six patterns that count as "arch-graph-out is already ignored". */
@@ -495,7 +514,13 @@ export async function ensureArchGraphOutGitignored(opts: {
 
     if (existsSync(gitignorePath)) {
         // Check whether any recognised pattern is already present.
-        const content = await readFile(gitignorePath, 'utf8');
+        let content: string;
+        try {
+            content = await readFile(gitignorePath, 'utf8');
+        } catch (err) {
+            write('\nWarning: could not read .gitignore — ' + (err as Error).message + '\n  Add arch-graph-out/ to .gitignore manually.\n');
+            return { action: 'declined' };
+        }
         const alreadyIgnored = content
             .split('\n')
             .map((l) => l.trim())
@@ -507,36 +532,24 @@ export async function ensureArchGraphOutGitignored(opts: {
         }
 
         // Not yet ignored — offer to append.
-        let doAdd = nonInteractive;
-        if (!nonInteractive) {
-            doAdd = await askYesNo(rl!, "Add 'arch-graph-out/' to .gitignore?", true);
-        }
+        const doAdd = await shouldProceed(nonInteractive, rl, "Add 'arch-graph-out/' to .gitignore?");
         if (!doAdd) {
             return { action: 'declined' };
         }
 
         // Atomic append via tmp → rename.
-        const endsWithNewline = content.endsWith('\n');
-        const addition = (endsWithNewline ? '' : '\n') + 'arch-graph-out/\n';
-        const newContent = content + addition;
-        const tmpPath = gitignorePath + '.tmp';
-        await writeFile(tmpPath, newContent, 'utf8');
-        await rename(tmpPath, gitignorePath);
+        const newContent = content + (content.endsWith('\n') ? '' : '\n') + 'arch-graph-out/\n';
+        await atomicWrite(gitignorePath, newContent);
         write('  ✓ added arch-graph-out/ to .gitignore\n');
         return { action: 'added' };
     } else {
         // .gitignore does not exist — offer to create it.
-        let doCreate = nonInteractive;
-        if (!nonInteractive) {
-            doCreate = await askYesNo(rl!, "No .gitignore found. Create one with 'arch-graph-out/'?", true);
-        }
+        const doCreate = await shouldProceed(nonInteractive, rl, "No .gitignore found. Create one with 'arch-graph-out/'?");
         if (!doCreate) {
             return { action: 'no-gitignore-declined' };
         }
 
-        const tmpPath = gitignorePath + '.tmp';
-        await writeFile(tmpPath, 'arch-graph-out/\n', 'utf8');
-        await rename(tmpPath, gitignorePath);
+        await atomicWrite(gitignorePath, 'arch-graph-out/\n');
         write('  ✓ created .gitignore with arch-graph-out/\n');
         return { action: 'created' };
     }
@@ -628,6 +641,11 @@ export async function runInitWizard(target: string): Promise<void> {
         // consistent with the interactive path.
         const snippetPath = await writeStrategySnippet('both-buckets', 'separate', resolve('.'));
         process.stdout.write(`wrote ${snippetPath}\n`);
+        try {
+            await ensureArchGraphOutGitignored({ repoRoot: dirname(targetPath), nonInteractive: true, write: (s) => process.stdout.write(s) });
+        } catch (err) {
+            process.stdout.write('\nWarning: could not update .gitignore — ' + (err as Error).message + '\n  Add arch-graph-out/ to .gitignore manually.\n');
+        }
         return;
     }
 
@@ -798,12 +816,16 @@ export async function runInitWizard(target: string): Promise<void> {
     }
 
     // ── .gitignore entry ──────────────────────────────────────────────────────
-    await ensureArchGraphOutGitignored({
-        repoRoot: targetPath,
-        rl,
-        nonInteractive: !process.stdin.isTTY,
-        write: (s) => output.write(s),
-    });
+    try {
+        await ensureArchGraphOutGitignored({
+            repoRoot: dirname(targetPath),
+            rl,
+            nonInteractive: !process.stdin.isTTY,
+            write: (s) => output.write(s),
+        });
+    } catch (err) {
+        output.write('\nWarning: could not update .gitignore — ' + (err as Error).message + '\n  Add arch-graph-out/ to .gitignore manually.\n');
+    }
 
     // ── Next steps ────────────────────────────────────────────────────────────
     output.write('\nNext steps:\n');

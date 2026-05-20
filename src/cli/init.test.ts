@@ -448,9 +448,8 @@ describe('ensureArchGraphOutGitignored', () => {
         const dir = await mkdtemp(join(tmpdir(), 'ag-gitignore-test-'));
         try {
             const gitignorePath = join(dir, '.gitignore');
-            // First run: create from scratch.
-            const rl1 = makeRl(['y']);
-            const first = await ensureArchGraphOutGitignored({ repoRoot: dir, rl: rl1 as any, nonInteractive: true });
+            // First run: create from scratch (nonInteractive=true, no rl needed).
+            const first = await ensureArchGraphOutGitignored({ repoRoot: dir, nonInteractive: true });
             expect(first.action).toBe('created');
 
             // Second run: should detect and short-circuit.
@@ -460,6 +459,36 @@ describe('ensureArchGraphOutGitignored', () => {
             const content = await readFile(gitignorePath, 'utf8');
             const occurrences = content.split('arch-graph-out/').length - 1;
             expect(occurrences).toBe(1);
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+        }
+    });
+
+    // T11: non-interactive mode appends to existing .gitignore without prompting.
+    it('T11: non-interactive mode appends to existing .gitignore without prompting', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 'ag-gitignore-test-'));
+        try {
+            const gitignorePath = join(dir, '.gitignore');
+            // .gitignore exists with unrelated content
+            await writeFile(gitignorePath, 'node_modules/\ndist/\n', 'utf8');
+
+            let promptCalled = false;
+            const written: string[] = [];
+            const result = await ensureArchGraphOutGitignored({
+                repoRoot: dir,
+                nonInteractive: true,
+                write: (s) => {
+                    written.push(s);
+                    if (s.includes('?') || s.includes('prompt')) promptCalled = true;
+                },
+            });
+
+            expect(result.action).toBe('added');
+            expect(promptCalled).toBe(false);
+            const content = await readFile(gitignorePath, 'utf8');
+            expect(content).toContain('arch-graph-out/');
+            expect(written.length).toBe(1);
+            expect(written[0]).toContain('✓ added arch-graph-out/ to .gitignore');
         } finally {
             await rm(dir, { recursive: true, force: true });
         }
