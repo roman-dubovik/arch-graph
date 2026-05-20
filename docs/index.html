@@ -134,8 +134,8 @@
             <span class="stat-label">fewer tokens on structural queries</span>
           </li>
           <li>
-            <span class="stat-num">67%</span>
-            <span class="stat-label">RU semantic hit-rate vs graphify 35%</span>
+            <span class="stat-num">74.8%</span>
+            <span class="stat-label">RU semantic hit-rate vs graphify 20.4%</span>
           </li>
           <li>
             <span class="stat-num">0</span>
@@ -920,7 +920,7 @@ arch-graph build --strict            # CI gate: exit 3 if recall drops below flo
           </li>
           <li class="reveal">
             <h3><code>code-vs-docs-v1</code></h3>
-            <p>Semantic search splits into <code>code_search</code> and <code>docs_search</code> MCP tools. Eliminates the dilution effect where doc-section nodes crowd out code results (A_find recall: 80% → 30% with mixed bucket → 70% restored with split). Baseline hit-rate across 103 eval queries: 47% → 67%.</p>
+            <p>Semantic search splits into <code>code_search</code> and <code>docs_search</code> MCP tools. Eliminates the dilution effect where doc-section nodes crowd out code results (A_find recall: 80% → 30% with mixed bucket → 70% restored with split). Baseline hit-rate across 103 eval queries: 47% → 67% → <strong>75% with e5-base</strong>.</p>
           </li>
           <li class="reveal">
             <h3><code>ui-uplift-v1</code></h3>
