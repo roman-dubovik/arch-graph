@@ -11,11 +11,16 @@ import {
 } from 'ts-morph';
 
 import type { TypeOrmRelation } from '../../core/types.js';
+import type { TypeOrmConfig, TypeOrmRelationDecoratorKind } from '../../core/config.js';
 import { isExcludedSourceFile } from '../shared.js';
 import type { EntityIndex } from './entity-index.js';
 
 const RELATION_DECORATORS = ['ManyToOne', 'OneToMany', 'ManyToMany', 'OneToOne'] as const;
 type RelationDecorator = (typeof RELATION_DECORATORS)[number];
+type RelationDecoratorSpec = {
+    name: string;
+    mapsTo: RelationDecorator;
+};
 
 export interface ExtractRelationsResult {
     relations: TypeOrmRelation[];
@@ -49,9 +54,14 @@ export interface ExtractRelationsResult {
  * paths lead to the same base, its properties may appear twice; this is
  * structurally uncommon in TypeORM usage.
  */
-export function extractRelations(project: Project, entityIndex: EntityIndex): ExtractRelationsResult {
+export function extractRelations(
+    project: Project,
+    entityIndex: EntityIndex,
+    typeormConfig?: TypeOrmConfig,
+): ExtractRelationsResult {
     const relations: TypeOrmRelation[] = [];
     let baseClassCycles = 0;
+    const relationDecorators = buildRelationDecoratorSpecs(typeormConfig);
 
     for (const sf of project.getSourceFiles()) {
         if (isExcludedSourceFile(sf)) continue;
@@ -70,19 +80,20 @@ export function extractRelations(project: Project, entityIndex: EntityIndex): Ex
             const { props, cycles } = getAllProperties(cls);
             baseClassCycles += cycles;
             for (const prop of props) {
-                for (const decoratorName of RELATION_DECORATORS) {
-                    const dec = prop.getDecorator(decoratorName);
+                for (const decoratorSpec of relationDecorators) {
+                    const dec = prop.getDecorator(decoratorSpec.name);
                     if (!dec) continue;
 
                     const propertyName = prop.getName();
-                    const resolved = resolveTarget(dec, entityIndex, decoratorName);
+                    const resolved = resolveTarget(dec, entityIndex, decoratorSpec.mapsTo);
 
                     // Use the decorator's own source file for location — when the property
                     // is inherited from a base class, it lives in a different file than `sf`.
                     const decSf = dec.getSourceFile();
                     const pos = decSf.getLineAndColumnAtPos(dec.getStart());
                     relations.push({
-                        decorator: decoratorName,
+                        decorator: decoratorSpec.mapsTo,
+                        ...(decoratorSpec.name !== decoratorSpec.mapsTo ? { sourceDecorator: decoratorSpec.name } : {}),
                         ownerClass: className,
                         propertyName,
                         location: {
@@ -98,6 +109,23 @@ export function extractRelations(project: Project, entityIndex: EntityIndex): Ex
     }
 
     return { relations, baseClassCycles };
+}
+
+function buildRelationDecoratorSpecs(typeormConfig: TypeOrmConfig | undefined): RelationDecoratorSpec[] {
+    const specs = new Map<string, RelationDecorator>();
+    for (const decorator of RELATION_DECORATORS) {
+        specs.set(decorator, decorator);
+    }
+    for (const alias of typeormConfig?.relationDecorators ?? []) {
+        if (isRelationDecoratorKind(alias.mapsTo)) {
+            specs.set(alias.name, alias.mapsTo);
+        }
+    }
+    return [...specs.entries()].map(([name, mapsTo]) => ({ name, mapsTo }));
+}
+
+function isRelationDecoratorKind(value: TypeOrmRelationDecoratorKind): value is RelationDecorator {
+    return (RELATION_DECORATORS as readonly string[]).includes(value);
 }
 
 /**

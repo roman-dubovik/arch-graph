@@ -236,8 +236,10 @@ export function tableNameOf(e: TypeOrmEntity): string {
  * structural — the type system prevents the two fields from drifting apart.
  */
 export type TypeOrmRelation = {
-    /** Decorator name as written. */
+    /** Normalized TypeORM relation decorator kind. */
     decorator: 'ManyToOne' | 'OneToMany' | 'ManyToMany' | 'OneToOne';
+    /** Decorator name as written when it differs from `decorator` (custom wrapper alias). */
+    sourceDecorator?: string;
     /** Class that owns the property bearing the relation decorator. */
     ownerClass: string;
     /** Property name on the owner class. */

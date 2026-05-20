@@ -2,16 +2,17 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ClassDeclaration } from 'ts-morph';
 
 import { inMemoryProject } from '../../__fixtures__/in-memory-project.js';
+import type { TypeOrmConfig } from '../../core/config.js';
 import { buildEntityIndex } from './entity-index.js';
 import { extractRelations, getAllProperties } from './relations.js';
 
 // ---------------------------------------------------------------------------
 // Helper: build an entity index + extract relations from the same project
 // ---------------------------------------------------------------------------
-function setup(files: Record<string, string>) {
+function setup(files: Record<string, string>, typeorm?: TypeOrmConfig) {
     const project = inMemoryProject(files);
     const entityIndex = buildEntityIndex(project);
-    const { relations, baseClassCycles } = extractRelations(project, entityIndex);
+    const { relations, baseClassCycles } = extractRelations(project, entityIndex, typeorm);
     return { entityIndex, relations, baseClassCycles };
 }
 
@@ -70,6 +71,43 @@ describe('extractRelations — @ManyToOne', () => {
         const rel = relations[0]!;
         expect(rel.targetClass).toBe('User');
         expect(rel.resolvedTarget).not.toBeNull();
+    });
+});
+
+describe('extractRelations — configured relation decorators', () => {
+    it('maps a custom decorator to a normalized relation type and keeps the source decorator', () => {
+        const { relations } = setup(
+            {
+                '/apps/svc/order.entity.ts': `
+                    import { Entity } from 'typeorm';
+                    import { ManyToOneWithIndex } from '../decorators/many-to-one-with-index.decorator';
+                    @Entity()
+                    export class Order {
+                        @ManyToOneWithIndex(() => User, user => user.orders)
+                        user: User;
+                    }
+                `,
+                '/apps/svc/user.entity.ts': `
+                    import { Entity } from 'typeorm';
+                    @Entity()
+                    export class User {}
+                `,
+            },
+            {
+                relationDecorators: [
+                    { name: 'ManyToOneWithIndex', mapsTo: 'ManyToOne' },
+                ],
+            },
+        );
+
+        expect(relations).toHaveLength(1);
+        const rel = relations[0]!;
+        expect(rel.decorator).toBe('ManyToOne');
+        expect(rel.sourceDecorator).toBe('ManyToOneWithIndex');
+        expect(rel.ownerClass).toBe('Order');
+        expect(rel.propertyName).toBe('user');
+        expect(rel.targetClass).toBe('User');
+        expect(rel.resolvedTarget?.className).toBe('User');
     });
 });
 

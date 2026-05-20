@@ -24,6 +24,8 @@ export interface ArchGraphConfig {
     excludeGlobs?: string[];
     /** NATS extractor settings. */
     nats?: NatsConfig;
+    /** TypeORM extractor settings. */
+    typeorm?: TypeOrmConfig;
     /** HTTP extractor settings. */
     http?: HttpConfig;
     /** TS-imports extractor settings. */
@@ -72,6 +74,32 @@ export interface NatsConfig {
     /** Project-specific wrapper classes around NATS subscribe API. */
     wrapperSubscribeApis?: WrapperApi[];
 }
+
+export type TypeOrmRelationDecoratorKind = 'ManyToOne' | 'OneToMany' | 'ManyToMany' | 'OneToOne';
+
+export interface TypeOrmRelationDecoratorAlias {
+    /** Custom decorator name as it appears in source, e.g. `ManyToOneWithIndex`. */
+    name: string;
+    /** Native TypeORM relation kind this decorator wraps. */
+    mapsTo: TypeOrmRelationDecoratorKind;
+}
+
+export interface TypeOrmConfig {
+    /**
+     * Project-specific wrappers around TypeORM relation decorators.
+     *
+     * Example:
+     *   relationDecorators: [{ name: 'ManyToOneWithIndex', mapsTo: 'ManyToOne' }]
+     */
+    relationDecorators?: TypeOrmRelationDecoratorAlias[];
+}
+
+const VALID_TYPEORM_RELATION_KINDS = new Set<TypeOrmRelationDecoratorKind>([
+    'ManyToOne',
+    'OneToMany',
+    'ManyToMany',
+    'OneToOne',
+]);
 
 export interface HttpInternalService {
     /** Stable service id used as graph target (e.g. `my-api` → `service:my-api`). */
@@ -293,6 +321,32 @@ export function validateConfig(raw: unknown, source: string): ArchGraphConfig {
                 `config.semantic.model "${alias}" is not a recognised alias in ${source}. ` +
                 `Valid aliases: ${VALID_SEMANTIC_ALIASES.join(', ')}`,
             );
+        }
+    }
+    if (cfg.typeorm !== undefined) {
+        if (typeof cfg.typeorm !== 'object' || cfg.typeorm === null) {
+            throw new Error(`config.typeorm must be an object in ${source}`);
+        }
+        const aliases = (cfg.typeorm as Partial<TypeOrmConfig>).relationDecorators;
+        if (aliases !== undefined) {
+            if (!Array.isArray(aliases)) {
+                throw new Error(`config.typeorm.relationDecorators must be an array in ${source}`);
+            }
+            aliases.forEach((alias, i) => {
+                if (!alias || typeof alias !== 'object') {
+                    throw new Error(`config.typeorm.relationDecorators[${i}] must be an object in ${source}`);
+                }
+                const a = alias as Partial<TypeOrmRelationDecoratorAlias>;
+                if (!a.name || typeof a.name !== 'string') {
+                    throw new Error(`config.typeorm.relationDecorators[${i}].name must be a string in ${source}`);
+                }
+                if (!a.mapsTo || !VALID_TYPEORM_RELATION_KINDS.has(a.mapsTo)) {
+                    throw new Error(
+                        `config.typeorm.relationDecorators[${i}].mapsTo must be one of ` +
+                            `${[...VALID_TYPEORM_RELATION_KINDS].join(', ')} in ${source}`,
+                    );
+                }
+            });
         }
     }
 

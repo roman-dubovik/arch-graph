@@ -58,7 +58,7 @@ export async function extractTypeOrm(
         }
     }
 
-    const { relations, baseClassCycles } = extractRelations(project, entities);
+    const { relations, baseClassCycles } = extractRelations(project, entities, _cfg.typeorm);
 
     return { sites, entities, relations, baseClassCycles };
 }

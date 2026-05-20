@@ -626,6 +626,11 @@ export default {
             // { class: 'MyNatsService', methods: ['subscribe'] },
         ],
     },
+    typeorm: {
+        relationDecorators: [
+            // { name: 'ManyToOneWithIndex', mapsTo: 'ManyToOne' },
+        ],
+    },
     imports: {
         // Emit file-level \`ts-import\` edges (file → file). Off by default —
         // produces 10k+ edges in medium monorepos. Turn on for file-graph drill-downs.

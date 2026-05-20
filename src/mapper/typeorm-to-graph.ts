@@ -189,6 +189,7 @@ export function mapTypeOrmToGraph(
                 line: rel.location.line,
                 meta: {
                     decorator: rel.decorator,
+                    ...(rel.sourceDecorator ? { sourceDecorator: rel.sourceDecorator } : {}),
                     propertyName: rel.propertyName,
                     ownerClass: rel.ownerClass,
                     targetClass: rel.targetClass,

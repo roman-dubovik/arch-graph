@@ -65,7 +65,7 @@ One command — clones into `~/.arch-graph`, installs deps, symlinks `arch-graph
 curl -fsSL https://roman-dubovik.github.io/arch-graph/install.sh | sh
 ```
 
-If you say **yes** at the init prompt, the installer chains straight into `arch-graph init` — an interactive wizard that writes `arch-graph.config.ts`, optionally installs the Claude Code skill, optionally adds a git pre-push hook, and runs the first build right away. If you say **no**, you get a hint with the exact command to run later in your project directory, plus a `.gitignore` reminder for `arch-graph-out/`.
+If you say **yes** at the init prompt, the installer chains straight into `arch-graph init` — an interactive wizard that writes `arch-graph.config.ts`, optionally installs the Claude Code skill, optionally adds a git pre-commit hook, and runs the first build right away. If you say **no**, you get a hint with the exact command to run later in your project directory, plus a `.gitignore` reminder for `arch-graph-out/`.
 
 **Prefer to read the script before piping it to `sh`?** Same script, two commands:
 
@@ -195,7 +195,7 @@ Non-interactive (CI) fallback: when stdin is not a TTY, `arch-graph init` writes
 | Domain | Coverage (what the extractor recognises) | Per-build recall gate | Measured on our 5 reference NestJS monorepos |
 |---|---|---|---|
 | **NATS** | publish + subscribe via decorators and configurable wrapper APIs; literal + pattern + dynamic subject resolution | recall ≥ 95% (handlers + senders independent) | 100% recall, 5/5 |
-| **TypeORM** | `@InjectRepository(Entity)` → `@Entity` resolution across services / libs | recall ≥ 95% + resolveRate ≥ 95% | 100% / 100%, 5/5 |
+| **TypeORM** | `@InjectRepository(Entity)` → `@Entity` resolution across services / libs; table relation edges from `@ManyToOne` / `@OneToMany` / `@ManyToMany` / `@OneToOne` and configured decorator aliases | recall ≥ 95% + resolveRate ≥ 95% | 100% / 100%, 5/5 |
 | **BullMQ** | `@InjectQueue` producers, `@Processor` consumers, `BullModule.registerQueue` registrations; queue meta (`concurrency`, `defaultDelay/Attempts/Backoff`, `hasRepeat`, `jobData[]`, `workerConcurrencyEnvVar`/`Fallback`); EdgeKinds `queue-fails-into` (DLQ heuristic), `queue-event-listener`, `queue-repeat` (→ cron-schedule). Modern `@nestjs/bullmq` patterns: `WorkerHost.process()` override + heritage type-args (`extends BaseWorkerHost<T,R>`) including 2-level inheritance. `--with-types` flag enables Job<T> resolution via ts-morph. `concurrencySource: 'bullmq-default'` marker distinguishes inferred-from-framework defaults from extracted values. | recall ≥ 95% per role + resolveRate ≥ 95% | 100% / 100%, 5/5; project-b real-world: jobData 8/8, concurrency 8/8 (5 code + 3 default) |
 | **Cron schedule** | `@nestjs/schedule` decorators (`@Cron`, `@Interval`, `@Timeout`) plus dynamic `SchedulerRegistry.add*` registrations. Resolves `CronExpression.X` aliases to literal cron strings. NodeKind `cron-schedule` + EdgeKind `cron-triggers`. Per-site diagnostics (`unresolved`, `unresolvedOptions`, `filteredByReceiver`). | recall ≥ 95% per pattern | 100%, project-b: 2 sites (`daily-report-job`, `weekly-cleanup-job`) |
 | **NestJS DI** | `@Module({ imports, providers, exports, controllers })` with full reference resolution | recall ≥ 95% per field + resolveRate ≥ 95% | 100% / 98.7–100%, 5/5 |
@@ -205,6 +205,23 @@ Non-interactive (CI) fallback: when stdin is not a TTY, `arch-graph init` writes
 "Coverage" is whether an extractor exists for the domain (boolean per row). The recall gate runs on every build against ground truth derived from *your* code — that's what tells you arch-graph is matching reality on the monorepo in front of it. The last column is what we measured against our private reference suite; your numbers depend on how closely your code follows NestJS conventions and what wrapper APIs are declared in `arch-graph.config.ts`.
 
 Each domain emits structured diagnostics for everything it couldn't pin down — dynamic subjects, unresolved queue names, opaque HTTP URLs, missing entity decorators. That list is the honest gap report.
+
+### TypeORM decorator aliases
+
+If your project wraps TypeORM relation decorators, declare the wrapper in `arch-graph.config.ts` so `db-relation` edges are emitted:
+
+```ts
+export default {
+  // ...
+  typeorm: {
+    relationDecorators: [
+      { name: 'ManyToOneWithIndex', mapsTo: 'ManyToOne' },
+    ],
+  },
+};
+```
+
+`mapsTo` must be one of `ManyToOne`, `OneToMany`, `ManyToMany`, or `OneToOne`. The graph stores the normalized decorator in `meta.decorator` and the wrapper name in `meta.sourceDecorator`.
 
 ## Build output
 

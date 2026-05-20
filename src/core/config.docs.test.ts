@@ -104,3 +104,37 @@ describe('validateConfig semantic block (D1)', () => {
         ).toThrow(/not a recognised alias/);
     });
 });
+
+describe('validateConfig typeorm relation decorator aliases', () => {
+    it('accepts configured TypeORM relation decorator aliases', () => {
+        expect(() =>
+            validateConfig(
+                {
+                    ...BASE_CONFIG,
+                    typeorm: {
+                        relationDecorators: [
+                            { name: 'ManyToOneWithIndex', mapsTo: 'ManyToOne' },
+                        ],
+                    },
+                },
+                'test',
+            ),
+        ).not.toThrow();
+    });
+
+    it('rejects unknown TypeORM relation alias targets', () => {
+        expect(() =>
+            validateConfig(
+                {
+                    ...BASE_CONFIG,
+                    typeorm: {
+                        relationDecorators: [
+                            { name: 'ManyToOneWithIndex', mapsTo: 'BelongsTo' },
+                        ],
+                    },
+                },
+                'test',
+            ),
+        ).toThrow(/relationDecorators\[0\]\.mapsTo/);
+    });
+});

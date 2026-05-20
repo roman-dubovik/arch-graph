@@ -105,7 +105,7 @@ To rebuild manually: `arch-graph build`
 | Domain | Edges | Resolution gate |
 |---|---|---|
 | NATS | `nats-publish`, `nats-subscribe`, `nats-request`, `nats-reply` | recall ≥ 95% vs grep-based ground truth |
-| TypeORM | `db-read`, `db-write`, `db-access` (service → table) + `db-relation` (table → table via `@ManyToOne` / `@OneToMany` / `@ManyToMany` / `@OneToOne`) | recall ≥ 95%, resolve ≥ 95% |
+| TypeORM | `db-read`, `db-write`, `db-access` (service → table) + `db-relation` (table → table via `@ManyToOne` / `@OneToMany` / `@ManyToMany` / `@OneToOne`; wrapper aliases via `typeorm.relationDecorators`) | recall ≥ 95%, resolve ≥ 95% |
 | BullMQ | `queue-produce`, `queue-consume` | recall ≥ 95% per role |
 | NestJS DI | `di-import`, `di-provides`, `di-exports`, `di-controller` + `di-guard` / `di-interceptor` / `di-pipe` (from `@UseGuards` / `@UseInterceptors` / `@UsePipes`, attachedTo class or method) | recall ≥ 95% per field |
 | HTTP | `http-call` (internal) or `http-external` (host) | recall ≥ 95% on call sites |
@@ -117,4 +117,5 @@ To rebuild manually: `arch-graph build`
 - **Edges are extracted, not runtime-observed.** A dynamic subject (`subject.something(${id})`) is recorded in `diagnostics.json` as `unresolved`, not invented as an edge.
 - **`diagnostics.json` is the second source you should check** whenever the graph seems "missing" a relationship — the call-site is almost certainly listed as unresolved.
 - **Coverage caveats** are in `arch-graph-out/validation.json` per domain (recall, resolveRate, ground-truth counts). If a domain shows zero ground-truth, that domain probably isn't used in this project.
+- **Custom TypeORM relation decorators require config.** If a project wraps `@ManyToOne` as something like `@ManyToOneWithIndex`, it must be declared in `arch-graph.config.ts` under `typeorm.relationDecorators`; otherwise those `db-relation` edges will be absent.
 - **Cite source location** (`file:line`) for every edge you mention. Never invent an edge.

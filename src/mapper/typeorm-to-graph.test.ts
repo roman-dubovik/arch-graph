@@ -241,9 +241,44 @@ describe('mapTypeOrmToGraph — db-relation edges', () => {
         expect(relEdge?.from).toBe('db-table:orders');
         expect(relEdge?.to).toBe('db-table:users');
         expect(relEdge?.meta?.decorator).toBe('ManyToOne');
+        expect(relEdge?.meta?.sourceDecorator).toBeUndefined();
         expect(relEdge?.meta?.propertyName).toBe('user');
         expect(relEdge?.meta?.ownerClass).toBe('Order');
         expect(relEdge?.meta?.targetClass).toBe('User');
+    });
+
+    it('emits normalized decorator and sourceDecorator metadata for configured relation decorators', () => {
+        const project = inMemoryProject({
+            '/apps/svc/user.ts': `
+                import { Entity } from 'typeorm';
+                @Entity('users')
+                export class User {}
+            `,
+            '/apps/svc/order.ts': `
+                import { Entity } from 'typeorm';
+                import { ManyToOneWithIndex } from '../decorators/many-to-one-with-index.decorator';
+                @Entity('orders')
+                export class Order {
+                    @ManyToOneWithIndex(() => User)
+                    user: User;
+                }
+            `,
+        });
+        const entityIndex = buildEntityIndex(project);
+        const { relations } = extractRelations(project, entityIndex, {
+            relationDecorators: [
+                { name: 'ManyToOneWithIndex', mapsTo: 'ManyToOne' },
+            ],
+        });
+
+        const result = mapTypeOrmToGraph([], makeOwnership(), [], relations, entityIndex);
+
+        const relEdge = result.edges.find((e) => e.kind === 'db-relation');
+        expect(relEdge).toBeDefined();
+        expect(relEdge?.from).toBe('db-table:orders');
+        expect(relEdge?.to).toBe('db-table:users');
+        expect(relEdge?.meta?.decorator).toBe('ManyToOne');
+        expect(relEdge?.meta?.sourceDecorator).toBe('ManyToOneWithIndex');
     });
 
     it('does NOT emit a db-relation edge for @OneToMany (Policy A: FK lives on @ManyToOne side)', () => {
