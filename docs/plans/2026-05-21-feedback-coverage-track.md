@@ -5,7 +5,9 @@ Status: active track
 Latest implementation commits:
 
 - `749b940 feat: cover rmq and graph feedback gaps`
-- pending: NATS decorator aliases, FE diagnose/validator alignment, init snippet idempotency, docs refresh
+- `7ffb3e6 feat: enhance RMQ and DI extraction, add semantic search quotas and boosts`
+- `17007f8 feat: cover nats aliases and fe diagnostics`
+- pending: NATS inherited command resolution, FE diagnostics noise classification, CodeQL-like analysis track
 
 ## Goal
 
@@ -85,7 +87,7 @@ export default {
 
 ## Block 2.5: NATS Decorator Alias Coverage
 
-Status: in progress.
+Status: implemented in `17007f8`; inherited command resolution in progress.
 
 ### What changed
 
@@ -102,6 +104,16 @@ Status: in progress.
   site with `via: '@NatsMessagePattern'`.
 - Unconfigured custom decorators are ignored rather than guessed.
 - RMQ decorators remain in the RMQ domain.
+
+### Follow-up Status
+
+- Implemented: Nest command object subjects, e.g.
+  `client.send({ cmd: EAuditServiceCmd.CREATE_ENGAGEMENT }, payload)`.
+- Implemented: `this.somePattern` / `this.someCmd` class-property subjects.
+- Implemented: base-class calls like `this.client.send(this.getEntitiesCmd, ...)`
+  are expanded through subclass overrides when the override has a static
+  initializer.
+- Remaining: run on target-monorepo and confirm NATS unresolved drops from 31.
 
 ## Block 3: TypeORM Relation Fidelity
 
@@ -185,7 +197,7 @@ Status: implemented baseline in `749b940`.
 
 ## Block 5.5: Init / CLAUDE.md Snippet Hygiene
 
-Status: in progress.
+Status: implemented in `17007f8`.
 
 ### What changed
 
@@ -205,7 +217,7 @@ place to write instructions without mutating project memory. When appending to
 
 ## Block 5.6: FE Diagnose And Recall Hygiene
 
-Status: in progress.
+Status: implemented in `17007f8`; diagnostics noise classification remains.
 
 ### What changed
 
@@ -222,6 +234,8 @@ Status: in progress.
   and classify any remaining missed routes by concrete file path.
 - If route misses remain, add targeted Next.js router pattern support instead of
   loosening route extraction blindly.
+- Classify external JSX components and external/package imports separately so
+  diagnostics do not present UI library components as local component misses.
 
 ## Block 6: CodeQL / Static Analysis Strategy
 

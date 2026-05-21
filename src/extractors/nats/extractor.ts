@@ -1,10 +1,12 @@
 import {
     ArrowFunction,
     CallExpression,
+    ClassDeclaration,
     Decorator,
     FunctionDeclaration,
     Identifier,
     Node,
+    ObjectLiteralExpression,
     Project,
     PropertyAccessExpression,
     PropertyAssignment,
@@ -347,6 +349,13 @@ function handleCall(
     const subjArg = args[api.subjectArgIndex ?? 0];
     if (!subjArg) return;
     const resolved = resolveSubject(subjArg, 0, ctx.constIndex);
+    const expanded = resolved.kind === 'unresolved'
+        ? expandThisPropertyCall(call, subjArg, role, methodName, api, ctx)
+        : [];
+    if (expanded.length > 0) {
+        out.push(...expanded);
+        return;
+    }
 
     // Construct the role-narrowed NatsCallSite (DU enforces role↔edgeKind coherence).
     const base = {
@@ -392,6 +401,83 @@ function handleCall(
         if (enc && pass.wrapperKeys.has(`${enc.className}.${enc.methodName}`)) return;
         out.push(site);
     }
+}
+
+function expandThisPropertyCall(
+    call: CallExpression,
+    subjectArg: Node,
+    role: 'sender' | 'receiver',
+    methodName: string,
+    api: WrapperApi,
+    ctx: ExtractorCtx,
+): NatsCallSite[] {
+    const propName = thisPropertyName(subjectArg);
+    if (!propName) return [];
+    const baseClass = findEnclosingClass(call);
+    if (!baseClass) return [];
+    const baseName = baseClass.getName();
+    if (!baseName) return [];
+
+    const sites: NatsCallSite[] = [];
+    for (const cls of findSubclasses(ctx.project, baseName)) {
+        const prop = cls.getInstanceProperty(propName);
+        if (!prop || !Node.isPropertyDeclaration(prop)) continue;
+        const init = prop.getInitializer();
+        if (!init) continue;
+        const subject = resolveSubject(init, 0, ctx.constIndex);
+        if (subject.kind === 'unresolved') continue;
+        const base = {
+            subject,
+            location: locOf(prop),
+            via: `${api.class}.${methodName}`,
+            enclosingClass: cls.getName(),
+        };
+        sites.push(
+            role === 'sender'
+                ? {
+                      ...base,
+                      role: 'sender',
+                      edgeKind: methodName === 'emit' || methodName === 'publish' ? 'nats-publish' : 'nats-request',
+                  }
+                : {
+                      ...base,
+                      role: 'receiver',
+                      edgeKind: 'nats-subscribe',
+                  },
+        );
+    }
+    return sites;
+}
+
+function thisPropertyName(node: Node): string | null {
+    if (!Node.isPropertyAccessExpression(node)) return null;
+    if (node.getExpression().getKind() !== SyntaxKind.ThisKeyword) return null;
+    return node.getName();
+}
+
+function findEnclosingClass(node: Node): ClassDeclaration | null {
+    let cur: Node | undefined = node;
+    while (cur) {
+        if (Node.isClassDeclaration(cur)) return cur;
+        cur = cur.getParent();
+    }
+    return null;
+}
+
+function findSubclasses(project: Project, baseName: string): ClassDeclaration[] {
+    const classes = project.getSourceFiles().flatMap((sf) => sf.getClasses());
+    const byName = new Map(classes.map((cls) => [cls.getName(), cls]));
+    const extendsBase = (cls: ClassDeclaration, seen = new Set<string>()): boolean => {
+        const name = cls.getName();
+        if (name && seen.has(name)) return false;
+        if (name) seen.add(name);
+        const parentName = cls.getExtends()?.getExpression().getText();
+        if (!parentName) return false;
+        if (parentName === baseName) return true;
+        const parent = byName.get(parentName);
+        return parent ? extendsBase(parent, seen) : false;
+    };
+    return classes.filter((cls) => extendsBase(cls));
 }
 
 function pushSubscribe(
@@ -505,6 +591,10 @@ export function resolveSubject(node: Node, depth: number, idx?: ConstantIndex): 
             return resolveElementAccess(node, depth, idx);
         }
 
+        case SyntaxKind.ObjectLiteralExpression: {
+            return resolveCommandObject(node as ObjectLiteralExpression, depth, idx);
+        }
+
         case SyntaxKind.Identifier: {
             return resolveIdentifier(node as Identifier, depth, idx);
         }
@@ -530,6 +620,19 @@ export function resolveSubject(node: Node, depth: number, idx?: ConstantIndex): 
     }
 
     return { kind: 'unresolved', raw: node.getText(), reason: `unsupported kind: ${node.getKindName()}` };
+}
+
+function resolveCommandObject(node: ObjectLiteralExpression, depth: number, idx?: ConstantIndex): ResolvedSubject {
+    const candidates = ['cmd', 'pattern'];
+    for (const prop of node.getProperties()) {
+        if (!Node.isPropertyAssignment(prop)) continue;
+        const name = prop.getName().replace(/^['"]|['"]$/g, '');
+        if (!candidates.includes(name)) continue;
+        const init = prop.getInitializer();
+        if (!init) continue;
+        return resolveSubject(init, depth + 1, idx);
+    }
+    return { kind: 'unresolved', raw: node.getText(), reason: 'object literal without cmd/pattern' };
 }
 
 function resolveElementAccess(node: Node, depth: number, idx?: ConstantIndex): ResolvedSubject {
