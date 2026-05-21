@@ -39,3 +39,4 @@ bench/cache/
 # Self-build bench intermediate scoring artifacts — regenerable from
 # queries-self-build.json + graphify-responses.jsonl + arch-graph CLI.
 bench/self-build/.*.json
+.playwright-mcp/
