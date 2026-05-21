@@ -643,6 +643,9 @@ table.bench-table {
     grid-column: 3;
     grid-row: 1 / span 3;
   }
+  .domain-card-under-feature {
+    grid-column: 3;
+  }
 }
 .domain-head {
   display: flex;
@@ -668,6 +671,23 @@ table.bench-table {
   letter-spacing: -0.01em;
   margin: 0;
   color: var(--text);
+}
+.domain-card-compact {
+  padding: 16px 18px;
+  gap: 8px;
+}
+.domain-card-compact .domain-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+}
+.domain-card-compact .domain-blurb {
+  font-size: 13px;
+  line-height: 1.45;
+}
+.domain-card-compact .domain-edges li {
+  padding: 3px 8px;
+  font-size: 11px;
 }
 .domain-blurb {
   margin: 0;

@@ -822,6 +822,26 @@ arch-graph build --strict            # CI gate: exit 3 if recall drops below flo
             </ul>
           </li>
 
+          <li class="domain-card domain-card-compact domain-card-under-feature reveal">
+            <div class="domain-head">
+              <span class="domain-icon" aria-hidden="true">
+                <svg viewBox="0 0 32 32" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="4" y="6" width="24" height="18" rx="2"></rect>
+                  <path d="M4 12h24"></path>
+                  <path d="M10 18h5"></path>
+                  <path d="M19 18h3"></path>
+                </svg>
+              </span>
+              <h3>React / Next FE</h3>
+            </div>
+            <p class="domain-blurb">Pages, routes, components, hooks, JSX renders, imports, and i18n. Avoids feature folders named <code>pages/</code>; sees <code>React.useX</code> hooks.</p>
+            <ul class="domain-edges mono">
+              <li>fe-routes-to</li>
+              <li>fe-renders</li>
+              <li>fe-imports</li>
+            </ul>
+          </li>
+
           <li class="domain-card reveal">
             <div class="domain-head">
               <span class="domain-icon" aria-hidden="true">
@@ -879,26 +899,6 @@ arch-graph build --strict            # CI gate: exit 3 if recall drops below flo
             <ul class="domain-edges mono">
               <li>http-call</li>
               <li>http-external</li>
-            </ul>
-          </li>
-
-          <li class="domain-card reveal">
-            <div class="domain-head">
-              <span class="domain-icon" aria-hidden="true">
-                <svg viewBox="0 0 32 32" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="4" y="6" width="24" height="18" rx="2"></rect>
-                  <path d="M4 12h24"></path>
-                  <path d="M10 18h5"></path>
-                  <path d="M19 18h3"></path>
-                </svg>
-              </span>
-              <h3>React / Next FE</h3>
-            </div>
-            <p class="domain-blurb">Frontend pages, route patterns, components, hooks, JSX render references, local imports, and i18n strings. Next.js route detection avoids feature folders merely named <code>pages/</code>; hook extraction recognizes direct and namespaced React calls such as <code>React.useContext</code>.</p>
-            <ul class="domain-edges mono">
-              <li>fe-routes-to</li>
-              <li>fe-renders</li>
-              <li>fe-imports</li>
             </ul>
           </li>
 
