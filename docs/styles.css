@@ -641,7 +641,7 @@ table.bench-table {
   }
   .domain-card-feature {
     grid-column: 3;
-    grid-row: 1 / span 3;
+    grid-row: span 2;
   }
   .domain-card-under-feature {
     grid-column: 3;
