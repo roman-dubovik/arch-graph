@@ -4,6 +4,7 @@ import type {
     DiFilterChainRef,
     DiModuleRef,
     DiModuleSite,
+    DiProviderUseSite,
     DiProviderRef,
     EdgeKind,
     GraphEdge,
@@ -46,6 +47,7 @@ export function mapDiToGraph(
     filterChain: DiFilterChainRef[] = [],
     skippedAnonymousFiles: string[] = [],
     classIndex?: ClassIndex,
+    providerUses: DiProviderUseSite[] = [],
 ): MapDiResult {
     const moduleNodes = new Map<string, GraphNode>();
     const providerNodes = new Map<string, GraphNode>();
@@ -57,6 +59,7 @@ export function mapDiToGraph(
     let providersCount = 0;
     let exportsCount = 0;
     let controllersCount = 0;
+    let providerUsesCount = 0;
 
     for (const mod of modules) {
         importsCount += mod.imports.length;
@@ -221,6 +224,24 @@ export function mapDiToGraph(
         }
     }
 
+    for (const use of providerUses) {
+        const fromId = `provider:${use.providerClass}`;
+        const toId = `provider:${use.dependencyClass}`;
+        if (!providerNodes.has(fromId) || !providerNodes.has(toId)) continue;
+        const key = `di-uses:${fromId}->${toId}`;
+        if (edges.has(key)) continue;
+        edges.set(key, {
+            id: key,
+            from: fromId,
+            to: toId,
+            kind: 'di-uses',
+            file: use.location.file,
+            line: use.location.line,
+            meta: { via: use.via },
+        });
+        providerUsesCount++;
+    }
+
     return {
         nodes: [...moduleNodes.values(), ...providerNodes.values()],
         edges: [...edges.values()],
@@ -236,6 +257,7 @@ export function mapDiToGraph(
                 providers: providersCount,
                 exports: exportsCount,
                 controllers: controllersCount,
+                providerUses: providerUsesCount,
                 unresolvedRefs: unresolvedRefs.length,
                 unowned: unowned.length,
                 guards: guardsCount,

@@ -2,6 +2,7 @@ import {
     ArrowFunction,
     CallExpression,
     ClassDeclaration,
+    Node,
     ObjectLiteralExpression,
     NoSubstitutionTemplateLiteral,
     Project,
@@ -88,6 +89,7 @@ export function extractRelations(
                     const propertyName = prop.getName();
                     const resolved = resolveTarget(dec, entityIndex, decoratorSpec.mapsTo);
                     const joinMeta = extractJoinMetadata(prop);
+                    const relationMeta = extractRelationMetadata(dec);
 
                     // Use the decorator's own source file for location — when the property
                     // is inherited from a base class, it lives in a different file than `sf`.
@@ -97,6 +99,7 @@ export function extractRelations(
                         decorator: decoratorSpec.mapsTo,
                         ...(decoratorSpec.name !== decoratorSpec.mapsTo ? { sourceDecorator: decoratorSpec.name } : {}),
                         ...joinMeta,
+                        ...relationMeta,
                         ownerClass: className,
                         propertyName,
                         location: {
@@ -142,6 +145,57 @@ function extractJoinMetadata(prop: PropertyDeclaration): Pick<TypeOrmRelation, '
         ...(joinTableDecorator ? { joinTable: true } : {}),
         ...(joinTableName ? { joinTableName } : {}),
     };
+}
+
+function extractRelationMetadata(dec: import('ts-morph').Decorator): Pick<TypeOrmRelation, 'inverseProperty' | 'onDelete' | 'onUpdate' | 'nullable'> {
+    const args = dec.getArguments();
+    const inverseProperty = extractInverseProperty(args[1]);
+    const options = args.find((arg, idx) => idx > 0 && arg.getKind() === SyntaxKind.ObjectLiteralExpression) as ObjectLiteralExpression | undefined;
+    return {
+        ...(inverseProperty ? { inverseProperty } : {}),
+        ...(options ? extractRelationOptions(options) : {}),
+    };
+}
+
+function extractInverseProperty(arg: Node | undefined): string | undefined {
+    if (!arg || arg.getKind() !== SyntaxKind.ArrowFunction) return undefined;
+    const body = (arg as ArrowFunction).getBody();
+    if (body.getKind() !== SyntaxKind.PropertyAccessExpression) return undefined;
+    return (body as import('ts-morph').PropertyAccessExpression).getName();
+}
+
+function extractRelationOptions(obj: ObjectLiteralExpression): Pick<TypeOrmRelation, 'onDelete' | 'onUpdate' | 'nullable'> {
+    return {
+        ...stringOption(obj, 'onDelete'),
+        ...stringOption(obj, 'onUpdate'),
+        ...booleanOption(obj, 'nullable'),
+    };
+}
+
+function stringOption(obj: ObjectLiteralExpression, name: 'onDelete' | 'onUpdate'): Pick<TypeOrmRelation, typeof name> {
+    const initializer = optionInitializer(obj, name);
+    if (!initializer) return {};
+    if (
+        initializer.getKind() === SyntaxKind.StringLiteral ||
+        initializer.getKind() === SyntaxKind.NoSubstitutionTemplateLiteral
+    ) {
+        return { [name]: (initializer as StringLiteral | NoSubstitutionTemplateLiteral).getLiteralValue() };
+    }
+    return {};
+}
+
+function booleanOption(obj: ObjectLiteralExpression, name: 'nullable'): Pick<TypeOrmRelation, typeof name> {
+    const initializer = optionInitializer(obj, name);
+    if (!initializer) return {};
+    if (initializer.getKind() === SyntaxKind.TrueKeyword) return { [name]: true };
+    if (initializer.getKind() === SyntaxKind.FalseKeyword) return { [name]: false };
+    return {};
+}
+
+function optionInitializer(obj: ObjectLiteralExpression, name: string): Node | undefined {
+    const prop = obj.getProperty(name);
+    if (!prop || prop.getKind() !== SyntaxKind.PropertyAssignment) return undefined;
+    return prop.asKind(SyntaxKind.PropertyAssignment)?.getInitializer();
 }
 
 function extractJoinTableName(dec: import('ts-morph').Decorator): string | undefined {

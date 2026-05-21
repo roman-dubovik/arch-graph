@@ -279,6 +279,38 @@ describe('mapDiToGraph — di-provides edges', () => {
     });
 });
 
+describe('mapDiToGraph — di-uses edges', () => {
+    it('emits provider-to-provider constructor dependency edges for registered providers only', () => {
+        const mod = makeModule('AppModule', {
+            providers: [
+                { kind: 'class', name: 'OrdersService' },
+                { kind: 'class', name: 'UsersService' },
+            ],
+        });
+
+        const result = mapDiToGraph(
+            [mod],
+            IDX,
+            EMPTY_OWNERSHIP,
+            [],
+            [],
+            undefined,
+            [{
+                providerClass: 'OrdersService',
+                dependencyClass: 'UsersService',
+                location: makeLoc('/apps/api/src/orders.service.ts', 7),
+                via: 'constructor',
+            }],
+        );
+
+        const edge = result.edges.find((e) => e.kind === 'di-uses');
+        expect(edge?.from).toBe('provider:OrdersService');
+        expect(edge?.to).toBe('provider:UsersService');
+        expect(edge?.meta?.via).toBe('constructor');
+        expect(result.diagnostics.counts.providerUses).toBe(1);
+    });
+});
+
 // ---------------------------------------------------------------------------
 // di-exports edges
 // ---------------------------------------------------------------------------

@@ -51,7 +51,7 @@ Plus a refreshed head-to-head benchmark on 103 fuzzy-intent queries vs graphify 
 
 ---
 
-**Static architecture graph for NestJS monorepos.** Extracts NATS pub/sub, BullMQ queues, TypeORM (`@InjectRepository` → `@Entity` and `@ManyToOne` / `@OneToMany` / `@ManyToMany` / `@OneToOne` → `db-relation`), NestJS module DI (modules / providers / exports / controllers + `@UseGuards` / `@UseInterceptors` / `@UsePipes`), HTTP inter-service calls, and TypeScript imports (static + dynamic + CommonJS `require`) into a single typed graph at `arch-graph-out/graph.json`. Plus an import-cycle diagnostic across `ts-import` / `lib-usage` / `di-import` edges in `diagnostics.cycles`. Designed so an LLM agent can answer "who publishes on this subject?", "what guards run on this endpoint?", or "what tables relate to entity X?" without grepping or guessing.
+**Static architecture graph for NestJS monorepos.** Extracts NATS pub/sub, RMQ decorator subscriptions, BullMQ queues, TypeORM (`@InjectRepository` → `@Entity` and `@ManyToOne` / `@OneToMany` / `@ManyToMany` / `@OneToOne` → `db-relation`), NestJS module DI (modules / providers / exports / controllers, constructor `provider -> provider` uses, and `@UseGuards` / `@UseInterceptors` / `@UsePipes`), HTTP inter-service calls, and TypeScript imports (static + dynamic + CommonJS `require`) into a single typed graph at `arch-graph-out/graph.json`. Plus an import-cycle diagnostic across `ts-import` / `lib-usage` / `di-import` edges in `diagnostics.cycles`. Designed so an LLM agent can answer "who publishes on this subject?", "what guards run on this endpoint?", or "what tables relate to entity X?" without grepping or guessing.
 
 **Local multilingual semantic search runs alongside, fully offline.** A dense-vector index over node `embed-text` powers `semantic_search` / `code_search` / `docs_search` MCP tools. Multilingual embedder (`Xenova/multilingual-e5-base`, 768-dim, passage/query prefixes) via `transformers.js` — no API key, no GPU, no network. Russian, English, mixed queries hit the same index. **Zero LLM tokens on both build and query.**
 
@@ -158,11 +158,12 @@ arch-graph init — interactive setup wizard
 
 ? Which domains to extract?
   1. [x] NATS          pub/sub + request/reply
-  2. [x] TypeORM       @InjectRepository → @Entity
-  3. [x] BullMQ        @InjectQueue / @Processor
-  4. [x] NestJS DI     @Module imports/providers/exports
-  5. [x] HTTP          HttpService / axios / fetch
-  6. [x] TS imports    file→file / service→lib
+  2. [x] RMQ           RabbitMQ decorator subscriptions
+  3. [x] TypeORM       @InjectRepository → @Entity
+  4. [x] BullMQ        @InjectQueue / @Processor
+  5. [x] NestJS DI     @Module imports/providers/exports
+  6. [x] HTTP          HttpService / axios / fetch
+  7. [x] TS imports    file→file / service→lib
 
   Disable any? Enter numbers separated by comma (blank = all enabled):
 
@@ -171,7 +172,7 @@ arch-graph init — interactive setup wizard
 ? Install Claude Code integration (./CLAUDE.md + skill)? [Y/n]:
 
 ? Install git hook?
-  1. pre-commit   (graph committed with code) — recommended
+  1. pre-commit   (validate graph build; artifacts stay local) — recommended
   2. post-commit  (graph rebuilt after commit, not in commit)
   3. none
   Choice [1]:
@@ -195,10 +196,11 @@ Non-interactive (CI) fallback: when stdin is not a TTY, `arch-graph init` writes
 | Domain | Coverage (what the extractor recognises) | Per-build recall gate | Measured on our 5 reference NestJS monorepos |
 |---|---|---|---|
 | **NATS** | publish + subscribe via decorators and configurable wrapper APIs; literal + pattern + dynamic subject resolution | recall ≥ 95% (handlers + senders independent) | 100% recall, 5/5 |
+| **RMQ** | RabbitMQ subscribe decorators configured via `rmq.subscribeDecorators`; literal + pattern + dynamic pattern resolution | diagnostics only | opt-in, project-specific |
 | **TypeORM** | `@InjectRepository(Entity)` → `@Entity` resolution across services / libs; table relation edges from `@ManyToOne` / `@OneToMany` / `@ManyToMany` / `@OneToOne` and configured decorator aliases | recall ≥ 95% + resolveRate ≥ 95% | 100% / 100%, 5/5 |
 | **BullMQ** | `@InjectQueue` producers, `@Processor` consumers, `BullModule.registerQueue` registrations; queue meta (`concurrency`, `defaultDelay/Attempts/Backoff`, `hasRepeat`, `jobData[]`, `workerConcurrencyEnvVar`/`Fallback`); EdgeKinds `queue-fails-into` (DLQ heuristic), `queue-event-listener`, `queue-repeat` (→ cron-schedule). Modern `@nestjs/bullmq` patterns: `WorkerHost.process()` override + heritage type-args (`extends BaseWorkerHost<T,R>`) including 2-level inheritance. `--with-types` flag enables Job<T> resolution via ts-morph. `concurrencySource: 'bullmq-default'` marker distinguishes inferred-from-framework defaults from extracted values. | recall ≥ 95% per role + resolveRate ≥ 95% | 100% / 100%, 5/5; project-b real-world: jobData 8/8, concurrency 8/8 (5 code + 3 default) |
 | **Cron schedule** | `@nestjs/schedule` decorators (`@Cron`, `@Interval`, `@Timeout`) plus dynamic `SchedulerRegistry.add*` registrations. Resolves `CronExpression.X` aliases to literal cron strings. NodeKind `cron-schedule` + EdgeKind `cron-triggers`. Per-site diagnostics (`unresolved`, `unresolvedOptions`, `filteredByReceiver`). | recall ≥ 95% per pattern | 100%, project-b: 2 sites (`daily-report-job`, `weekly-cleanup-job`) |
-| **NestJS DI** | `@Module({ imports, providers, exports, controllers })` with full reference resolution | recall ≥ 95% per field + resolveRate ≥ 95% | 100% / 98.7–100%, 5/5 |
+| **NestJS DI** | `@Module({ imports, providers, exports, controllers })` with full reference resolution plus constructor `di-uses` provider dependency edges | recall ≥ 95% per field + resolveRate ≥ 95% | 100% / 98.7–100%, 5/5 |
 | **HTTP** | `HttpService` / `axios` / `fetch` call sites with URL classification (literal / env-ref / pattern / unresolved → internal service vs external host) | recall ≥ 95% | 100%, 5/5 |
 | **TS imports** | static + dynamic `import` sites resolved through `tsconfig.paths`; aggregated service → lib `lib-usage` edges (and optional file-level `ts-import` edges) | recall ≥ 80% (alias resolution is best-effort) | 100%, 5/5 |
 
@@ -229,6 +231,21 @@ export default {
 - `meta.joinTableName` — explicit `@JoinTable({ name: '...' })` table name when present. Explicit join tables are also emitted as `db-table` nodes.
 
 Auto-generated `ManyToMany` join table names are not guessed, because TypeORM naming strategies can change them at runtime.
+
+### RMQ decorator aliases
+
+If your project wraps RabbitMQ handlers in a custom decorator such as `RmqEventPattern`, declare it separately from NATS:
+
+```ts
+export default {
+  // ...
+  rmq: {
+    subscribeDecorators: ['RmqEventPattern'],
+  },
+};
+```
+
+RMQ handlers are emitted as `rmq-pattern` nodes with `rmq-subscribe` edges. They are intentionally not represented as `nats-subject`.
 
 ## Build output
 
@@ -286,7 +303,7 @@ The choice is persisted as a `## arch-graph semantic search strategy` section. I
 
 ## Git hook
 
-The pre-commit hook (default) rebuilds the graph before each commit that touches `.ts` files and **auto-stages** the output artifacts (`graph.json`, `diagnostics.json`, `validation.json`, `graph.mermaid`) so the graph is always coherent with the code in history.
+The pre-commit hook (default) validates that the graph can be rebuilt before each commit that touches `.ts` files. It does **not** stage or commit `arch-graph-out/`; generated graph artifacts stay local and should normally be ignored by the consuming repo.
 
 ```sh
 arch-graph hook install                        # pre-commit (default, recommended)
@@ -295,7 +312,7 @@ arch-graph hook status                         # check installed mode
 arch-graph hook uninstall                      # remove
 ```
 
-**Why pre-commit is usually better:** the graph is committed alongside the code that generated it, so every checkout in history is self-consistent. Post-commit rebuilds the graph after the commit has landed — the graph in the commit is one build behind until the hook fires.
+**Why pre-commit is usually better:** it blocks commits when the configured graph build is broken, without forcing generated graph files into project history. Post-commit is useful when you want local artifacts refreshed after the commit has landed.
 
 The hook is a marker-delimited block. If you already have a hook from another tool, arch-graph appends to it without disturbing existing content. Switching modes strips the old block and writes the new one.
 
@@ -349,7 +366,7 @@ The semantic layer is independent and opt-in: arch-graph works identically well 
   arch-graph semantic search "auth flow" # fuzzy search for top 10 results
   arch-graph semantic search "logging" --k 20 --json  # top 20, structured output
   ```
-- **First build**: the model downloads ~280 MB on first run and is cached under `~/.cache/transformers/` (or via `HF_HOME` env var), so subsequent `semantic build` and `semantic search` run much faster. After the first `semantic build`, subsequent builds are incremental (~1-2 s per typical commit). The pre-commit hook installs with semantic auto-rebuild on by default.
+- **First build**: the model downloads ~280 MB on first run and is cached under `~/.cache/transformers/` (or via `HF_HOME` env var), so subsequent `semantic build` and `semantic search` run much faster. After the first `semantic build`, subsequent builds are incremental (~1-2 s per typical commit). Post-commit hooks can refresh the semantic sidecar locally; pre-commit validates only the structural graph build.
 - **Sidecar layout**: `arch-graph-out/<repo>/semantic/{manifest.json, embeddings.jsonl}` — one JSON record per line, streamable for large graphs.
 - **MCP tools**: when the MCP server is running (`arch-graph mcp`), three semantic tools become available:
   - `semantic_search` — mixed bucket (code + docs together)

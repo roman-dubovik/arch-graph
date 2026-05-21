@@ -1,8 +1,8 @@
 // Git hook install/uninstall/status.
 //
-// Default mode: pre-commit — installs a shell block that rebuilds the graph
-// BEFORE the commit and auto-stages the output artifacts so they land in the
-// same commit. Optional --mode=post-commit restores the old behavior.
+// Default mode: pre-commit — installs a shell block that validates the graph can
+// be rebuilt before the commit. Generated graph artifacts are local build output
+// and are intentionally not staged by the hook.
 //
 // Idempotent: re-running install replaces the block. If a hook already exists
 // from another tool, our block is appended without disturbing it.
@@ -31,17 +31,10 @@ export function postCommitHookPath(repo: string): string {
 // ---------------------------------------------------------------------------
 
 function buildPreCommitBody(includeSemantic: boolean): string {
-    const semanticBlock = includeSemantic ? `
-        # Incremental semantic index update (default-on).
-        # Only stage the semantic files when the build succeeded — a failed build
-        # (OOM, model download error) must NOT stage a potentially corrupt sidecar.
-        if arch-graph semantic build --quiet; then
-            git add arch-graph-out/semantic/manifest.json \\
-                    arch-graph-out/semantic/embeddings.jsonl 2>/dev/null || true
-        fi` : '';
+    void includeSemantic;
 
     return `${MARK_START}
-# Auto-rebuild arch-graph before commits that touch TypeScript files.
+# Validate arch-graph before commits that touch TypeScript files.
 # Managed by \`arch-graph hook install\` — edit between markers will be overwritten.
 if command -v arch-graph >/dev/null 2>&1; then
     if git diff --cached --name-only --diff-filter=ACMR 2>/dev/null | grep -qE '\\.ts$'; then
@@ -49,14 +42,6 @@ if command -v arch-graph >/dev/null 2>&1; then
         # regressions are advisory by default and do not block — see \`arch-graph
         # build --strict\` for CI gating.
         arch-graph build --quiet || exit 1
-        # Stage the graph + diagnostics + validation outputs so they go into this commit.
-        # graph.mermaid stays — it's a viewable artifact; mermaid-collisions.json too.
-        # If arch-graph-out/ is in .gitignore the \`git add -f\` is required, but the
-        # install step warns the user — see init flow.
-        git add arch-graph-out/graph.json \\
-                arch-graph-out/diagnostics.json \\
-                arch-graph-out/validation.json \\
-                arch-graph-out/graph.mermaid 2>/dev/null || true${semanticBlock}
     fi
 fi
 ${MARK_END}
@@ -217,10 +202,7 @@ export async function hookInstall(args: HookArgs): Promise<void> {
         await removeMarkerFromFile(other);
         await writeHookBlock(target, 'pre-commit', buildPreCommitBody(includeSemantic));
         process.stdout.write(`✓ pre-commit hook installed at ${target}\n`);
-        process.stdout.write(`  Rebuilds graph + stages artifacts before commits touching .ts files.\n`);
-        if (includeSemantic) {
-            process.stdout.write(`  Incremental semantic build included (use --no-include-semantic to skip).\n`);
-        }
+        process.stdout.write(`  Validates graph build before commits touching .ts files; generated artifacts stay local.\n`);
         process.stdout.write(`  Remove with: arch-graph hook uninstall\n`);
     } else {
         const target = postCommitHookPath(args.repo);

@@ -26,6 +26,7 @@ export interface SourceLoc {
 // ============================================================================
 
 export type EdgeKindNats = 'nats-publish' | 'nats-request' | 'nats-subscribe' | 'nats-reply';
+export type EdgeKindRmq = 'rmq-subscribe';
 
 export type ResolvedSubject =
     | { kind: 'literal'; value: string }
@@ -51,6 +52,13 @@ export type NatsCallSite =
     | (NatsCallSiteBase & { role: 'sender'; edgeKind: 'nats-publish' | 'nats-request' })
     | (NatsCallSiteBase & { role: 'receiver'; edgeKind: 'nats-subscribe' | 'nats-reply' });
 
+export interface RmqCallSite {
+    pattern: ResolvedSubject;
+    location: SourceLoc;
+    via: string;
+    enclosingClass?: string;
+}
+
 export interface WrapperApi {
     class: string;
     methods: string[];
@@ -71,6 +79,7 @@ export type NodeKind =
     | 'service'
     | 'lib'
     | 'nats-subject'
+    | 'rmq-pattern'
     | 'db-table'
     | 'queue'
     | 'module'
@@ -100,6 +109,7 @@ const NODE_KIND_CHECK: Record<NodeKind, null> = {
     'service': null,
     'lib': null,
     'nats-subject': null,
+    'rmq-pattern': null,
     'db-table': null,
     'queue': null,
     'module': null,
@@ -123,6 +133,7 @@ export const NODE_KIND_VALUES = Object.keys(NODE_KIND_CHECK) as [NodeKind, ...No
 
 export type EdgeKind =
     | EdgeKindNats
+    | EdgeKindRmq
     | 'http-call'
     | 'http-external'
     | 'queue-produce'
@@ -135,6 +146,7 @@ export type EdgeKind =
     | 'di-provides'
     | 'di-exports'
     | 'di-controller'
+    | 'di-uses'
     | 'di-guard'
     | 'di-interceptor'
     | 'di-pipe'
@@ -246,6 +258,12 @@ export type TypeOrmRelation = {
     joinTable?: boolean;
     /** Explicit join table name from `@JoinTable({ name: '...' })`, when present. */
     joinTableName?: string;
+    /** Inverse-side property from `@ManyToOne(() => Foo, (foo) => foo.items)` when statically parseable. */
+    inverseProperty?: string;
+    /** Selected TypeORM relation options that materially affect DB behavior. */
+    onDelete?: string;
+    onUpdate?: string;
+    nullable?: boolean;
     /** Class that owns the property bearing the relation decorator. */
     ownerClass: string;
     /** Property name on the owner class. */
@@ -305,6 +323,19 @@ export interface NatsDiagnostics {
     };
 }
 
+export interface RmqDiagnostics {
+    unresolved: RmqCallSite[];
+    dynamic: RmqCallSite[];
+    /** Call-sites whose owner couldn't be resolved (outside apps/ and libs/). */
+    unowned: RmqCallSite[];
+    counts: {
+        literal: number;
+        pattern: number;
+        dynamic: number;
+        unresolved: number;
+    };
+}
+
 export type TypeOrmEntityDecoratorWarning =
     | { className: string; file: string; line: number; reason: 'object-literal-missing-name' }
     | { className: string; file: string; line: number; reason: 'non-static-argument'; argKind: string };
@@ -332,19 +363,16 @@ export interface TypeOrmDiagnostics {
         unresolvedEntity: number;
         unowned: number;
         entityDecoratorWarnings: number;
-        /** Number of `db-relation` edges emitted (after dedup + Policy A `@OneToMany` skip). */
+        /** Number of `db-relation` edges emitted after dedup. */
         relationsEmitted: number;
         /**
-         * Number of input relations where `resolvedTarget !== null`, counted BEFORE
-         * Policy A `@OneToMany` filtering. A `@OneToMany` with a resolved target is
-         * included in this count even though it never produces an edge.
+         * Number of input relations where `resolvedTarget !== null`.
          */
         relationsResolved: number;
         unresolvedRelations: number;
         /**
-         * Number of `@OneToMany` relations skipped under Policy A (FK lives on the
-         * `@ManyToOne` side; emitting both would produce duplicate reverse edges).
-         * Surfaced in the pipeline log for observability.
+         * Deprecated compatibility counter. Inverse `@OneToMany` edges are now emitted
+         * with `meta.isOwnerSide=false`, so this should remain 0.
          */
         oneToManySkipped: number;
         /**
@@ -355,9 +383,7 @@ export interface TypeOrmDiagnostics {
          *                       entityIndex (defensive branch; should be unreachable in a well-formed
          *                       run, but is now tracked structurally so the invariant is maintained)
          *
-         * Invariant: `unparseable + notIndexed + ownerNotIndexed === unresolvedRelations`
-         * (Policy A — @OneToMany — is filtered before unresolved bucketing; unresolved
-         * @OneToMany relations are NOT counted here.)
+         * Invariant: `unparseable + notIndexed + ownerNotIndexed === unresolvedRelations`.
          */
         unresolvedReasons: {
             unparseable: number;
@@ -486,6 +512,7 @@ export interface DiagnosticsReport {
     projectId: string;
     timestamp: string;
     nats: NatsDiagnostics;
+    rmq?: RmqDiagnostics;
     typeorm: TypeOrmDiagnostics;
     bullmq: BullMqDiagnostics;
     di: DiDiagnostics;
@@ -1118,6 +1145,13 @@ export interface DiModuleSite {
     };
 }
 
+export interface DiProviderUseSite {
+    providerClass: string;
+    dependencyClass: string;
+    location: SourceLoc;
+    via: 'constructor';
+}
+
 export interface DiDiagnostics {
     /** Refs (across all four arrays) that couldn't be resolved to a class name. */
     unresolvedRefs: Array<{
@@ -1153,6 +1187,7 @@ export interface DiDiagnostics {
         providers: number;
         exports: number;
         controllers: number;
+        providerUses: number;
         unresolvedRefs: number;
         unowned: number;
         guards: number;

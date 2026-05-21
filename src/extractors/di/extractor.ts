@@ -6,6 +6,7 @@ import {
     ObjectLiteralExpression,
     Project,
     PropertyAssignment,
+    ParameterDeclaration,
     SourceFile,
     SyntaxKind,
 } from 'ts-morph';
@@ -16,6 +17,7 @@ import type {
     DiFilterChainRef,
     DiModuleRef,
     DiModuleSite,
+    DiProviderUseSite,
     DiProviderRef,
     SourceLoc,
 } from '../../core/types.js';
@@ -50,15 +52,18 @@ export interface ExtractDiResult {
     modules: DiModuleSite[];
     moduleIndex: DiModuleIndex;
     filterChain: DiFilterChainRef[];
+    providerUses: DiProviderUseSite[];
     skippedAnonymousFiles: string[];
 }
 
 export async function extractDi(_cfg: ArchGraphConfig, project: Project): Promise<ExtractDiResult> {
     const moduleIndex = buildDiModuleIndex(project);
     const modules: DiModuleSite[] = [];
+    const providerUses: DiProviderUseSite[] = [];
 
     for (const sf of project.getSourceFiles()) {
         if (isExcludedSourceFile(sf)) continue;
+        collectProviderUses(sf, providerUses);
         if (!sf.getFullText().includes('@Module')) continue;
 
         for (const cls of sf.getClasses()) {
@@ -102,7 +107,35 @@ export async function extractDi(_cfg: ArchGraphConfig, project: Project): Promis
 
     const { refs: filterChain, skippedAnonymousFiles } = extractFilterChain(project);
 
-    return { modules, moduleIndex, filterChain, skippedAnonymousFiles };
+    return { modules, moduleIndex, filterChain, providerUses, skippedAnonymousFiles };
+}
+
+function collectProviderUses(sf: SourceFile, out: DiProviderUseSite[]): void {
+    for (const cls of sf.getClasses()) {
+        const providerClass = cls.getName();
+        if (!providerClass) continue;
+        const ctor = cls.getConstructors()[0];
+        if (!ctor) continue;
+        for (const param of ctor.getParameters()) {
+            const dependencyClass = dependencyClassFromParam(param);
+            if (!dependencyClass || dependencyClass === providerClass) continue;
+            const pos = sf.getLineAndColumnAtPos(param.getStart());
+            out.push({
+                providerClass,
+                dependencyClass,
+                location: { file: sf.getFilePath(), line: pos.line, column: pos.column },
+                via: 'constructor',
+            });
+        }
+    }
+}
+
+function dependencyClassFromParam(param: ParameterDeclaration): string | undefined {
+    const typeNode = param.getTypeNode();
+    if (!typeNode) return undefined;
+    const text = typeNode.getText().trim();
+    const match = text.match(/^([A-Z][A-Za-z0-9_]*)\b/);
+    return match?.[1];
 }
 
 function fillSiteFromMetadata(site: DiModuleSite, obj: ObjectLiteralExpression): void {

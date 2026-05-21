@@ -350,9 +350,9 @@ export async function semanticSearch(opts: SemanticSearchOpts): Promise<SearchRe
         return true;
     });
 
-    // --- Sort descending, take top-K ----------------------------------------
-    filtered.sort((a, b) => b.score - a.score);
-    const topResults = filtered.slice(0, topK).map((s) => s.result);
+    // --- Hybrid rank dense + lexical using Reciprocal Rank Fusion ----------
+    const ranked = rankHybrid(filtered, query);
+    const topResults = ranked.slice(0, topK).map((s) => s.result);
 
     const exitCode: SearchExitCode = topResults.length > 0 ? 0 : 4;
 
@@ -366,4 +366,63 @@ export async function semanticSearch(opts: SemanticSearchOpts): Promise<SearchRe
     };
 
     return { output, exitCode, stderrWarning };
+}
+
+function rankHybrid(scored: Array<{ result: SearchResult; score: number }>, query: string): Array<{ result: SearchResult; score: number }> {
+    const dense = [...scored].sort((a, b) => b.score - a.score);
+    const denseRank = new Map<string, number>();
+    dense.forEach((s, i) => denseRank.set(s.result.nodeId, i + 1));
+
+    const queryTokens = tokenize(query);
+    const bm25 = buildBm25Index(scored, queryTokens);
+    const lexical = scored
+        .map((s, i) => ({ ...s, lexicalScore: bm25.score(i) }))
+        .filter((s) => s.lexicalScore > 0)
+        .sort((a, b) => b.lexicalScore - a.lexicalScore || b.score - a.score);
+    const lexicalRank = new Map<string, number>();
+    lexical.forEach((s, i) => lexicalRank.set(s.result.nodeId, i + 1));
+
+    const k = 60;
+    return [...scored].sort((a, b) => {
+        const ar = 1 / (k + (denseRank.get(a.result.nodeId) ?? scored.length + 1))
+            + (lexicalRank.has(a.result.nodeId) ? 1 / (k + lexicalRank.get(a.result.nodeId)!) : 0);
+        const br = 1 / (k + (denseRank.get(b.result.nodeId) ?? scored.length + 1))
+            + (lexicalRank.has(b.result.nodeId) ? 1 / (k + lexicalRank.get(b.result.nodeId)!) : 0);
+        return br - ar || b.score - a.score || a.result.nodeId.localeCompare(b.result.nodeId);
+    });
+}
+
+function buildBm25Index(scored: Array<{ result: SearchResult; score: number }>, queryTokens: string[]): { score: (idx: number) => number } {
+    const docs = scored.map((s) => tokenize([s.result.kind, s.result.label, s.result.path ?? '', s.result.snippet ?? ''].join(' ')));
+    const avgLen = docs.reduce((sum, doc) => sum + doc.length, 0) / Math.max(1, docs.length);
+    const df = new Map<string, number>();
+    for (const token of new Set(queryTokens)) {
+        df.set(token, docs.filter((doc) => doc.includes(token)).length);
+    }
+    const n = docs.length;
+    return {
+        score(idx: number): number {
+            const doc = docs[idx] ?? [];
+            if (doc.length === 0 || queryTokens.length === 0) return 0;
+            const counts = new Map<string, number>();
+            for (const token of doc) counts.set(token, (counts.get(token) ?? 0) + 1);
+            let total = 0;
+            for (const token of queryTokens) {
+                const tf = counts.get(token) ?? 0;
+                if (tf === 0) continue;
+                const idf = Math.log(1 + (n - (df.get(token) ?? 0) + 0.5) / ((df.get(token) ?? 0) + 0.5));
+                const k1 = 1.2;
+                const b = 0.75;
+                total += idf * ((tf * (k1 + 1)) / (tf + k1 * (1 - b + b * (doc.length / avgLen))));
+            }
+            return total;
+        },
+    };
+}
+
+function tokenize(text: string): string[] {
+    return text
+        .toLowerCase()
+        .split(/[^a-z0-9а-яё_]+/iu)
+        .filter((token) => token.length >= 2);
 }

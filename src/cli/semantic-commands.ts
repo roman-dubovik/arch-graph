@@ -528,6 +528,7 @@ export async function runSemanticBuild(args: SemanticArgs): Promise<void> {
                 if (vn.service > 0) vnEntries.push(`service: ${vn.service}`);
                 if (vn.moduleExternal > 0) vnEntries.push(`module (external): ${vn.moduleExternal}`);
                 if (vn.natsSubject > 0) vnEntries.push(`nats-subject: ${vn.natsSubject}`);
+                if ((vn.rmqPattern ?? 0) > 0) vnEntries.push(`rmq-pattern: ${vn.rmqPattern}`);
                 if (vn.dbTable > 0) vnEntries.push(`db-table: ${vn.dbTable}`);
                 if (vn.queue > 0) vnEntries.push(`queue: ${vn.queue}`);
                 if (vn.external > 0) vnEntries.push(`external: ${vn.external}`);
@@ -555,6 +556,7 @@ export async function runSemanticBuild(args: SemanticArgs): Promise<void> {
                 if (vn2.service > 0) vnEntries2.push(`service: ${vn2.service}`);
                 if (vn2.moduleExternal > 0) vnEntries2.push(`module (external): ${vn2.moduleExternal}`);
                 if (vn2.natsSubject > 0) vnEntries2.push(`nats-subject: ${vn2.natsSubject}`);
+                if ((vn2.rmqPattern ?? 0) > 0) vnEntries2.push(`rmq-pattern: ${vn2.rmqPattern}`);
                 if (vn2.dbTable > 0) vnEntries2.push(`db-table: ${vn2.dbTable}`);
                 if (vn2.queue > 0) vnEntries2.push(`queue: ${vn2.queue}`);
                 if (vn2.external > 0) vnEntries2.push(`external: ${vn2.external}`);

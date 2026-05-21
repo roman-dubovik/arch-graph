@@ -34,7 +34,7 @@ export type MermaidSliceMode =
     | { kind: 'per-service' }
     | { kind: 'domain'; domain: DomainKey };
 
-export type DomainKey = 'nats' | 'bullmq' | 'typeorm' | 'http' | 'di' | 'ts-import' | 'lib' | 'fe' | 'endpoint' | 'config' | 'scoped' | 'cron';
+export type DomainKey = 'nats' | 'rmq' | 'bullmq' | 'typeorm' | 'http' | 'di' | 'ts-import' | 'lib' | 'fe' | 'endpoint' | 'config' | 'scoped' | 'cron';
 
 export interface MermaidWriteOptions {
     /** Slicing mode. Defaults to `{ kind: 'full' }`. */
@@ -143,20 +143,26 @@ const NODE_KIND_META: Record<NodeKind, NodeKindMeta> = {
         cssClass: 'nats',
         order: 5,
     },
-    'db-table': { subgraphId: 'db_tables', subgraphLabel: 'DB tables', cssClass: 'db', order: 6 },
-    provider: { subgraphId: 'providers', subgraphLabel: 'Providers', cssClass: 'module', order: 7 },
-    external: { subgraphId: 'externals', subgraphLabel: 'External hosts', cssClass: 'lib', order: 8 },
-    file: { subgraphId: 'files', subgraphLabel: 'Files', cssClass: 'file', order: 9 },
-    endpoint: { subgraphId: 'endpoints', subgraphLabel: 'Endpoints', cssClass: 'endpoint', order: 10 },
-    'config-field': { subgraphId: 'config_fields', subgraphLabel: 'Config fields', cssClass: 'config', order: 11 },
-    'scoped-marker': { subgraphId: 'scoped_markers', subgraphLabel: 'Scoped markers', cssClass: 'scoped', order: 12 },
-    'db-entity-field': { subgraphId: 'db_entity_fields', subgraphLabel: 'DB entity fields', cssClass: 'db', order: 13 },
-    'fe-page': { subgraphId: 'fe_pages', subgraphLabel: 'FE pages', cssClass: 'fe', order: 14 },
-    'fe-component': { subgraphId: 'fe_components', subgraphLabel: 'FE components', cssClass: 'fe', order: 15 },
-    'fe-route': { subgraphId: 'fe_routes', subgraphLabel: 'FE routes', cssClass: 'fe', order: 16 },
-    'fe-hook': { subgraphId: 'fe_hooks', subgraphLabel: 'FE hooks', cssClass: 'fe', order: 17 },
-    'doc-section': { subgraphId: 'docs', subgraphLabel: 'Docs', cssClass: 'docs', order: 18 },
-    'cron-schedule': { subgraphId: 'cron_schedules', subgraphLabel: 'Cron schedules', cssClass: 'cron', order: 19 },
+    'rmq-pattern': {
+        subgraphId: 'rmq_patterns',
+        subgraphLabel: 'RMQ patterns',
+        cssClass: 'rmq',
+        order: 6,
+    },
+    'db-table': { subgraphId: 'db_tables', subgraphLabel: 'DB tables', cssClass: 'db', order: 7 },
+    provider: { subgraphId: 'providers', subgraphLabel: 'Providers', cssClass: 'module', order: 8 },
+    external: { subgraphId: 'externals', subgraphLabel: 'External hosts', cssClass: 'lib', order: 9 },
+    file: { subgraphId: 'files', subgraphLabel: 'Files', cssClass: 'file', order: 10 },
+    endpoint: { subgraphId: 'endpoints', subgraphLabel: 'Endpoints', cssClass: 'endpoint', order: 11 },
+    'config-field': { subgraphId: 'config_fields', subgraphLabel: 'Config fields', cssClass: 'config', order: 12 },
+    'scoped-marker': { subgraphId: 'scoped_markers', subgraphLabel: 'Scoped markers', cssClass: 'scoped', order: 13 },
+    'db-entity-field': { subgraphId: 'db_entity_fields', subgraphLabel: 'DB entity fields', cssClass: 'db', order: 14 },
+    'fe-page': { subgraphId: 'fe_pages', subgraphLabel: 'FE pages', cssClass: 'fe', order: 15 },
+    'fe-component': { subgraphId: 'fe_components', subgraphLabel: 'FE components', cssClass: 'fe', order: 16 },
+    'fe-route': { subgraphId: 'fe_routes', subgraphLabel: 'FE routes', cssClass: 'fe', order: 17 },
+    'fe-hook': { subgraphId: 'fe_hooks', subgraphLabel: 'FE hooks', cssClass: 'fe', order: 18 },
+    'doc-section': { subgraphId: 'docs', subgraphLabel: 'Docs', cssClass: 'docs', order: 19 },
+    'cron-schedule': { subgraphId: 'cron_schedules', subgraphLabel: 'Cron schedules', cssClass: 'cron', order: 20 },
 };
 
 const SUBGRAPH_ORDER: NodeKind[] = (Object.keys(NODE_KIND_META) as NodeKind[]).sort(
@@ -180,6 +186,7 @@ const EDGE_SYNTAX: Record<EdgeKind, string> = {
     'nats-request': '==>|request|',
     'nats-subscribe': '-.->|subscribe|',
     'nats-reply': '==>|reply|',
+    'rmq-subscribe': '-.->|rmq-sub|',
     'http-call': '==>|http|',
     'http-external': '==>|http-ext|',
     'queue-produce': '-.->|produce|',
@@ -195,6 +202,7 @@ const EDGE_SYNTAX: Record<EdgeKind, string> = {
     'di-provides': '-.->|provides|',
     'di-exports': '-.->|exports|',
     'di-controller': '-.->|controller|',
+    'di-uses': '-.->|uses|',
     'di-guard': '-.->|guard|',
     'di-interceptor': '-.->|interceptor|',
     'di-pipe': '-.->|pipe|',
@@ -223,6 +231,7 @@ const EDGE_DOMAIN: Record<EdgeKind, DomainKey> = {
     'nats-request': 'nats',
     'nats-subscribe': 'nats',
     'nats-reply': 'nats',
+    'rmq-subscribe': 'rmq',
     'http-call': 'http',
     'http-external': 'http',
     'queue-produce': 'bullmq',
@@ -235,6 +244,7 @@ const EDGE_DOMAIN: Record<EdgeKind, DomainKey> = {
     'di-provides': 'di',
     'di-exports': 'di',
     'di-controller': 'di',
+    'di-uses': 'di',
     'di-guard': 'di',
     'di-interceptor': 'di',
     'di-pipe': 'di',
@@ -271,6 +281,7 @@ function nodeDeclaration(node: GraphNode, idMap: Map<string, string>): string {
         case 'queue':
             return `${id}(["${label}"])`;
         case 'nats-subject':
+        case 'rmq-pattern':
             return `${id}(("${label}"))`;
         case 'db-table':
             return `${id}[("${label}")]`;
@@ -303,6 +314,7 @@ const CLASS_DEFS = [
     'classDef lib fill:#ede9fe,stroke:#6d28d9,color:#4c1d95;',
     'classDef queue fill:#fef3c7,stroke:#b45309,color:#78350f;',
     'classDef nats fill:#dcfce7,stroke:#15803d,color:#14532d;',
+    'classDef rmq fill:#ffedd5,stroke:#ea580c,color:#7c2d12;',
     'classDef db fill:#fee2e2,stroke:#b91c1c,color:#7f1d1d;',
     'classDef module fill:#e0f2fe,stroke:#0369a1,color:#0c4a6e;',
     'classDef file fill:#f1f5f9,stroke:#475569,color:#0f172a;',

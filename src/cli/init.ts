@@ -53,7 +53,7 @@ interface WizardAnswers {
     snippetTarget: SnippetTarget;
 }
 
-type DomainKey = 'nats' | 'typeorm' | 'bullmq' | 'di' | 'http' | 'ts-import';
+type DomainKey = 'nats' | 'rmq' | 'typeorm' | 'bullmq' | 'di' | 'http' | 'ts-import';
 
 interface DomainOption {
     key: DomainKey;
@@ -65,6 +65,7 @@ interface DomainOption {
 
 const DOMAIN_OPTIONS: DomainOption[] = [
     { key: 'nats',      label: 'NATS',       description: 'pub/sub + request/reply' },
+    { key: 'rmq',       label: 'RMQ',        description: 'RabbitMQ decorator subscriptions' },
     { key: 'typeorm',   label: 'TypeORM',    description: '@InjectRepository → @Entity' },
     { key: 'bullmq',    label: 'BullMQ',     description: '@InjectQueue / @Processor' },
     { key: 'di',        label: 'NestJS DI',  description: '@Module imports/providers/exports' },
@@ -159,6 +160,15 @@ export function buildConfigTemplate(a: WizardAnswers): string {
         }
     }
 
+    let rmqBlock = '';
+    if (domainSet.has('rmq')) {
+        rmqBlock = `    rmq: {
+        subscribeDecorators: [
+            // 'RmqEventPattern',
+        ],
+    },\n`;
+    }
+
     // imports block — fileLevel comment only if ts-import enabled
     let importsBlock = '';
     if (domainSet.has('ts-import')) {
@@ -198,7 +208,7 @@ export default {
     root: ${q(a.repoRoot)},
     appsGlob: ${q(a.appsGlob)},
     libsGlob: ${q(a.libsGlob)},
-${domainsBlock}${natsBlock}${importsBlock}${docsBlockStr}${strictComment}    semantic: { model: 'e5-base' },
+${domainsBlock}${natsBlock}${rmqBlock}${importsBlock}${docsBlockStr}${strictComment}    semantic: { model: 'e5-base' },
 };
 `;
 }
@@ -322,7 +332,7 @@ async function askMultiSelect(rl: Rl, options: DomainOption[]): Promise<DomainKe
 
 async function askHookMode(rl: Rl): Promise<'pre-commit' | 'post-commit' | 'none'> {
     output.write('\n? Install git hook?\n');
-    output.write('  1. pre-commit   (graph committed with code) — recommended\n');
+    output.write('  1. pre-commit   (validate graph build; artifacts stay local) — recommended\n');
     output.write('  2. post-commit  (graph rebuilt after commit, not in commit)\n');
     output.write('  3. none\n');
 
@@ -626,6 +636,11 @@ export default {
             // { class: 'MyNatsService', methods: ['subscribe'] },
         ],
     },
+    rmq: {
+        subscribeDecorators: [
+            // 'RmqEventPattern',
+        ],
+    },
     typeorm: {
         relationDecorators: [
             // { name: 'ManyToOneWithIndex', mapsTo: 'ManyToOne' },
@@ -850,7 +865,9 @@ export async function runInitWizard(target: string): Promise<void> {
 
     if (hookMode !== 'none') {
         output.write(
-            `  • The graph rebuilds automatically ${hookMode === 'pre-commit' ? 'before each commit' : 'after each commit'} touching .ts files\n`,
+            hookMode === 'pre-commit'
+                ? '  • Commits touching .ts files validate that the graph can build; arch-graph-out/ stays local\n'
+                : '  • The graph rebuilds automatically after each commit touching .ts files; arch-graph-out/ stays local\n',
         );
     }
     if (installClaude) {

@@ -30,11 +30,10 @@ export interface MapTypeOrmResult {
  *   - Resolved target      -> `db-relation` edge emitted
  *   - Unresolved target    -> diagnostics.unresolvedRelations
  *
- * Policy A: only `@ManyToOne` (the FK-owner side), `@ManyToMany`, and `@OneToOne`
- * produce `db-relation` edges. `@OneToMany` is the inverse/mirror of a `@ManyToOne`
- * on the other side of the same FK — emitting both would produce duplicate edges in
- * opposite directions for the same logical foreign key. Since the FK lives on the
- * `@ManyToOne` side, that is the single source of truth; `@OneToMany` is skipped.
+ * `@OneToMany` produces an inverse-side `db-relation` edge with
+ * `meta.isOwnerSide=false`. This can duplicate the logical FK already represented
+ * by the owning `@ManyToOne`, but it makes inverse navigation visible instead of
+ * silently dropping that side of the model.
  *
  * `entityIndex` is required when `relations` is non-empty: it is used to look up
  * the owner entity's table name for each relation. Pass `undefined` or omit only
@@ -105,11 +104,7 @@ export function mapTypeOrmToGraph(
         }
     }
 
-    // ---- db-relation edges from @ManyToOne / @ManyToMany / @OneToOne ----
-    // Policy A: skip @OneToMany — the FK is owned by @ManyToOne on the other entity.
-    // Emitting both would produce two edges in opposite directions for the same FK.
-    // Note: @OneToMany relations that are also unresolved are NOT counted in
-    // unresolvedReasons — Policy A filters them before unresolved bucketing.
+    // ---- db-relation edges from TypeORM relation decorators ----
     const unresolvedRelations: TypeOrmRelation[] = [];
     let relationsEmitted = 0;
     let relationsResolved = 0;
@@ -119,12 +114,6 @@ export function mapTypeOrmToGraph(
     for (const rel of relations) {
         // Count resolved relations BEFORE Policy A filtering (matches JSDoc on the field).
         if (rel.resolvedTarget) relationsResolved++;
-
-        // Policy A: @OneToMany is the inverse mirror of @ManyToOne — skip it entirely.
-        if (rel.decorator === 'OneToMany') {
-            oneToManySkipped++;
-            continue;
-        }
 
         if (!rel.resolvedTarget) {
             unresolvedRelations.push(rel);
@@ -210,6 +199,10 @@ export function mapTypeOrmToGraph(
                     ...(rel.joinColumn ? { joinColumn: true } : {}),
                     ...(rel.joinTable ? { joinTable: true } : {}),
                     ...(rel.joinTableName ? { joinTableName: rel.joinTableName } : {}),
+                    ...(rel.inverseProperty ? { inverseProperty: rel.inverseProperty } : {}),
+                    ...(rel.onDelete ? { onDelete: rel.onDelete } : {}),
+                    ...(rel.onUpdate ? { onUpdate: rel.onUpdate } : {}),
+                    ...(rel.nullable !== undefined ? { nullable: rel.nullable } : {}),
                     propertyName: rel.propertyName,
                     ownerClass: rel.ownerClass,
                     targetClass: rel.targetClass,

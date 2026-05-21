@@ -45,6 +45,7 @@ export const HIGH_FIDELITY_KINDS: ReadonlySet<NodeKind> = new Set<NodeKind>([
  */
 export const KINDS_WITHOUT_SOURCE: ReadonlySet<NodeKind> = new Set<NodeKind>([
     'nats-subject',
+    'rmq-pattern',
     'db-table',
     'queue',
     'external',
@@ -75,6 +76,7 @@ export interface VirtualNodeCounts {
     service: number;
     moduleExternal: number;  // module nodes without a path field
     natsSubject: number;
+    rmqPattern?: number;
     dbTable: number;
     queue: number;
     external: number;
@@ -178,6 +180,7 @@ export function makeEmptyVirtualNodeCounts(): VirtualNodeCounts {
         service: 0,
         moduleExternal: 0,
         natsSubject: 0,
+        rmqPattern: 0,
         dbTable: 0,
         queue: 0,
         external: 0,
@@ -256,6 +259,7 @@ export async function validateSnippetRecall(semanticDir: string): Promise<Snippe
                     else if (kind === 'service') virtualCounts.service++;
                     else if (kind === 'module') virtualCounts.moduleExternal++;
                     else if (kind === 'nats-subject') virtualCounts.natsSubject++;
+                    else if (kind === 'rmq-pattern') virtualCounts.rmqPattern = (virtualCounts.rmqPattern ?? 0) + 1;
                     else if (kind === 'db-table') virtualCounts.dbTable++;
                     else if (kind === 'queue') virtualCounts.queue++;
                     else if (kind === 'external') virtualCounts.external++;
@@ -378,6 +382,7 @@ export function formatRecallResult(result: SnippetRecallResult): string {
     if (vn.service > 0) virtualEntries.push(`service: ${vn.service}`);
     if (vn.moduleExternal > 0) virtualEntries.push(`module (external): ${vn.moduleExternal}`);
     if (vn.natsSubject > 0) virtualEntries.push(`nats-subject: ${vn.natsSubject}`);
+    if ((vn.rmqPattern ?? 0) > 0) virtualEntries.push(`rmq-pattern: ${vn.rmqPattern}`);
     if (vn.dbTable > 0) virtualEntries.push(`db-table: ${vn.dbTable}`);
     if (vn.queue > 0) virtualEntries.push(`queue: ${vn.queue}`);
     if (vn.external > 0) virtualEntries.push(`external: ${vn.external}`);

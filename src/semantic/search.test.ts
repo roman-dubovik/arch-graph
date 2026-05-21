@@ -256,6 +256,29 @@ describe('semanticSearch — kinds filter (AC 6-2)', () => {
     });
 });
 
+describe('semanticSearch — hybrid lexical+dense ranking', () => {
+    it('promotes lexical label matches via RRF when dense scores are close', async () => {
+        const graphHash = await writeGraphJson('{"nodes":[]}');
+        const manifest = makeManifest({ graphHash, nodeCount: 2 });
+
+        await writeSidecar([
+            makeRecord('dense-only', 'service', unitVec(0), { label: 'PaymentsService' }),
+            makeRecord('lexical-hit', 'service', (() => { const v = unitVec(0); v[1] = 0.01; return v; })(), { label: 'RmqEventPattern orders' }),
+        ], manifest);
+
+        const { output, exitCode } = await semanticSearch({
+            query: 'RmqEventPattern',
+            outDir: testDir,
+            embedder: fakeEmbedder(unitVec(0)),
+            modelAlias: 'minilm',
+            topK: 2,
+        });
+
+        expect(exitCode).toBe(0);
+        expect(output.results[0]?.nodeId).toBe('lexical-hit');
+    });
+});
+
 // ---------------------------------------------------------------------------
 // excludeKinds blacklist (code-vs-docs split)
 // ---------------------------------------------------------------------------

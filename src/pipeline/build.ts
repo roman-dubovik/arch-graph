@@ -13,6 +13,7 @@ import { extractFe } from '../extractors/fe/extractor.js';
 import { extractHttp } from '../extractors/http/extractor.js';
 import { extractImports } from '../extractors/imports/extractor.js';
 import { extractNats } from '../extractors/nats/extractor.js';
+import { extractRmq } from '../extractors/rmq/extractor.js';
 import { extractTypeOrm } from '../extractors/typeorm/extractor.js';
 import { extractEndpoints } from '../extractors/endpoint/extractor.js';
 import { extractConfig } from '../extractors/config/extractor.js';
@@ -26,6 +27,7 @@ import { mapFeToGraph } from '../mapper/fe-to-graph.js';
 import { mapHttpToGraph } from '../mapper/http-to-graph.js';
 import { mapImportsToGraph } from '../mapper/imports-to-graph.js';
 import { assembleGraph, buildNatsDiagnostics, mapNatsToGraph } from '../mapper/nats-to-graph.js';
+import { buildRmqDiagnostics, mapRmqToGraph } from '../mapper/rmq-to-graph.js';
 import { mapTypeOrmToGraph } from '../mapper/typeorm-to-graph.js';
 import { mapEndpointsToGraph } from '../mapper/endpoint-to-graph.js';
 import { mapConfigToGraph } from '../mapper/config-to-graph.js';
@@ -191,6 +193,19 @@ export async function runBuild(cfg: ArchGraphConfig, buildOptions: BuildOptions 
     );
     const natsDiagnostics = buildNatsDiagnostics(callSites, natsMapped);
 
+    // ---- RMQ domain ----
+    process.stdout.write(`extracting RMQ...\n`);
+    t0 = Date.now();
+    const rmqCallSites = await stage(`[${cfg.id}] rmq.extract`, () => extractRmq(cfg, project));
+    process.stdout.write(`  ${rmqCallSites.length} RMQ decorator sites in ${Date.now() - t0}ms\n`);
+
+    process.stdout.write(`mapping RMQ to graph...\n`);
+    const rmqMapped = mapRmqToGraph(rmqCallSites, ownership);
+    process.stdout.write(
+        `  nodes: ${rmqMapped.nodes.length}, edges: ${rmqMapped.edges.length}, unresolved: ${rmqMapped.diagnostics.unresolved.length}, dynamic: ${rmqMapped.diagnostics.dynamic.length}, unowned: ${rmqMapped.diagnostics.unowned.length}\n`,
+    );
+    const rmqDiagnostics = buildRmqDiagnostics(rmqCallSites, rmqMapped);
+
     // ---- TypeORM domain ----
     process.stdout.write(`extracting TypeORM...\n`);
     t0 = Date.now();
@@ -332,7 +347,7 @@ export async function runBuild(cfg: ArchGraphConfig, buildOptions: BuildOptions 
     t0 = Date.now();
     const di = await stage(`[${cfg.id}] di.extract`, () => extractDi(cfg, project));
     process.stdout.write(
-        `  ${di.modules.length} @Module classes, ${di.moduleIndex.size()} indexed in ${Date.now() - t0}ms\n`,
+        `  ${di.modules.length} @Module classes, ${di.moduleIndex.size()} indexed, ${di.providerUses.length} constructor DI uses in ${Date.now() - t0}ms\n`,
     );
 
     process.stdout.write(`validating DI against ground truth...\n`);
@@ -349,10 +364,10 @@ export async function runBuild(cfg: ArchGraphConfig, buildOptions: BuildOptions 
     // A1: build class index so provider/module nodes get path + anchor fields.
     const classIndex = buildClassIndex(project);
     const diMapped = await stage(`[${cfg.id}] di.map`, () =>
-        mapDiToGraph(di.modules, di.moduleIndex, ownership, di.filterChain, di.skippedAnonymousFiles, classIndex),
+        mapDiToGraph(di.modules, di.moduleIndex, ownership, di.filterChain, di.skippedAnonymousFiles, classIndex, di.providerUses),
     );
     process.stdout.write(
-        `  nodes: ${diMapped.nodes.length}, edges: ${diMapped.edges.length}, unresolvedRefs: ${diMapped.diagnostics.unresolvedRefs.length}, unowned: ${diMapped.diagnostics.unowned.length}, guards: ${diMapped.diagnostics.counts.guards}, interceptors: ${diMapped.diagnostics.counts.interceptors}, pipes: ${diMapped.diagnostics.counts.pipes}, unresolvedFilterRefs: ${diMapped.diagnostics.counts.unresolvedFilterRefs}, truncatedFilterRefs: ${diMapped.diagnostics.counts.truncatedFilterRefs}, skippedAnonymousFiles: ${diMapped.diagnostics.skippedAnonymousFiles.length}\n`,
+        `  nodes: ${diMapped.nodes.length}, edges: ${diMapped.edges.length}, unresolvedRefs: ${diMapped.diagnostics.unresolvedRefs.length}, unowned: ${diMapped.diagnostics.unowned.length}, providerUses: ${diMapped.diagnostics.counts.providerUses}, guards: ${diMapped.diagnostics.counts.guards}, interceptors: ${diMapped.diagnostics.counts.interceptors}, pipes: ${diMapped.diagnostics.counts.pipes}, unresolvedFilterRefs: ${diMapped.diagnostics.counts.unresolvedFilterRefs}, truncatedFilterRefs: ${diMapped.diagnostics.counts.truncatedFilterRefs}, skippedAnonymousFiles: ${diMapped.diagnostics.skippedAnonymousFiles.length}\n`,
     );
 
     // ---- HTTP domain ----
@@ -505,6 +520,7 @@ export async function runBuild(cfg: ArchGraphConfig, buildOptions: BuildOptions 
     // ---- Compose ----
     const graph = assembleGraph(cfg.root, [
         natsMapped,
+        rmqMapped,
         typeormMapped,
         bullmqMapped,
         cronMapped,
@@ -577,6 +593,7 @@ export async function runBuild(cfg: ArchGraphConfig, buildOptions: BuildOptions 
         projectId: cfg.id,
         timestamp: new Date().toISOString(),
         nats: natsDiagnostics,
+        rmq: rmqDiagnostics,
         typeorm: typeormMapped.diagnostics,
         bullmq: bullmqMapped.diagnostics,
         di: diMapped.diagnostics,

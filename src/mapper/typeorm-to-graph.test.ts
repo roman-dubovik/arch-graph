@@ -285,7 +285,7 @@ describe('mapTypeOrmToGraph — db-relation edges', () => {
         expect(relEdge?.meta?.sourceDecorator).toBe('ManyToOneWithIndex');
     });
 
-    it('does NOT emit a db-relation edge for @OneToMany (Policy A: FK lives on @ManyToOne side)', () => {
+    it('emits an inverse-side db-relation edge for @OneToMany', () => {
         const project = inMemoryProject({
             '/apps/svc/user.ts': `
                 import { Entity, OneToMany } from 'typeorm';
@@ -305,10 +305,13 @@ describe('mapTypeOrmToGraph — db-relation edges', () => {
         const { relations } = extractRelations(project, entityIndex);
         const result = mapTypeOrmToGraph([], makeOwnership(), [], relations, entityIndex);
 
-        // No edge: @OneToMany is skipped under Policy A
         const relEdges = result.edges.filter((e) => e.kind === 'db-relation');
-        expect(relEdges).toHaveLength(0);
-        // Extractor found it but mapper skips it — not in unresolvedRelations either
+        expect(relEdges).toHaveLength(1);
+        expect(relEdges[0]?.from).toBe('db-table:user');
+        expect(relEdges[0]?.to).toBe('db-table:order');
+        expect(relEdges[0]?.meta?.type).toBe('OneToMany');
+        expect(relEdges[0]?.meta?.isOwnerSide).toBe(false);
+        expect(relEdges[0]?.meta?.inverseProperty).toBe('user');
         expect(result.diagnostics.unresolvedRelations).toHaveLength(0);
     });
 
@@ -449,7 +452,7 @@ describe('mapTypeOrmToGraph — db-relation edges', () => {
         expect(result.diagnostics.counts.unresolvedRelations).toBe(0);
     });
 
-    it('relationsResolved counts resolved input relations BEFORE Policy A (includes skipped OneToMany)', () => {
+    it('relationsResolved counts resolved input relations and emits inverse OneToMany', () => {
         const project = inMemoryProject({
             '/apps/svc/user.ts': `
                 import { Entity, ManyToOne, OneToMany } from 'typeorm';
@@ -472,13 +475,9 @@ describe('mapTypeOrmToGraph — db-relation edges', () => {
         const { relations } = extractRelations(project, entityIndex);
         const result = mapTypeOrmToGraph([], makeOwnership(), [], relations, entityIndex);
 
-        // ManyToOne emits 1 edge; OneToMany skipped under Policy A
-        expect(result.diagnostics.counts.relationsEmitted).toBe(1);
-        // relationsResolved counts BOTH ManyToOne and the skipped OneToMany (both have resolvedTarget,
-        // counted before Policy A filtering per JSDoc). Fixed from .toBe(1) → .toBe(2).
+        expect(result.diagnostics.counts.relationsEmitted).toBe(2);
         expect(result.diagnostics.counts.relationsResolved).toBe(2);
-        // oneToManySkipped tracks Policy A skips separately
-        expect(result.diagnostics.counts.oneToManySkipped).toBe(1);
+        expect(result.diagnostics.counts.oneToManySkipped).toBe(0);
     });
 
     it('pushes unresolved relation (string token not in index) to diagnostics.unresolvedRelations, no edge', () => {
@@ -676,7 +675,7 @@ describe('mapTypeOrmToGraph — unresolvedReasons breakdown', () => {
         expect(unparseable + notIndexed + ownerNotIndexed).toBe(result.diagnostics.counts.unresolvedRelations);
     });
 
-    it('oneToManySkipped tracks Policy A skips; unresolved OneToMany NOT in unresolvedReasons', () => {
+    it('tracks unresolved OneToMany relations instead of skipping them', () => {
         const userEntity = makeEntity('User', 'users');
         const orderEntity = makeEntity('Order', 'orders');
         const entityIndex = {
@@ -691,21 +690,18 @@ describe('mapTypeOrmToGraph — unresolvedReasons breakdown', () => {
         } as unknown as import('../extractors/typeorm/entity-index.js').EntityIndex;
 
         const relations: TypeOrmRelation[] = [
-            // resolved OneToMany — Policy A skip, counts in relationsResolved and oneToManySkipped
             makeResolvedRelation('OneToMany', 'User', 'Order', orderEntity, 'orders'),
-            // unresolved OneToMany — Policy A skip, does NOT appear in unresolvedReasons
             makeUnresolvedRelation('OneToMany', 'User', null, 'unparseable', 'orphan'),
-            // resolved ManyToOne — emitted (ownerClass=Order is in entityIndex)
             makeResolvedRelation('ManyToOne', 'Order', 'User', userEntity, 'user'),
         ];
 
         const result = mapTypeOrmToGraph([], makeOwnership(), [], relations, entityIndex);
 
-        expect(result.diagnostics.counts.relationsEmitted).toBe(1);
-        expect(result.diagnostics.counts.relationsResolved).toBe(2); // resolved OneToMany + resolved ManyToOne
-        expect(result.diagnostics.counts.oneToManySkipped).toBe(2); // both OneToMany entries (resolved + unresolved)
-        expect(result.diagnostics.counts.unresolvedRelations).toBe(0); // no ManyToOne/ManyToMany/OneToOne unresolved
-        expect(result.diagnostics.counts.unresolvedReasons.unparseable).toBe(0);
+        expect(result.diagnostics.counts.relationsEmitted).toBe(2);
+        expect(result.diagnostics.counts.relationsResolved).toBe(2);
+        expect(result.diagnostics.counts.oneToManySkipped).toBe(0);
+        expect(result.diagnostics.counts.unresolvedRelations).toBe(1);
+        expect(result.diagnostics.counts.unresolvedReasons.unparseable).toBe(1);
         expect(result.diagnostics.counts.unresolvedReasons.notIndexed).toBe(0);
     });
 });

@@ -24,6 +24,8 @@ export interface ArchGraphConfig {
     excludeGlobs?: string[];
     /** NATS extractor settings. */
     nats?: NatsConfig;
+    /** RabbitMQ / RMQ decorator-based messaging extractor settings. */
+    rmq?: RmqConfig;
     /** TypeORM extractor settings. */
     typeorm?: TypeOrmConfig;
     /** HTTP extractor settings. */
@@ -43,6 +45,7 @@ export interface ArchGraphConfig {
      */
     domains?: {
         nats?: boolean;
+        rmq?: boolean;
         typeorm?: boolean;
         bullmq?: boolean;
         di?: boolean;
@@ -73,6 +76,15 @@ export interface NatsConfig {
     wrapperPublishApis?: WrapperApi[];
     /** Project-specific wrapper classes around NATS subscribe API. */
     wrapperSubscribeApis?: WrapperApi[];
+}
+
+export interface RmqConfig {
+    /**
+     * Custom decorator-based RMQ subscribe markers.
+     *
+     * Example: `RmqEventPattern` wrapping Nest's `EventPattern(..., Transport.RMQ)`.
+     */
+    subscribeDecorators?: string[];
 }
 
 export type TypeOrmRelationDecoratorKind = 'ManyToOne' | 'OneToMany' | 'ManyToMany' | 'OneToOne';
@@ -345,6 +357,22 @@ export function validateConfig(raw: unknown, source: string): ArchGraphConfig {
                         `config.typeorm.relationDecorators[${i}].mapsTo must be one of ` +
                             `${[...VALID_TYPEORM_RELATION_KINDS].join(', ')} in ${source}`,
                     );
+                }
+            });
+        }
+    }
+    if (cfg.rmq !== undefined) {
+        if (typeof cfg.rmq !== 'object' || cfg.rmq === null) {
+            throw new Error(`config.rmq must be an object in ${source}`);
+        }
+        const decorators = (cfg.rmq as Partial<RmqConfig>).subscribeDecorators;
+        if (decorators !== undefined) {
+            if (!Array.isArray(decorators)) {
+                throw new Error(`config.rmq.subscribeDecorators must be an array in ${source}`);
+            }
+            decorators.forEach((decorator, i) => {
+                if (typeof decorator !== 'string' || decorator.length === 0) {
+                    throw new Error(`config.rmq.subscribeDecorators[${i}] must be a non-empty string in ${source}`);
                 }
             });
         }

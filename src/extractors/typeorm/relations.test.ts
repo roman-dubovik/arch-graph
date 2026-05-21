@@ -56,7 +56,7 @@ describe('extractRelations — @ManyToOne', () => {
                 import { Entity, ManyToOne } from 'typeorm';
                 @Entity()
                 export class Order {
-                    @ManyToOne(() => User, { eager: true })
+                    @ManyToOne(() => User, { onDelete: 'CASCADE', onUpdate: 'RESTRICT', nullable: false })
                     user: User;
                 }
             `,
@@ -71,6 +71,9 @@ describe('extractRelations — @ManyToOne', () => {
         const rel = relations[0]!;
         expect(rel.targetClass).toBe('User');
         expect(rel.resolvedTarget).not.toBeNull();
+        expect(rel.onDelete).toBe('CASCADE');
+        expect(rel.onUpdate).toBe('RESTRICT');
+        expect(rel.nullable).toBe(false);
     });
 
     it('detects @JoinColumn on the relation property', () => {
@@ -157,6 +160,7 @@ describe('extractRelations — @OneToMany', () => {
         expect(rel.ownerClass).toBe('User');
         expect(rel.targetClass).toBe('Order');
         expect(rel.resolvedTarget?.className).toBe('Order');
+        expect(rel.inverseProperty).toBe('user');
     });
 });
 
