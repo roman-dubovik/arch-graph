@@ -55,6 +55,9 @@ export function mapRmqToGraph(callSites: RmqCallSite[], ownership: OwnershipRegi
                 via: cs.via,
                 transport: 'rmq',
                 ...(cs.enclosingClass !== undefined ? { enclosingClass: cs.enclosingClass } : {}),
+                ...(cs.handlerName !== undefined ? { handlerName: cs.handlerName } : {}),
+                ...(cs.payloadParamName !== undefined ? { payloadParamName: cs.payloadParamName } : {}),
+                ...(cs.payloadType !== undefined ? { payloadType: cs.payloadType } : {}),
             },
             ...(cs.pattern.kind === 'pattern' ? { dynamic: true, subjectPattern: cs.pattern.pattern } : {}),
         });

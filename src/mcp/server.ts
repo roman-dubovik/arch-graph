@@ -130,6 +130,14 @@ export const semanticSearchInputShape = {
             'Minimum cosine similarity threshold. Results below this value are dropped. ' +
             'When omitted, the per-model recommended threshold is used (e.g. 0.30 for minilm, 0.55 for e5-base).',
         ),
+    kindQuotas: z
+        .record(nodeKindSchema, z.number().int().min(0).max(MAX_TOP_K))
+        .optional()
+        .describe('Optional per-kind result caps, e.g. {"service": 3, "doc-section": 2}.'),
+    kindBoosts: z
+        .record(nodeKindSchema, z.number().min(0).max(10))
+        .optional()
+        .describe('Optional per-kind ranking multipliers, e.g. {"db-table": 1.5}.'),
 } as const;
 
 /**
@@ -628,6 +636,8 @@ export interface SemanticSearchHandlerInput {
      * using the factory-bound `modelAlias`.
      */
     minScore?: number;
+    kindQuotas?: Partial<Record<NodeKind, number>>;
+    kindBoosts?: Partial<Record<NodeKind, number>>;
 }
 
 /**
@@ -659,7 +669,16 @@ export function makeSemanticSearchHandler(handlerOpts: SemanticSearchHandlerOpts
         })();
 
     return async (input: SemanticSearchHandlerInput) => {
-        const { query, topK = 10, kinds, excludeKinds, includeVectors = false, minScore: userMinScore } = input;
+        const {
+            query,
+            topK = 10,
+            kinds,
+            excludeKinds,
+            includeVectors = false,
+            minScore: userMinScore,
+            kindQuotas,
+            kindBoosts,
+        } = input;
 
         // Factory `lockedKinds` is authoritative. If the caller tries to pass
         // `kinds`, that would be a silent contract violation in production —
@@ -693,6 +712,8 @@ export function makeSemanticSearchHandler(handlerOpts: SemanticSearchHandlerOpts
             kinds: effectiveKinds,
             excludeKinds: effectiveExclude,
             minScore: effectiveMinScore,
+            kindQuotas,
+            kindBoosts,
         });
 
         const output = searchRes.output;

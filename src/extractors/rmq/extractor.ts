@@ -24,12 +24,14 @@ export async function extractRmq(cfg: ArchGraphConfig, project: Project): Promis
 
             const args = dec.getArguments();
             const first = args[0];
+            const handler = handlerMetadata(dec);
             if (!first) {
                 out.push({
                     pattern: { kind: 'unresolved', raw: '', reason: 'missing decorator argument' },
                     location: locOf(dec),
                     via: `@${name}`,
                     enclosingClass: findEnclosingClassName(dec),
+                    ...handler,
                 });
                 continue;
             }
@@ -41,6 +43,7 @@ export async function extractRmq(cfg: ArchGraphConfig, project: Project): Promis
                         location: locOf(dec),
                         via: `@${name}`,
                         enclosingClass: findEnclosingClassName(dec),
+                        ...handler,
                     });
                 }
                 continue;
@@ -51,11 +54,24 @@ export async function extractRmq(cfg: ArchGraphConfig, project: Project): Promis
                 location: locOf(dec),
                 via: `@${name}`,
                 enclosingClass: findEnclosingClassName(dec),
+                ...handler,
             });
         }
     }
 
     return out;
+}
+
+function handlerMetadata(dec: Decorator): Pick<RmqCallSite, 'handlerName' | 'payloadParamName' | 'payloadType'> {
+    const method = dec.getFirstAncestorByKind(SyntaxKind.MethodDeclaration);
+    if (!method) return {};
+    const firstParam = method.getParameters()[0];
+    const typeNode = firstParam?.getTypeNode();
+    return {
+        ...(method.getName() ? { handlerName: method.getName() } : {}),
+        ...(firstParam ? { payloadParamName: firstParam.getName() } : {}),
+        ...(typeNode ? { payloadType: typeNode.getText() } : {}),
+    };
 }
 
 function decoratorName(dec: Decorator): string {

@@ -159,6 +159,10 @@ export interface SemanticSearchOpts {
      * threshold via {@link resolveMinScore} and pass it explicitly.
      */
     minScore?: number;
+    /** Per-kind maximum result counts after ranking. Omitted kinds are unlimited. */
+    kindQuotas?: Partial<Record<NodeKind, number>>;
+    /** Per-kind rank multiplier applied during hybrid ranking. Defaults to 1. */
+    kindBoosts?: Partial<Record<NodeKind, number>>;
 }
 
 // ---------------------------------------------------------------------------
@@ -351,8 +355,8 @@ export async function semanticSearch(opts: SemanticSearchOpts): Promise<SearchRe
     });
 
     // --- Hybrid rank dense + lexical using Reciprocal Rank Fusion ----------
-    const ranked = rankHybrid(filtered, query);
-    const topResults = ranked.slice(0, topK).map((s) => s.result);
+    const ranked = rankHybrid(filtered, query, opts.kindBoosts);
+    const topResults = applyKindQuotas(ranked, opts.kindQuotas, topK).map((s) => s.result);
 
     const exitCode: SearchExitCode = topResults.length > 0 ? 0 : 4;
 
@@ -368,7 +372,11 @@ export async function semanticSearch(opts: SemanticSearchOpts): Promise<SearchRe
     return { output, exitCode, stderrWarning };
 }
 
-function rankHybrid(scored: Array<{ result: SearchResult; score: number }>, query: string): Array<{ result: SearchResult; score: number }> {
+function rankHybrid(
+    scored: Array<{ result: SearchResult; score: number }>,
+    query: string,
+    kindBoosts?: Partial<Record<NodeKind, number>>,
+): Array<{ result: SearchResult; score: number }> {
     const dense = [...scored].sort((a, b) => b.score - a.score);
     const denseRank = new Map<string, number>();
     dense.forEach((s, i) => denseRank.set(s.result.nodeId, i + 1));
@@ -384,12 +392,34 @@ function rankHybrid(scored: Array<{ result: SearchResult; score: number }>, quer
 
     const k = 60;
     return [...scored].sort((a, b) => {
-        const ar = 1 / (k + (denseRank.get(a.result.nodeId) ?? scored.length + 1))
-            + (lexicalRank.has(a.result.nodeId) ? 1 / (k + lexicalRank.get(a.result.nodeId)!) : 0);
-        const br = 1 / (k + (denseRank.get(b.result.nodeId) ?? scored.length + 1))
-            + (lexicalRank.has(b.result.nodeId) ? 1 / (k + lexicalRank.get(b.result.nodeId)!) : 0);
+        const ar = (
+            1 / (k + (denseRank.get(a.result.nodeId) ?? scored.length + 1))
+            + (lexicalRank.has(a.result.nodeId) ? 1 / (k + lexicalRank.get(a.result.nodeId)!) : 0)
+        ) * (kindBoosts?.[a.result.kind] ?? 1);
+        const br = (1 / (k + (denseRank.get(b.result.nodeId) ?? scored.length + 1))
+            + (lexicalRank.has(b.result.nodeId) ? 1 / (k + lexicalRank.get(b.result.nodeId)!) : 0)
+        ) * (kindBoosts?.[b.result.kind] ?? 1);
         return br - ar || b.score - a.score || a.result.nodeId.localeCompare(b.result.nodeId);
     });
+}
+
+function applyKindQuotas(
+    ranked: Array<{ result: SearchResult; score: number }>,
+    quotas: Partial<Record<NodeKind, number>> | undefined,
+    topK: number,
+): Array<{ result: SearchResult; score: number }> {
+    if (!quotas) return ranked.slice(0, topK);
+    const counts = new Map<NodeKind, number>();
+    const out: Array<{ result: SearchResult; score: number }> = [];
+    for (const item of ranked) {
+        const quota = quotas[item.result.kind];
+        const used = counts.get(item.result.kind) ?? 0;
+        if (quota !== undefined && used >= quota) continue;
+        counts.set(item.result.kind, used + 1);
+        out.push(item);
+        if (out.length >= topK) break;
+    }
+    return out;
 }
 
 function buildBm25Index(scored: Array<{ result: SearchResult; score: number }>, queryTokens: string[]): { score: (idx: number) => number } {

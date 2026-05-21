@@ -1024,3 +1024,51 @@ describe('semanticSearch — e5-base model alias', () => {
         expect(output.hint).toBeDefined();
     });
 });
+
+describe('semanticSearch — kind quotas and boosts', () => {
+    it('caps results per kind after hybrid ranking', async () => {
+        const graphHash = await writeGraphJson('{"nodes":[]}');
+        const manifest = makeManifest({ graphHash, nodeCount: 4 });
+        await writeSidecar([
+            makeRecord('svc1', 'service', unitVec(0)),
+            makeRecord('svc2', 'service', unitVec(0)),
+            makeRecord('tbl1', 'db-table', unitVec(0)),
+            makeRecord('tbl2', 'db-table', unitVec(0)),
+        ], manifest);
+
+        const { output, exitCode } = await semanticSearch({
+            query: 'anything',
+            outDir: testDir,
+            embedder: fakeEmbedder(unitVec(0)),
+            modelAlias: 'minilm',
+            topK: 4,
+            kindQuotas: { service: 1, 'db-table': 1 },
+        });
+
+        expect(exitCode).toBe(0);
+        expect(output.results).toHaveLength(2);
+        expect(output.results.filter((r) => r.kind === 'service')).toHaveLength(1);
+        expect(output.results.filter((r) => r.kind === 'db-table')).toHaveLength(1);
+    });
+
+    it('boosts a requested kind during ranking', async () => {
+        const graphHash = await writeGraphJson('{"nodes":[]}');
+        const manifest = makeManifest({ graphHash, nodeCount: 2 });
+        await writeSidecar([
+            makeRecord('svc', 'service', unitVec(0)),
+            makeRecord('table', 'db-table', (() => { const v = unitVec(0); v[1] = 0.05; return v; })()),
+        ], manifest);
+
+        const { output, exitCode } = await semanticSearch({
+            query: 'anything',
+            outDir: testDir,
+            embedder: fakeEmbedder(unitVec(0)),
+            modelAlias: 'minilm',
+            topK: 2,
+            kindBoosts: { 'db-table': 3 },
+        });
+
+        expect(exitCode).toBe(0);
+        expect(output.results[0]?.nodeId).toBe('table');
+    });
+});

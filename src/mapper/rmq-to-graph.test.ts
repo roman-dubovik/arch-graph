@@ -11,6 +11,9 @@ describe('mapRmqToGraph', () => {
             location: { file: '/repo/apps/api/src/orders.listener.ts', line: 4, column: 5 },
             via: '@RmqEventPattern',
             enclosingClass: 'OrdersListener',
+            handlerName: 'handle',
+            payloadParamName: 'payload',
+            payloadType: 'OrderCreatedDto',
         }];
         const ownership = new OwnershipRegistry('/repo', [{ id: 'api', rootDir: '/repo/apps/api' }], []);
 
@@ -22,6 +25,8 @@ describe('mapRmqToGraph', () => {
         expect(edge?.from).toBe('rmq:order.created');
         expect(edge?.to).toBe('service:api');
         expect(edge?.meta?.transport).toBe('rmq');
+        expect(edge?.meta?.payloadType).toBe('OrderCreatedDto');
+        expect(edge?.meta?.handlerName).toBe('handle');
         expect(diagnostics.counts.literal).toBe(1);
     });
 });

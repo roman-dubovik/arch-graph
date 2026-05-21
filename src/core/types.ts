@@ -57,6 +57,9 @@ export interface RmqCallSite {
     location: SourceLoc;
     via: string;
     enclosingClass?: string;
+    handlerName?: string;
+    payloadParamName?: string;
+    payloadType?: string;
 }
 
 export interface WrapperApi {
@@ -1148,6 +1151,8 @@ export interface DiModuleSite {
 export interface DiProviderUseSite {
     providerClass: string;
     dependencyClass: string;
+    dependencyKind?: 'class' | 'token';
+    injectToken?: string;
     location: SourceLoc;
     via: 'constructor';
 }
@@ -1171,6 +1176,8 @@ export interface DiDiagnostics {
      * Capped at 200 entries. Check `unresolvedFilterRefsTruncated` for overflow.
      */
     unresolvedFilterRefs: DiFilterChainRef[];
+    /** Constructor DI refs where source or target provider is not present in the DI graph. */
+    unresolvedProviderUses: Array<DiProviderUseSite & { reason: 'source-not-in-di-graph' | 'target-not-in-di-graph' }>;
     /**
      * True when `unresolvedFilterRefs` reached the 200-entry cap and additional
      * entries were discarded.
@@ -1188,6 +1195,7 @@ export interface DiDiagnostics {
         exports: number;
         controllers: number;
         providerUses: number;
+        unresolvedProviderUses: number;
         unresolvedRefs: number;
         unowned: number;
         guards: number;

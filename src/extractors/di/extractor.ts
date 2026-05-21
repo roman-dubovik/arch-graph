@@ -117,12 +117,14 @@ function collectProviderUses(sf: SourceFile, out: DiProviderUseSite[]): void {
         const ctor = cls.getConstructors()[0];
         if (!ctor) continue;
         for (const param of ctor.getParameters()) {
-            const dependencyClass = dependencyClassFromParam(param);
-            if (!dependencyClass || dependencyClass === providerClass) continue;
+            const dep = dependencyFromParam(param);
+            if (!dep || dep.name === providerClass) continue;
             const pos = sf.getLineAndColumnAtPos(param.getStart());
             out.push({
                 providerClass,
-                dependencyClass,
+                dependencyClass: dep.name,
+                dependencyKind: dep.kind,
+                ...(dep.injectToken ? { injectToken: dep.injectToken } : {}),
                 location: { file: sf.getFilePath(), line: pos.line, column: pos.column },
                 via: 'constructor',
             });
@@ -130,12 +132,17 @@ function collectProviderUses(sf: SourceFile, out: DiProviderUseSite[]): void {
     }
 }
 
-function dependencyClassFromParam(param: ParameterDeclaration): string | undefined {
+function dependencyFromParam(param: ParameterDeclaration): { name: string; kind: 'class' | 'token'; injectToken?: string } | undefined {
+    const inject = param.getDecorator('Inject');
+    if (inject) {
+        const token = identifierLikeText(inject.getArguments()[0]);
+        if (token) return { name: token, kind: 'token', injectToken: token };
+    }
     const typeNode = param.getTypeNode();
     if (!typeNode) return undefined;
     const text = typeNode.getText().trim();
     const match = text.match(/^([A-Z][A-Za-z0-9_]*)\b/);
-    return match?.[1];
+    return match ? { name: match[1]!, kind: 'class' } : undefined;
 }
 
 function fillSiteFromMetadata(site: DiModuleSite, obj: ObjectLiteralExpression): void {

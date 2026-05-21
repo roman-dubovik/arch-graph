@@ -309,6 +309,64 @@ describe('mapDiToGraph — di-uses edges', () => {
         expect(edge?.meta?.via).toBe('constructor');
         expect(result.diagnostics.counts.providerUses).toBe(1);
     });
+
+    it('emits token constructor dependency edges when the token provider exists', () => {
+        const mod = makeModule('AppModule', {
+            providers: [
+                { kind: 'class', name: 'OrdersService' },
+                { kind: 'token-ref', name: 'PAYMENT_CLIENT' },
+            ],
+        });
+
+        const result = mapDiToGraph(
+            [mod],
+            IDX,
+            EMPTY_OWNERSHIP,
+            [],
+            [],
+            undefined,
+            [{
+                providerClass: 'OrdersService',
+                dependencyClass: 'PAYMENT_CLIENT',
+                dependencyKind: 'token',
+                injectToken: 'PAYMENT_CLIENT',
+                location: makeLoc('/apps/api/src/orders.service.ts', 7),
+                via: 'constructor',
+            }],
+        );
+
+        const edge = result.edges.find((e) => e.kind === 'di-uses');
+        expect(edge?.from).toBe('provider:OrdersService');
+        expect(edge?.to).toBe('provider:PAYMENT_CLIENT');
+        expect(edge?.meta?.targetKind).toBe('token');
+        expect(edge?.meta?.injectToken).toBe('PAYMENT_CLIENT');
+    });
+
+    it('records unresolved constructor dependencies instead of fabricating providers', () => {
+        const mod = makeModule('AppModule', {
+            providers: [{ kind: 'class', name: 'OrdersService' }],
+        });
+
+        const result = mapDiToGraph(
+            [mod],
+            IDX,
+            EMPTY_OWNERSHIP,
+            [],
+            [],
+            undefined,
+            [{
+                providerClass: 'OrdersService',
+                dependencyClass: 'MissingService',
+                dependencyKind: 'class',
+                location: makeLoc('/apps/api/src/orders.service.ts', 7),
+                via: 'constructor',
+            }],
+        );
+
+        expect(result.edges.filter((e) => e.kind === 'di-uses')).toHaveLength(0);
+        expect(result.diagnostics.unresolvedProviderUses[0]?.reason).toBe('target-not-in-di-graph');
+        expect(result.diagnostics.counts.unresolvedProviderUses).toBe(1);
+    });
 });
 
 // ---------------------------------------------------------------------------

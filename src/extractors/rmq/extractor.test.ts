@@ -12,7 +12,7 @@ describe('extractRmq', () => {
                 }
                 class OrdersListener {
                     @RmqEventPattern(RmqPattern.OrderCreated)
-                    handle(): void {}
+                    handle(payload: OrderCreatedDto): void {}
                 }
             `,
         });
@@ -28,5 +28,8 @@ describe('extractRmq', () => {
         expect(sites[0]?.pattern).toEqual({ kind: 'literal', value: 'order.created' });
         expect(sites[0]?.via).toBe('@RmqEventPattern');
         expect(sites[0]?.enclosingClass).toBe('OrdersListener');
+        expect(sites[0]?.handlerName).toBe('handle');
+        expect(sites[0]?.payloadParamName).toBe('payload');
+        expect(sites[0]?.payloadType).toBe('OrderCreatedDto');
     });
 });

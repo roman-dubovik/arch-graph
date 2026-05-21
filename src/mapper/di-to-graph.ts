@@ -53,6 +53,7 @@ export function mapDiToGraph(
     const providerNodes = new Map<string, GraphNode>();
     const edges = new Map<string, GraphEdge>();
     const unresolvedRefs: DiDiagnostics['unresolvedRefs'] = [];
+    const unresolvedProviderUses: DiDiagnostics['unresolvedProviderUses'] = [];
     const unowned: DiModuleSite[] = [];
 
     let importsCount = 0;
@@ -227,7 +228,14 @@ export function mapDiToGraph(
     for (const use of providerUses) {
         const fromId = `provider:${use.providerClass}`;
         const toId = `provider:${use.dependencyClass}`;
-        if (!providerNodes.has(fromId) || !providerNodes.has(toId)) continue;
+        if (!providerNodes.has(fromId)) {
+            unresolvedProviderUses.push({ ...use, reason: 'source-not-in-di-graph' });
+            continue;
+        }
+        if (!providerNodes.has(toId)) {
+            unresolvedProviderUses.push({ ...use, reason: 'target-not-in-di-graph' });
+            continue;
+        }
         const key = `di-uses:${fromId}->${toId}`;
         if (edges.has(key)) continue;
         edges.set(key, {
@@ -237,7 +245,11 @@ export function mapDiToGraph(
             kind: 'di-uses',
             file: use.location.file,
             line: use.location.line,
-            meta: { via: use.via },
+            meta: {
+                via: use.via,
+                targetKind: use.dependencyKind ?? 'class',
+                ...(use.injectToken ? { injectToken: use.injectToken } : {}),
+            },
         });
         providerUsesCount++;
     }
@@ -249,6 +261,7 @@ export function mapDiToGraph(
             unresolvedRefs,
             unowned,
             unresolvedFilterRefs,
+            unresolvedProviderUses,
             unresolvedFilterRefsTruncated,
             skippedAnonymousFiles,
             counts: {
@@ -258,6 +271,7 @@ export function mapDiToGraph(
                 exports: exportsCount,
                 controllers: controllersCount,
                 providerUses: providerUsesCount,
+                unresolvedProviderUses: unresolvedProviderUses.length,
                 unresolvedRefs: unresolvedRefs.length,
                 unowned: unowned.length,
                 guards: guardsCount,
