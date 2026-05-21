@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>arch-graph — Static architecture graph for NestJS monorepos</title>
-  <meta name="description" content="arch-graph extracts NATS, RMQ/RabbitMQ, BullMQ, TypeORM, NestJS DI, HTTP, TS imports, cron schedules, and Markdown docs from a NestJS monorepo into a typed graph, plus local multilingual semantic search with dense + BM25 hybrid ranking. Deterministic structural extraction, zero LLM tokens on both build and query." />
+  <meta name="description" content="arch-graph extracts NATS, RMQ/RabbitMQ, BullMQ, TypeORM, NestJS DI, HTTP, React/Next frontend routes/hooks/components, TS imports, cron schedules, and Markdown docs from a NestJS monorepo into a typed graph, plus local multilingual semantic search with dense + BM25 hybrid ranking. Deterministic structural extraction, zero LLM tokens on both build and query." />
   <meta name="theme-color" content="#0a0a0f" />
 
   <meta property="og:type" content="website" />
@@ -751,7 +751,7 @@ arch-graph build --strict            # CI gate: exit 3 if recall drops below flo
     <section class="section section-domains" id="domains" aria-labelledby="domains-title">
       <div class="container">
         <p class="section-eyebrow">What it knows</p>
-        <h2 id="domains-title" class="section-title">Seven domains. Gated on every build.</h2>
+        <h2 id="domains-title" class="section-title">Eight domains. Gated on every build.</h2>
         <p class="section-lead">Each card is one extractor pass — a typed walk over the NestJS decorators / call shapes that domain uses. Coverage is boolean here (the extractor exists or it doesn't); per-domain recall is measured separately in the bench above and gated by <code>arch-graph build --strict</code>.</p>
 
         <ul class="domain-grid" role="list">
@@ -879,6 +879,26 @@ arch-graph build --strict            # CI gate: exit 3 if recall drops below flo
             <ul class="domain-edges mono">
               <li>http-call</li>
               <li>http-external</li>
+            </ul>
+          </li>
+
+          <li class="domain-card reveal">
+            <div class="domain-head">
+              <span class="domain-icon" aria-hidden="true">
+                <svg viewBox="0 0 32 32" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="4" y="6" width="24" height="18" rx="2"></rect>
+                  <path d="M4 12h24"></path>
+                  <path d="M10 18h5"></path>
+                  <path d="M19 18h3"></path>
+                </svg>
+              </span>
+              <h3>React / Next FE</h3>
+            </div>
+            <p class="domain-blurb">Frontend pages, route patterns, components, hooks, JSX render references, local imports, and i18n strings. Next.js route detection avoids feature folders merely named <code>pages/</code>; hook extraction recognizes direct and namespaced React calls such as <code>React.useContext</code>.</p>
+            <ul class="domain-edges mono">
+              <li>fe-routes-to</li>
+              <li>fe-renders</li>
+              <li>fe-imports</li>
             </ul>
           </li>
 

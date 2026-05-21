@@ -46,8 +46,17 @@ function containsJsx(node: Node): boolean {
 function bodyCallsHook(node: ArrowFunction | FunctionDeclaration): boolean {
     const body = node.getBody();
     /* v8 ignore next 1 */ if (!body) return false;
+    if (Node.isCallExpression(body) && isHookCallExpression(body.getExpression().getText())) {
+        return true;
+    }
     const calls = body.getDescendantsOfKind(SyntaxKind.CallExpression);
-    return calls.some((c) => /^use[A-Z]/.test(c.getExpression().getText()));
+    return calls.some((c) => isHookCallExpression(c.getExpression().getText()));
+}
+
+function isHookCallExpression(expressionText: string): boolean {
+    const normalized = expressionText.replace(/\?\./g, '.');
+    const lastSegment = normalized.split('.').pop() ?? normalized;
+    return /^use[A-Z]/.test(lastSegment);
 }
 
 /**

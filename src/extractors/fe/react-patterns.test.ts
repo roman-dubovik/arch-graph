@@ -248,6 +248,36 @@ describe('extractReactPatterns — hooks', () => {
         expect(hooks[0]!.name).toBe('useFetch');
     });
 
+    it('detects hook wrappers that call React.useX property-access hooks', () => {
+        const project = setup({
+            '/app/context.tsx': `
+                import React from 'react';
+                const DataContext = React.createContext(null);
+                export const useDataProcessingContext = () => React.useContext(DataContext);
+            `,
+        });
+        const sf = project.getSourceFileOrThrow('/app/context.tsx');
+        const { hooks } = extractReactPatterns(sf);
+        expect(hooks.map((h) => h.name)).toContain('useDataProcessingContext');
+    });
+
+    it('detects function hooks that call namespaced React.useX hooks', () => {
+        const project = setup({
+            '/app/useKeydownListener.ts': `
+                import React from 'react';
+                export function useKeydownListener(handler: () => void) {
+                    React.useEffect(() => {
+                        window.addEventListener('keydown', handler);
+                        return () => window.removeEventListener('keydown', handler);
+                    }, [handler]);
+                }
+            `,
+        });
+        const sf = project.getSourceFileOrThrow('/app/useKeydownListener.ts');
+        const { hooks } = extractReactPatterns(sf);
+        expect(hooks.map((h) => h.name)).toContain('useKeydownListener');
+    });
+
     it('does NOT treat a function whose name starts with lowercase use as hook', () => {
         const project = setup({
             '/app/utils.ts': `

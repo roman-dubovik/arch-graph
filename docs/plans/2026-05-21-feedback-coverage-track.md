@@ -7,7 +7,9 @@ Latest implementation commits:
 - `749b940 feat: cover rmq and graph feedback gaps`
 - `7ffb3e6 feat: enhance RMQ and DI extraction, add semantic search quotas and boosts`
 - `17007f8 feat: cover nats aliases and fe diagnostics`
-- pending: NATS inherited command resolution, FE diagnostics noise classification, CodeQL-like analysis track
+- `b77a315 feat: resolve inherited nats command subjects`
+- `93d74e1 docs: document nats command resolution`
+- pending: FE diagnostics noise classification, CodeQL-like analysis track
 
 ## Goal
 
@@ -217,7 +219,8 @@ place to write instructions without mutating project memory. When appending to
 
 ## Block 5.6: FE Diagnose And Recall Hygiene
 
-Status: implemented in `17007f8`; diagnostics noise classification remains.
+Status: implemented in `17007f8`; route/hook recall hygiene extended after
+target-monorepo validation feedback; diagnostics noise classification remains.
 
 ### What changed
 
@@ -227,13 +230,15 @@ Status: implemented in `17007f8`; diagnostics noise classification remains.
 - FE hook ground truth now mirrors extractor semantics: a `useXxx` function is
   counted as a hook only if its body calls another hook. Bare use-prefixed
   utilities no longer inflate missed hook counts.
+- Pages Router detection now treats `pages/` as a Next.js route root only in
+  expected project/package positions. Feature folders such as
+  `components/**/pages/**` are not counted as route ground truth.
+- Hook extraction now recognizes namespaced React hook calls such as
+  `React.useContext(...)` and `React.useEffect(...)`, closing context-wrapper
+  custom hook misses.
 
 ### Remaining
 
-- Run `arch-graph diagnose --only=fe` on the consumer repo after updating config
-  and classify any remaining missed routes by concrete file path.
-- If route misses remain, add targeted Next.js router pattern support instead of
-  loosening route extraction blindly.
 - Classify external JSX components and external/package imports separately so
   diagnostics do not present UI library components as local component misses.
 

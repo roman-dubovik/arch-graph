@@ -115,6 +115,15 @@ describe('deriveRoute — non-page files', () => {
     it('.ts hook file → null', () => {
         expect(deriveRoute(`${ROOT}/src/hooks/useCounter.ts`, ROOT)).toBeNull();
     });
+
+    it('does not treat feature folders named pages as Next.js pages router roots', () => {
+        expect(
+            deriveRoute(
+                `${ROOT}/src/app/components/misstatement/pages/misstatement-details-page/index.ts`,
+                ROOT,
+            ),
+        ).toBeNull();
+    });
 });
 
 // ---------------------------------------------------------------------------
@@ -193,6 +202,10 @@ describe('isPageFile', () => {
 
     it('src/components/Button.tsx → false', () => {
         expect(isPageFile('/app/src/components/Button.tsx')).toBe(false);
+    });
+
+    it('feature folder named pages → false', () => {
+        expect(isPageFile('/app/src/app/components/misstatement/pages/misstatement-details-page/index.ts')).toBe(false);
     });
 
     it('app/layout.tsx → false (not a page)', () => {

@@ -40,9 +40,9 @@ export function deriveRoute(file: string, root: string): { route: string; router
         .replace(/\\/g, '/');
 
     // ---- Pages Router ----
-    const pagesMatch = rel.match(/^(?:.*\/)?pages\/(.+)\.(?:tsx|jsx|ts|js)$/);
-    if (pagesMatch) {
-        let seg = pagesMatch[1]!;
+    const pagesSeg = pagesRouterSubpath(rel);
+    if (pagesSeg) {
+        let seg = pagesSeg;
 
         // Skip internal Next.js pages and API routes
         if (/(?:^|\/)_/.test(seg)) return null;
@@ -90,6 +90,20 @@ export function deriveRoute(file: string, root: string): { route: string; router
     return null;
 }
 
+function pagesRouterSubpath(rel: string): string | null {
+    const patterns = [
+        /^pages\/(.+)\.(?:tsx|jsx|ts|js)$/,
+        /^src\/pages\/(.+)\.(?:tsx|jsx|ts|js)$/,
+        /^apps\/[^/]+\/(?:src\/)?pages\/(.+)\.(?:tsx|jsx|ts|js)$/,
+        /^packages\/[^/]+\/(?:src\/)?pages\/(.+)\.(?:tsx|jsx|ts|js)$/,
+    ];
+    for (const pattern of patterns) {
+        const match = rel.match(pattern);
+        if (match) return match[1]!;
+    }
+    return null;
+}
+
 /**
  * Determine if a file path looks like a page file (Pages or App Router).
  * Used by the extractor to quickly pre-filter before full AST analysis.
@@ -97,7 +111,7 @@ export function deriveRoute(file: string, root: string): { route: string; router
 export function isPageFile(file: string): boolean {
     const f = file.replace(/\\/g, '/');
     // Pages Router
-    if (/\/pages\/[^/]/.test(f) && /\.(tsx|jsx|ts|js)$/.test(f)) {
+    if (looksLikePagesRouterFile(f)) {
         const seg = f.match(/\/pages\/(.+)\.(tsx|jsx|ts|js)$/)?.[1] ?? '';
         if (/(?:^|\/)_/.test(seg) || /(?:^|\/)api(?:\/|$)/.test(seg)) return false;
         return true;
@@ -107,6 +121,14 @@ export function isPageFile(file: string): boolean {
         return true;
     }
     return false;
+}
+
+function looksLikePagesRouterFile(file: string): boolean {
+    if (!/\.(tsx|jsx|ts|js)$/.test(file)) return false;
+    return (
+        /\/pages\/[^/]/.test(file) &&
+        !/\/(?:app|components?|features?|modules?|widgets?)\/.*\/pages\/[^/]/.test(file)
+    );
 }
 
 // ---------------------------------------------------------------------------
