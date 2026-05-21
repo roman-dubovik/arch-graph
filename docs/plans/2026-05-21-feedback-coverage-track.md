@@ -9,7 +9,7 @@ Latest implementation commits:
 - `17007f8 feat: cover nats aliases and fe diagnostics`
 - `b77a315 feat: resolve inherited nats command subjects`
 - `93d74e1 docs: document nats command resolution`
-- pending: FE diagnostics noise classification, CodeQL-like analysis track
+- pending: CodeQL-like analysis track
 
 ## Goal
 
@@ -219,8 +219,8 @@ place to write instructions without mutating project memory. When appending to
 
 ## Block 5.6: FE Diagnose And Recall Hygiene
 
-Status: implemented in `17007f8`; route/hook recall hygiene extended after
-target-monorepo validation feedback; diagnostics noise classification remains.
+Status: implemented in `17007f8`; route/hook recall hygiene and diagnostics
+noise classification extended after target-monorepo validation feedback.
 
 ### What changed
 
@@ -236,11 +236,13 @@ target-monorepo validation feedback; diagnostics noise classification remains.
 - Hook extraction now recognizes namespaced React hook calls such as
   `React.useContext(...)` and `React.useEffect(...)`, closing context-wrapper
   custom hook misses.
-
-### Remaining
-
-- Classify external JSX components and external/package imports separately so
-  diagnostics do not present UI library components as local component misses.
+- FE unresolved diagnostics now classify:
+  - `external-package`
+  - `workspace-alias-unresolved`
+  - `local-file-unresolved`
+  - `tsx-component-unresolved`
+- `arch-graph diagnose --only=fe` prints classification counters and orders
+  actionable local/alias/component misses before external package noise.
 
 ## Block 6: CodeQL / Static Analysis Strategy
 

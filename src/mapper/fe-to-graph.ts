@@ -13,6 +13,9 @@
  *   fe-routes-to — route → page (url pattern → page node)
  */
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import type { GraphEdge, GraphNode } from '../core/types.js';
 import type { FeExtractResult } from '../extractors/fe/types.js';
 import { OwnershipRegistry } from '../core/service-registry.js';
@@ -20,16 +23,35 @@ import { OwnershipRegistry } from '../core/service-registry.js';
 /** Kind literals for unresolved FE references. */
 export type FeUnresolvedKind = 'fe-imports' | 'fe-renders';
 
+/** Diagnostic bucket for separating actionable local misses from external UI/package noise. */
+export type FeUnresolvedClassification =
+    | 'external-package'
+    | 'workspace-alias-unresolved'
+    | 'local-file-unresolved'
+    | 'tsx-component-unresolved';
+
 /** Kind literals for unowned FE nodes. */
 export type FeUnownedKind = 'fe-component' | 'fe-page' | 'fe-hook' | 'fe-route';
 
 export interface FeDiagnostics {
-    unresolved: Array<{ kind: FeUnresolvedKind; ref: string; reason: string }>;
+    unresolved: Array<{
+        kind: FeUnresolvedKind;
+        ref: string;
+        reason: string;
+        classification: FeUnresolvedClassification;
+        sourceFile?: string;
+        importedName?: string;
+    }>;
     unowned: Array<{ kind: FeUnownedKind; file: string }>;
     counts: {
         unresolvedImports: number;
         unresolvedRenders: number;
         unowned: number;
+        externalPackageImports: number;
+        externalComponentRenders: number;
+        workspaceAliasUnresolved: number;
+        localFileUnresolved: number;
+        tsxComponentUnresolved: number;
     };
 }
 
@@ -53,6 +75,7 @@ export function mapFeToGraph(
     const edgeMap = new Map<string, GraphEdge>();
     const unresolved: FeDiagnostics['unresolved'] = [];
     const unowned: FeDiagnostics['unowned'] = [];
+    const externalPackages = loadRootPackageNames(ownership.root);
 
     // Carry over unresolved imports from extractor (P0-5)
     for (const u of extractorOutput.unresolvedImports) {
@@ -60,6 +83,17 @@ export function mapFeToGraph(
             kind: 'fe-imports' as FeUnresolvedKind,
             ref: u.specifier,
             reason: u.error,
+            classification: classifyUnresolvedImport(u.specifier, externalPackages),
+            sourceFile: u.file,
+        });
+    }
+
+    const unresolvedImportByFileAndName = new Map<string, { specifier: string; classification: FeUnresolvedClassification }>();
+    for (const imp of extractorOutput.imports) {
+        if (imp.resolvedFile) continue;
+        unresolvedImportByFileAndName.set(`${imp.sourceFile}#${imp.importedName}`, {
+            specifier: imp.specifier,
+            classification: classifyUnresolvedImport(imp.specifier, externalPackages),
         });
     }
 
@@ -175,10 +209,14 @@ export function mapFeToGraph(
 
         if (!toId) {
             // toName not found in extracted components — could be external/unresolved
+            const imported = unresolvedImportByFileAndName.get(`${render.fromFile}#${jsxRootName(render.toName)}`);
+            const classification = imported?.classification ?? 'tsx-component-unresolved';
             unresolved.push({
                 kind: 'fe-renders' as FeUnresolvedKind,
                 ref: render.toName,
-                reason: 'component-not-found',
+                reason: imported ? renderReasonForImportClassification(classification) : 'component-not-found',
+                classification,
+                sourceFile: render.fromFile,
             });
             continue;
         }
@@ -221,6 +259,9 @@ export function mapFeToGraph(
                 kind: 'fe-imports' as FeUnresolvedKind,
                 ref: imp.specifier,
                 reason: 'unresolved-file',
+                classification: classifyUnresolvedImport(imp.specifier, externalPackages),
+                sourceFile: imp.sourceFile,
+                importedName: imp.importedName,
             });
             continue;
         }
@@ -281,6 +322,8 @@ export function mapFeToGraph(
 
     const unresolvedImportsCount = unresolved.filter((u) => u.kind === 'fe-imports').length;
     const unresolvedRendersCount = unresolved.filter((u) => u.kind === 'fe-renders').length;
+    const countByClassification = (kind: FeUnresolvedKind, classification: FeUnresolvedClassification): number =>
+        unresolved.filter((u) => u.kind === kind && u.classification === classification).length;
 
     return {
         nodes: [...nodeMap.values()],
@@ -292,6 +335,15 @@ export function mapFeToGraph(
                 unresolvedImports: unresolvedImportsCount,
                 unresolvedRenders: unresolvedRendersCount,
                 unowned: unowned.length,
+                externalPackageImports: countByClassification('fe-imports', 'external-package'),
+                externalComponentRenders: countByClassification('fe-renders', 'external-package'),
+                workspaceAliasUnresolved:
+                    countByClassification('fe-imports', 'workspace-alias-unresolved') +
+                    countByClassification('fe-renders', 'workspace-alias-unresolved'),
+                localFileUnresolved:
+                    countByClassification('fe-imports', 'local-file-unresolved') +
+                    countByClassification('fe-renders', 'local-file-unresolved'),
+                tsxComponentUnresolved: countByClassification('fe-renders', 'tsx-component-unresolved'),
             },
         },
     };
@@ -305,4 +357,94 @@ function addEdge(map: Map<string, GraphEdge>, edge: GraphEdge): void {
     if (!map.has(edge.id)) {
         map.set(edge.id, edge);
     }
+}
+
+const KNOWN_EXTERNAL_SCOPES = new Set([
+    '@adobe',
+    '@ant-design',
+    '@apollo',
+    '@auth',
+    '@babel',
+    '@chakra-ui',
+    '@codemirror',
+    '@dnd-kit',
+    '@emotion',
+    '@floating-ui',
+    '@fontsource',
+    '@fortawesome',
+    '@headlessui',
+    '@heroicons',
+    '@hookform',
+    '@internationalized',
+    '@mantine',
+    '@material-ui',
+    '@mui',
+    '@nestjs',
+    '@next',
+    '@popperjs',
+    '@radix-ui',
+    '@react-aria',
+    '@react-hook',
+    '@react-spring',
+    '@react-stately',
+    '@reduxjs',
+    '@storybook',
+    '@tanstack',
+    '@testing-library',
+    '@types',
+    '@vitejs',
+]);
+
+function classifyUnresolvedImport(
+    specifier: string,
+    externalPackages: Set<string>,
+): FeUnresolvedClassification {
+    if (specifier.startsWith('.')) return 'local-file-unresolved';
+    if (specifier.startsWith('@/') || specifier.startsWith('~/')) return 'workspace-alias-unresolved';
+    const packageName = packageNameOf(specifier);
+    if (externalPackages.has(packageName)) return 'external-package';
+    if (specifier.startsWith('@')) {
+        const scope = specifier.split('/')[0] ?? specifier;
+        return KNOWN_EXTERNAL_SCOPES.has(scope) ? 'external-package' : 'workspace-alias-unresolved';
+    }
+    return 'external-package';
+}
+
+function packageNameOf(specifier: string): string {
+    if (specifier.startsWith('@')) {
+        const [scope, name] = specifier.split('/');
+        return name ? `${scope}/${name}` : specifier;
+    }
+    return specifier.split('/')[0] ?? specifier;
+}
+
+function loadRootPackageNames(root: string): Set<string> {
+    try {
+        const raw = readFileSync(join(root, 'package.json'), 'utf8');
+        const parsed = JSON.parse(raw) as {
+            dependencies?: Record<string, string>;
+            devDependencies?: Record<string, string>;
+            peerDependencies?: Record<string, string>;
+            optionalDependencies?: Record<string, string>;
+        };
+        return new Set([
+            ...Object.keys(parsed.dependencies ?? {}),
+            ...Object.keys(parsed.devDependencies ?? {}),
+            ...Object.keys(parsed.peerDependencies ?? {}),
+            ...Object.keys(parsed.optionalDependencies ?? {}),
+        ]);
+    } catch {
+        return new Set();
+    }
+}
+
+function renderReasonForImportClassification(classification: FeUnresolvedClassification): string {
+    if (classification === 'external-package') return 'external-component';
+    if (classification === 'workspace-alias-unresolved') return 'workspace-alias-component-unresolved';
+    if (classification === 'local-file-unresolved') return 'local-file-component-unresolved';
+    return 'component-not-found';
+}
+
+function jsxRootName(name: string): string {
+    return name.split('.')[0] ?? name;
 }

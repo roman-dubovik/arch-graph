@@ -50,6 +50,7 @@ Recent features shipped on `main` in May 2026:
 - **`nats-decorator-alias-v1`** *(2026-05-21)* — custom NATS handler decorators such as `NatsMessagePattern` can be declared via `nats.subscribeDecorators`, closing wrapper-based subscriber gaps without pretending RMQ handlers are NATS.
 - **`nats-command-resolver-v1`** *(2026-05-21)* — NATS subjects now resolve Nest command objects (`{ cmd: EAuditServiceCmd.X }`), `this.someCmd` / `this.somePattern` class properties, and base-class sender methods expanded through subclass overrides.
 - **`fe-recall-hygiene-v2`** *(2026-05-21)* — FE route ground truth no longer treats arbitrary feature folders named `pages/` as Next.js routes, and hook extraction now recognizes namespaced React hook calls such as `React.useContext(...)` / `React.useEffect(...)`.
+- **`fe-diagnostics-v2`** *(2026-05-21)* — FE diagnostics classify external UI/package references separately from workspace aliases, missing local files, and real JSX component misses, so `diagnose --only=fe` surfaces actionable gaps before library noise.
 - **`semantic-hybrid-v1`** *(2026-05-21)* — semantic search fuses dense vectors with BM25 lexical ranking via Reciprocal Rank Fusion, with MCP controls for kind quotas/boosts when agents need compact, code-first context.
 - **`init-idempotency-v1`** *(2026-05-21)* — semantic strategy snippets written into `CLAUDE.md` are marker-delimited and replaced in place on re-run; generated graph output stays local and is not staged by hooks.
 
@@ -305,7 +306,7 @@ http         100.0%      n/a  ≥95.0%   ✓ ok
 imports      100.0%      n/a  ≥80.0%   ✓ ok
 ```
 
-If a domain falls below its recall floor the status shows `⚠` with tips. Use `arch-graph diagnose --only=fe` to print missed FE routes/hooks/components, including the source files that drove the warning. By default `arch-graph build` is **advisory** — it always exits 0 so it never breaks builds unexpectedly. Use `--strict` for CI hard-fail:
+If a domain falls below its recall floor the status shows `⚠` with tips. Use `arch-graph diagnose --only=fe` to print missed FE routes/hooks/components, including the source files that drove the warning. FE unresolved references are classified as external package noise, workspace-alias misses, local-file misses, or real JSX component misses so agents spend context on actionable gaps first. By default `arch-graph build` is **advisory** — it always exits 0 so it never breaks builds unexpectedly. Use `--strict` for CI hard-fail:
 
 ```sh
 arch-graph build               # advisory: always exit 0, prints table

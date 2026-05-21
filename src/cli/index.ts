@@ -667,7 +667,13 @@ async function cmdDiagnose(args: ParsedArgs): Promise<void> {
     if (show('di')) process.stdout.write(`[di]      modules=${di.counts.modules} imports=${di.counts.imports} providers=${di.counts.providers} exports=${di.counts.exports} controllers=${di.counts.controllers} unresolvedRefs=${di.counts.unresolvedRefs} unowned=${di.counts.unowned}\n`);
     if (show('http')) process.stdout.write(`[http]    total=${hd.counts.totalSites} literal=${hd.counts.literal} envRef=${hd.counts.envRef} pattern=${hd.counts.pattern} unresolved=${hd.counts.unresolved} internal=${hd.counts.internal} external=${hd.counts.external} unowned=${hd.counts.unowned}\n`);
     if (show('imports')) process.stdout.write(`[imports] static=${im.counts.totalStatic} dynamic=${im.counts.totalDynamic} cjsRequire=${im.counts.totalCjsRequire} resolved=${im.counts.resolvedToOwner} external/unres=${im.counts.externalOrUnresolved} unresolvedInternal=${im.counts.unresolvedInternal}\n`);
-    if (show('fe')) process.stdout.write(`[fe]      unresolvedImports=${fe.counts.unresolvedImports} unresolvedRenders=${fe.counts.unresolvedRenders} unowned=${fe.counts.unowned}\n`);
+    if (show('fe')) {
+        process.stdout.write(
+            `[fe]      unresolvedImports=${fe.counts.unresolvedImports} unresolvedRenders=${fe.counts.unresolvedRenders} unowned=${fe.counts.unowned}` +
+            ` externalImports=${fe.counts.externalPackageImports} externalRenders=${fe.counts.externalComponentRenders}` +
+            ` aliasUnresolved=${fe.counts.workspaceAliasUnresolved} localUnresolved=${fe.counts.localFileUnresolved} componentMisses=${fe.counts.tsxComponentUnresolved}\n`,
+        );
+    }
 
     if (show('nats') && n.unresolved.length > 0) {
         process.stdout.write(`\nTop 10 unresolved NATS subjects:\n`);
@@ -697,8 +703,19 @@ async function cmdDiagnose(args: ParsedArgs): Promise<void> {
 
     if (show('fe') && fe.unresolved.length > 0) {
         process.stdout.write(`\nTop 10 unresolved FE references (fe-imports / fe-renders):\n`);
-        for (const u of fe.unresolved.slice(0, 10)) {
-            process.stdout.write(`  ${u.kind}  '${u.ref}'  reason=${u.reason}\n`);
+        const sortedUnresolved = [
+            ...fe.unresolved.filter((u) => u.classification !== 'external-package'),
+            ...fe.unresolved.filter((u) => u.classification === 'external-package'),
+        ];
+        for (const u of sortedUnresolved.slice(0, 10)) {
+            const classification = 'classification' in u ? ` classification=${u.classification}` : '';
+            process.stdout.write(`  ${u.kind}  '${u.ref}'  reason=${u.reason}${classification}\n`);
+        }
+        const actionable = fe.unresolved.filter((u) => u.classification !== 'external-package');
+        if (actionable.length !== fe.unresolved.length) {
+            process.stdout.write(
+                `  note: ${fe.unresolved.length - actionable.length} external package reference(s) are classified as non-local FE noise.\n`,
+            );
         }
     }
 

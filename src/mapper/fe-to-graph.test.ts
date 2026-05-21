@@ -584,3 +584,114 @@ describe('mapFeToGraph — diagnostics.counts', () => {
         expect(diagnostics.counts.unowned).toBe(1);
     });
 });
+
+// ---------------------------------------------------------------------------
+// Diagnostics classification: actionable local misses vs external/package noise
+// ---------------------------------------------------------------------------
+describe('mapFeToGraph — diagnostics classification', () => {
+    it('classifies unresolved FE imports by package, workspace alias, and relative path', () => {
+        const FILE = '/app/Page.tsx';
+        const extract: FeExtractResult = {
+            ...emptyExtract(),
+            imports: [
+                {
+                    sourceFile: FILE,
+                    resolvedFile: null,
+                    importedName: 'Stack',
+                    specifier: '@mui/material',
+                    location: { file: FILE, line: 1, column: 0 },
+                },
+                {
+                    sourceFile: FILE,
+                    resolvedFile: null,
+                    importedName: 'TargetButton',
+                    specifier: '@workspace/ui',
+                    location: { file: FILE, line: 2, column: 0 },
+                },
+                {
+                    sourceFile: FILE,
+                    resolvedFile: null,
+                    importedName: 'LocalButton',
+                    specifier: './missing-button',
+                    location: { file: FILE, line: 3, column: 0 },
+                },
+            ],
+        };
+
+        const { diagnostics } = mapFeToGraph(extract, makeOwnership());
+
+        expect(diagnostics.unresolved).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    kind: 'fe-imports',
+                    ref: '@mui/material',
+                    classification: 'external-package',
+                }),
+                expect.objectContaining({
+                    kind: 'fe-imports',
+                    ref: '@workspace/ui',
+                    classification: 'workspace-alias-unresolved',
+                }),
+                expect.objectContaining({
+                    kind: 'fe-imports',
+                    ref: './missing-button',
+                    classification: 'local-file-unresolved',
+                }),
+            ]),
+        );
+        expect(diagnostics.counts.externalPackageImports).toBe(1);
+        expect(diagnostics.counts.workspaceAliasUnresolved).toBe(1);
+        expect(diagnostics.counts.localFileUnresolved).toBe(1);
+    });
+
+    it('classifies unresolved renders imported from external packages separately from local JSX misses', () => {
+        const FILE = '/app/Page.tsx';
+        const extract: FeExtractResult = {
+            ...emptyExtract(),
+            components: [
+                {
+                    name: 'Page',
+                    kind: 'arrow',
+                    file: FILE,
+                    location: { file: FILE, line: 4, column: 0 },
+                    exported: true,
+                    defaultExport: false,
+                },
+            ],
+            imports: [
+                {
+                    sourceFile: FILE,
+                    resolvedFile: null,
+                    importedName: 'Stack',
+                    specifier: '@mui/material',
+                    location: { file: FILE, line: 1, column: 0 },
+                },
+            ],
+            renders: [
+                { fromFile: FILE, fromName: 'Page', toName: 'Stack', location: { file: FILE, line: 5, column: 0 } },
+                { fromFile: FILE, fromName: 'Page', toName: 'MissingLocal', location: { file: FILE, line: 6, column: 0 } },
+            ],
+        };
+
+        const { diagnostics } = mapFeToGraph(extract, makeOwnership());
+
+        expect(diagnostics.unresolved).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    kind: 'fe-renders',
+                    ref: 'Stack',
+                    classification: 'external-package',
+                    reason: 'external-component',
+                }),
+                expect.objectContaining({
+                    kind: 'fe-renders',
+                    ref: 'MissingLocal',
+                    classification: 'tsx-component-unresolved',
+                    reason: 'component-not-found',
+                }),
+            ]),
+        );
+        expect(diagnostics.counts.externalComponentRenders).toBe(1);
+        expect(diagnostics.counts.tsxComponentUnresolved).toBe(1);
+    });
+});
