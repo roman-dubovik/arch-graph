@@ -19,7 +19,7 @@ import type { ArchGraphConfig } from '../../core/config.js';
 import { isExcludedSourceFile } from '../shared.js';
 import { extractReactPatterns } from './react-patterns.js';
 import { extractI18nStringsForFile, loadMessagesFromJson, type MessagesObject } from './i18n-resolver.js';
-import { deriveRoute, extractPageFromFile } from './router-patterns.js';
+import { discoverNextPagesRouterRoots, extractPageFromFile, extractReactRouterRoutesFromFile } from './router-patterns.js';
 import type {
     FeComponent,
     FeExtractResult,
@@ -352,6 +352,16 @@ export async function extractFe(
     // Load i18n messages once per extractFe call (shared across all files).
     const { messages: projectMessages, diagnostics: i18nDiagnostics } =
         await loadProjectMessages(root, capOverride);
+    const pagesRouterRoots = await discoverNextPagesRouterRoots(root);
+    if (pagesRouterRoots.size === 2 && pagesRouterRoots.has('pages') && pagesRouterRoots.has('src/pages')) {
+        for (const sf of project.getSourceFiles()) {
+            const rel = sf.getFilePath()
+                .replace(root.endsWith('/') ? root : root + '/', '')
+                .replace(/\\/g, '/');
+            const match = rel.match(/^((?:apps|packages)\/[^/]+\/(?:src\/)?pages)\//);
+            if (match) pagesRouterRoots.add(match[1]!);
+        }
+    }
 
     const allComponents: FeComponent[] = [];
     const allHooks: FeHook[] = [];
@@ -403,7 +413,7 @@ export async function extractFe(
         allRenders.push(...renders);
 
         // --- Page / route detection ---
-        const pageResult = extractPageFromFile(sf, root);
+        const pageResult = extractPageFromFile(sf, root, { pagesRouterRoots });
         if (pageResult) {
             allPages.push(pageResult);
             if (!routeMap.has(pageResult.route)) {
@@ -412,6 +422,9 @@ export async function extractFe(
                     pageFile: file,
                 });
             }
+        }
+        for (const route of extractReactRouterRoutesFromFile(sf)) {
+            if (!routeMap.has(route.pattern)) routeMap.set(route.pattern, route);
         }
 
         // --- Import references (for fe-imports edges) ---

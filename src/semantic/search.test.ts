@@ -49,7 +49,7 @@ afterEach(async () => {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Build a minimal valid SemanticManifest defaulting to minilm (for explicit-minilm tests). */
+/** Build a minimal valid SemanticManifest defaulting to minilm for explicit legacy-model tests. */
 function makeManifest(overrides: Partial<SemanticManifest> = {}): SemanticManifest {
     return {
         schemaVersion: SEMANTIC_SCHEMA_VERSION,

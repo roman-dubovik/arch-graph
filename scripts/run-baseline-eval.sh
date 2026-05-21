@@ -14,7 +14,7 @@
 #
 # Environment overrides:
 #   SKIP_BUILD=1            Same as --skip-build (env var form).
-#   MODEL=minilm            Semantic embedder alias: minilm (default) | e5-base.
+#   MODEL=e5-base           Semantic embedder alias: e5-base (default) | minilm.
 #                           Switches both `semantic build` and `semantic search`
 #                           CLI calls.
 #   EVAL_K=10               Number of top results to inspect (default: 10).
@@ -67,13 +67,13 @@ case "$EVAL_MODE" in
   *) echo "ERROR: invalid EVAL_MODE='$EVAL_MODE'. Use single|per-category|fallback|both-buckets." >&2; exit 1 ;;
 esac
 DATE="$(date +%Y-%m-%d)"
-MODEL="${MODEL:-minilm}"
+MODEL="${MODEL:-e5-base}"
 case "$MODEL" in
   minilm|e5-base) ;;
   *) echo "ERROR: invalid MODEL='$MODEL'. Use minilm|e5-base." >&2; exit 1 ;;
 esac
 _MODEL_SUFFIX=""
-if [[ "$MODEL" != "minilm" ]]; then
+if [[ "$MODEL" != "e5-base" ]]; then
   _MODEL_SUFFIX="-${MODEL}"
 fi
 RESULTS_FILE="${RESULTS_FILE:-$SCRIPT_DIR/eval/results-${DATE}-${EVAL_MODE}${_MODEL_SUFFIX}.md}"

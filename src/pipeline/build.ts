@@ -546,7 +546,7 @@ export async function runBuild(cfg: ArchGraphConfig, buildOptions: BuildOptions 
     // ─── docs pass ────────────────────────────────────────────────────────────
     const docsConfig = applyDocsDefaults(cfg.docs);
     // Resolve the semantic model alias so docs chunking uses the matching tokenizer.
-    // countTokens defaults to 'minilm' but bge-m3 indexes should use the bge-m3 tokenizer.
+    // countTokens has a fallback tokenizer, but e5-base indexes should use e5-base limits.
     const semanticAlias = applySemanticDefaults(cfg.semantic).model;
     const countTokensForAlias = (text: string) => countTokens(text, semanticAlias);
     let docsDiagnostics: import('../core/types.js').DocsDiagnostics;

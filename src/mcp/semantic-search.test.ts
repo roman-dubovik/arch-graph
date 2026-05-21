@@ -29,7 +29,12 @@ import type { SemanticManifest, SemanticRecord } from '../semantic/types.js';
 import { SEMANTIC_DIM, SEMANTIC_MODEL, SEMANTIC_SCHEMA_VERSION, SEMANTIC_MODELS, defaultModelAlias } from '../semantic/types.js';
 import { MAX_TOP_K } from '../semantic/search.js';
 import { writeEmbeddingsJsonl, writeManifest } from '../semantic/io.js';
-import { makeSemanticSearchHandler, semanticSearchInputShape } from './server.js';
+import {
+    codeSearchInputShape,
+    docsSearchInputShape,
+    makeSemanticSearchHandler,
+    semanticSearchInputShape,
+} from './server.js';
 import * as embedderModule from '../semantic/embedder.js';
 
 // ---------------------------------------------------------------------------
@@ -456,6 +461,33 @@ describe('makeSemanticSearchHandler — factory presets', () => {
         }
     });
 
+    it('bucket search schemas expose ranking controls but not kind filters', () => {
+        const codeSchema = z.object(codeSearchInputShape);
+        const docsSchema = z.object(docsSearchInputShape);
+
+        const codeParsed = codeSchema.parse({
+            query: 'RmqEventPattern',
+            minScore: 0.55,
+            kindQuotas: { service: 2, 'nats-subject': 1 },
+            kindBoosts: { service: 1.25 },
+        });
+        const docsParsed = docsSchema.parse({
+            query: 'semantic strategy',
+            kindQuotas: { 'doc-section': 3 },
+            kindBoosts: { 'doc-section': 1.5 },
+        });
+
+        expect(codeParsed.kindQuotas?.service).toBe(2);
+        expect(codeParsed.kindBoosts?.service).toBe(1.25);
+        expect(docsParsed.kindQuotas?.['doc-section']).toBe(3);
+        expect(docsParsed.kindBoosts?.['doc-section']).toBe(1.5);
+
+        expect('kinds' in codeSearchInputShape).toBe(false);
+        expect('excludeKinds' in codeSearchInputShape).toBe(false);
+        expect('kinds' in docsSearchInputShape).toBe(false);
+        expect('excludeKinds' in docsSearchInputShape).toBe(false);
+    });
+
     it('lockedKinds + caller kinds throws (silent-override guard)', async () => {
         await setupMixedSidecar();
 
@@ -860,6 +892,18 @@ describe('makeSemanticSearchHandler — per-model minScore calibration (Task 3)'
         expect(() =>
             semanticSearchInputSchema.parse({ query: 'test', minScore: 1 }),
         ).not.toThrow();
+    });
+
+    it('Zod schema accepts partial kind quota and boost maps', () => {
+        const semanticSearchInputSchema = z.object(semanticSearchInputShape);
+        const parsed = semanticSearchInputSchema.parse({
+            query: 'test',
+            kindQuotas: { service: 2 },
+            kindBoosts: { 'db-table': 1.5 },
+        });
+
+        expect(parsed.kindQuotas?.service).toBe(2);
+        expect(parsed.kindBoosts?.['db-table']).toBe(1.5);
     });
 
     it('Zod schema: minScore omitted → parsed as undefined (not defaulted)', () => {

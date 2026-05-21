@@ -376,7 +376,7 @@
             <p class="bench-card-label">Three MCP tools</p>
             <p class="bench-card-row"><span class="bench-card-tool">code_search</span><span class="bench-card-num mono" style="font-size:0.85em;">code only</span></p>
             <p class="bench-card-row dim"><span class="bench-card-tool">docs_search</span><span class="bench-card-num mono" style="font-size:0.85em;">docs only</span></p>
-            <p class="bench-card-foot"><code>semantic_search</code> covers the union. Split exists because mixing buckets drops A_find recall: 80% → 30%. With split: 70% restored. Baseline hit-rate across 103 eval queries: 47% → 67% → <strong>75% with e5-base</strong> (C_ui 36% → 82%).</p>
+            <p class="bench-card-foot"><code>semantic_search</code> covers the union. Split exists because mixing buckets drops A_find recall: 80% → 30%. All three support <code>minScore</code>, <code>kindQuotas</code>, and <code>kindBoosts</code>; bucket filters stay tool-owned. Baseline hit-rate: 47% → 67% → <strong>75% with e5-base</strong>.</p>
           </div>
           <div class="bench-card">
             <p class="bench-card-label">vs graphify on the same suite</p>
@@ -834,7 +834,7 @@ arch-graph build --strict            # CI gate: exit 3 if recall drops below flo
               </span>
               <h3>React / Next FE</h3>
             </div>
-            <p class="domain-blurb">Pages, routes, components, hooks, JSX renders, imports, and i18n. Avoids feature folders named <code>pages/</code>; sees <code>React.useX</code> hooks.</p>
+            <p class="domain-blurb">Pages, routes, React Router JSX routes, components, hooks, JSX renders, imports, and i18n. Next Pages Router roots are marker-gated; feature folders named <code>pages/</code> stay out of route recall.</p>
             <ul class="domain-edges mono">
               <li>fe-routes-to</li>
               <li>fe-renders</li>

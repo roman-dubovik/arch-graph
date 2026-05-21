@@ -2,7 +2,7 @@
  * bench/self-build/compare.ts
  *
  * Usage:
- *   pnpm tsx bench/self-build/compare.ts <minilm-results.json> <bge-m3-results.json>
+ *   pnpm tsx bench/self-build/compare.ts <baseline-results.json> <candidate-results.json>
  *
  * Reads two result JSON files produced by bench/self-build/run.ts (each an
  * array of BenchResultRow), loads queries-self-build.json from the same
@@ -128,8 +128,8 @@ export function buildComparison(
         }
         if (!bgeByQuery.has(spec.id)) {
             warnFn(
-                `[compare] WARNING: queryId "${spec.id}" has no rows in the BGE-M3 result file — ` +
-                `treating as all-miss. Check for infrastructure failures in the BGE-M3 bench run.\n`,
+                `[compare] WARNING: queryId "${spec.id}" has no rows in the candidate result file — ` +
+                `treating as all-miss. Check for infrastructure failures in the candidate bench run.\n`,
             );
         }
     }
@@ -167,9 +167,9 @@ function delta(a: number | null, b: number | null): string {
 
 function rankDelta(a: number | null, b: number | null): string {
     if (a === null && b === null) return 'n/a';
-    // b is null: BGE dropped the expected node out of top-K entirely.
+    // b is null: the candidate dropped the expected node out of top-K entirely.
     if (b === null) return 'DROPPED';
-    // a is null: MiniLM missed; BGE found it at rank b — 'new entry at rank b'.
+    // a is null: baseline missed; candidate found it at rank b.
     if (a === null) return `NEW@${b}`;
     const d = b - a;
     return (d <= 0 ? '' : '+') + String(d);
@@ -187,8 +187,8 @@ export function renderMarkdown(comparisons: QueryComparison[], specs: QuerySpec[
     lines.push('## Per-query comparison');
     lines.push('');
     lines.push(
-        '| ID | Category | Query | MiniLM hit | BGE-M3 hit | Change | ' +
-        'Score@1 MiniLM | Score@1 BGE-M3 | Score delta | Rank MiniLM | Rank BGE-M3 | Rank delta |',
+        '| ID | Category | Query | Baseline hit | Candidate hit | Change | ' +
+        'Score@1 baseline | Score@1 candidate | Score delta | Rank baseline | Rank candidate | Rank delta |',
     );
     lines.push(
         '|----|----------|-------|-----------|-----------|--------|' +
@@ -211,7 +211,7 @@ export function renderMarkdown(comparisons: QueryComparison[], specs: QuerySpec[
     // ── Section 2: Per-category hit-rate ─────────────────────────────────────
     lines.push('## Per-category hit-rate');
     lines.push('');
-    lines.push('| Category | MiniLM hits | BGE-M3 hits | Total | MiniLM % | BGE-M3 % | Delta |');
+    lines.push('| Category | Baseline hits | Candidate hits | Total | Baseline % | Candidate % | Delta |');
     lines.push('|----------|------------|------------|-------|----------|----------|-------|');
 
     const categories = [...new Set(comparisons.map((c) => c.category))].sort();
@@ -243,7 +243,7 @@ export function renderMarkdown(comparisons: QueryComparison[], specs: QuerySpec[
     const overallDelta = bgeTotalHits / totalQueries * 100 - mlTotalHits / totalQueries * 100;
     const overallDeltaStr = (overallDelta >= 0 ? '+' : '') + overallDelta.toFixed(0) + 'pp';
 
-    lines.push(`| Metric | MiniLM | BGE-M3 | Delta |`);
+    lines.push(`| Metric | Baseline | Candidate | Delta |`);
     lines.push(`|--------|--------|--------|-------|`);
     lines.push(`| Total queries | ${totalQueries} | ${totalQueries} | — |`);
     lines.push(`| Total hits | ${mlTotalHits} | ${bgeTotalHits} | ${bgeTotalHits - mlTotalHits >= 0 ? '+' : ''}${bgeTotalHits - mlTotalHits} |`);
@@ -261,7 +261,7 @@ async function main(): Promise<void> {
     const args = process.argv.slice(2);
     if (args.length < 2) {
         process.stderr.write(
-            'Usage: pnpm tsx bench/self-build/compare.ts <minilm-results.json> <bge-m3-results.json>\n',
+            'Usage: pnpm tsx bench/self-build/compare.ts <baseline-results.json> <candidate-results.json>\n',
         );
         process.exit(1);
     }

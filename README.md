@@ -49,7 +49,7 @@ Recent features shipped on `main` in May 2026:
 - **`feedback-coverage-v1`** *(2026-05-21)* — TypeORM `db-relation` edges now carry relation type, owner-side, inverse property, join table, and selected options; custom TypeORM relation decorators are configurable. DI emits constructor `di-uses` edges, including `@Inject(TOKEN)` when the token provider exists. RMQ decorators are a first-class RabbitMQ domain, not NATS.
 - **`nats-decorator-alias-v1`** *(2026-05-21)* — custom NATS handler decorators such as `NatsMessagePattern` can be declared via `nats.subscribeDecorators`, closing wrapper-based subscriber gaps without pretending RMQ handlers are NATS.
 - **`nats-command-resolver-v1`** *(2026-05-21)* — NATS subjects now resolve Nest command objects (`{ cmd: EAuditServiceCmd.X }`), `this.someCmd` / `this.somePattern` class properties, and base-class sender methods expanded through subclass overrides.
-- **`fe-recall-hygiene-v2`** *(2026-05-21)* — FE route ground truth no longer treats arbitrary feature folders named `pages/` as Next.js routes, and hook extraction now recognizes namespaced React hook calls such as `React.useContext(...)` / `React.useEffect(...)`.
+- **`fe-recall-hygiene-v2`** *(2026-05-21)* — FE route ground truth no longer treats arbitrary feature folders named `pages/` as Next.js routes, Pages Router roots are gated by Next/Nx markers, React Router JSX routes are extracted, and hook extraction recognizes namespaced React hook calls such as `React.useContext(...)` / `React.useEffect(...)`.
 - **`fe-diagnostics-v2`** *(2026-05-21)* — FE diagnostics classify external UI/package references separately from workspace aliases, missing local files, and real JSX component misses, so `diagnose --only=fe` surfaces actionable gaps before library noise.
 - **`semantic-hybrid-v1`** *(2026-05-21)* — semantic search fuses dense vectors with BM25 lexical ranking via Reciprocal Rank Fusion, with MCP controls for kind quotas/boosts when agents need compact, code-first context.
 - **`init-idempotency-v1`** *(2026-05-21)* — semantic strategy snippets written into `CLAUDE.md` are marker-delimited and replaced in place on re-run; generated graph output stays local and is not staged by hooks.
@@ -440,6 +440,8 @@ Exposes 15 tools — 12 structural + 3 semantic.
 - `code_search` — vector search over code nodes only (services, modules, tables, queues, endpoints, fe-components). Use for "find code that does X".
 - `docs_search` — vector search over `doc-section` nodes only (Markdown sections). Use for "find documentation about Y".
 - `semantic_search` — mixed bucket (code + docs together). Useful as a fallback when you don't know which bucket the answer lives in, but expect lower precision on mixed corpora.
+
+All three semantic MCP tools support `topK`, `minScore`, `includeVectors`, `kindQuotas`, and `kindBoosts`. `code_search` / `docs_search` intentionally hide `kinds` and `excludeKinds` because their bucket filters are wired by the tool itself.
 
 See [Semantic search](#semantic-search-optional) for setup and the recommended `both-buckets` agent pattern. For unresolved / dynamic call-sites, read `arch-graph-out/diagnostics.json` directly — there is no MCP tool for it.
 

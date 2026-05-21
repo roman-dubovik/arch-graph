@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { deriveRoute, isPageFile } from './router-patterns.js';
+import { deriveRoute, extractReactRouterRoutesFromFile, isPageFile } from './router-patterns.js';
 
 const ROOT = '/monorepo/apps/my-app';
 
@@ -123,6 +123,26 @@ describe('deriveRoute — non-page files', () => {
                 ROOT,
             ),
         ).toBeNull();
+    });
+
+    it('does not treat unconfirmed app src/pages files as Pages Router routes', () => {
+        expect(
+            deriveRoute(
+                `${ROOT}/apps/admin/src/pages/users/utils.ts`,
+                ROOT,
+                { pagesRouterRoots: new Set(['apps/site/src/pages']) },
+            ),
+        ).toBeNull();
+    });
+
+    it('treats confirmed app src/pages files as Pages Router routes', () => {
+        expect(
+            deriveRoute(
+                `${ROOT}/apps/site/src/pages/users/[id].tsx`,
+                ROOT,
+                { pagesRouterRoots: new Set(['apps/site/src/pages']) },
+            ),
+        ).toEqual({ route: '/users/:id', router: 'pages' });
     });
 });
 
@@ -270,5 +290,49 @@ describe('extractPageFromFile', () => {
         expect(page).not.toBeNull();
         expect(page!.route).toBe('/about');
         expect(page!.router).toBe('app');
+    });
+});
+
+describe('extractReactRouterRoutesFromFile', () => {
+    it('extracts literal <Route path> values', () => {
+        const project = inMemoryProject({
+            '/root/apps/admin/src/router/index.tsx': `
+                import { Route, createBrowserRouter, createRoutesFromElements } from 'react-router-dom';
+                export const router = createBrowserRouter(createRoutesFromElements(
+                    <Route path="/" element={<Layout />}>
+                        <Route path="/users/:id" element={<UserPage />} />
+                    </Route>
+                ));
+            `,
+        });
+        const sf = project.getSourceFileOrThrow('/root/apps/admin/src/router/index.tsx');
+        expect(extractReactRouterRoutesFromFile(sf).map((r) => r.pattern)).toEqual(['/', '/users/:id']);
+    });
+
+    it('resolves imported route object PATH constants', () => {
+        const project = inMemoryProject({
+            '/root/apps/admin/src/router/routes.ts': `
+                export const APP_ROUTES = {
+                    LOGIN: { PATH: '/login' },
+                    USERS: { ITEM: { PATH: '/users/:id' } },
+                } as const;
+            `,
+            '/root/apps/admin/src/router/index.tsx': `
+                import { Route } from 'react-router-dom';
+                import { APP_ROUTES } from './routes';
+                export const router = (
+                    <Route path="/">
+                        <Route path={APP_ROUTES.LOGIN.PATH as string} element={<Login />} />
+                        <Route path={APP_ROUTES.USERS.ITEM.PATH as string} element={<UserPage />} />
+                    </Route>
+                );
+            `,
+        });
+        const sf = project.getSourceFileOrThrow('/root/apps/admin/src/router/index.tsx');
+        expect(extractReactRouterRoutesFromFile(sf).map((r) => r.pattern)).toEqual([
+            '/',
+            '/login',
+            '/users/:id',
+        ]);
     });
 });

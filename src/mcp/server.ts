@@ -131,37 +131,31 @@ export const semanticSearchInputShape = {
             'When omitted, the per-model recommended threshold is used (e.g. 0.30 for minilm, 0.55 for e5-base).',
         ),
     kindQuotas: z
-        .record(nodeKindSchema, z.number().int().min(0).max(MAX_TOP_K))
+        .partialRecord(nodeKindSchema, z.number().int().min(0).max(MAX_TOP_K))
         .optional()
         .describe('Optional per-kind result caps, e.g. {"service": 3, "doc-section": 2}.'),
     kindBoosts: z
-        .record(nodeKindSchema, z.number().min(0).max(10))
+        .partialRecord(nodeKindSchema, z.number().min(0).max(10))
         .optional()
         .describe('Optional per-kind ranking multipliers, e.g. {"db-table": 1.5}.'),
+} as const;
+
+const bucketSearchInputShape = {
+    query: semanticSearchInputShape.query,
+    topK: semanticSearchInputShape.topK,
+    includeVectors: semanticSearchInputShape.includeVectors,
+    minScore: semanticSearchInputShape.minScore,
+    kindQuotas: semanticSearchInputShape.kindQuotas,
+    kindBoosts: semanticSearchInputShape.kindBoosts,
 } as const;
 
 /**
  * `code_search` exposes the same shape as `semantic_search` minus `kinds` /
  * `excludeKinds` — those are wired internally to exclude doc-section. Keeping
- * `topK` + `includeVectors` makes the agent-facing contract identical and
+ * the other ranking controls makes the agent-facing contract identical and
  * eliminates a class of "I forgot to add the kind filter" mistakes.
  */
-export const codeSearchInputShape = {
-    query: z.string().min(1).describe('Query text to search for.'),
-    topK: z
-        .number()
-        .int()
-        .min(1)
-        .max(MAX_TOP_K)
-        .optional()
-        .default(10)
-        .describe(`Number of results to return (1-${MAX_TOP_K}, default 10).`),
-    includeVectors: z
-        .boolean()
-        .optional()
-        .default(false)
-        .describe('If true, include the embedding vector for each result.'),
-} as const;
+export const codeSearchInputShape = bucketSearchInputShape;
 
 /**
  * `docs_search` — same shape as `code_search`, internally restricted to

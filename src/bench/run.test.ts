@@ -3,7 +3,7 @@
  *
  * The happy-path end-to-end test is marked .skip() because it requires:
  *   1. A local arch-graph.config.ts pointing at a repo root with source files
- *   2. The MiniLM model to be cached at ~/.cache/huggingface (or $HF_HOME)
+ *   2. The default e5-base model to be cached at ~/.cache/huggingface (or $HF_HOME)
  *
  * CI does not have the model cached and the download would time out.
  * Run locally with: pnpm test src/bench/run.test.ts --reporter=verbose
@@ -47,7 +47,7 @@ async function isModelCached(hubId: string): Promise<boolean> {
     const base = process.env['HF_HOME']
         ? join(process.env['HF_HOME'], 'hub')
         : join(homedir(), '.cache', 'huggingface', 'hub');
-    // hub directory uses '--' as separator: 'Xenova/bge-m3' → 'models--Xenova--bge-m3'
+    // hub directory uses '--' as separator: 'Xenova/multilingual-e5-base' → 'models--Xenova--multilingual-e5-base'
     const dirName = 'models--' + hubId.replace('/', '--');
     try {
         await access(join(base, dirName));
@@ -57,7 +57,7 @@ async function isModelCached(hubId: string): Promise<boolean> {
     }
 }
 
-const miniLmCached = await isModelCached(SEMANTIC_MODELS.minilm.hubId);
+const e5BaseCached = await isModelCached(SEMANTIC_MODELS['e5-base'].hubId);
 
 // ---------------------------------------------------------------------------
 // Test directory lifecycle
@@ -351,18 +351,18 @@ describe('parseModelAlias — rejects inherited Object.prototype keys', () => {
 // Integration test — skipped unless model is cached
 // ---------------------------------------------------------------------------
 
-// Skip condition: the MiniLM model must be cached in ~/.cache/huggingface/
+// Skip condition: the e5-base model must be cached in ~/.cache/huggingface/
 // (or $HF_HOME). In CI, no model is cached and the download would time out.
 // To run locally: pnpm test src/bench/run.test.ts --reporter=verbose
-describe.skipIf(!miniLmCached)('runBench — real MiniLM build (integration, requires cached model)', () => {
+describe.skipIf(!e5BaseCached)('runBench — real e5-base build (integration, requires cached model)', () => {
     it('builds a real index and returns scored rows', async () => {
-        const outPath = join(testDir, 'minilm-results.json');
+        const outPath = join(testDir, 'e5-base-results.json');
         const queriesPath = new URL('../../bench/self-build/queries-self-build.json', import.meta.url);
         const queriesRaw = await readFile(new URL(queriesPath).pathname, 'utf8');
         const queries: QuerySpec[] = JSON.parse(queriesRaw);
 
         const rows = await runBench({
-            modelAlias: 'minilm',
+            modelAlias: 'e5-base',
             outResultPath: outPath,
             configPath: './arch-graph.config.ts',
             queries: queries.slice(0, 3), // Only first 3 to keep the test fast

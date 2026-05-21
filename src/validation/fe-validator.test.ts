@@ -6,7 +6,7 @@
  * enumerateFeGroundTruth against the fe-sample fixture directory.
  */
 
-import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -261,6 +261,64 @@ describe('enumerateFeGroundTruth — fe-sample fixtures', () => {
         // app/users/[id]/page.tsx → /users/:id
         const appRoutes = routes.filter((r) => r.file.includes('/app/'));
         expect(appRoutes.length).toBeGreaterThan(0);
+    });
+
+    it('does not count webpack app src/pages helper files as Next route GT', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 'ag-fe-webpack-'));
+        try {
+            await mkdir(join(dir, 'apps/admin/src/pages/users'), { recursive: true });
+            await writeFile(
+                join(dir, 'apps/admin/project.json'),
+                JSON.stringify({ targets: { build: { executor: '@nx/webpack:webpack' } } }),
+                'utf8',
+            );
+            await writeFile(join(dir, 'apps/admin/src/pages/users/utils.ts'), 'export const x = 1;\n', 'utf8');
+
+            const gt = await enumerateFeGroundTruth({ id: 'tmp', root: dir, appsGlob: 'apps/*' });
+            expect(gt.filter((g) => g.role === 'route')).toHaveLength(0);
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+        }
+    });
+
+    it('counts react-router-dom JSX routes as route GT', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 'ag-fe-react-router-'));
+        try {
+            await mkdir(join(dir, 'apps/admin/src/router'), { recursive: true });
+            await writeFile(
+                join(dir, 'apps/admin/project.json'),
+                JSON.stringify({ targets: { build: { executor: '@nx/webpack:webpack' } } }),
+                'utf8',
+            );
+            await writeFile(
+                join(dir, 'apps/admin/src/router/routes.ts'),
+                `export const APP_ROUTES = { LOGIN: { PATH: '/login' }, USERS: { ITEM: { PATH: '/users/:id' } } } as const;\n`,
+                'utf8',
+            );
+            await writeFile(
+                join(dir, 'apps/admin/src/router/index.tsx'),
+                `
+                    import { Route } from 'react-router-dom';
+                    import { APP_ROUTES } from './routes';
+                    export const router = (
+                        <Route path="/">
+                            <Route path={APP_ROUTES.LOGIN.PATH as string} element={<Login />} />
+                            <Route path={APP_ROUTES.USERS.ITEM.PATH as string} element={<UserPage />} />
+                        </Route>
+                    );
+                `,
+                'utf8',
+            );
+
+            const gt = await enumerateFeGroundTruth({ id: 'tmp', root: dir, appsGlob: 'apps/*' });
+            expect(gt.filter((g) => g.role === 'route').map((g) => g.matchedText).sort()).toEqual([
+                '/',
+                '/login',
+                '/users/:id',
+            ]);
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+        }
     });
 
     it('works with libsGlob set', async () => {

@@ -121,7 +121,7 @@ export function makeEmbedder(alias: SemanticModelAlias): Embedder {
 }
 
 /**
- * Embed a batch of texts using the default MiniLM model.
+ * Embed a batch of texts using the legacy MiniLM model.
  * Returns one float32 vector per input string (length 384).
  *
  * @deprecated Prefer `makeEmbedder('minilm').embed(texts)` for explicit model selection.
@@ -129,7 +129,7 @@ export function makeEmbedder(alias: SemanticModelAlias): Embedder {
 export const embed: EmbedFn = (texts: string[]) => makeEmbedder('minilm').embed(texts);
 
 /**
- * Embed a single text string using the default MiniLM model.
+ * Embed a single text string using the legacy MiniLM model.
  * Returns a float32 vector of length 384.
  *
  * @deprecated Prefer `makeEmbedder('minilm').embedOne(text)`.

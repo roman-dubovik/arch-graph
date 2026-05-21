@@ -14,10 +14,15 @@
 import fg from 'fast-glob';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { Project, ts } from 'ts-morph';
 
 import type { ArchGraphConfig } from '../core/config.js';
 import type { FeExtractResult } from '../extractors/fe/types.js';
-import { deriveRoute } from '../extractors/fe/router-patterns.js';
+import {
+    deriveRoute,
+    discoverNextPagesRouterRoots,
+    extractReactRouterRoutesFromFile,
+} from '../extractors/fe/router-patterns.js';
 
 // ---------------------------------------------------------------------------
 // Ground-truth entry shapes
@@ -87,6 +92,7 @@ const JSX_RE = /<[A-Z][A-Za-z]*[\s/>]|\/>/;
 export async function enumerateFeGroundTruth(cfg: ArchGraphConfig): Promise<FeGroundTruthEntry[]> {
     const root = resolve(cfg.root);
     const out: FeGroundTruthEntry[] = [];
+    const pagesRouterRoots = await discoverNextPagesRouterRoots(root);
 
     const files = await fg(
         [
@@ -117,15 +123,33 @@ export async function enumerateFeGroundTruth(cfg: ArchGraphConfig): Promise<FeGr
         },
     );
 
+    const fileContents = new Map<string, string>();
     for (const file of files) {
-        let content: string;
         try {
-            content = await readFile(file, 'utf8');
+            fileContents.set(file, await readFile(file, 'utf8'));
         } catch (err) /* v8 ignore next 4 */ {
             const e = err as NodeJS.ErrnoException;
             if (e.code === 'ENOENT') continue;
             throw new Error(`fe GT read failed for ${file}: ${e.code ?? e.message}`, { cause: err });
         }
+    }
+
+    const project = new Project({
+        useInMemoryFileSystem: true,
+        compilerOptions: {
+            target: 99,
+            module: 99,
+            moduleResolution: 100,
+            strict: false,
+            noEmit: true,
+            jsx: ts.JsxEmit.React,
+        },
+    });
+    for (const [file, content] of fileContents) {
+        project.createSourceFile(file, content);
+    }
+
+    for (const [file, content] of fileContents) {
 
         const isFE = file.endsWith('.tsx') || file.endsWith('.jsx');
 
@@ -145,9 +169,15 @@ export async function enumerateFeGroundTruth(cfg: ArchGraphConfig): Promise<FeGr
         }
 
         // ---- Route GT (page files) ----
-        const routeResult = deriveRoute(file, root);
+        const routeResult = deriveRoute(file, root, { pagesRouterRoots });
         if (routeResult) {
             out.push({ role: 'route', file, matchedText: routeResult.route });
+        }
+        const sf = project.getSourceFile(file);
+        if (sf) {
+            for (const route of extractReactRouterRoutesFromFile(sf)) {
+                out.push({ role: 'route', file, matchedText: route.pattern });
+            }
         }
     }
 

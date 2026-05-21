@@ -175,7 +175,7 @@ Status: implemented in `749b940`.
 
 ## Block 5: Semantic Retrieval Quality
 
-Status: implemented baseline in `749b940`.
+Status: closed.
 
 ### What changed
 
@@ -194,8 +194,16 @@ Status: implemented baseline in `749b940`.
 ### Follow-up Status
 
 - Implemented: per-kind quota/boost controls in semantic search and MCP semantic handler.
-- Remaining: evaluate recall impact on the comparison benchmark.
-- Remaining: decide whether `code_search` / `docs_search` need their own preset quotas beyond caller-supplied `kindQuotas`.
+- Implemented: `code_search` and `docs_search` expose the same ranking controls
+  as `semantic_search` (`minScore`, `kindQuotas`, `kindBoosts`) while still
+  hiding `kinds` / `excludeKinds`; bucket filters remain factory-owned.
+- Evaluated on the 2026-05-21 three-project benchmark with `e5-base`:
+  `both-buckets` and `fallback` both reached 76/108 HITs (70.4%); `fallback`
+  used fewer calls (141 vs 216). `per-category` reached 69/108 (63.9%).
+- Decision: do not add default preset quotas for `code_search` / `docs_search`
+  yet. The current misses are dominated by extractor coverage, FE validation
+  ground-truth noise, and query-suite labeling, not by kind mix inside a bucket.
+  Keep caller-supplied `kindQuotas` / `kindBoosts` for targeted investigations.
 
 ## Block 5.5: Init / CLAUDE.md Snippet Hygiene
 
@@ -219,8 +227,8 @@ place to write instructions without mutating project memory. When appending to
 
 ## Block 5.6: FE Diagnose And Recall Hygiene
 
-Status: implemented in `17007f8`; route/hook recall hygiene and diagnostics
-noise classification extended after target-monorepo validation feedback.
+Status: closed; route/hook recall hygiene and diagnostics noise classification
+extended after target-monorepo and Beribuy validation feedback.
 
 ### What changed
 
@@ -233,6 +241,14 @@ noise classification extended after target-monorepo validation feedback.
 - Pages Router detection now treats `pages/` as a Next.js route root only in
   expected project/package positions. Feature folders such as
   `components/**/pages/**` are not counted as route ground truth.
+- Pages Router roots under `apps/*/src/pages` / `packages/*/src/pages` are now
+  gated by Next.js markers (`next.config.*`, `next` dependency, or Nx Next
+  executor). Webpack/Vite/React Router apps with feature folders named
+  `src/pages` no longer inflate route ground truth with `utils.ts`,
+  `schema.ts`, `types.ts`, `hooks.ts`, or `consts.ts`.
+- React Router JSX routes are extracted from `react-router-dom` `<Route path>`
+  declarations, including paths stored in imported object constants such as
+  `APP_ROUTES.USERS.ITEM.PATH`.
 - Hook extraction now recognizes namespaced React hook calls such as
   `React.useContext(...)` and `React.useEffect(...)`, closing context-wrapper
   custom hook misses.

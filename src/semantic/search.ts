@@ -134,8 +134,8 @@ export interface SemanticSearchOpts {
      *
      * Required: the alias controls which model the embedder must match, so
      * callers must pass it explicitly.  Production callers resolve it from
-     * config (or use the `'minilm'` literal as a named default); omitting it
-     * silently mismatches a bge-m3 index with minilm validation.
+     * config (or the shared defaultModelAlias); omitting it silently mismatches
+     * indexes built with a non-default model.
      */
     modelAlias: SemanticModelAlias;
     /** Number of results to return.  Defaults to {@link DEFAULT_TOP_K}.  Capped at {@link MAX_TOP_K}. */

@@ -8,21 +8,22 @@ and verify these numbers.
 
 ---
 
-## Model comparison (MiniLM vs BGE-M3)
+## Model comparison (MiniLM vs e5-base)
 
 Two scripts let you benchmark a different embedding model and compare results:
 
 ### Run the bench for a given model
 
 ```bash
-# Build graph + semantic index, run all 12 queries, write results JSON
+# Build graph + semantic index, run all 12 queries, write results JSON.
+# e5-base is the default when --model is omitted.
+pnpm tsx bench/self-build/run.ts --out bench/self-build/results/e5-base.json
 pnpm tsx bench/self-build/run.ts --model minilm --out bench/self-build/results/minilm.json
-pnpm tsx bench/self-build/run.ts --model bge-m3 --out bench/self-build/results/bge-m3.json
 ```
 
-`--model` accepts any alias from the SEMANTIC_MODELS registry (`minilm`, `bge-m3`).
+`--model` accepts any alias from the SEMANTIC_MODELS registry (`e5-base`, `minilm`).
 `--out` is the path for the flat JSON result array.
-First run for BGE-M3 downloads ~500 MB; subsequent runs use the local cache.
+First run for e5-base downloads ~280 MB; subsequent runs use the local cache.
 
 ### Compare two result files
 
@@ -30,7 +31,7 @@ First run for BGE-M3 downloads ~500 MB; subsequent runs use the local cache.
 # Emit markdown side-by-side comparison to stdout
 pnpm tsx bench/self-build/compare.ts \
   bench/self-build/results/minilm.json \
-  bench/self-build/results/bge-m3.json
+  bench/self-build/results/e5-base.json
 ```
 
 The output has three sections:
@@ -43,11 +44,11 @@ The output has three sections:
 ```bash
 # 1. Build both models
 pnpm tsx bench/self-build/run.ts --model minilm --out /tmp/minilm.json
-pnpm tsx bench/self-build/run.ts --model bge-m3 --out /tmp/bge-m3.json
+pnpm tsx bench/self-build/run.ts --model e5-base --out /tmp/e5-base.json
 
 # 2. Compare and save report
-pnpm tsx bench/self-build/compare.ts /tmp/minilm.json /tmp/bge-m3.json \
-  > docs/plans/bge-m3-migration-report.md
+pnpm tsx bench/self-build/compare.ts /tmp/minilm.json /tmp/e5-base.json \
+  > /tmp/e5-base-vs-minilm-report.md
 ```
 
 ---

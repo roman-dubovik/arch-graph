@@ -186,6 +186,29 @@ describe('extractFe — pages and routes', () => {
         const result = await extractFe(minimalCfg('/root'), project);
         expect(result.routes).toHaveLength(2);
     });
+
+    it('extracts react-router-dom JSX routes', async () => {
+        const project = inMemoryProject({
+            '/root/apps/admin/src/router/routes.ts': `
+                export const APP_ROUTES = {
+                    LOGIN: { PATH: '/login' },
+                    USERS: { ITEM: { PATH: '/users/:id' } },
+                } as const;
+            `,
+            '/root/apps/admin/src/router/index.tsx': `
+                import { Route } from 'react-router-dom';
+                import { APP_ROUTES } from './routes';
+                export const router = (
+                    <Route path="/">
+                        <Route path={APP_ROUTES.LOGIN.PATH as string} element={<Login />} />
+                        <Route path={APP_ROUTES.USERS.ITEM.PATH as string} element={<UserPage />} />
+                    </Route>
+                );
+            `,
+        });
+        const result = await extractFe(minimalCfg('/root'), project);
+        expect(result.routes.map((r) => r.pattern).sort()).toEqual(['/', '/login', '/users/:id']);
+    });
 });
 
 describe('extractFe — imports', () => {

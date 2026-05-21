@@ -19,8 +19,8 @@
  * dedicated temp directory so the bench does not pollute arch-graph-out/.
  *
  * End-to-end tests for this file may be marked .skip() when the chosen model
- * is not cached locally — the model download (~135 MB for minilm, ~500 MB for
- * bge-m3) would time out in CI. See src/bench/run.test.ts for the .skip()
+ * is not cached locally — the model download (~280 MB for e5-base, ~135 MB for
+ * minilm) would time out in CI. See src/bench/run.test.ts for the .skip()
  * condition and mock-based unit tests.
  */
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -35,7 +35,7 @@ import { makeEmbedder } from '../../src/semantic/embedder.js';
 import { semanticSearch } from '../../src/semantic/search.js';
 import { buildSemanticIndexFromArgs } from '../../src/cli/semantic-commands.js';
 import type { SemanticModelAlias } from '../../src/semantic/types.js';
-import { SEMANTIC_MODELS } from '../../src/semantic/types.js';
+import { defaultModelAlias, SEMANTIC_MODELS } from '../../src/semantic/types.js';
 import type { BenchResultRow, QuerySpec } from './compare.js';
 
 // ---------------------------------------------------------------------------
@@ -68,7 +68,7 @@ export function parseModelAlias(raw: string): SemanticModelAlias {
 
 function parseArgs(): RunArgs {
     const argv = process.argv.slice(2);
-    let model: SemanticModelAlias = 'minilm';
+    let model: SemanticModelAlias = defaultModelAlias;
     let out = '';
     let config = './arch-graph.config.ts';
 

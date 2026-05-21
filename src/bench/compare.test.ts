@@ -183,12 +183,12 @@ describe('buildComparison', () => {
         const q2 = result.find((c) => c.queryId === 'Q2')!;
 
         // Q1: MiniLM has ROW_HIT (score 0.55, doc-section, label matches) → HIT
-        //     BGE has 'Build pipeline' label which does not match 'Semantic search'/'builder' → MISS
+        //     candidate has 'Build pipeline' label which does not match 'Semantic search'/'builder' → MISS
         expect(q1.minilmHit).toBe(true);
         expect(q1.bgeHit).toBe(false);
 
         // Q2: MiniLM has score 0.30 < 0.40 minScore → MISS
-        //     BGE has 'Strict mode behavior' label matches 'strict' → HIT
+        //     candidate has 'Strict mode behavior' label matches 'strict' → HIT
         expect(q2.minilmHit).toBe(false);
         expect(q2.bgeHit).toBe(true);
     });
@@ -208,7 +208,7 @@ describe('buildComparison', () => {
         const warnings: string[] = [];
         const warnFn = (msg: string) => warnings.push(msg);
 
-        // MiniLM has no Q1 rows; BGE has no Q2 rows.
+        // Baseline has no Q1 rows; candidate has no Q2 rows.
         buildComparison(
             [],  // no MiniLM rows at all
             [{ queryId: 'Q1', nodeId: 'n', kind: 'doc-section', label: 'x', score: 0.5, snippet: '' }],
@@ -218,7 +218,7 @@ describe('buildComparison', () => {
 
         // Expect a warning for Q1 (missing from MiniLM) and Q2 (missing from both).
         expect(warnings.some((w) => w.includes('"Q1"') && w.includes('MiniLM'))).toBe(true);
-        expect(warnings.some((w) => w.includes('"Q2"') && w.includes('BGE-M3'))).toBe(true);
+        expect(warnings.some((w) => w.includes('"Q2"') && w.includes('candidate'))).toBe(true);
         expect(warnings.some((w) => w.includes('"Q2"') && w.includes('MiniLM'))).toBe(true);
     });
 
@@ -226,7 +226,7 @@ describe('buildComparison', () => {
     // error for Q2). buildComparison must still produce an entry for every spec,
     // treating missing queryIds as empty rows (all-miss) without throwing.
     it('P1-7: mismatched queryId sets — spec IDs absent from one result file produce all-miss entries', () => {
-        // minilmRows only covers Q1; bgeRows only covers Q2.
+        // baseline rows only cover Q1; candidate rows only cover Q2.
         const onlyQ1Rows: BenchResultRow[] = [ROW_HIT];
         const onlyQ2Rows: BenchResultRow[] = [
             { queryId: 'Q2', nodeId: 'n-q2', kind: 'doc-section', label: 'Strict mode behavior', score: 0.50, snippet: '' },
@@ -236,13 +236,13 @@ describe('buildComparison', () => {
         expect(result).toHaveLength(2);
 
         const q1 = result.find((c) => c.queryId === 'Q1')!;
-        // MiniLM has Q1 → should HIT; BGE has no Q1 rows → miss
+        // Baseline has Q1 → should HIT; candidate has no Q1 rows → miss
         expect(q1.minilmHit).toBe(true);
         expect(q1.bgeHit).toBe(false);
         expect(q1.bgeScore1).toBeNull();
 
         const q2 = result.find((c) => c.queryId === 'Q2')!;
-        // MiniLM has no Q2 rows → miss; BGE has Q2 → HIT (score 0.50 > minScore 0.40)
+        // Baseline has no Q2 rows → miss; candidate has Q2 → HIT (score 0.50 > minScore 0.40)
         expect(q2.minilmHit).toBe(false);
         expect(q2.bgeHit).toBe(true);
         expect(q2.minilmScore1).toBeNull();
@@ -304,9 +304,9 @@ describe('renderMarkdown', () => {
 
     it('shows correct per-category hit-rates', () => {
         const md = renderMarkdown(comparisons, specs);
-        // A_find: MiniLM 1/1 (100%), BGE 0/1 (0%), delta -100pp
+        // A_find: baseline 1/1 (100%), candidate 0/1 (0%), delta -100pp
         expect(md).toContain('| A_find | 1/1 | 0/1 | 1 | 100% | 0% | -100pp |');
-        // D_docs: MiniLM 0/1 (0%), BGE 1/1 (100%), delta +100pp
+        // D_docs: baseline 0/1 (0%), candidate 1/1 (100%), delta +100pp
         expect(md).toContain('| D_docs | 0/1 | 1/1 | 1 | 0% | 100% | +100pp |');
     });
 
@@ -322,12 +322,12 @@ describe('renderMarkdown', () => {
         expect(md).toContain('+0.050');
     });
 
-    it('shows n/a for null BGE rank and DROPPED for null rank-delta (BGE rank on Q1)', () => {
+    it('shows n/a for null candidate rank and DROPPED for null rank-delta (candidate rank on Q1)', () => {
         const md = renderMarkdown(comparisons, specs);
-        // Q1: BGE rank is null → "n/a" in Rank BGE-M3 column; rank delta → DROPPED
+        // Q1: candidate rank is null → "n/a" in Rank candidate column; rank delta → DROPPED
         const q1Line = md.split('\n').find((l) => l.startsWith('| Q1 |'));
         expect(q1Line).toBeDefined();
-        expect(q1Line).toContain('n/a');    // Rank BGE-M3 column
+        expect(q1Line).toContain('n/a');    // Rank candidate column
         expect(q1Line).toContain('DROPPED'); // Rank delta column
     });
 
@@ -339,8 +339,8 @@ describe('renderMarkdown', () => {
         const expected =
             '## Per-query comparison\n' +
             '\n' +
-            '| ID | Category | Query | MiniLM hit | BGE-M3 hit | Change | ' +
-            'Score@1 MiniLM | Score@1 BGE-M3 | Score delta | Rank MiniLM | Rank BGE-M3 | Rank delta |\n' +
+            '| ID | Category | Query | Baseline hit | Candidate hit | Change | ' +
+            'Score@1 baseline | Score@1 candidate | Score delta | Rank baseline | Rank candidate | Rank delta |\n' +
             '|----|----------|-------|-----------|-----------|--------|' +
             '---------------|---------------|-------------|------------|------------|------------|\n' +
             '| Q1 | A_find | where is the semantic builder | HIT | MISS | MISS<-HIT | 0.550 | 0.600 | +0.050 | 1 | n/a | DROPPED |\n' +
@@ -348,14 +348,14 @@ describe('renderMarkdown', () => {
             '\n' +
             '## Per-category hit-rate\n' +
             '\n' +
-            '| Category | MiniLM hits | BGE-M3 hits | Total | MiniLM % | BGE-M3 % | Delta |\n' +
+            '| Category | Baseline hits | Candidate hits | Total | Baseline % | Candidate % | Delta |\n' +
             '|----------|------------|------------|-------|----------|----------|-------|\n' +
             '| A_find | 1/1 | 0/1 | 1 | 100% | 0% | -100pp |\n' +
             '| D_docs | 0/1 | 1/1 | 1 | 0% | 100% | +100pp |\n' +
             '\n' +
             '## Overall summary\n' +
             '\n' +
-            '| Metric | MiniLM | BGE-M3 | Delta |\n' +
+            '| Metric | Baseline | Candidate | Delta |\n' +
             '|--------|--------|--------|-------|\n' +
             '| Total queries | 2 | 2 | — |\n' +
             '| Total hits | 1 | 1 | +0 |\n' +
