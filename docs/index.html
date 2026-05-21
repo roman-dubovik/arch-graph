@@ -166,7 +166,7 @@
         <p class="section-eyebrow">How it works</p>
         <h2 id="flow-title" class="section-title">Sources flow in. A typed graph grows out.</h2>
         <p class="section-lead">
-          Every <code>@Module</code>, <code>@InjectQueue</code>, <code>@MessagePattern</code>, configured <code>nats.subscribeDecorators</code> / <code>rmq.subscribeDecorators</code>, <code>@InjectRepository</code>, <code>axios.get()</code> and <code>import</code> statement gets parsed by <code>ts-morph</code>, classified by domain extractor, resolved to typed nodes and edges, and emitted as <code>graph.json</code>.
+          Every <code>@Module</code>, <code>@InjectQueue</code>, <code>@MessagePattern</code>, configured <code>nats.subscribeDecorators</code> / <code>rmq.subscribeDecorators</code>, Nest command object (<code>{ cmd: Enum.X }</code>), <code>this.someCmd</code> override, <code>@InjectRepository</code>, <code>axios.get()</code> and <code>import</code> statement gets parsed by <code>ts-morph</code>, classified by domain extractor, resolved to typed nodes and edges, and emitted as <code>graph.json</code>.
         </p>
 
         <div class="flow-stage reveal" role="img" aria-label="Animated diagram: NestJS source decorators feeding into arch-graph extractors that emit a typed graph with services, NATS subjects, DB tables, queues, modules, and providers connected by typed edges.">
@@ -772,7 +772,7 @@ arch-graph build --strict            # CI gate: exit 3 if recall drops below flo
               </span>
               <h3>NATS</h3>
             </div>
-            <p class="domain-blurb">Subject-level message bus. Standard Nest decorators plus configured aliases such as <code>NatsMessagePattern</code>; senders, handlers, request/reply pairs resolve to literal or pattern subjects.</p>
+            <p class="domain-blurb">Subject-level message bus. Standard Nest decorators plus configured aliases such as <code>NatsMessagePattern</code>; command objects like <code>{ cmd: Enum.X }</code> and inherited <code>this.someCmd</code> properties resolve to literal or pattern subjects.</p>
             <ul class="domain-edges mono">
               <li>nats-publish</li>
               <li>nats-subscribe</li>

@@ -48,6 +48,7 @@ Recent features shipped on `main` in May 2026:
 - **`bullmq-realworld-v3`** *(2026-05-19)* — Inject BullMQ default concurrency (`1`) with explicit `concurrencySource: 'bullmq-default'` marker when @Processor has no concurrency option. project-b concurrency recall: 5/8 → **8/8 (100%)**. Discriminator preserves data fidelity — extracted values carry no source marker, inferred defaults do.
 - **`feedback-coverage-v1`** *(2026-05-21)* — TypeORM `db-relation` edges now carry relation type, owner-side, inverse property, join table, and selected options; custom TypeORM relation decorators are configurable. DI emits constructor `di-uses` edges, including `@Inject(TOKEN)` when the token provider exists. RMQ decorators are a first-class RabbitMQ domain, not NATS.
 - **`nats-decorator-alias-v1`** *(2026-05-21)* — custom NATS handler decorators such as `NatsMessagePattern` can be declared via `nats.subscribeDecorators`, closing wrapper-based subscriber gaps without pretending RMQ handlers are NATS.
+- **`nats-command-resolver-v1`** *(2026-05-21)* — NATS subjects now resolve Nest command objects (`{ cmd: EAuditServiceCmd.X }`), `this.someCmd` / `this.somePattern` class properties, and base-class sender methods expanded through subclass overrides.
 - **`semantic-hybrid-v1`** *(2026-05-21)* — semantic search fuses dense vectors with BM25 lexical ranking via Reciprocal Rank Fusion, with MCP controls for kind quotas/boosts when agents need compact, code-first context.
 - **`init-idempotency-v1`** *(2026-05-21)* — semantic strategy snippets written into `CLAUDE.md` are marker-delimited and replaced in place on re-run; generated graph output stays local and is not staged by hooks.
 
@@ -199,7 +200,7 @@ Non-interactive (CI) fallback: when stdin is not a TTY, `arch-graph init` writes
 
 | Domain | Coverage (what the extractor recognises) | Per-build recall gate | Measured on our 5 reference NestJS monorepos |
 |---|---|---|---|
-| **NATS** | publish + subscribe via standard decorators, `nats.subscribeDecorators` aliases, and configurable wrapper APIs; literal + pattern + dynamic subject resolution | recall ≥ 95% (handlers + senders independent) | 100% recall, 5/5 |
+| **NATS** | publish + subscribe via standard decorators, `nats.subscribeDecorators` aliases, command objects (`{ cmd: Enum.X }`), `this.someCmd` properties including subclass overrides, and configurable wrapper APIs; literal + pattern + dynamic subject resolution | recall ≥ 95% (handlers + senders independent) | 100% recall, 5/5 |
 | **RMQ** | RabbitMQ subscribe decorators configured via `rmq.subscribeDecorators`; literal + pattern + dynamic pattern resolution | diagnostics only | opt-in, project-specific |
 | **TypeORM** | `@InjectRepository(Entity)` → `@Entity` resolution across services / libs; table relation edges from `@ManyToOne` / `@OneToMany` / `@ManyToMany` / `@OneToOne` and configured decorator aliases | recall ≥ 95% + resolveRate ≥ 95% | 100% / 100%, 5/5 |
 | **BullMQ** | `@InjectQueue` producers, `@Processor` consumers, `BullModule.registerQueue` registrations; queue meta (`concurrency`, `defaultDelay/Attempts/Backoff`, `hasRepeat`, `jobData[]`, `workerConcurrencyEnvVar`/`Fallback`); EdgeKinds `queue-fails-into` (DLQ heuristic), `queue-event-listener`, `queue-repeat` (→ cron-schedule). Modern `@nestjs/bullmq` patterns: `WorkerHost.process()` override + heritage type-args (`extends BaseWorkerHost<T,R>`) including 2-level inheritance. `--with-types` flag enables Job<T> resolution via ts-morph. `concurrencySource: 'bullmq-default'` marker distinguishes inferred-from-framework defaults from extracted values. | recall ≥ 95% per role + resolveRate ≥ 95% | 100% / 100%, 5/5; project-b real-world: jobData 8/8, concurrency 8/8 (5 code + 3 default) |
@@ -232,6 +233,15 @@ export default {
 ```
 
 Custom NATS decorators are emitted as `nats-subscribe` edges. RMQ/RabbitMQ decorators stay under `rmq.subscribeDecorators`.
+
+NATS subject resolution also handles common Nest patterns without extra config:
+
+```ts
+client.send({ cmd: EAuditServiceCmd.CREATE_ENGAGEMENT }, payload);
+this.client.send(this.getEntitiesCmd, payload);
+```
+
+When a base class sends `this.getEntitiesCmd` and concrete services override that property with static enum/string values, arch-graph expands the base sender into one resolved call site per subclass.
 
 ### TypeORM decorator aliases
 
