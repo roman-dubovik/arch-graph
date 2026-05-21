@@ -171,9 +171,11 @@ describe('writeStrategySnippet', () => {
             const content = await readFile(claudeMd, 'utf8');
             // Original content preserved
             expect(content).toContain('Existing content.');
-            // New section appended
+            // New managed section appended
+            expect(content).toContain('<!-- arch-graph:semantic-strategy:start -->');
             expect(content).toContain('## arch-graph semantic search strategy');
             expect(content).toContain('**both-buckets**');
+            expect(content).toContain('<!-- arch-graph:semantic-strategy:end -->');
         } finally {
             await rm(dir, { recursive: true, force: true });
         }
@@ -190,6 +192,53 @@ describe('writeStrategySnippet', () => {
             const content = await readFile(claudeMd, 'utf8');
             expect(content).toContain('**fallback**');
             expect(content).toContain('$0.003');
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+        }
+    });
+
+    it('append: replaces an existing managed strategy block instead of duplicating it', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 'ag-init-test-'));
+        try {
+            const claudeMd = join(dir, 'CLAUDE.md');
+            const { writeFile } = await import('node:fs/promises');
+            await writeFile(claudeMd, '# Project\n', 'utf8');
+
+            await writeStrategySnippet('both-buckets', 'append', dir);
+            await writeStrategySnippet('fallback', 'append', dir);
+
+            const content = await readFile(claudeMd, 'utf8');
+            expect(content.match(/## arch-graph semantic search strategy/g)).toHaveLength(1);
+            expect(content).toContain('**fallback**');
+            expect(content).not.toContain('**both-buckets**');
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+        }
+    });
+
+    it('append: removes legacy unmarked strategy snippets before writing the managed block', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 'ag-init-test-'));
+        try {
+            const claudeMd = join(dir, 'CLAUDE.md');
+            const { writeFile } = await import('node:fs/promises');
+            await writeFile(
+                claudeMd,
+                [
+                    '# Project',
+                    '',
+                    buildStrategySnippet('both-buckets').trim(),
+                    '',
+                    buildStrategySnippet('fallback').trim(),
+                ].join('\n'),
+                'utf8',
+            );
+
+            await writeStrategySnippet('fallback', 'append', dir);
+
+            const content = await readFile(claudeMd, 'utf8');
+            expect(content.match(/## arch-graph semantic search strategy/g)).toHaveLength(1);
+            expect(content).toContain('<!-- arch-graph:semantic-strategy:start -->');
+            expect(content).toContain('**fallback**');
         } finally {
             await rm(dir, { recursive: true, force: true });
         }

@@ -4,7 +4,8 @@
  * Ground-truth signals:
  *   - Components: files ending in .tsx/.jsx that contain recognisable React
  *     component patterns (arrow/function/class with JSX, memo/forwardRef wrappers).
- *   - Hooks: functions named use[A-Z]* in .tsx/.jsx/.ts files.
+ *   - Hooks: functions named use[A-Z]* in .tsx/.jsx/.ts files whose body calls
+ *     another hook.
  *   - Routes: Next.js page files (pages/ subtree or app/ subtree page.tsx).
  *
  * Recall floor: ≥ 90% per category (enforced by the caller / CLI gate).
@@ -68,15 +69,6 @@ const COMPONENT_RE =
 /**
  * Matches hook function definitions: function useXxx or const useXxx =
  * Also catches arrow hooks: const useXxx = (...) =>
- *
- * KNOWN DIVERGENCE from react-patterns.ts extractor:
- *   This regex counts any `use[A-Z]*` function by name alone, regardless of
- *   whether its body calls another hook. The AST extractor (react-patterns.ts)
- *   additionally requires `bodyCallsHook()` — i.e. the body must contain at
- *   least one `use[A-Z]*()` call. Bare utility functions named `useXxx` that
- *   contain no inner hook calls are counted by GT but skipped by the extractor.
- *   This is intentional: the extractor prioritises precision over recall.
- *   See: test "KNOWN DIVERGENCE — bare use* function" in react-patterns.test.ts.
  */
 const HOOK_RE =
     /(?:function|const)\s+(use[A-Z]\w*)\s*[=(]/g;
@@ -120,6 +112,7 @@ export async function enumerateFeGroundTruth(cfg: ArchGraphConfig): Promise<FeGr
                 '**/*.test.ts',
                 '**/*.test.tsx',
                 '**/*.d.ts',
+                ...(cfg.excludeGlobs ?? []).map((g) => `**${g}**`),
             ],
         },
     );
@@ -146,7 +139,9 @@ export async function enumerateFeGroundTruth(cfg: ArchGraphConfig): Promise<FeGr
         // ---- Hook GT (any file) ----
         for (const m of content.matchAll(HOOK_RE)) {
             const hookName = m[1]!;
-            out.push({ role: 'hook', file, matchedText: hookName });
+            if (hookBodyCallsHook(content, m.index ?? 0)) {
+                out.push({ role: 'hook', file, matchedText: hookName });
+            }
         }
 
         // ---- Route GT (page files) ----
@@ -157,6 +152,46 @@ export async function enumerateFeGroundTruth(cfg: ArchGraphConfig): Promise<FeGr
     }
 
     return out;
+}
+
+function hookBodyCallsHook(content: string, matchIndex: number): boolean {
+    const arrowStart = content.indexOf('=>', matchIndex);
+    const firstBrace = content.indexOf('{', matchIndex);
+    if (firstBrace >= 0 && (arrowStart < 0 || firstBrace < arrowStart)) {
+        const body = readBalancedBlock(content, firstBrace);
+        return body ? /\buse[A-Z]\w*\s*(?:<[^>]+>)?\s*\(/.test(body) : false;
+    }
+
+    if (arrowStart < 0) return false;
+    const bodyStart = content.indexOf('{', arrowStart);
+    if (bodyStart >= 0) {
+        const body = readBalancedBlock(content, bodyStart);
+        return body ? /\buse[A-Z]\w*\s*(?:<[^>]+>)?\s*\(/.test(body) : false;
+    }
+
+    const expression = content.slice(arrowStart + 2, findExpressionEnd(content, arrowStart + 2));
+    return /\buse[A-Z]\w*\s*(?:<[^>]+>)?\s*\(/.test(expression);
+}
+
+function readBalancedBlock(content: string, openBraceIndex: number): string | null {
+    let depth = 0;
+    for (let i = openBraceIndex; i < content.length; i++) {
+        const ch = content[i];
+        if (ch === '{') depth += 1;
+        if (ch === '}') {
+            depth -= 1;
+            if (depth === 0) return content.slice(openBraceIndex + 1, i);
+        }
+    }
+    return null;
+}
+
+function findExpressionEnd(content: string, start: number): number {
+    const semi = content.indexOf(';', start);
+    const newline = content.indexOf('\n', start);
+    if (semi < 0) return newline < 0 ? content.length : newline;
+    if (newline < 0) return semi;
+    return Math.min(semi, newline);
 }
 
 /**

@@ -622,20 +622,18 @@ describe('extractReactPatterns — location info', () => {
 });
 
 // ---------------------------------------------------------------------------
-// KNOWN DIVERGENCE — bare use* function (no inner hook call)
-// See JSDoc on bodyCallsHook() in react-patterns.ts and HOOK_RE in fe-validator.ts.
+// Bare use* function (no inner hook call)
+// See JSDoc on bodyCallsHook() in react-patterns.ts.
 // ---------------------------------------------------------------------------
-describe('extractReactPatterns — KNOWN DIVERGENCE: bare use* without inner hook call', () => {
-    it('does NOT count a bare useXxx function that calls no other hook (extractor is stricter than GT regex)', () => {
-        // The fe-validator HOOK_RE would count `usePureFn` as a hook because its name
-        // matches /use[A-Z]*/. The extractor requires bodyCallsHook() and skips it.
-        // This is intentional — known divergence, documented in JSDoc.
+describe('extractReactPatterns — bare use* without inner hook call', () => {
+    it('does NOT count a bare useXxx function that calls no other hook', () => {
+        // The extractor and validator both require an inner hook call so bare
+        // use-prefixed utilities do not inflate FE hook recall.
         const project = setup({
             '/app/utils.tsx': `export function usePureFn() { return 42; }`,
         });
         const sf = project.getSourceFileOrThrow('/app/utils.tsx');
         const { hooks } = extractReactPatterns(sf);
-        // KNOWN DIVERGENCE: GT regex counts this, extractor does NOT
         expect(hooks.every((h) => h.name !== 'usePureFn')).toBe(true);
     });
 });

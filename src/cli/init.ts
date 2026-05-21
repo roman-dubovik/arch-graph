@@ -8,7 +8,7 @@
 
 import { existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { appendFile, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { createInterface } from 'node:readline/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import { stdin as input, stdout as output } from 'node:process';
@@ -147,6 +147,9 @@ export function buildConfigTemplate(a: WizardAnswers): string {
         wrapperSubscribeApis: [
             { class: ${q(a.natsWrapperClass)}, methods: ${subscribeMethods} },
         ],
+        subscribeDecorators: [
+            // 'NatsMessagePattern',
+        ],
     },\n`;
         } else {
             natsBlock = `    nats: {
@@ -155,6 +158,9 @@ export function buildConfigTemplate(a: WizardAnswers): string {
         ],
         wrapperSubscribeApis: [
             // { class: 'MyNatsService', methods: ['subscribe'] },
+        ],
+        subscribeDecorators: [
+            // 'NatsMessagePattern',
         ],
     },\n`;
         }
@@ -593,6 +599,29 @@ export function buildStrategySnippet(strategy: SemanticStrategy): string {
     return `\n## arch-graph semantic search strategy\n\nThis project uses **${strategy}** for arch-graph semantic retrieval.\n\n${STRATEGY_EXPLANATIONS[strategy]}\n\nTo change: edit this file or re-run \`arch-graph init\`.\n`;
 }
 
+const STRATEGY_SNIPPET_START = '<!-- arch-graph:semantic-strategy:start -->';
+const STRATEGY_SNIPPET_END = '<!-- arch-graph:semantic-strategy:end -->';
+
+function buildMarkedStrategySnippet(strategy: SemanticStrategy): string {
+    return `${STRATEGY_SNIPPET_START}\n${buildStrategySnippet(strategy).trimStart()}\n${STRATEGY_SNIPPET_END}\n`;
+}
+
+function replaceStrategySnippet(content: string, strategy: SemanticStrategy): string {
+    const marked = buildMarkedStrategySnippet(strategy);
+    const markedRe = new RegExp(
+        `\\n*${escapeRegExp(STRATEGY_SNIPPET_START)}[\\s\\S]*?${escapeRegExp(STRATEGY_SNIPPET_END)}\\n*`,
+        'g',
+    );
+    const legacyRe =
+        /\n*## arch-graph semantic search strategy\n\nThis project uses \*\*(?:both-buckets|fallback)\*\* for arch-graph semantic retrieval\.\n\n[\s\S]*?To change: edit this file or re-run `arch-graph init`\.\n*/g;
+    const cleaned = content.replace(markedRe, '\n').replace(legacyRe, '\n').trimEnd();
+    return `${cleaned}${cleaned ? '\n\n' : ''}${marked}`;
+}
+
+function escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /**
  * Write the strategy snippet — either append to CLAUDE.md or create a
  * separate `CLAUDE.md.arch-graph-snippet.md` file.
@@ -604,12 +633,19 @@ export async function writeStrategySnippet(
     target: SnippetTarget,
     dir: string,
 ): Promise<string> {
-    const snippet = buildStrategySnippet(strategy);
     if (target === 'append') {
         const claudeMdPath = join(dir, 'CLAUDE.md');
-        await appendFile(claudeMdPath, snippet, 'utf8');
+        let existing = '';
+        try {
+            existing = await readFile(claudeMdPath, 'utf8');
+        } catch (err) {
+            const e = err as NodeJS.ErrnoException;
+            if (e.code !== 'ENOENT') throw err;
+        }
+        await writeFile(claudeMdPath, replaceStrategySnippet(existing, strategy), 'utf8');
         return claudeMdPath;
     } else {
+        const snippet = buildStrategySnippet(strategy);
         const snippetPath = join(dir, 'CLAUDE.md.arch-graph-snippet.md');
         await writeFile(snippetPath, snippet.trimStart(), 'utf8');
         return snippetPath;
@@ -634,6 +670,9 @@ export default {
         ],
         wrapperSubscribeApis: [
             // { class: 'MyNatsService', methods: ['subscribe'] },
+        ],
+        subscribeDecorators: [
+            // 'NatsMessagePattern',
         ],
     },
     rmq: {

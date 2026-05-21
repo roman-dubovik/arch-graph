@@ -76,6 +76,12 @@ export interface NatsConfig {
     wrapperPublishApis?: WrapperApi[];
     /** Project-specific wrapper classes around NATS subscribe API. */
     wrapperSubscribeApis?: WrapperApi[];
+    /**
+     * Custom decorator-based NATS subscribe markers.
+     *
+     * Example: `NatsMessagePattern` wrapping Nest's `MessagePattern(...)`.
+     */
+    subscribeDecorators?: string[];
 }
 
 export interface RmqConfig {
@@ -373,6 +379,22 @@ export function validateConfig(raw: unknown, source: string): ArchGraphConfig {
             decorators.forEach((decorator, i) => {
                 if (typeof decorator !== 'string' || decorator.length === 0) {
                     throw new Error(`config.rmq.subscribeDecorators[${i}] must be a non-empty string in ${source}`);
+                }
+            });
+        }
+    }
+    if (cfg.nats !== undefined) {
+        if (typeof cfg.nats !== 'object' || cfg.nats === null) {
+            throw new Error(`config.nats must be an object in ${source}`);
+        }
+        const decorators = (cfg.nats as Partial<NatsConfig>).subscribeDecorators;
+        if (decorators !== undefined) {
+            if (!Array.isArray(decorators)) {
+                throw new Error(`config.nats.subscribeDecorators must be an array in ${source}`);
+            }
+            decorators.forEach((decorator, i) => {
+                if (typeof decorator !== 'string' || decorator.length === 0) {
+                    throw new Error(`config.nats.subscribeDecorators[${i}] must be a non-empty string in ${source}`);
                 }
             });
         }

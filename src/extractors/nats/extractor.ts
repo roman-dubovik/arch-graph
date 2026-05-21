@@ -28,7 +28,7 @@ const STANDARD_PUBLISH: WrapperApi[] = [
     { class: 'ClientProxy', methods: ['send', 'emit'] },
     { class: 'ClientNats', methods: ['send', 'emit'] },
 ];
-const STANDARD_SUBSCRIBE_DECORATORS = new Set(['MessagePattern', 'EventPattern']);
+const STANDARD_SUBSCRIBE_DECORATORS = ['MessagePattern', 'EventPattern'] as const;
 
 // Deepest chain observed in the 5-project corpus is 4; 6 leaves headroom while
 // still terminating quickly on cycles (resolver guards both depth and visited symbols).
@@ -39,6 +39,8 @@ interface ExtractorCtx {
     project: Project;
     publishApis: WrapperApi[];
     subscribeMethodApis: WrapperApi[];
+    subscribeDecoratorNames: Set<string>;
+    customSubscribeDecoratorNames: Set<string>;
     constIndex: ConstantIndex;
 }
 
@@ -81,6 +83,11 @@ export async function extractNats(cfg: ArchGraphConfig, project: Project): Promi
         project,
         publishApis: [...STANDARD_PUBLISH, ...(cfg.nats?.wrapperPublishApis ?? [])],
         subscribeMethodApis: cfg.nats?.wrapperSubscribeApis ?? [],
+        subscribeDecoratorNames: new Set([
+            ...STANDARD_SUBSCRIBE_DECORATORS,
+            ...(cfg.nats?.subscribeDecorators ?? []),
+        ]),
+        customSubscribeDecoratorNames: new Set(cfg.nats?.subscribeDecorators ?? []),
         constIndex,
     };
 
@@ -267,7 +274,7 @@ function collectFromFile(sf: SourceFile, ctx: ExtractorCtx, out: NatsCallSite[],
             if (node.getKind() !== SyntaxKind.Decorator) return;
             const dec = node as Decorator;
             const name = decoratorName(dec);
-            if (!STANDARD_SUBSCRIBE_DECORATORS.has(name)) return;
+            if (!ctx.subscribeDecoratorNames.has(name)) return;
 
             const args = dec.getArguments();
             if (args.length === 0) return;
@@ -397,7 +404,9 @@ function pushSubscribe(
     const resolved = resolveSubject(subjectExpr, 0, ctx.constIndex);
     out.push({
         role: 'receiver',
-        edgeKind: decoratorNameStr === 'EventPattern' ? 'nats-subscribe' : 'nats-reply',
+        edgeKind: decoratorNameStr === 'EventPattern' || ctx.customSubscribeDecoratorNames.has(decoratorNameStr)
+            ? 'nats-subscribe'
+            : 'nats-reply',
         subject: resolved,
         location: locOf(dec),
         via: `@${decoratorNameStr}`,

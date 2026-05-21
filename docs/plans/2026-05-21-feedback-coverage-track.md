@@ -5,7 +5,7 @@ Status: active track
 Latest implementation commits:
 
 - `749b940 feat: cover rmq and graph feedback gaps`
-- pending: plan follow-ups for RMQ payload DTO, DI token injection, constructor diagnostics, semantic quotas/boosts
+- pending: NATS decorator aliases, FE diagnose/validator alignment, init snippet idempotency, docs refresh
 
 ## Goal
 
@@ -82,6 +82,26 @@ export default {
 
 - Implemented: payload DTO extraction for handler method parameters.
 - Remaining: add project corpus validation once at least one real RMQ repo is available.
+
+## Block 2.5: NATS Decorator Alias Coverage
+
+Status: in progress.
+
+### What changed
+
+- Added `nats.subscribeDecorators` to `ArchGraphConfig`.
+- Custom NATS decorators such as `NatsMessagePattern` are merged with the
+  built-in `MessagePattern` / `EventPattern` scan set.
+- Configured custom decorators emit `nats-subscribe` edges. Standard
+  `MessagePattern` keeps its existing `nats-reply` semantics.
+
+### Acceptance Criteria
+
+- `nats: { subscribeDecorators: ['NatsMessagePattern'] }` validates.
+- `@NatsMessagePattern('ROLL_FORWARD_ENGAGEMENT')` creates a `nats-subscribe`
+  site with `via: '@NatsMessagePattern'`.
+- Unconfigured custom decorators are ignored rather than guessed.
+- RMQ decorators remain in the RMQ domain.
 
 ## Block 3: TypeORM Relation Fidelity
 
@@ -162,6 +182,46 @@ Status: implemented baseline in `749b940`.
 - Implemented: per-kind quota/boost controls in semantic search and MCP semantic handler.
 - Remaining: evaluate recall impact on the comparison benchmark.
 - Remaining: decide whether `code_search` / `docs_search` need their own preset quotas beyond caller-supplied `kindQuotas`.
+
+## Block 5.5: Init / CLAUDE.md Snippet Hygiene
+
+Status: in progress.
+
+### What changed
+
+- Appended semantic strategy snippets are now wrapped in
+  `<!-- arch-graph:semantic-strategy:start/end -->`.
+- Re-running `arch-graph init` replaces the existing managed semantic strategy
+  block instead of appending another copy.
+- Legacy unmarked `## arch-graph semantic search strategy` sections are removed
+  before the marked block is written.
+
+### Why `CLAUDE.md.arch-graph-snippet.md` Exists
+
+The separate file is a fallback/review artifact. It is created when the user
+chooses not to append to `CLAUDE.md`, or when non-interactive init needs a safe
+place to write instructions without mutating project memory. When appending to
+`CLAUDE.md`, the project does not need the separate file.
+
+## Block 5.6: FE Diagnose And Recall Hygiene
+
+Status: in progress.
+
+### What changed
+
+- `arch-graph diagnose --only=fe` now filters diagnostic output to FE.
+- FE diagnose prints top missed routes, hooks, and components from
+  `validation.fe`.
+- FE hook ground truth now mirrors extractor semantics: a `useXxx` function is
+  counted as a hook only if its body calls another hook. Bare use-prefixed
+  utilities no longer inflate missed hook counts.
+
+### Remaining
+
+- Run `arch-graph diagnose --only=fe` on the consumer repo after updating config
+  and classify any remaining missed routes by concrete file path.
+- If route misses remain, add targeted Next.js router pattern support instead of
+  loosening route extraction blindly.
 
 ## Block 6: CodeQL / Static Analysis Strategy
 

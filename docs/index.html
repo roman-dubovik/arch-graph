@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>arch-graph — Static architecture graph for NestJS monorepos</title>
-  <meta name="description" content="arch-graph extracts NATS, BullMQ, TypeORM, NestJS DI, HTTP, TS imports, cron schedules, and Markdown docs from a NestJS monorepo into a typed graph, plus a local multilingual semantic index (Xenova/multilingual-e5-base). Deterministic structural extraction, zero LLM tokens on both build and query. 75% hit-rate on 103 queries x 3 monorepos; +54.4 pp vs graphify on Russian, +18.9 pp on English-keyword strict (2026-05-19)." />
+  <meta name="description" content="arch-graph extracts NATS, RMQ/RabbitMQ, BullMQ, TypeORM, NestJS DI, HTTP, TS imports, cron schedules, and Markdown docs from a NestJS monorepo into a typed graph, plus local multilingual semantic search with dense + BM25 hybrid ranking. Deterministic structural extraction, zero LLM tokens on both build and query." />
   <meta name="theme-color" content="#0a0a0f" />
 
   <meta property="og:type" content="website" />
@@ -166,7 +166,7 @@
         <p class="section-eyebrow">How it works</p>
         <h2 id="flow-title" class="section-title">Sources flow in. A typed graph grows out.</h2>
         <p class="section-lead">
-          Every <code>@Module</code>, <code>@InjectQueue</code>, <code>@MessagePattern</code>, <code>@InjectRepository</code>, <code>axios.get()</code> and <code>import</code> statement gets parsed by <code>ts-morph</code>, classified by domain extractor, resolved to typed nodes and edges, and emitted as <code>graph.json</code>.
+          Every <code>@Module</code>, <code>@InjectQueue</code>, <code>@MessagePattern</code>, configured <code>nats.subscribeDecorators</code> / <code>rmq.subscribeDecorators</code>, <code>@InjectRepository</code>, <code>axios.get()</code> and <code>import</code> statement gets parsed by <code>ts-morph</code>, classified by domain extractor, resolved to typed nodes and edges, and emitted as <code>graph.json</code>.
         </p>
 
         <div class="flow-stage reveal" role="img" aria-label="Animated diagram: NestJS source decorators feeding into arch-graph extractors that emit a typed graph with services, NATS subjects, DB tables, queues, modules, and providers connected by typed edges.">
@@ -369,8 +369,8 @@
           <div class="bench-card">
             <p class="bench-card-label">How it works</p>
             <p class="bench-card-row"><span class="bench-card-tool">Embedder</span><span class="bench-card-num mono" style="font-size:0.85em;white-space:nowrap;">multilingual-e5-base</span></p>
-            <p class="bench-card-row dim"><span class="bench-card-tool">Dim · Index</span><span class="bench-card-num mono" style="font-size:0.85em;white-space:nowrap;">768 · cosine</span></p>
-            <p class="bench-card-foot"><code>Xenova/multilingual-e5-base</code> via <code>transformers.js</code> with passage/query prefixes. Schema v2 with per-node <code>contentHash</code> enables incremental re-embed — typical commit reuses unchanged vectors in ~5–19 s vs ~25 min full rebuild. Persisted as <code>arch-graph-out/semantic/embeddings.jsonl</code> + <code>manifest.json</code> (model · dim · <code>graphHash</code> for stale detection).</p>
+            <p class="bench-card-row dim"><span class="bench-card-tool">Dim · Rank</span><span class="bench-card-num mono" style="font-size:0.85em;white-space:nowrap;">768 · dense+BM25</span></p>
+            <p class="bench-card-foot"><code>Xenova/multilingual-e5-base</code> via <code>transformers.js</code> with passage/query prefixes. Ranking fuses dense cosine with BM25 lexical hits via Reciprocal Rank Fusion, so exact symbols and table names stay visible. Schema v2 with per-node <code>contentHash</code> enables incremental re-embed. Persisted as <code>arch-graph-out/semantic/embeddings.jsonl</code> + <code>manifest.json</code>.</p>
           </div>
           <div class="bench-card">
             <p class="bench-card-label">Three MCP tools</p>
@@ -733,10 +733,10 @@ arch-graph init</code></pre>
               <span class="step-num">3</span>
               <h3>Stays in lockstep automatically</h3>
             </div>
-            <p>The init wizard installs a pre-commit hook by default. On every commit it does a fresh structural pass (always cheap — ts-morph only, no LLM) and an <strong>incremental semantic re-embed</strong> — only nodes whose <code>contentHash</code> changed get re-vectorised. Typical commit: ~5–19 s. Full semantic rebuild (~25 min on 30K nodes) is reserved for model swaps or schema bumps and stays a one-flag opt-in. Each build emits <code>graph.json</code>, <code>diagnostics.json</code>, <code>validation.json</code>, <code>graph.mermaid</code>, plus an advisory recall table per domain.</p>
+            <p>The init wizard installs a pre-commit hook by default. On every commit it validates a fresh structural pass (ts-morph only, no LLM) and leaves generated graph artifacts local. Full semantic indexing is explicit via <code>arch-graph semantic build</code>; the model is cached locally and incremental rebuilds reuse unchanged vectors. Each build emits <code>graph.json</code>, <code>diagnostics.json</code>, <code>validation.json</code>, <code>graph.mermaid</code>, plus an advisory recall table per domain.</p>
             <div class="code-block">
               <button class="copy-btn" type="button" aria-label="Copy build command">Copy</button>
-              <pre><code class="lang-sh">arch-graph hook install              # pre-commit: structural + incremental semantic (default)
+              <pre><code class="lang-sh">arch-graph hook install              # pre-commit: validate structural graph; artifacts stay local
 arch-graph build                     # manual structural; advisory exit 0
 arch-graph semantic build            # manual semantic; incremental by default
 arch-graph semantic build --full     # full re-embed (model swap / schema bump)
@@ -772,7 +772,7 @@ arch-graph build --strict            # CI gate: exit 3 if recall drops below flo
               </span>
               <h3>NATS</h3>
             </div>
-            <p class="domain-blurb">Subject-level message bus. Senders, handlers, request/reply pairs — resolved to literal or pattern subjects.</p>
+            <p class="domain-blurb">Subject-level message bus. Standard Nest decorators plus configured aliases such as <code>NatsMessagePattern</code>; senders, handlers, request/reply pairs resolve to literal or pattern subjects.</p>
             <ul class="domain-edges mono">
               <li>nats-publish</li>
               <li>nats-subscribe</li>
@@ -792,7 +792,7 @@ arch-graph build --strict            # CI gate: exit 3 if recall drops below flo
               </span>
               <h3>TypeORM</h3>
             </div>
-            <p class="domain-blurb">Repository → entity → table chain. Now with entity-relation edges (<code>@ManyToOne</code>, <code>@OneToMany</code>, …) joining tables to tables.</p>
+            <p class="domain-blurb">Repository → entity → table chain. Relation edges carry type, owner-side, inverse property, join-table and selected option metadata, including configured decorator aliases.</p>
             <ul class="domain-edges mono">
               <li>db-access</li>
               <li>db-read · db-write</li>
@@ -977,7 +977,7 @@ arch-graph stats</code></pre>
           <article class="cli-card reveal">
             <p class="three-ways-sub">Auto-trigger in Claude Code</p>
             <h3 class="mono">Claude Code skill</h3>
-            <p>Installs <code>~/.claude/skills/arch-graph/SKILL.md</code> + a delimited block in <code>./CLAUDE.md</code>. The skill knows when to fire — Claude consults the graph automatically on architecture questions.</p>
+            <p>Installs <code>~/.claude/skills/arch-graph/SKILL.md</code> + a delimited block in <code>./CLAUDE.md</code>. Semantic strategy instructions are written as an idempotent marked block, or to <code>CLAUDE.md.arch-graph-snippet.md</code> when you choose the separate review file. The skill knows when to fire — Claude consults the graph automatically on architecture questions.</p>
             <div class="code-block">
               <button class="copy-btn" type="button" aria-label="Copy skill install command">Copy</button>
               <pre><code class="lang-sh">arch-graph claude install --skill

@@ -6,8 +6,9 @@
  * enumerateFeGroundTruth against the fe-sample fixture directory.
  */
 
-import { readdir, readFile } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import { Project, ts } from 'ts-morph';
@@ -216,6 +217,24 @@ describe('enumerateFeGroundTruth — fe-sample fixtures', () => {
         expect(hooks.some((h) => h.matchedText === 'useCounter')).toBe(true);
     });
 
+    it('does not count bare use* utilities as hook GT entries', async () => {
+        const dir = await mkdtemp(join(tmpdir(), 'ag-fe-gt-'));
+        try {
+            await writeFile(
+                join(dir, 'usePureFn.ts'),
+                `export function usePureFn() { return 42; }\nexport const useRealHook = () => useMemo(() => 42, []);\n`,
+                'utf8',
+            );
+
+            const gt = await enumerateFeGroundTruth({ id: 'tmp', root: dir, appsGlob: '**' });
+            const hooks = gt.filter((g) => g.role === 'hook').map((g) => g.matchedText);
+            expect(hooks).toContain('useRealHook');
+            expect(hooks).not.toContain('usePureFn');
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+        }
+    });
+
     it('discovers route GT entries', async () => {
         const gt = await enumerateFeGroundTruth(cfg);
         const routes = gt.filter((g) => g.role === 'route');
@@ -248,6 +267,12 @@ describe('enumerateFeGroundTruth — fe-sample fixtures', () => {
         const cfgWithLibs = { ...cfg, libsGlob: 'src/components' };
         const gt = await enumerateFeGroundTruth(cfgWithLibs);
         expect(gt.length).toBeGreaterThan(0);
+    });
+
+    it('honors excludeGlobs so validator and extractor use the same source set', async () => {
+        const gt = await enumerateFeGroundTruth({ ...cfg, excludeGlobs: ['/src/hooks/'] });
+        const hooks = gt.filter((g) => g.role === 'hook');
+        expect(hooks.every((h) => !h.file.includes('/src/hooks/'))).toBe(true);
     });
 
     it('handles ENOENT gracefully (no crash)', async () => {
@@ -336,4 +361,3 @@ describe('extractFe → buildFeReport integration against fe-sample', () => {
         expect(report.summary.recallHooks).toBeGreaterThanOrEqual(0.9);
     });
 });
-

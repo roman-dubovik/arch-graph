@@ -29,7 +29,7 @@
 
 ## What's new (May 2026)
 
-Fifteen features shipped on `main` in May 2026:
+Recent features shipped on `main` in May 2026:
 
 - **`doc-section-v1`** — Markdown files are now indexed as first-class `doc-section` graph nodes alongside code, enabling semantic search over your project's documentation.
 - **`code-vs-docs-v1`** — Semantic search splits into `code_search` and `docs_search` MCP tools, eliminating the dilution effect where docs crowded out code results (measured: A_find recall 80% → 30% → 70%).
@@ -46,6 +46,10 @@ Fifteen features shipped on `main` in May 2026:
 - **`bullmq-realworld-v1`** *(2026-05-19)* — Real-world recall fixes for modern `@nestjs/bullmq` patterns: `WorkerHost.process()` detection (Pass 2 + heritage type-arg Pass 3 for `class extends BaseWorkerHost<T,R>`); `NumericConstIndex` resolves `parseInt(process.env.X ?? 'N', 10)` env-fallback consts at decl level; aliased `Job` import detection via type-checker. Plus 5 new BullMQ eval queries.
 - **`bullmq-realworld-v2`** *(2026-05-19)* — Closes 2-level inheritance gap in heritage type-arg detection: classes like `EmailMarketingProcessor extends BaseEmailProcessor extends BaseWorkerHost<T,R>` now resolve job-data type via recursive heritage walk. project-b real-world recall: jobData 6/8 → **8/8**.
 - **`bullmq-realworld-v3`** *(2026-05-19)* — Inject BullMQ default concurrency (`1`) with explicit `concurrencySource: 'bullmq-default'` marker when @Processor has no concurrency option. project-b concurrency recall: 5/8 → **8/8 (100%)**. Discriminator preserves data fidelity — extracted values carry no source marker, inferred defaults do.
+- **`feedback-coverage-v1`** *(2026-05-21)* — TypeORM `db-relation` edges now carry relation type, owner-side, inverse property, join table, and selected options; custom TypeORM relation decorators are configurable. DI emits constructor `di-uses` edges, including `@Inject(TOKEN)` when the token provider exists. RMQ decorators are a first-class RabbitMQ domain, not NATS.
+- **`nats-decorator-alias-v1`** *(2026-05-21)* — custom NATS handler decorators such as `NatsMessagePattern` can be declared via `nats.subscribeDecorators`, closing wrapper-based subscriber gaps without pretending RMQ handlers are NATS.
+- **`semantic-hybrid-v1`** *(2026-05-21)* — semantic search fuses dense vectors with BM25 lexical ranking via Reciprocal Rank Fusion, with MCP controls for kind quotas/boosts when agents need compact, code-first context.
+- **`init-idempotency-v1`** *(2026-05-21)* — semantic strategy snippets written into `CLAUDE.md` are marker-delimited and replaced in place on re-run; generated graph output stays local and is not staged by hooks.
 
 Plus a refreshed head-to-head benchmark on 103 fuzzy-intent queries vs graphify with **e5-base default + full LLM rebuild on graphify side + scope correction** (`bench-2026-05-19` tag): arch-graph **74.8% / 75.4%** (RU / EN strict) vs graphify **20.4% / 56.5%** — **+54.4 pp RU** (multilingual win) and **+18.9 pp EN strict** (semantic vs BFS-keyword). Prior graphify lenient numbers were inflated by `.next/` / `.worktrees/` / `tmp/` noise nodes the default graphify scan picked up; arch-graph excludes them by convention via `appsGlob`/`libsGlob`. See [`docs/comparisons/2026-05-19-arch-graph-vs-graphify-eval.md`](docs/comparisons/2026-05-19-arch-graph-vs-graphify-eval.md), [`bench/REPRODUCE.md`](bench/REPRODUCE.md) and [`bench/self-build/README.md`](bench/self-build/README.md).
 
@@ -195,18 +199,39 @@ Non-interactive (CI) fallback: when stdin is not a TTY, `arch-graph init` writes
 
 | Domain | Coverage (what the extractor recognises) | Per-build recall gate | Measured on our 5 reference NestJS monorepos |
 |---|---|---|---|
-| **NATS** | publish + subscribe via decorators and configurable wrapper APIs; literal + pattern + dynamic subject resolution | recall ≥ 95% (handlers + senders independent) | 100% recall, 5/5 |
+| **NATS** | publish + subscribe via standard decorators, `nats.subscribeDecorators` aliases, and configurable wrapper APIs; literal + pattern + dynamic subject resolution | recall ≥ 95% (handlers + senders independent) | 100% recall, 5/5 |
 | **RMQ** | RabbitMQ subscribe decorators configured via `rmq.subscribeDecorators`; literal + pattern + dynamic pattern resolution | diagnostics only | opt-in, project-specific |
 | **TypeORM** | `@InjectRepository(Entity)` → `@Entity` resolution across services / libs; table relation edges from `@ManyToOne` / `@OneToMany` / `@ManyToMany` / `@OneToOne` and configured decorator aliases | recall ≥ 95% + resolveRate ≥ 95% | 100% / 100%, 5/5 |
 | **BullMQ** | `@InjectQueue` producers, `@Processor` consumers, `BullModule.registerQueue` registrations; queue meta (`concurrency`, `defaultDelay/Attempts/Backoff`, `hasRepeat`, `jobData[]`, `workerConcurrencyEnvVar`/`Fallback`); EdgeKinds `queue-fails-into` (DLQ heuristic), `queue-event-listener`, `queue-repeat` (→ cron-schedule). Modern `@nestjs/bullmq` patterns: `WorkerHost.process()` override + heritage type-args (`extends BaseWorkerHost<T,R>`) including 2-level inheritance. `--with-types` flag enables Job<T> resolution via ts-morph. `concurrencySource: 'bullmq-default'` marker distinguishes inferred-from-framework defaults from extracted values. | recall ≥ 95% per role + resolveRate ≥ 95% | 100% / 100%, 5/5; project-b real-world: jobData 8/8, concurrency 8/8 (5 code + 3 default) |
 | **Cron schedule** | `@nestjs/schedule` decorators (`@Cron`, `@Interval`, `@Timeout`) plus dynamic `SchedulerRegistry.add*` registrations. Resolves `CronExpression.X` aliases to literal cron strings. NodeKind `cron-schedule` + EdgeKind `cron-triggers`. Per-site diagnostics (`unresolved`, `unresolvedOptions`, `filteredByReceiver`). | recall ≥ 95% per pattern | 100%, project-b: 2 sites (`daily-report-job`, `weekly-cleanup-job`) |
-| **NestJS DI** | `@Module({ imports, providers, exports, controllers })` with full reference resolution plus constructor `di-uses` provider dependency edges | recall ≥ 95% per field + resolveRate ≥ 95% | 100% / 98.7–100%, 5/5 |
+| **NestJS DI** | `@Module({ imports, providers, exports, controllers })` with full reference resolution plus constructor `di-uses` provider dependency edges, including `@Inject(TOKEN)` when the token provider is registered | recall ≥ 95% per field + resolveRate ≥ 95% | 100% / 98.7–100%, 5/5 |
 | **HTTP** | `HttpService` / `axios` / `fetch` call sites with URL classification (literal / env-ref / pattern / unresolved → internal service vs external host) | recall ≥ 95% | 100%, 5/5 |
 | **TS imports** | static + dynamic `import` sites resolved through `tsconfig.paths`; aggregated service → lib `lib-usage` edges (and optional file-level `ts-import` edges) | recall ≥ 80% (alias resolution is best-effort) | 100%, 5/5 |
 
 "Coverage" is whether an extractor exists for the domain (boolean per row). The recall gate runs on every build against ground truth derived from *your* code — that's what tells you arch-graph is matching reality on the monorepo in front of it. The last column is what we measured against our private reference suite; your numbers depend on how closely your code follows NestJS conventions and what wrapper APIs are declared in `arch-graph.config.ts`.
 
 Each domain emits structured diagnostics for everything it couldn't pin down — dynamic subjects, unresolved queue names, opaque HTTP URLs, missing entity decorators. That list is the honest gap report.
+
+### NATS decorator aliases
+
+If your project wraps NestJS NATS handlers in a custom decorator such as `NatsMessagePattern`, declare it in `arch-graph.config.ts`:
+
+```ts
+export default {
+  // ...
+  nats: {
+    subscribeDecorators: ['NatsMessagePattern'],
+    wrapperPublishApis: [
+      // { class: 'MyNatsService', methods: ['publish', 'request'] },
+    ],
+    wrapperSubscribeApis: [
+      // { class: 'MyNatsService', methods: ['subscribe'] },
+    ],
+  },
+};
+```
+
+Custom NATS decorators are emitted as `nats-subscribe` edges. RMQ/RabbitMQ decorators stay under `rmq.subscribeDecorators`.
 
 ### TypeORM decorator aliases
 
@@ -269,7 +294,7 @@ http         100.0%      n/a  ≥95.0%   ✓ ok
 imports      100.0%      n/a  ≥80.0%   ✓ ok
 ```
 
-If a domain falls below its recall floor the status shows `⚠` with tips. By default `arch-graph build` is **advisory** — it always exits 0 so it never breaks builds unexpectedly. Use `--strict` for CI hard-fail:
+If a domain falls below its recall floor the status shows `⚠` with tips. Use `arch-graph diagnose --only=fe` to print missed FE routes/hooks/components, including the source files that drove the warning. By default `arch-graph build` is **advisory** — it always exits 0 so it never breaks builds unexpectedly. Use `--strict` for CI hard-fail:
 
 ```sh
 arch-graph build               # advisory: always exit 0, prints table
@@ -299,7 +324,7 @@ During `arch-graph init`, the wizard asks you to choose an agent-side semantic s
 - **both-buckets** (default, recommended) — `code_search` and `docs_search` are called in parallel on every retrieval, giving the LLM the richest context (~$0.005/query on Sonnet, ~$0.025/query on Opus).
 - **fallback** — `code_search` runs first; `docs_search` is only called on a miss. Halves cost for cost-sensitive projects (~$0.003/query on Sonnet, ~$0.012/query on Opus). Recall is identical to `both-buckets`.
 
-The choice is persisted as a `## arch-graph semantic search strategy` section. If no `CLAUDE.md` exists (or the user declines to append), it is written to `CLAUDE.md.arch-graph-snippet.md` in the project root. If a `CLAUDE.md` is already present, the wizard asks whether to append to it or create the separate file. To change the strategy later, edit that file or re-run `arch-graph init`.
+The choice is persisted as a marker-delimited `## arch-graph semantic search strategy` section when you append to `CLAUDE.md`; re-running `arch-graph init` replaces that managed block instead of duplicating it. If no `CLAUDE.md` exists, or you choose not to touch it, the same instructions are written to `CLAUDE.md.arch-graph-snippet.md` so you can review or paste them manually. The separate file is a fallback/review artifact, not a second required config file.
 
 ## Git hook
 
@@ -359,7 +384,7 @@ The above commands answer **deterministic structural questions** — "who publis
 The semantic layer is independent and opt-in: arch-graph works identically well without it. If you enable it, the CLI and MCP server gain new tools:
 
 - **Model**: `Xenova/multilingual-e5-base` (768-dimensional, multilingual, passage/query prefixes). The model name is recorded in `manifest.json` so any external consumer (a second tool, a future agent, a federated index) can verify vector compatibility before mixing results.
-- **How it works**: each GraphNode (service, module, table, queue, **doc-section**) gets a dense vector computed from `label + kind + AST snippet` (or Markdown section text for doc-section nodes), persisted in a sidecar at `arch-graph-out/<repo>/semantic/`. Markdown files matching the `docs` include globs (including root-level `*.md` by default) are indexed automatically.
+- **How it works**: each GraphNode (service, module, table, queue, **doc-section**) gets a dense vector computed from `label + kind + AST snippet` (or Markdown section text for doc-section nodes), persisted in a sidecar at `arch-graph-out/<repo>/semantic/`. Search combines dense ranking with BM25 lexical hits using Reciprocal Rank Fusion, so exact symbols like `NatsMessagePattern` or table names do not get buried by embedding similarity alone. Markdown files matching the `docs` include globs (including root-level `*.md` by default) are indexed automatically.
 - **Quick start**: 
   ```sh
   arch-graph semantic build              # one-time: downloads model (~280 MB, cached), extracts snippets, embeds

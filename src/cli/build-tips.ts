@@ -292,7 +292,7 @@ export function tipsForFe(validation: FeValidationReport): string[] {
     if (groundTruthHooks > 0 && recallHooks < 0.9) {
         const missed = groundTruthHooks - Math.round(recallHooks * groundTruthHooks);
         tips.push(
-            `${missed} hook(s) not extracted — hooks in .ts files are scanned; check appsGlob/libsGlob coverage`,
+            `${missed} hook(s) not extracted — hooks in .ts files are scanned; check appsGlob/libsGlob coverage and diagnose missed files`,
         );
     }
 

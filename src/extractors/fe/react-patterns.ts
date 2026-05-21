@@ -39,16 +39,9 @@ function containsJsx(node: Node): boolean {
 /**
  * Returns true if the function/arrow body calls any hook (use[A-Z]*).
  *
- * KNOWN DIVERGENCE from fe-validator.ts HOOK_RE:
- *   The ground-truth regex (`HOOK_RE`) counts any function named `use[A-Z]*`
- *   regardless of whether its body calls another hook. This extractor is
- *   intentionally stricter — it only counts hooks that call at least one
- *   other hook internally, matching React's rules-of-hooks intent. This means
- *   the extractor may undercount versus GT for "bare" utility functions whose
- *   names happen to start with `use`. The divergence is expected and kept
- *   because false positives (non-hooks promoted to hook nodes) are worse than
- *   minor under-recall in the validator's ground-truth comparison.
- *   See: test "KNOWN DIVERGENCE — bare use* function" in react-patterns.test.ts.
+ * Mirrors fe-validator.ts ground truth: a `use[A-Z]*` function is treated as a
+ * hook only when the body calls at least one other hook. This avoids promoting
+ * ordinary use-prefixed utility functions to FE hook nodes.
  */
 function bodyCallsHook(node: ArrowFunction | FunctionDeclaration): boolean {
     const body = node.getBody();

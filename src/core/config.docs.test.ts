@@ -138,3 +138,33 @@ describe('validateConfig typeorm relation decorator aliases', () => {
         ).toThrow(/relationDecorators\[0\]\.mapsTo/);
     });
 });
+
+describe('validateConfig nats subscribe decorators', () => {
+    it('accepts configured NATS decorator subscribe aliases', () => {
+        expect(() =>
+            validateConfig(
+                {
+                    ...BASE_CONFIG,
+                    nats: {
+                        subscribeDecorators: ['NatsMessagePattern'],
+                    },
+                },
+                'test',
+            ),
+        ).not.toThrow();
+    });
+
+    it('rejects invalid NATS decorator subscribe aliases', () => {
+        expect(() =>
+            validateConfig(
+                {
+                    ...BASE_CONFIG,
+                    nats: {
+                        subscribeDecorators: ['NatsMessagePattern', ''],
+                    },
+                },
+                'test',
+            ),
+        ).toThrow(/nats\.subscribeDecorators\[1\]/);
+    });
+});
