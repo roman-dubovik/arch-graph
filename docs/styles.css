@@ -1169,6 +1169,10 @@ td.dim, .dim { color: var(--text-mute); }
   background: var(--bg-3);
 }
 
+.section-code-intel .feature-card:hover {
+  border-color: rgba(139, 92, 246, 0.3);
+}
+
 .feature-card::before {
   content: '';
   position: absolute;
@@ -1182,6 +1186,10 @@ td.dim, .dim { color: var(--text-mute); }
 
 .section-code-intel .feature-card::before {
   background: var(--accent);
+}
+
+.section-code-intel .feature-title {
+  color: var(--accent);
 }
 
 .feature-title {
