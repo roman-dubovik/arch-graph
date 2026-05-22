@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getBlueprint, getFileOutline, resolveSymbol } from './queries.js';
+import { getBlueprint, getFileOutline, resolveSymbol, suggestPlacement } from './queries.js';
 import type { CodeIntelIndex, CodeIntelSymbol } from './types.js';
 
 describe('code-intel queries', () => {
@@ -65,6 +65,35 @@ describe('code-intel queries', () => {
             expect(result.found).toBe(true);
             expect(result.blueprints[0].name).toBe('GoldDto');
             expect(result.blueprints[1].name).toBe('MidDto');
+        });
+    });
+
+    describe('suggestPlacement', () => {
+        it('suggests path based on domain match in existing folders', () => {
+            const index: CodeIntelIndex = {
+                ...mockIndex,
+                symbols: [
+                    { id: 'p1', kind: 'class', name: 'UsersService', fqn: 'UsersService', file: 'src/modules/users/users.service.ts', line: 1, column: 1 },
+                    { id: 'p2', kind: 'class', name: 'OrdersService', fqn: 'OrdersService', file: 'src/modules/orders/orders.service.ts', line: 1, column: 1 },
+                ]
+            };
+            const result = suggestPlacement(index, { name: 'UsersController', kind: 'class' });
+            expect(result.found).toBe(true);
+            expect(result.suggestions[0].path).toBe('src/modules/users/UsersController.ts');
+            expect(result.suggestions[0].reason).toContain("domain 'users'");
+        });
+
+        it('falls back to most common folder for the kind', () => {
+            const index: CodeIntelIndex = {
+                ...mockIndex,
+                symbols: [
+                    { id: 'p1', kind: 'dto', name: 'A', fqn: 'A', file: 'src/dto/a.ts', line: 1, column: 1 },
+                    { id: 'p2', kind: 'dto', name: 'B', fqn: 'B', file: 'src/dto/b.ts', line: 1, column: 1 },
+                ]
+            };
+            const result = suggestPlacement(index, { name: 'NewDto', kind: 'dto' });
+            expect(result.found).toBe(true);
+            expect(result.suggestions[0].path).toBe('src/dto/NewDto.ts');
         });
     });
 });

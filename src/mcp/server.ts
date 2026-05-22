@@ -43,8 +43,10 @@ import {
     explainDataFlow,
     getBlueprint,
     getFileOutline,
+    getProjectPolicies,
     impactContract,
     resolveSymbol,
+    suggestPlacement,
     traceScenario,
 } from '../code-intel/queries.js';
 
@@ -616,6 +618,27 @@ export async function startMcpServer(opts: { out: string; config?: string }): Pr
             },
         },
         async ({ kind, maxResults }) => jsonResult(getBlueprint(await loadCodeIntelFn(), { kind, maxResults })),
+    );
+
+    server.registerTool(
+        'get_project_policies',
+        {
+            description: 'Returns inferred and explicit architectural policies (e.g., placement rules, decorator pairings).',
+            inputSchema: {},
+        },
+        async () => jsonResult(getProjectPolicies(await loadCodeIntelFn())),
+    );
+
+    server.registerTool(
+        'suggest_placement',
+        {
+            description: 'Suggests the correct directory path for a new file based on its name and kind.',
+            inputSchema: {
+                name: z.string().min(1).describe('The name of the new symbol, e.g. "UsersService".'),
+                kind: z.enum(['class', 'method', 'function', 'dto', 'type', 'field', 'param']).describe('The kind of the new symbol.'),
+            },
+        },
+        async ({ name, kind }) => jsonResult(suggestPlacement(await loadCodeIntelFn(), { name, kind })),
     );
 
     server.registerTool(

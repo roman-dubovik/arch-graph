@@ -9,6 +9,7 @@ import { readCodeIntelDiagnostics, readCodeIntelIndex, writeCodeIntelDiagnostics
 import {
     explainBranch,
     explainDataFlow,
+    getBlueprint,
     getFileOutline,
     impactContract,
     resolveSymbol,
@@ -24,6 +25,8 @@ export type CodeIntelSubcommand =
     | 'impact-contract'
     | 'outline'
     | 'blueprint'
+    | 'policies'
+    | 'suggest-placement'
     | 'diagnostics';
 
 export interface CodeIntelArgs {
@@ -82,6 +85,7 @@ export function parseCodeIntelArgs(argv: string[]): CodeIntelArgs {
     if (args.sub === 'impact-contract') args.symbol = positionals[0] ?? args.symbol;
     if (args.sub === 'outline') args.file = positionals[0] ?? args.file;
     if (args.sub === 'blueprint') args.symbol = positionals[0] ?? args.symbol;
+    if (args.sub === 'suggest-placement') args.entry = positionals[0] ?? args.entry;
     if (args.sub === 'trace-scenario') args.entry = positionals.join(' ') || args.entry;
     return args;
 }
@@ -96,6 +100,13 @@ export async function runCodeIntelCommand(args: CodeIntelArgs): Promise<void> {
             return emitQuery(args, (index) => getFileOutline(index, { file: requireString(args.file, '--file') }));
         case 'blueprint':
             return emitQuery(args, (index) => getBlueprint(index, { kind: requireString(args.symbol, 'kind'), maxResults: args.maxResults }));
+        case 'policies':
+            return emitQuery(args, (index) => getProjectPolicies(index));
+        case 'suggest-placement':
+            return emitQuery(args, (index) => suggestPlacement(index, {
+                name: requireString(args.entry, 'name'),
+                kind: requireString(args.symbol, '--symbol or positional'),
+            }));
         case 'explain-flow':
             return emitQuery(args, (index) => explainDataFlow(index, {
                 target: requireString(args.target, '--target'),
@@ -204,11 +215,12 @@ function requireNumber(value: number | undefined, name: string): number {
 function codeIntelUsage(): string {
     return `unknown code-intel subcommand\n` +
         `  arch-graph code-intel build [--config <path>] [--out <dir>]\n` +
-        arch-graph code-intel resolve-symbol <name> [--out <dir>]
+        `  arch-graph code-intel resolve-symbol <name> [--out <dir>]\n` +
         arch-graph code-intel outline <file> [--out <dir>]
         arch-graph code-intel blueprint <kind> [--out <dir>]
-        arch-graph code-intel explain-flow --target Class.method --param x [--out <dir>]
-        `  arch-graph code-intel explain-branch --file path --line N [--out <dir>]\n` +
+        arch-graph code-intel policies [--out <dir>]
+        arch-graph code-intel suggest-placement <name> --symbol <kind> [--out <dir>]
+        arch-graph code-intel explain-flow --target Class.method --param x [--out <dir>]        `  arch-graph code-intel explain-branch --file path --line N [--out <dir>]\n` +
         `  arch-graph code-intel trace-scenario --entry "Class.method" [--out <dir>]\n` +
         `  arch-graph code-intel impact-contract DtoName [--field name] [--out <dir>]\n` +
         `  arch-graph code-intel diagnostics [--max-results N] [--out <dir>]\n`;

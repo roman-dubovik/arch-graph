@@ -58,6 +58,58 @@ export function getBlueprint(index: CodeIntelIndex, args: { kind: string; maxRes
     return { found: blueprints.length > 0, kind: args.kind, blueprints };
 }
 
+export function getProjectPolicies(index: CodeIntelIndex): {
+    found: boolean;
+    policies: CodeIntelPolicy[];
+} {
+    const policies = index.policies ?? [];
+    return { found: policies.length > 0, policies };
+}
+
+export function suggestPlacement(index: CodeIntelIndex, args: { name: string; kind: string }): {
+    found: boolean;
+    suggestions: Array<{ path: string; confidence: number; reason: string }>;
+} {
+    const kindSymbols = index.symbols.filter((s) => s.kind === args.kind);
+    if (kindSymbols.length === 0) return { found: false, suggestions: [] };
+
+    const placements = new Map<string, number>();
+    for (const s of kindSymbols) {
+        const dir = s.file.split('/').slice(0, -1).join('/');
+        if (dir) placements.set(dir, (placements.get(dir) ?? 0) + 1);
+    }
+
+    // Heuristic: try to match domain from name (e.g. UsersService -> users)
+    const domainMatch = args.name.match(/^([A-Z][a-z0-9]+)/);
+    const domain = domainMatch ? domainMatch[1].toLowerCase() : undefined;
+
+    const suggestions: Array<{ path: string; confidence: number; reason: string }> = [];
+    
+    if (domain) {
+        const domainDirs = Array.from(placements.keys()).filter(d => d.toLowerCase().includes(domain));
+        for (const dir of domainDirs) {
+            suggestions.push({
+                path: `${dir}/${args.name}.ts`,
+                confidence: 0.9,
+                reason: `Existing ${args.kind} symbols for domain '${domain}' are found in this directory.`
+            });
+        }
+    }
+
+    // Fallback: most common directory for this kind
+    const sortedPlacements = Array.from(placements.entries()).sort((a, b) => b[1] - a[1]);
+    if (sortedPlacements.length > 0 && suggestions.length === 0) {
+        const [dir, count] = sortedPlacements[0];
+        suggestions.push({
+            path: `${dir}/${args.name}.ts`,
+            confidence: count / kindSymbols.length,
+            reason: `Most ${args.kind} symbols (${count}) are located here.`
+        });
+    }
+
+    return { found: suggestions.length > 0, suggestions };
+}
+
 export function explainDataFlow(index: CodeIntelIndex, args: {
     target: string;
     param: string;

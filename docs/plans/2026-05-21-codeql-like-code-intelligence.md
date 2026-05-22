@@ -430,10 +430,11 @@ real-world NestJS/TypeScript projects.
 - [x] **Control Flow v2 (Completed 2026-05-22)**: Full support for switch/case, ternary operators, throw/catch blocks, and else/else-if chains with automated condition negation in `nestedIn`.
 - [x] **Data Flow v2.2 (Completed 2026-05-22)**: Enhanced source/sink classification (DB, HTTP, NATS, Env, Config) and ranked proof packets for improved LLM context.
 - [x] **Call Graph v2 (Completed 2026-05-22)**: Better DI resolution (NestJS @Inject, class props) and scenario path exploration with condition stacks.
-- [ ] **Impact v2**: Field-level DTO impact across endpoints, messages, and frontend consumers.
-- [ ] **UX & Discovery (Helpline Inspired)**:
+- [x] **Impact v2 (Completed 2026-05-22)**: Field-level DTO impact across endpoints, messages, and frontend consumers.
+- [x] **UX & Discovery (Completed 2026-05-22)**:
     - **Impact Ranking**: Deduplicate impacts on the same line by weight (e.g., `endpoint` > `type-reference`).
-    - **Structural Outline**: Add `get_file_outline` to provide a "Table of Contents" (signatures only) for files to save LLM tokens.
+    - **Structural Outline & Surgical Reads**: Added `get_file_outline` with exact `line` to `endLine` ranges. 
+        - *Benefit:* Enables LLMs to read only specific methods/classes instead of full files (e.g., 10,000 tokens ➔ 300 tokens).
     - **Fuzzy Resolution**: Support partial paths and fuzzy names in `resolve_symbol` for better agent navigation.
 - [ ] **Architectural Policies**: Integration of "Gold Standard" Blueprints and style enforcement.
 
