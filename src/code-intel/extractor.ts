@@ -1038,6 +1038,7 @@ function symbolForNode(
         file: loc.file,
         line: loc.line,
         column: loc.column,
+        endLine: endLineOf(node),
         ...withoutUndefined(extra),
     };
 }
@@ -1047,6 +1048,10 @@ function locOf(node: MorphNode, root: string): { file: string; line: number; col
     const pos = sf.getLineAndColumnAtPos(node.getStart());
     const file = sf.getFilePath().replace(root, '').replace(/^\/+/, '');
     return { file, line: pos.line, column: pos.column };
+}
+
+function endLineOf(node: MorphNode): number {
+    return node.getSourceFile().getLineAndColumnAtPos(node.getEnd()).line;
 }
 
 function signatureOf(fn: MethodDeclaration | FunctionDeclaration): string {

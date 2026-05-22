@@ -31,6 +31,7 @@ export interface CodeIntelSymbol extends SourceLoc {
     kind: CodeIntelSymbolKind;
     name: string;
     fqn: string;
+    endLine?: number;
     parentId?: string;
     ownerName?: string;
     signature?: string;

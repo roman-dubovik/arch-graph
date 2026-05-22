@@ -671,4 +671,29 @@ describe('extractCodeIntel', () => {
             }),
         );
     });
+
+    it('extracts endLine for classes and methods', () => {
+        const project = inMemoryProject({
+            '/root/app.ts': `
+                export class App {
+                    run() {
+                        const x = 1;
+                    }
+                }
+            `,
+        });
+
+        const index = extractCodeIntel(project, { root: '/root' });
+        const appClass = index.symbols.find(s => s.name === 'App');
+        const runMethod = index.symbols.find(s => s.name === 'run');
+
+        expect(appClass).toMatchObject({
+            line: 2,
+            endLine: 6
+        });
+        expect(runMethod).toMatchObject({
+            line: 3,
+            endLine: 5
+        });
+    });
 });
