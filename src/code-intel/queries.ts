@@ -46,6 +46,18 @@ export function getFileOutline(index: CodeIntelIndex, args: { file: string }): {
     return { found: symbols.length > 0, file: args.file, symbols };
 }
 
+export function getBlueprint(index: CodeIntelIndex, args: { kind: string; maxResults?: number }): {
+    found: boolean;
+    kind: string;
+    blueprints: CodeIntelSymbol[];
+} {
+    const blueprints = index.symbols
+        .filter((symbol) => symbol.kind === args.kind)
+        .sort((a, b) => (b.qualityScore ?? 0) - (a.qualityScore ?? 0))
+        .slice(0, args.maxResults ?? 3);
+    return { found: blueprints.length > 0, kind: args.kind, blueprints };
+}
+
 export function explainDataFlow(index: CodeIntelIndex, args: {
     target: string;
     param: string;

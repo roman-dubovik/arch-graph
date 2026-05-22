@@ -41,6 +41,7 @@ import { readCodeIntelIndex } from '../code-intel/io.js';
 import {
     explainBranch,
     explainDataFlow,
+    getBlueprint,
     getFileOutline,
     impactContract,
     resolveSymbol,
@@ -603,6 +604,18 @@ export async function startMcpServer(opts: { out: string; config?: string }): Pr
             inputSchema: getFileOutlineInputShape,
         },
         async ({ file }) => jsonResult(getFileOutline(await loadCodeIntelFn(), { file })),
+    );
+
+    server.registerTool(
+        'get_blueprint',
+        {
+            description: 'Returns the highest quality existing code examples (blueprints) for a given kind (e.g., dto, service).',
+            inputSchema: {
+                kind: z.enum(['class', 'method', 'function', 'dto', 'type', 'field', 'param']).describe('Symbol kind to find blueprints for.'),
+                maxResults: z.number().int().min(1).max(10).optional().default(3),
+            },
+        },
+        async ({ kind, maxResults }) => jsonResult(getBlueprint(await loadCodeIntelFn(), { kind, maxResults })),
     );
 
     server.registerTool(

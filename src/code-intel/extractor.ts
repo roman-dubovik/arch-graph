@@ -1030,6 +1030,7 @@ function symbolForNode(
     extra: Partial<CodeIntelSymbol> = {},
 ): CodeIntelSymbol {
     const loc = locOf(node, root);
+    const score = computeQualityScore(node, extra);
     return {
         id: `symbol:${fqn}`,
         kind,
@@ -1039,8 +1040,26 @@ function symbolForNode(
         line: loc.line,
         column: loc.column,
         endLine: endLineOf(node),
+        qualityScore: score,
         ...withoutUndefined(extra),
     };
+}
+
+function computeQualityScore(node: MorphNode, extra: Partial<CodeIntelSymbol>): number {
+    let score = 0;
+    // JSDoc is a primary quality indicator (+2)
+    if (extra.description && extra.description.length > 20) score += 2;
+    // Decorators indicate framework compliance (+1)
+    if (extra.decorators && extra.decorators.length > 0) score += 1;
+    // Public visibility is preferred for examples (+1)
+    if (extra.visibility === 'public') score += 1;
+    // Async methods often show more modern/complete patterns (+0.5)
+    if (extra.isAsync) score += 0.5;
+    // Large classes/methods with docs are often 'Gold' examples (+1)
+    const lineCount = (node.getSourceFile().getLineAndColumnAtPos(node.getEnd()).line -
+                     node.getSourceFile().getLineAndColumnAtPos(node.getStart()).line);
+    if (lineCount > 10 && extra.description) score += 1;
+    return score;
 }
 
 function locOf(node: MorphNode, root: string): { file: string; line: number; column: number } {

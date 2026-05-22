@@ -41,6 +41,7 @@ export interface CodeIntelSymbol extends SourceLoc {
     isAsync?: boolean;
     decorators?: string[];
     description?: string;
+    qualityScore?: number;
 }
 
 export interface CodeIntelCall extends SourceLoc {

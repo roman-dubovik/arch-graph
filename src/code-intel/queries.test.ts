@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getFileOutline, resolveSymbol } from './queries.js';
+import { getBlueprint, getFileOutline, resolveSymbol } from './queries.js';
 import type { CodeIntelIndex, CodeIntelSymbol } from './types.js';
 
 describe('code-intel queries', () => {
@@ -48,6 +48,23 @@ describe('code-intel queries', () => {
         it('handles missing files', () => {
             const result = getFileOutline(mockIndex, { file: 'non-existent.ts' });
             expect(result.found).toBe(false);
+        });
+    });
+
+    describe('getBlueprint', () => {
+        it('returns highest quality symbols first', () => {
+            const index: CodeIntelIndex = {
+                ...mockIndex,
+                symbols: [
+                    { id: 'b1', kind: 'dto', name: 'BadDto', fqn: 'BadDto', file: 'a.ts', line: 1, column: 1, qualityScore: 0 },
+                    { id: 'b2', kind: 'dto', name: 'GoldDto', fqn: 'GoldDto', file: 'b.ts', line: 1, column: 1, qualityScore: 10 },
+                    { id: 'b3', kind: 'dto', name: 'MidDto', fqn: 'MidDto', file: 'c.ts', line: 1, column: 1, qualityScore: 5 },
+                ]
+            };
+            const result = getBlueprint(index, { kind: 'dto' });
+            expect(result.found).toBe(true);
+            expect(result.blueprints[0].name).toBe('GoldDto');
+            expect(result.blueprints[1].name).toBe('MidDto');
         });
     });
 });
