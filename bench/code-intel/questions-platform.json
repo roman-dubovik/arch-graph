@@ -1,0 +1,26 @@
+[
+  {
+    "id": "PLAT-CI1",
+    "category": "call-graph",
+    "question": "Какая компактная цепочка вызовов строится для PatientsController.getSummary?",
+    "tool": "trace_scenario",
+    "cli": "arch-graph code-intel trace-scenario --entry PatientsController.getSummary --max-depth 2",
+    "expectedContains": ["PatientsController.getSummary", "PatientsController.findClientIds", "patients.controller.ts"]
+  },
+  {
+    "id": "PLAT-CI2",
+    "category": "impact",
+    "question": "Какие места затрагивает контракт DashboardQueryDto?",
+    "tool": "impact_contract",
+    "cli": "arch-graph code-intel impact-contract DashboardQueryDto --max-results 5",
+    "expectedContains": ["DashboardQueryDto", "dashboard.controller.ts", "\"kind\": \"endpoint\"", "query.period"]
+  },
+  {
+    "id": "PLAT-CI3",
+    "category": "symbol",
+    "question": "Где объявлен TbankWebhookController и какие методы он содержит?",
+    "tool": "resolve_symbol",
+    "cli": "arch-graph code-intel resolve-symbol TbankWebhookController",
+    "expectedContains": ["TbankWebhookController", "handleNotification", "TbankNotificationDto", "tbank-webhook.controller.ts"]
+  }
+]

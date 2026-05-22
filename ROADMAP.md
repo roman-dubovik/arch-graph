@@ -110,11 +110,31 @@ A handful of project-c eval queries reference domains that don't exist in that c
 - ~~**Extended BullMQ**~~ — **SHIPPED** (5 tags: `bullmq-extras-v1`, `bullmq-types-v1`, `bullmq-realworld-v1/v2/v3`, all 2026-05-19). Phase 1 + Phase 2 + cross-enrichment with cron-schedule, plus 3 rounds of real-world recall hardening on project-b (3338-file NestJS+BullMQ monorepo). Final project-b recall: jobData **8/8 (100%)**, queue.concurrency **8/8 (100%)** — 5 from code + 3 from `bullmq-default` injection with `concurrencySource` marker. Design: [`docs/plans/v_2026-05-19-ui-bench-cron-bullmq-design.md`](./docs/plans/v_2026-05-19-ui-bench-cron-bullmq-design.md).
 - ⚪ GraphQL endpoints — by request, ~1-2 days.
 
-### ⚪ 6. Broader eval corpus
+### 6. Code-Intel Enhancements (LLM Context Synergy)
+
+Following the implementation of `code-intel` (Phase 1), the next evolution focuses on minimizing LLM context windows and hallucinations by moving probabilistic tasks into deterministic Node.js extractors.
+
+- **Test-Awareness (Test Coverage as Context)**: Integrate with LCOV/Jest reports to add `coverage: { line: X%, branch: Y% }` and `tested_by` links to graph nodes. Enables LLMs to assess refactoring risk deterministically during `impact_contract` queries.
+- **Static Route Resolver**: Perform deep prefix concatenation (e.g., `@Controller('api/v1')` + `@Get('users/:id')` -> `GET /api/v1/users/:id`). Expose via a `resolve_url` tool so agents can map frontend API calls to backend handlers instantly without guessing.
+- **DB Schema Intelligence**: Translate ORM decorators (e.g., `@Column({ unique: true, index: true })`) into structured "proof packet" flags (`isIndexed: true`). Prevents LLMs from missing critical DB constraints hidden in large code snippets when writing queries.
+- **Exception Flow (Throw Graph)**: Parse `throw new XException()` and `try-catch` blocks to build an exception graph. A `trace_exceptions` tool will allow LLMs to instantly see all possible exceptions bubbling up from a method chain, perfect for writing robust error handlers.
+- **Architectural Metrics (Code Smells Index)**: Calculate Cyclomatic Complexity and Fan-out per method. Expose a tool for the LLM to query "refactoring candidates" instantly based on hard metrics rather than expensive text-based scanning.
+- **Signatures Snapshot**: Formalize precise mapping of method signatures and types (including JSDoc descriptions) via `resolve_symbol` to 100% prevent argument-order or typing hallucinations when an LLM writes cross-service calls.
+
+### 7. Architectural Policies & Blueprints (The "Style Guardian")
+
+Transform LLM agents from "visiting contractors" into "local tech leads" by explicitly codifying conventions and implicit rules.
+
+- **"Gold Standard" Blueprints**: Automatically identify the highest-quality examples of each entity type (e.g., best-documented Service, most complete DTO) and expose them via a `get_blueprint` tool.
+- **Inferred & Explicit Policies**: Mine the graph for project-wide habits (e.g., "98% of `@ManyToOne` use `@CustomFK`", "Local interfaces are forbidden") and inject these rules into every LLM prompt to prevent stylistic drift.
+- **Placement Engine**: Expose a tool to suggest the exact correct directory for a new file based on its domain and the monorepo's existing folder structure clusters.
+- **Dependency Guardrails**: Catch architectural violations *before* code is written. Tools to validate imports (e.g., "Controllers cannot import Repositories") and enforce layered architecture boundaries.
+
+### ⚪ 8. Broader eval corpus
 
 Currently three NestJS monorepos. A Node monolith or GraphQL backend would broaden the bench shape.
 
-### ⚪ 7. Semantic extension of `compare --share`
+### ⚪ 8. Semantic extension of `compare --share`
 
 Today `compare --share` measures structural graph size (nodes, edges, tokens) and emits anonymous numbers for the public bench Discussion. Adding a semantic recall number would let each contributor publish two data points instead of one — and surface the multilingual handling feature in community-comparable numbers.
 

@@ -1,0 +1,82 @@
+[
+  {
+    "id": "CI1",
+    "category": "symbol",
+    "question": "Где объявлен runBuild и какая у него сигнатура?",
+    "tool": "resolve_symbol",
+    "cli": "arch-graph code-intel resolve-symbol runBuild",
+    "expectedContains": ["symbol:runBuild", "src/pipeline/build.ts", "Promise<BuildResult>"]
+  },
+  {
+    "id": "CI2",
+    "category": "call-graph",
+    "question": "В каком статическом порядке runBuild вызывает внутренние шаги build pipeline?",
+    "tool": "trace_scenario",
+    "cli": "arch-graph code-intel trace-scenario --entry runBuild --max-depth 2",
+    "expectedContains": ["discoverOwnership", "extractNats", "enumerateHandlers"]
+  },
+  {
+    "id": "CI3",
+    "category": "data-flow",
+    "question": "Откуда параметр cfg в runBuild уходит дальше по вызовам?",
+    "tool": "explain_data_flow",
+    "cli": "arch-graph code-intel explain-flow --target runBuild --param cfg",
+    "expectedContains": ["discoverOwnership", "extractNats", "cfg"]
+  },
+  {
+    "id": "CI4",
+    "category": "control-flow",
+    "question": "Какая ветка в semanticSearch отбрасывает результаты ниже minScore?",
+    "tool": "explain_branch",
+    "cli": "arch-graph code-intel explain-branch --file src/semantic/search.ts --line 353",
+    "expectedContains": ["minScore", "s.score", "return false"]
+  },
+  {
+    "id": "CI5",
+    "category": "symbol",
+    "question": "Где объявлен makeSemanticSearchHandler и какие входные параметры у handler factory?",
+    "tool": "resolve_symbol",
+    "cli": "arch-graph code-intel resolve-symbol makeSemanticSearchHandler",
+    "expectedContains": ["symbol:makeSemanticSearchHandler", "src/mcp/server.ts", "SemanticSearchHandlerOpts"]
+  },
+  {
+    "id": "CI6",
+    "category": "control-flow",
+    "question": "Какая ветка MCP graph loader решает, что можно продолжать на cached graph при битом graph.json?",
+    "tool": "explain_branch",
+    "cli": "arch-graph code-intel explain-branch --file src/mcp/server.ts --line 230",
+    "expectedContains": ["st.mtimeMs === failedMtime", "handle"]
+  },
+  {
+    "id": "CI7",
+    "category": "data-flow",
+    "question": "Как CLI explain-flow передает --target/--param в explainDataFlow query?",
+    "tool": "explain_data_flow",
+    "cli": "arch-graph code-intel explain-flow --target runCodeIntelCommand --param args",
+    "expectedContains": ["explainDataFlow", "args.target", "args.param"]
+  },
+  {
+    "id": "CI8",
+    "category": "impact",
+    "question": "Что затронет изменение контракта SemanticManifest?",
+    "tool": "impact_contract",
+    "cli": "arch-graph code-intel impact-contract SemanticManifest",
+    "expectedContains": ["SemanticManifest", "src/semantic/io.ts", "src/semantic/types.ts"]
+  },
+  {
+    "id": "CI9",
+    "category": "symbol",
+    "question": "Какие поля есть у SearchResponse и где он объявлен?",
+    "tool": "resolve_symbol",
+    "cli": "arch-graph code-intel resolve-symbol SearchResponse",
+    "expectedContains": ["symbol:SearchResponse", "src/semantic/search.ts", "field"]
+  },
+  {
+    "id": "CI10",
+    "category": "control-flow",
+    "question": "Какое условие в mapTypeOrmToGraph материализует ManyToMany join table как db-table node?",
+    "tool": "explain_branch",
+    "cli": "arch-graph code-intel explain-branch --file src/mapper/typeorm-to-graph.ts --line 168",
+    "expectedContains": ["ManyToMany", "joinTableName", "tableNodes"]
+  }
+]
