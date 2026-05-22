@@ -37,6 +37,15 @@ import { readEmbeddingsJsonl } from '../semantic/io.js';
 import type { SemanticModelAlias } from '../semantic/types.js';
 import { defaultModelAlias, resolveMinScore } from '../semantic/types.js';
 import { applySemanticDefaults, loadConfig } from '../core/config.js';
+import { readCodeIntelIndex } from '../code-intel/io.js';
+import {
+    explainBranch,
+    explainDataFlow,
+    getFileOutline,
+    impactContract,
+    resolveSymbol,
+    traceScenario,
+} from '../code-intel/queries.js';
 
 const SERVER_NAME = 'arch-graph';
 const SERVER_VERSION = '0.1.0';
@@ -164,6 +173,36 @@ export const codeSearchInputShape = bucketSearchInputShape;
  */
 export const docsSearchInputShape = codeSearchInputShape;
 
+export const resolveSymbolInputShape = {
+    query: z.string().min(1).describe('Symbol name, partial path, or FQN.'),
+} as const;
+
+export const getFileOutlineInputShape = {
+    file: z.string().min(1).describe('Source file path (relative to root).'),
+} as const;
+
+export const explainDataFlowInputShape = {
+    target: z.string().min(1).describe('Function or method FQN, e.g. ItemsController.create.'),
+    param: z.string().min(1).describe('Parameter name inside the target function.'),
+    maxResults: z.number().int().min(1).max(100).optional().default(20),
+} as const;
+
+export const explainBranchInputShape = {
+    file: z.string().min(1).describe('Absolute or graph-recorded source file path.'),
+    line: z.number().int().positive().describe('Line inside or near the branch condition.'),
+} as const;
+
+export const traceScenarioInputShape = {
+    entry: z.string().min(1).describe('Entrypoint symbol/decorator text, e.g. Controller.method or POST /path.'),
+    maxDepth: z.number().int().min(1).max(20).optional().default(5),
+} as const;
+
+export const impactContractInputShape = {
+    symbol: z.string().min(1).describe('DTO/type symbol name, e.g. CreateItemDto.'),
+    field: z.string().min(1).optional().describe('Optional field name to narrow impact.'),
+    maxResults: z.number().int().min(1).max(200).optional().default(50),
+} as const;
+
 interface GraphHandle {
     path: string;
     mtimeMs: number;
@@ -229,6 +268,14 @@ function makeGraphLoader(path: string): () => Promise<ArchGraph> {
             throw new Error('arch-graph mcp: graph loader returned no handle');
         }
         return handle.graph;
+    };
+}
+
+function makeCodeIntelLoader(outDir: string) {
+    let cached: Awaited<ReturnType<typeof readCodeIntelIndex>> | null = null;
+    return async () => {
+        if (!cached) cached = await readCodeIntelIndex(resolve(outDir, 'code-intel'));
+        return cached;
     };
 }
 
@@ -319,6 +366,7 @@ function routeQuestion(question: string): RoutedAction {
 export async function startMcpServer(opts: { out: string; config?: string }): Promise<void> {
     const graphPath = resolve(opts.out, 'graph.json');
     const loadGraphFn = makeGraphLoader(graphPath);
+    const loadCodeIntelFn = makeCodeIntelLoader(opts.out);
     // Eager load so startup errors surface immediately on stderr instead of on first tool call.
     await loadGraphFn();
 
@@ -537,6 +585,62 @@ export async function startMcpServer(opts: { out: string; config?: string }): Pr
                 }
             }
         },
+    );
+
+    server.registerTool(
+        'resolve_symbol',
+        {
+            description: 'Code intelligence lookup for classes, DTOs, methods, functions, fields, and params. Supports fuzzy path matching.',
+            inputSchema: resolveSymbolInputShape,
+        },
+        async ({ query }) => jsonResult(resolveSymbol(await loadCodeIntelFn(), query)),
+    );
+
+    server.registerTool(
+        'get_file_outline',
+        {
+            description: 'Structural summary of a file (classes, methods, fields) without implementation details.',
+            inputSchema: getFileOutlineInputShape,
+        },
+        async ({ file }) => jsonResult(getFileOutline(await loadCodeIntelFn(), { file })),
+    );
+
+    server.registerTool(
+        'explain_data_flow',
+        {
+            description: 'Compact proof packet for where a parameter flows inside a target function/method.',
+            inputSchema: explainDataFlowInputShape,
+        },
+        async ({ target, param, maxResults }) =>
+            jsonResult(explainDataFlow(await loadCodeIntelFn(), { target, param, maxResults })),
+    );
+
+    server.registerTool(
+        'explain_branch',
+        {
+            description: 'Branch predicate and dominated calls for a file/line location.',
+            inputSchema: explainBranchInputShape,
+        },
+        async ({ file, line }) => jsonResult(explainBranch(await loadCodeIntelFn(), { file, line })),
+    );
+
+    server.registerTool(
+        'trace_scenario',
+        {
+            description: 'Ordered static call trace from a symbol/decorator entrypoint, depth-limited.',
+            inputSchema: traceScenarioInputShape,
+        },
+        async ({ entry, maxDepth }) => jsonResult(traceScenario(await loadCodeIntelFn(), { entry, maxDepth })),
+    );
+
+    server.registerTool(
+        'impact_contract',
+        {
+            description: 'DTO/type impact report grouped from endpoint/message/type/test/mapper references.',
+            inputSchema: impactContractInputShape,
+        },
+        async ({ symbol, field, maxResults }) =>
+            jsonResult(impactContract(await loadCodeIntelFn(), { symbol, field, maxResults })),
     );
 
     server.registerTool(

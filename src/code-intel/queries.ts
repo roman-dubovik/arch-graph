@@ -16,16 +16,34 @@ export function resolveSymbol(index: CodeIntelIndex, query: string): {
     const exact = index.symbols
         .filter((symbol) => symbol.fqn.toLowerCase() === q || symbol.name.toLowerCase() === q)
         .sort((a, b) => symbolRank(a) - symbolRank(b));
+
+    const pathMatches = index.symbols
+        .filter((symbol) => !exact.includes(symbol) && matchesFile(symbol.file, query))
+        .sort((a, b) => symbolRank(a) - symbolRank(b));
+
     const fuzzy = index.symbols.filter((symbol) =>
-            symbol.fqn.toLowerCase().includes(q) &&
-            symbol.fqn.toLowerCase() !== q &&
-            symbol.name.toLowerCase() !== q,
+            !exact.includes(symbol) &&
+            !pathMatches.includes(symbol) &&
+            symbol.fqn.toLowerCase().includes(q),
         )
         .sort((a, b) => symbolRank(a) - symbolRank(b));
+
     const matches = exact
+        .concat(pathMatches)
         .concat(fuzzy)
         .slice(0, 20);
     return { found: matches.length > 0, query, matches };
+}
+
+export function getFileOutline(index: CodeIntelIndex, args: { file: string }): {
+    found: boolean;
+    file: string;
+    symbols: CodeIntelSymbol[];
+} {
+    const symbols = index.symbols
+        .filter((symbol) => matchesFile(symbol.file, args.file))
+        .sort((a, b) => (a.line - b.line) || (a.column - b.column));
+    return { found: symbols.length > 0, file: args.file, symbols };
 }
 
 export function explainDataFlow(index: CodeIntelIndex, args: {
