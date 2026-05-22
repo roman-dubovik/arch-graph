@@ -55,6 +55,7 @@ export interface CodeIntelCall extends SourceLoc {
     expression: string;
     receiver?: string;
     args: string[];
+    conditions?: string[];
 }
 
 export interface CodeIntelFlow extends SourceLoc {

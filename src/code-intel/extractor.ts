@@ -20,6 +20,7 @@ interface FunctionLikeCtx {
     node: MethodDeclaration | FunctionDeclaration;
     className?: string;
     propertyTypes: Map<string, string>;
+    propertyDecorators: Map<string, string[]>;
     imports: Map<string, ImportBinding>;
     callOrder: number;
 }
@@ -64,9 +65,11 @@ export function extractCodeIntel(project: Project, opts: CodeIntelExtractOptions
             addSymbol(classSymbol);
 
             const propertyTypes = new Map<string, string>();
+            const propertyDecorators = new Map<string, string[]>();
             for (const prop of cls.getProperties()) {
                 const propName = prop.getName();
                 propertyTypes.set(propName, prop.getTypeNode()?.getText() ?? prop.getType().getText(prop));
+                propertyDecorators.set(propName, decoratorsOf(prop));
                 const fieldFqn = `${name}.${propName}`;
                 addSymbol(symbolForNode(prop, 'field', propName, fieldFqn, {
                     parentId: classSymbol.id,
@@ -79,7 +82,9 @@ export function extractCodeIntel(project: Project, opts: CodeIntelExtractOptions
             for (const ctor of cls.getConstructors()) {
                 for (const param of ctor.getParameters()) {
                     if (!param.isParameterProperty()) continue;
-                    propertyTypes.set(param.getName(), param.getTypeNode()?.getText() ?? param.getType().getText(param));
+                    const paramName = param.getName();
+                    propertyTypes.set(paramName, param.getTypeNode()?.getText() ?? param.getType().getText(param));
+                    propertyDecorators.set(paramName, decoratorsOf(param));
                 }
             }
 
@@ -98,7 +103,16 @@ export function extractCodeIntel(project: Project, opts: CodeIntelExtractOptions
                 });
                 addSymbol(methodSymbol);
                 addParams(method, methodSymbol, addSymbol);
-                functionContexts.push({ id: methodSymbol.id, fqn: methodFqn, node: method, className: name, propertyTypes, imports, callOrder: 0 });
+                functionContexts.push({
+                    id: methodSymbol.id,
+                    fqn: methodFqn,
+                    node: method,
+                    className: name,
+                    propertyTypes,
+                    propertyDecorators,
+                    imports,
+                    callOrder: 0,
+                });
             }
         }
 
@@ -113,7 +127,15 @@ export function extractCodeIntel(project: Project, opts: CodeIntelExtractOptions
             });
             addSymbol(fnSymbol);
             addParams(fn, fnSymbol, addSymbol);
-            functionContexts.push({ id: fnSymbol.id, fqn: name, node: fn, propertyTypes: new Map(), imports, callOrder: 0 });
+            functionContexts.push({
+                id: fnSymbol.id,
+                fqn: name,
+                node: fn,
+                propertyTypes: new Map(),
+                propertyDecorators: new Map(),
+                imports,
+                callOrder: 0,
+            });
         }
 
         for (const intf of sf.getInterfaces()) {
@@ -221,6 +243,7 @@ function collectFunctionFacts(
         if (node.getFirstAncestorByKind(SyntaxKind.Decorator)) return;
         const resolved = resolveCall(node, ctx, symbolByFqn, localFacts);
         const loc = locOf(node);
+        const conditions = collectNestedConditions(node);
         const call: CodeIntelCall = {
             id: `call:${ctx.fqn}:${ctx.callOrder}:${loc.line}:${loc.column}`,
             callerId: ctx.id,
@@ -237,6 +260,7 @@ function collectFunctionFacts(
             expression: node.getExpression().getText(),
             ...(resolved.receiver ? { receiver: resolved.receiver } : {}),
             args: node.getArguments().map((arg) => arg.getText()),
+            ...(conditions.length > 0 ? { conditions } : {}),
         };
         callByNode.set(node, call);
         calls.push(call);
@@ -576,16 +600,25 @@ function resolveCall(
         const receiver = expr.getExpression();
         const method = expr.getName();
         let callee = `${receiver.getText()}.${method}`;
+        let calleeId: string | undefined;
+
         if (Node.isThisExpression(receiver) && ctx.className) {
             callee = `${ctx.className}.${method}`;
         } else if (Node.isPropertyAccessExpression(receiver) && Node.isThisExpression(receiver.getExpression())) {
-            const typeName = ctx.propertyTypes.get(receiver.getName());
+            const propName = receiver.getName();
+            const typeName = ctx.propertyTypes.get(propName);
+            const decorators = ctx.propertyDecorators.get(propName);
+            const injectToken = decorators?.find((d) => d.includes('@Inject'))?.match(/@Inject\((['"])(.+)\1\)/)?.[2];
+
             if (typeName) callee = `${cleanTypeName(typeName)}.${method}`;
+            if (injectToken && (!typeName || typeName === 'any' || typeName === 'unknown')) {
+                callee = `${injectToken}.${method}`;
+            }
         } else if (Node.isIdentifier(receiver)) {
             const typeName = localFacts.variableTypes.get(receiver.getText());
             if (typeName) callee = `${cleanTypeName(typeName)}.${method}`;
         }
-        const calleeId = symbolByFqn.get(callee)?.id;
+        calleeId = symbolByFqn.get(callee)?.id;
         const receiverText = receiver.getText();
         const receiverImport = Node.isIdentifier(receiver) ? ctx.imports.get(receiverText) : undefined;
         if (receiverImport?.isExternal) {

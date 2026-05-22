@@ -170,6 +170,7 @@ function walkCalls(
     out: CodeIntelCall[],
     seen: Set<string>,
     maxCalls: number,
+    parentConditions: string[] = [],
 ): void {
     if (depthLeft <= 0 || seen.has(callerId) || out.length >= maxCalls) return;
     seen.add(callerId);
@@ -178,8 +179,10 @@ function walkCalls(
         .sort((a, b) => a.order - b.order);
     for (const call of direct) {
         if (out.length >= maxCalls) return;
-        out.push(call);
-        if (call.calleeId) walkCalls(index, call.calleeId, depthLeft - 1, out, seen, maxCalls);
+        const conditions = Array.from(new Set([...parentConditions, ...(call.conditions ?? [])]));
+        const enrichedCall = { ...call, ...(conditions.length > 0 ? { conditions } : {}) };
+        out.push(enrichedCall);
+        if (call.calleeId) walkCalls(index, call.calleeId, depthLeft - 1, out, new Set(seen), maxCalls, conditions);
     }
 }
 

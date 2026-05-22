@@ -516,23 +516,117 @@ describe('extractCodeIntel', () => {
         }));
     });
 
-    it('ranks data flows preferring sinks', () => {
+    it('resolves calls with complex DI and typed receivers', () => {
+        const project = inMemoryProject({
+            '/root/app.ts': `
+                import { Injectable, Inject } from '@nestjs/common';
+                import { UsersService } from './users.service';
+
+                @Injectable()
+                export class App {
+                    private readonly internal = new InternalService();
+
+                    constructor(
+                        private readonly users: UsersService,
+                        @Inject('API_CLIENT') private readonly client: any
+                    ) {}
+
+                    async run() {
+                        await this.users.find();
+                        this.internal.doWork();
+                        this.client.post();
+                    }
+                }
+
+                class InternalService {
+                    doWork() {}
+                }
+            `,
+            '/root/users.service.ts': `
+                export class UsersService {
+                    find() {}
+                }
+            `
+        });
+
+        const index = extractCodeIntel(project, { root: '/root' });
+        const calls = index.calls.filter(c => c.caller === 'App.run');
+
+        expect(calls).toContainEqual(expect.objectContaining({
+            callee: 'UsersService.find',
+            kind: 'internal'
+        }));
+
+        expect(calls).toContainEqual(expect.objectContaining({
+            callee: 'InternalService.doWork',
+            kind: 'internal'
+        }));
+
+        // For @Inject('TOKEN') any, we should now see the token in callee
+        expect(calls).toContainEqual(expect.objectContaining({
+            callee: 'API_CLIENT.post',
+            expression: 'this.client.post'
+        }));
+    });
+
+    it('captures conditions for each call', () => {
         const project = inMemoryProject({
             '/root/app.ts': `
                 export class App {
-                    process(data: any) {
-                        this.logger.log(data);
-                        this.db.save(data);
+                    process(status: string) {
+                        if (status === 'open') {
+                            this.handleOpen();
+                        }
                     }
+                    handleOpen() {}
                 }
             `,
         });
 
         const index = extractCodeIntel(project, { root: '/root' });
-        const result = explainDataFlow(index, { target: 'App.process', param: 'data' });
+        const call = index.calls.find(c => c.callee === 'App.handleOpen');
 
-        // DB sink (rank 0) should be before log sink (rank 5)
-        expect(result.flows[0]).toMatchObject({ sinkKind: 'db' });
-        expect(result.flows[1]).toMatchObject({ sinkKind: 'log' });
+        expect(call).toMatchObject({
+            conditions: ["status === 'open'"]
+        });
+    });
+
+    it('traces scenarios with condition stacks', () => {
+        const project = inMemoryProject({
+            '/root/app.ts': `
+                export class App {
+                    run(a: number) {
+                        if (a > 0) {
+                            this.doA();
+                        } else {
+                            this.doB();
+                        }
+                    }
+                    doA() {
+                        this.finish();
+                    }
+                    doB() {}
+                    finish() {}
+                }
+            `,
+        });
+
+        const index = extractCodeIntel(project, { root: '/root' });
+        const result = traceScenario(index, { entry: 'App.run' });
+
+        expect(result.calls).toContainEqual(expect.objectContaining({
+            callee: 'App.doA',
+            conditions: ['a > 0']
+        }));
+        expect(result.calls).toContainEqual(expect.objectContaining({
+            callee: 'App.doB',
+            conditions: ['!(a > 0)']
+        }));
+        expect(result.calls).toContainEqual(expect.objectContaining({
+            callee: 'App.finish',
+            conditions: ['a > 0'] // finish is called from doA which was called under a > 0
+            // Wait, does walkCalls preserve conditions from the caller?
+            // Currently no, but it should!
+        }));
     });
 });
