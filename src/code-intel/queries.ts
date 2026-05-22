@@ -33,12 +33,12 @@ export function resolveSymbol(index: CodeIntelIndex, query: string): {
         .concat(pathMatches)
         .concat(fuzzy)
         .slice(0, 20);
-    return { 
+    return withHealthWarning(index, { 
         found: matches.length > 0, 
         query, 
         matches,
         agentHint: matches.length > 0 ? "Use 'get_file_outline' with the returned file path to find exact 'line' and 'endLine' ranges for surgical reading." : undefined
-    };
+    });
 }
 
 export function getFileOutline(index: CodeIntelIndex, args: { file: string }): {
@@ -49,7 +49,7 @@ export function getFileOutline(index: CodeIntelIndex, args: { file: string }): {
     const symbols = index.symbols
         .filter((symbol) => matchesFile(symbol.file, args.file))
         .sort((a, b) => (a.line - b.line) || (a.column - b.column));
-    return { found: symbols.length > 0, file: args.file, symbols };
+    return withHealthWarning(index, { found: symbols.length > 0, file: args.file, symbols });
 }
 
 export function getBlueprint(index: CodeIntelIndex, args: { kind: string; maxResults?: number }): {
@@ -61,7 +61,7 @@ export function getBlueprint(index: CodeIntelIndex, args: { kind: string; maxRes
         .filter((symbol) => symbol.kind === args.kind)
         .sort((a, b) => (b.qualityScore ?? 0) - (a.qualityScore ?? 0))
         .slice(0, args.maxResults ?? 3);
-    return { found: blueprints.length > 0, kind: args.kind, blueprints };
+    return withHealthWarning(index, { found: blueprints.length > 0, kind: args.kind, blueprints });
 }
 
 export function getProjectPolicies(index: CodeIntelIndex): {
@@ -69,7 +69,7 @@ export function getProjectPolicies(index: CodeIntelIndex): {
     policies: CodeIntelPolicy[];
 } {
     const policies = index.policies ?? [];
-    return { found: policies.length > 0, policies };
+    return withHealthWarning(index, { found: policies.length > 0, policies });
 }
 
 export function suggestPlacement(index: CodeIntelIndex, args: { name: string; kind: string }): {
@@ -113,7 +113,7 @@ export function suggestPlacement(index: CodeIntelIndex, args: { name: string; ki
         });
     }
 
-    return { found: suggestions.length > 0, suggestions };
+    return withHealthWarning(index, { found: suggestions.length > 0, suggestions });
 }
 
 export function getOrientation(index: CodeIntelIndex): {
@@ -143,7 +143,7 @@ export function getOrientation(index: CodeIntelIndex): {
         .slice(0, 5)
         .map((p) => p.rule);
 
-    return {
+    return withHealthWarning(index, {
         projectSummary: `NestJS Monorepo with ${apps.length} apps and ${libs.length} libs.`,
         apps,
         libs,
@@ -156,7 +156,7 @@ export function getOrientation(index: CodeIntelIndex): {
         },
         topPolicies,
         agentHint: "Use 'get_project_policies' for all rules. Use 'get_file_outline' to explore files surgically.",
-    };
+    });
 }
 
 export function validateProposal(index: CodeIntelIndex, proposal: CodeIntelProposal): CodeIntelValidationResult {
@@ -207,30 +207,31 @@ export function validateProposal(index: CodeIntelIndex, proposal: CodeIntelPropo
         }
     }
 
-    return {
+    return withHealthWarning(index, {
         isValid: violations.length === 0,
         violations,
-    };
+    });
 }
 
 export function selfCheck(index: CodeIntelIndex): CodeIntelHealth {
     const issues: string[] = [];
     const suggestions: string[] = [];
     const now = Date.now();
-    const builtAt = new Date(index.manifest.builtAt).getTime();
-    const ageHours = (now - builtAt) / (1000 * 60 * 60);
+    // Default to a very old date if builtAt is missing or invalid so it triggers stale warning
+    const builtAtTime = index.manifest.builtAt ? new Date(index.manifest.builtAt).getTime() : 0;
+    const ageHours = builtAtTime > 0 ? (now - builtAtTime) / (1000 * 60 * 60) : 999;
 
     const isFresh = ageHours < 24;
     if (!isFresh) {
         issues.push(`Index is stale: built more than 24 hours ago (${Math.round(ageHours)}h).`);
-        suggestions.push('Run "arch-graph code-intel build" to refresh the index.');
+        suggestions.push('Run `arch-graph code-intel build` to refresh the index.');
     }
 
     let isConsistent = true;
     if (index.symbols.length > 50 && index.calls.length === 0) {
         isConsistent = false;
         issues.push(`Index appears broken: ${index.symbols.length} symbols found but 0 calls recorded.`);
-        suggestions.push('Rebuild the index using "arch-graph code-intel build".');
+        suggestions.push('Run `arch-graph code-intel build` to attempt a clean rebuild.');
     }
 
     return {
@@ -239,6 +240,15 @@ export function selfCheck(index: CodeIntelIndex): CodeIntelHealth {
         issues,
         suggestions,
     };
+}
+
+function withHealthWarning<T>(index: CodeIntelIndex, result: T): T & { agentHint?: string } {
+    const health = selfCheck(index);
+    if (!health.isFresh || !health.isHealthy) {
+        const warning = `⚠️ WARNING: ${health.issues.join(' ')} ${health.suggestions.join(' ')}`;
+        return { ...result, agentHint: ((result as any).agentHint ? `${(result as any).agentHint} | ` : '') + warning };
+    }
+    return result;
 }
 
 export function explainDataFlow(index: CodeIntelIndex, args: {
@@ -281,7 +291,7 @@ function expandDataFlows(index: CodeIntelIndex, target: string, param: string, m
             }
         }
     }
-    return out.sort((a, b) => flowRank(a) - flowRank(b)).slice(0, max);
+    return withHealthWarning(index, { found: out.length > 0, target: args.target, param: args.param, flows: out.sort((a, b) => flowRank(a) - flowRank(b)).slice(0, max) });
 }
 
 function flowRank(flow: CodeIntelFlow): number {
@@ -326,7 +336,7 @@ export function explainBranch(index: CodeIntelIndex, args: { file: string; line:
             .slice(0, 1)
             .filter((branch) => Math.abs(branch.line - args.line) <= 5);
     }
-    return { found: branches.length > 0, file: args.file, line: args.line, branches };
+    return withHealthWarning(index, { found: branches.length > 0, file: args.file, line: args.line, branches });
 }
 
 export function traceScenario(index: CodeIntelIndex, args: { entry: string; maxDepth?: number }): {
@@ -341,12 +351,12 @@ export function traceScenario(index: CodeIntelIndex, args: { entry: string; maxD
             symbol.signature?.includes(args.entry) ||
             symbol.decorators?.some((decorator) => decorator.includes(args.entry)),
         );
-    if (!start) return { found: false, entry: args.entry, calls: [] };
+    if (!start) return withHealthWarning(index, { found: false, entry: args.entry, calls: [] });
     const maxDepth = args.maxDepth ?? 5;
     const calls: CodeIntelCall[] = [];
     const seen = new Set<string>();
     walkCalls(index, start.id, maxDepth, calls, seen, 20);
-    return { found: true, entry: args.entry, start, calls };
+    return withHealthWarning(index, { found: true, entry: args.entry, start, calls });
 }
 
 export function impactContract(index: CodeIntelIndex, args: {
@@ -362,18 +372,18 @@ export function impactContract(index: CodeIntelIndex, args: {
 } {
     const symbol = resolveSymbol(index, args.symbol).matches.find((match) => match.kind === 'dto') ??
         resolveSymbol(index, args.symbol).matches[0];
-    if (!symbol) return { found: false, symbol: args.symbol, ...(args.field ? { field: args.field } : {}), impacts: [] };
+    if (!symbol) return withHealthWarning(index, { found: false, symbol: args.symbol, ...(args.field ? { field: args.field } : {}), impacts: [] });
     const impacts = index.impacts
         .filter((impact) => impact.symbolId === symbol.id && (!args.field || impact.field === args.field || impact.detail.includes(args.field)))
         .sort((a, b) => impactRank(a, Boolean(args.field)) - impactRank(b, Boolean(args.field)) || a.file.localeCompare(b.file) || a.line - b.line)
         .slice(0, args.maxResults ?? 50);
-    return {
+    return withHealthWarning(index, {
         found: impacts.length > 0,
         symbol: symbol.fqn,
         subject: symbol,
         ...(args.field ? { field: args.field } : {}),
         impacts,
-    };
+    });
 }
 
 function walkCalls(
