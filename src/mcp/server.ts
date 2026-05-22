@@ -43,6 +43,7 @@ import {
     explainDataFlow,
     getBlueprint,
     getFileOutline,
+    getOrientation,
     getProjectPolicies,
     impactContract,
     resolveSymbol,
@@ -627,6 +628,15 @@ export async function startMcpServer(opts: { out: string; config?: string }): Pr
             inputSchema: {},
         },
         async () => jsonResult(getProjectPolicies(await loadCodeIntelFn())),
+    );
+
+    server.registerTool(
+        'get_orientation',
+        {
+            description: 'Provides a high-level architectural summary of the project (apps, libs, health, top policies). CALL THIS FIRST.',
+            inputSchema: {},
+        },
+        async () => jsonResult(getOrientation(await loadCodeIntelFn())),
     );
 
     server.registerTool(

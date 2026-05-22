@@ -27,6 +27,7 @@ export type CodeIntelSubcommand =
     | 'blueprint'
     | 'policies'
     | 'suggest-placement'
+    | 'summary'
     | 'diagnostics';
 
 export interface CodeIntelArgs {
@@ -107,6 +108,8 @@ export async function runCodeIntelCommand(args: CodeIntelArgs): Promise<void> {
                 name: requireString(args.entry, 'name'),
                 kind: requireString(args.symbol, '--symbol or positional'),
             }));
+        case 'summary':
+            return emitQuery(args, (index) => getOrientation(index));
         case 'explain-flow':
             return emitQuery(args, (index) => explainDataFlow(index, {
                 target: requireString(args.target, '--target'),
@@ -220,6 +223,7 @@ function codeIntelUsage(): string {
         arch-graph code-intel blueprint <kind> [--out <dir>]
         arch-graph code-intel policies [--out <dir>]
         arch-graph code-intel suggest-placement <name> --symbol <kind> [--out <dir>]
+        arch-graph code-intel summary [--out <dir>]
         arch-graph code-intel explain-flow --target Class.method --param x [--out <dir>]        `  arch-graph code-intel explain-branch --file path --line N [--out <dir>]\n` +
         `  arch-graph code-intel trace-scenario --entry "Class.method" [--out <dir>]\n` +
         `  arch-graph code-intel impact-contract DtoName [--field name] [--out <dir>]\n` +

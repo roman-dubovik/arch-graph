@@ -110,6 +110,47 @@ export function suggestPlacement(index: CodeIntelIndex, args: { name: string; ki
     return { found: suggestions.length > 0, suggestions };
 }
 
+export function getOrientation(index: CodeIntelIndex): {
+    projectSummary: string;
+    apps: string[];
+    libs: string[];
+    health: {
+        freshness: string;
+        coverage: {
+            symbols: number;
+            calls: number;
+        };
+    };
+    topPolicies: string[];
+} {
+    const apps = Array.from(
+        new Set(index.symbols.filter((s) => s.file.startsWith('apps/')).map((s) => s.file.split('/')[1])),
+    ).sort();
+
+    const libs = Array.from(
+        new Set(index.symbols.filter((s) => s.file.startsWith('libs/')).map((s) => s.file.split('/')[1])),
+    ).sort();
+
+    const topPolicies = (index.policies ?? [])
+        .sort((a, b) => b.confidence - a.confidence)
+        .slice(0, 5)
+        .map((p) => p.rule);
+
+    return {
+        projectSummary: `NestJS Monorepo with ${apps.length} apps and ${libs.length} libs.`,
+        apps,
+        libs,
+        health: {
+            freshness: index.manifest.builtAt,
+            coverage: {
+                symbols: index.manifest.counts.symbols,
+                calls: index.manifest.counts.calls,
+            },
+        },
+        topPolicies,
+    };
+}
+
 export function explainDataFlow(index: CodeIntelIndex, args: {
     target: string;
     param: string;

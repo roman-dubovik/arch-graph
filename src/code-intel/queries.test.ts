@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getBlueprint, getFileOutline, resolveSymbol, suggestPlacement } from './queries.js';
+import { getBlueprint, getFileOutline, getOrientation, resolveSymbol, suggestPlacement } from './queries.js';
 import type { CodeIntelIndex, CodeIntelSymbol } from './types.js';
 
 describe('code-intel queries', () => {
@@ -94,6 +94,26 @@ describe('code-intel queries', () => {
             const result = suggestPlacement(index, { name: 'NewDto', kind: 'dto' });
             expect(result.found).toBe(true);
             expect(result.suggestions[0].path).toBe('src/dto/NewDto.ts');
+        });
+    });
+
+    describe('getOrientation', () => {
+        it('summarizes monorepo structure', () => {
+            const index: CodeIntelIndex = {
+                ...mockIndex,
+                symbols: [
+                    { id: 'a1', kind: 'class', name: 'A', fqn: 'A', file: 'apps/api/src/a.ts', line: 1, column: 1 },
+                    { id: 'l1', kind: 'class', name: 'L', fqn: 'L', file: 'libs/common/src/l.ts', line: 1, column: 1 },
+                ],
+                policies: [
+                    { id: 'p1', kind: 'naming', rule: 'DTO naming: *Dto', description: '', confidence: 0.9, count: 10, total: 11 }
+                ]
+            };
+            const result = getOrientation(index);
+            expect(result.apps).toContain('api');
+            expect(result.libs).toContain('common');
+            expect(result.topPolicies[0]).toBe('DTO naming: *Dto');
+            expect(result.projectSummary).toContain('1 apps and 1 libs');
         });
     });
 });

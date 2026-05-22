@@ -130,7 +130,16 @@ Transform LLM agents from "visiting contractors" into "local tech leads" by expl
 - **Placement Engine**: Expose a tool to suggest the exact correct directory for a new file based on its domain and the monorepo's existing folder structure clusters.
 - **Dependency Guardrails**: Catch architectural violations *before* code is written. Tools to validate imports (e.g., "Controllers cannot import Repositories") and enforce layered architecture boundaries.
 
-### ⚪ 8. Broader eval corpus
+### 8. AI-Layer Orientation & Self-Healing (Level 0 Context)
+
+Ensure the LLM never feels "lost" in a large codebase and that the AI-specific tools are always healthy.
+
+- **Level 0 Orientation (`get_orientation`)**: A super-compact "Empire Map" of the project (apps, libs, health stats, top policies). Designed to be the first tool called in any session.
+- **AI-Layer Self-Check (`self-test`)**: Automated validation of MCP tools, indexes, and graph freshness. Prevents agents from "hallucinating" on stale or broken data by providing clear repair instructions.
+- **Stop-Hook Reflection**: An experimental `reflect` tool to analyze session history and suggest permanent updates to `arch-graph.config.ts` or `CLAUDE.md`.
+- **Read-Only Explorer Mode**: A sandboxed MCP server/mode for safe architectural mapping of massive monoliths.
+
+### ⚪ 9. Broader eval corpus
 
 Currently three NestJS monorepos. A Node monolith or GraphQL backend would broaden the bench shape.
 

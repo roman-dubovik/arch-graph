@@ -437,6 +437,9 @@ real-world NestJS/TypeScript projects.
         - *Benefit:* Enables LLMs to read only specific methods/classes instead of full files (e.g., 10,000 tokens ➔ 300 tokens).
     - **Fuzzy Resolution**: Support partial paths and fuzzy names in `resolve_symbol` for better agent navigation.
 - [ ] **Architectural Policies**: Integration of "Gold Standard" Blueprints and style enforcement.
+- [ ] **AI-Layer Orientation (Level 0)**: `get_orientation` tool for instant project mapping and health check.
+- [ ] **Dependency Guardrails**: `validate_proposal` tool to catch architectural violations before coding.
+- [ ] **AI-Layer Integrity**: `self-check` tool to verify tool health and index freshness.
 
 5. Improve control-flow. COMPLETED.
    - Add switch, ternary, catch, and early-return branch facts. DONE.
