@@ -56,12 +56,51 @@ export function getBlueprint(index: CodeIntelIndex, args: { kind: string; maxRes
     found: boolean;
     kind: string;
     blueprints: CodeIntelSymbol[];
+    patterns: string[];
+    compositeGuide?: string;
+    agentHint?: string;
 } {
     const blueprints = index.symbols
         .filter((symbol) => symbol.kind === args.kind)
         .sort((a, b) => (b.qualityScore ?? 0) - (a.qualityScore ?? 0))
         .slice(0, args.maxResults ?? 3);
-    return withHealthWarning(index, { found: blueprints.length > 0, kind: args.kind, blueprints });
+    
+    // Collect patterns for the kind itself
+    const ownPatterns = (index.policies ?? [])
+        .filter(p => p.id.includes(`:${args.kind}:`));
+
+    // For container kinds (dto, db-entity, class), also include patterns for their common members
+    let memberPatterns: CodeIntelPolicy[] = [];
+    if (args.kind === 'dto' || args.kind === 'db-entity' || args.kind === 'class') {
+        memberPatterns = (index.policies ?? [])
+            .filter(p => p.id.includes(`:field:`) || p.id.includes(`:method:`))
+            .filter(p => p.confidence > 0.5);
+    }
+
+    const allPatterns = [...ownPatterns, ...memberPatterns];
+    const patterns = Array.from(new Set(allPatterns.map(p => p.rule)));
+
+    let compositeGuide: string | undefined;
+    if (patterns.length > 0) {
+        const topPatterns = allPatterns
+            .sort((a, b) => b.confidence - a.confidence)
+            .slice(0, 8)
+            .map(p => `- ${p.rule} (${Math.round(p.confidence * 100)}% compliance)`);
+
+        compositeGuide = `### ${args.kind.toUpperCase()} Style Guide (Synthesized from ${index.manifest.counts.symbols} symbols)\n\n` +
+            `Based on existing code patterns, an ideal ${args.kind} should follow these conventions:\n\n` +
+            topPatterns.join('\n') + '\n\n' +
+            `See the blueprints below for full structural reference.`;
+    }
+
+    return withHealthWarning(index, { 
+        found: blueprints.length > 0 || patterns.length > 0, 
+        kind: args.kind, 
+        blueprints, 
+        patterns,
+        compositeGuide,
+        agentHint: compositeGuide ? "Follow the 'compositeGuide' and provided blueprints to ensure architectural consistency." : "Follow the code style of the provided blueprints."
+    });
 }
 
 export function getProjectPolicies(index: CodeIntelIndex): {
@@ -263,7 +302,7 @@ export function explainDataFlow(index: CodeIntelIndex, args: {
 } {
     const max = args.maxResults ?? 20;
     const flows = expandDataFlows(index, args.target, args.param, max);
-    return { found: flows.length > 0, target: args.target, param: args.param, flows };
+    return withHealthWarning(index, { found: flows.length > 0, target: args.target, param: args.param, flows });
 }
 
 function expandDataFlows(index: CodeIntelIndex, target: string, param: string, max: number): CodeIntelFlow[] {
@@ -291,7 +330,7 @@ function expandDataFlows(index: CodeIntelIndex, target: string, param: string, m
             }
         }
     }
-    return withHealthWarning(index, { found: out.length > 0, target: args.target, param: args.param, flows: out.sort((a, b) => flowRank(a) - flowRank(b)).slice(0, max) });
+    return out.sort((a, b) => flowRank(a) - flowRank(b)).slice(0, max);
 }
 
 function flowRank(flow: CodeIntelFlow): number {

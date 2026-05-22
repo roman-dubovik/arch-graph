@@ -57,10 +57,14 @@ export function extractCodeIntel(project: Project, opts: CodeIntelExtractOptions
         for (const cls of sf.getClasses()) {
             const name = cls.getName();
             if (!name) continue;
-            const classKind = isDtoName(name) ? 'dto' : 'class';
+            const decorators = decoratorsOf(cls);
+            let classKind: CodeIntelSymbolKind = 'class';
+            if (isDtoName(name)) classKind = 'dto';
+            else if (isEntityName(name) || decorators.some(d => d.includes('@Entity'))) classKind = 'db-entity';
+
             const classSymbol = symbolForNode(cls, classKind, name, name, opts.root, {
                 description: descriptionOf(cls),
-                decorators: decoratorsOf(cls),
+                decorators,
             });
             addSymbol(classSymbol);
 
@@ -163,7 +167,116 @@ export function extractCodeIntel(project: Project, opts: CodeIntelExtractOptions
     }
 
     const impacts = collectImpacts(project, symbols, opts.root);
-    return buildIndex(opts.root, symbols, calls, flows, branches, impacts);
+    const policies = inferPolicies(symbols);
+    return buildIndex(opts.root, symbols, calls, flows, branches, impacts, policies);
+}
+
+function inferPolicies(symbols: CodeIntelSymbol[]): CodeIntelPolicy[] {
+    const policies: CodeIntelPolicy[] = [];
+    const kinds: Array<CodeIntelSymbol['kind']> = ['dto', 'class', 'method', 'field'];
+
+    for (const kind of kinds) {
+        const kindSymbols = symbols.filter((s) => s.kind === kind);
+        if (kindSymbols.length < 5) continue;
+
+        // 1. Placement Patterns
+        const placements = new Map<string, number>();
+        for (const s of kindSymbols) {
+            const dir = s.file.split('/').slice(0, -1).join('/');
+            if (!dir) continue;
+            // Generalize: apps/api/src/modules/users/dto -> **/modules/*/dto
+            // Generalize: libs/shared/src/dto -> **/src/dto
+            const generalized = dir
+                .replace(/^apps\/[^/]+\//, '**/')
+                .replace(/^libs\/[^/]+\//, '**/')
+                .replace(/\/src\/modules\/[^/]+/, '/src/modules/*')
+                .replace(/\/src\/[^/]+$/, '/src/*');
+            placements.set(generalized, (placements.get(generalized) ?? 0) + 1);
+        }
+        for (const [pattern, count] of placements) {
+            const confidence = count / kindSymbols.length;
+            if (confidence > 0.3) { // Lowered to 30% for discovery
+                policies.push({
+                    id: `policy:placement:${kind}:${pattern}`,
+                    kind: 'placement',
+                    rule: `${kind.toUpperCase()} location: ${pattern}/*.ts`,
+                    description: `${Math.round(confidence * 100)}% of ${kind} symbols follow this directory pattern.`,
+                    confidence,
+                    count,
+                    total: kindSymbols.length,
+                });
+            }
+        }
+
+        // 2. Decorator Pairings (for classes and fields)
+        if (kind === 'class' || kind === 'field' || kind === 'method' || kind === 'db-entity') {
+            const decoratorCounts = new Map<string, number>();
+            const pairings = new Map<string, Map<string, number>>();
+            for (const s of kindSymbols) {
+                if (!s.decorators || s.decorators.length === 0) continue;
+                // Get unique base names of decorators on this symbol
+                const uniqueDecoNames = Array.from(new Set(s.decorators.map(d => d.split('(')[0].trim())));
+                for (const dName of uniqueDecoNames) {
+                    decoratorCounts.set(dName, (decoratorCounts.get(dName) ?? 0) + 1);
+                    for (const d2Name of uniqueDecoNames) {
+                        if (dName === d2Name) continue;
+                        const bucket = pairings.get(dName) ?? new Map<string, number>();
+                        bucket.set(d2Name, (bucket.get(d2Name) ?? 0) + 1);
+                        pairings.set(dName, bucket);
+                    }
+                }
+            }
+
+            for (const [d1, d1Count] of decoratorCounts) {
+                if (d1Count < 3) continue; // Minimum 3 occurrences to be a "pattern"
+                const d1Pairings = pairings.get(d1);
+                if (!d1Pairings) continue;
+                for (const [d2, pairCount] of d1Pairings) {
+                    const confidence = pairCount / d1Count;
+                    if (confidence > 0.5) { // At least 50% pairing
+                        policies.push({
+                            id: `policy:pairing:${kind}:${d1}:${d2}`,
+                            kind: 'decorator-pairing',
+                            rule: `When using ${d1}, also use ${d2}`,
+                            description: `In this project, ${d1} is paired with ${d2} in ${Math.round(confidence * 100)}% of cases for ${kind}s.`,
+                            confidence,
+                            count: pairCount,
+                            total: d1Count,
+                        });
+                    }
+                }
+            }
+        }
+
+        // 3. Naming Conventions
+        if (kind === 'dto') {
+            const suffixes = ['Dto', 'DTO', 'Request', 'Response', 'Payload', 'Command', 'Event'];
+            const suffixCounts = new Map<string, number>();
+            for (const s of kindSymbols) {
+                for (const suffix of suffixes) {
+                    if (s.name.endsWith(suffix)) {
+                        suffixCounts.set(suffix, (suffixCounts.get(suffix) ?? 0) + 1);
+                    }
+                }
+            }
+            for (const [suffix, count] of suffixCounts) {
+                const confidence = count / kindSymbols.length;
+                if (confidence > 0.7) {
+                    policies.push({
+                        id: `policy:naming:${kind}:${suffix}`,
+                        kind: 'naming',
+                        rule: `${kind.toUpperCase()} naming: *${suffix}`,
+                        description: `Most ${kind} symbols in this project end with '${suffix}'.`,
+                        confidence,
+                        count,
+                        total: kindSymbols.length,
+                    });
+                }
+            }
+        }
+    }
+
+    return policies;
 }
 
 function buildIndex(
@@ -173,6 +286,7 @@ function buildIndex(
     flows: CodeIntelFlow[],
     branches: CodeIntelBranch[],
     impacts: CodeIntelImpact[],
+    policies: CodeIntelPolicy[],
 ): CodeIntelIndex {
     return {
         manifest: {
@@ -192,6 +306,7 @@ function buildIndex(
         flows,
         branches,
         impacts,
+        policies,
     };
 }
 
@@ -1047,18 +1162,30 @@ function symbolForNode(
 
 function computeQualityScore(node: MorphNode, extra: Partial<CodeIntelSymbol>): number {
     let score = 0;
-    // JSDoc is a primary quality indicator (+2)
+
+    // 1. Penalize "Abstract/Base" templates - we want concrete feature examples
+    if (extra.name && /^(Base|Abstract|Internal)/.test(extra.name)) score -= 5;
+
+    // 2. JSDoc is a quality indicator (+2)
     if (extra.description && extra.description.length > 20) score += 2;
-    // Decorators indicate framework compliance (+1)
-    if (extra.decorators && extra.decorators.length > 0) score += 1;
-    // Public visibility is preferred for examples (+1)
+
+    // 3. Decorator richness (+1.5 per unique decorator type)
+    if (extra.decorators && extra.decorators.length > 0) {
+        const uniqueDecos = new Set(extra.decorators.map((d) => d.split('(')[0])).size;
+        score += uniqueDecos * 1.5;
+    }
+
+    // 4. Field count richness for DTOs/Classes
+    if (Node.isClassDeclaration(node) || Node.isInterfaceDeclaration(node)) {
+        const members = Node.isClassDeclaration(node) ? node.getProperties().length : (node as any).getMembers?.().length ?? 0;
+        if (members >= 3 && members <= 15) score += 3; // Sweet spot for a good example
+        if (members > 15) score += 1; // Too big, but still a sample
+    }
+
+    // 5. Visibility and modern patterns
     if (extra.visibility === 'public') score += 1;
-    // Async methods often show more modern/complete patterns (+0.5)
     if (extra.isAsync) score += 0.5;
-    // Large classes/methods with docs are often 'Gold' examples (+1)
-    const lineCount = (node.getSourceFile().getLineAndColumnAtPos(node.getEnd()).line -
-                     node.getSourceFile().getLineAndColumnAtPos(node.getStart()).line);
-    if (lineCount > 10 && extra.description) score += 1;
+
     return score;
 }
 
@@ -1102,6 +1229,10 @@ function decoratorsOf(node: MorphNode): string[] {
 
 function isDtoName(name: string): boolean {
     return /(Dto|DTO|Request|Response|Payload|Command|Event)$/.test(name);
+}
+
+function isEntityName(name: string): boolean {
+    return /(Entity)$/.test(name);
 }
 
 function cleanTypeName(typeName: string): string {

@@ -11,8 +11,11 @@ import {
     explainDataFlow,
     getBlueprint,
     getFileOutline,
+    getOrientation,
+    getProjectPolicies,
     impactContract,
     resolveSymbol,
+    suggestPlacement,
     traceScenario,
 } from './queries.js';
 
@@ -231,14 +234,15 @@ function codeIntelUsage(): string {
     return `unknown code-intel subcommand\n` +
         `  arch-graph code-intel build [--config <path>] [--out <dir>]\n` +
         `  arch-graph code-intel resolve-symbol <name> [--out <dir>]\n` +
-        arch-graph code-intel outline <file> [--out <dir>]
-        arch-graph code-intel blueprint <kind> [--out <dir>]
-        arch-graph code-intel policies [--out <dir>]
-        arch-graph code-intel suggest-placement <name> --symbol <kind> [--out <dir>]
-        arch-graph code-intel validate-proposal <file> --symbol <kind> --target <imports> [--out <dir>]
-        arch-graph code-intel summary [--out <dir>]
-        arch-graph code-intel self-check [--out <dir>]
-        arch-graph code-intel explain-flow --target Class.method --param x [--out <dir>]        `  arch-graph code-intel explain-branch --file path --line N [--out <dir>]\n` +
+        `  arch-graph code-intel outline <file> [--out <dir>]\n` +
+        `  arch-graph code-intel blueprint <kind> [--out <dir>]\n` +
+        `  arch-graph code-intel policies [--out <dir>]\n` +
+        `  arch-graph code-intel suggest-placement <name> --symbol <kind> [--out <dir>]\n` +
+        `  arch-graph code-intel validate-proposal <file> --symbol <kind> --target <imports> [--out <dir>]\n` +
+        `  arch-graph code-intel summary [--out <dir>]\n` +
+        `  arch-graph code-intel self-check [--out <dir>]\n` +
+        `  arch-graph code-intel explain-flow --target Class.method --param x [--out <dir>]\n` +
+        `  arch-graph code-intel explain-branch --file path --line N [--out <dir>]\n` +
         `  arch-graph code-intel trace-scenario --entry "Class.method" [--out <dir>]\n` +
         `  arch-graph code-intel impact-contract DtoName [--field name] [--out <dir>]\n` +
         `  arch-graph code-intel diagnostics [--max-results N] [--out <dir>]\n`;

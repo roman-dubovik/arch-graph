@@ -41,7 +41,7 @@ interface WizardAnswers {
     natsWrapperClass: string;
     natsWrapperPublishMethods: string[];
     natsWrapperSubscribeMethods: string[];
-    aiEnv: AiEnvironment;
+    aiEnvs: AiEnvironment[];
     hookMode: 'pre-commit' | 'post-commit' | 'none';
     /** Strict mode: when true, a comment is emitted and a future `strictMode` field can be toggled. */
     strictMode: boolean;
@@ -479,19 +479,25 @@ export async function askSnippetTarget(rl: Rl): Promise<SnippetTarget> {
     return 'separate'; // default
 }
 
-/** Ask which AI environment to scaffold for. */
-async function askAiEnvironment(rl: Rl): Promise<AiEnvironment> {
-    output.write('\n? Which AI agent do you primarily use for this project?\n');
-    output.write('  1. Claude Code (scaffolds SessionStart hook & CLAUDE.md)\n');
-    output.write('  2. Cursor / Windsurf (scaffolds .cursorrules)\n');
-    output.write('  3. Gemini CLI (scaffolds CLAUDE.md as a pointer)\n');
-    output.write('  4. None / Skip\n');
-    const answer = await rl.question('  Choice [4]: ');
-    const trimmed = answer.trim();
-    if (trimmed === '1') return 'claude';
-    if (trimmed === '2') return 'cursor';
-    if (trimmed === '3') return 'gemini';
-    return 'none';
+/** Ask which AI environment(s) to scaffold for. */
+async function askAiEnvironments(rl: Rl): Promise<AiEnvironment[]> {
+    output.write('\n? Which AI agent(s) do you use for this project? (select all that apply)\n');
+    output.write('  1. Claude Code (SessionStart hook & CLAUDE.md)\n');
+    output.write('  2. Cursor / Windsurf (.cursorrules)\n');
+    output.write('  3. Gemini CLI (CLAUDE.md pointer)\n');
+    output.write('  4. Done / Skip\n');
+
+    const selected = new Set<AiEnvironment>();
+    while (true) {
+        const currentStr = selected.size === 0 ? 'none' : Array.from(selected).join(', ');
+        const answer = await rl.question(`  Select [1-4, currently: ${currentStr}]: `);
+        const trimmed = answer.trim();
+        if (trimmed === '1') selected.add('claude');
+        else if (trimmed === '2') selected.add('cursor');
+        else if (trimmed === '3') selected.add('gemini');
+        else break;
+    }
+    return Array.from(selected);
 }
 
 // ─── .gitignore helpers ───────────────────────────────────────────────────────
@@ -778,7 +784,7 @@ export async function runInitWizard(target: string): Promise<void> {
     }
 
     // ── Tooling questions ─────────────────────────────────────────────────────
-    const aiEnv = await askAiEnvironment(rl);
+    const aiEnvs = await askAiEnvironments(rl);
 
     const hookMode = await askHookMode(rl);
 
@@ -811,7 +817,7 @@ export async function runInitWizard(target: string): Promise<void> {
         natsWrapperClass,
         natsWrapperPublishMethods,
         natsWrapperSubscribeMethods,
-        aiEnv,
+        aiEnvs,
         hookMode,
         strictMode,
         runBuild: shouldRunBuild,
@@ -829,13 +835,14 @@ export async function runInitWizard(target: string): Promise<void> {
 
     // ── AI Environment integration ────────────────────────────────────────────
     let claudeInstalled = false;
-    if (aiEnv === 'claude' || aiEnv === 'gemini') {
-        await claudeInstall({ target: resolve('./CLAUDE.md'), installSkill: true });
-        claudeInstalled = true;
-        // NOTE: Later we will scaffold .claude/hooks/SessionStart.sh here
-    } else if (aiEnv === 'cursor') {
-        // NOTE: Later we will scaffold .cursorrules here
-        output.write(`⚠  Cursor scaffolding is planned. Please manually add arch-graph pointer rules to your .cursorrules for now.\n`);
+    for (const env of aiEnvs) {
+        if (env === 'claude' || env === 'gemini') {
+            await claudeInstall({ target: resolve('./CLAUDE.md'), installSkill: true });
+            claudeInstalled = true;
+            await hooksModule.agentHookInstall({ repo: resolve('.'), agent: env === 'claude' ? 'claude' : 'gemini' as any });
+        } else if (env === 'cursor') {
+            await hooksModule.agentHookInstall({ repo: resolve('.'), agent: 'cursor' });
+        }
     }
 
     // ── Semantic strategy snippet ─────────────────────────────────────────────

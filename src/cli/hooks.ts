@@ -127,6 +127,38 @@ function validateMode(raw: string): HookMode {
 // Shared helpers
 // ---------------------------------------------------------------------------
 
+/** Install agent-side session hooks (e.g. .claude/hooks/SessionStart). */
+export async function agentHookInstall(args: { repo: string; agent: 'claude' | 'cursor' | 'gemini' | 'all' }): Promise<void> {
+    const repo = resolve(args.repo);
+    
+    if (args.agent === 'claude' || args.agent === 'all') {
+        const hooksDir = resolve(repo, '.claude/hooks');
+        await mkdir(hooksDir, { recursive: true });
+        const startHookPath = resolve(hooksDir, 'SessionStart.sh');
+        const content = `#!/bin/sh
+# --- arch-graph orientation hook ---
+# Automatically orient the agent at the start of a session.
+arch-graph code-intel summary --json
+`;
+        await writeFile(startHookPath, content, { mode: 0o755, encoding: 'utf8' });
+        process.stdout.write(`✓ scaffolded .claude/hooks/SessionStart.sh\n`);
+    }
+
+    if (args.agent === 'cursor' || args.agent === 'all') {
+        const cursorRulesPath = resolve(repo, '.cursorrules');
+        if (!existsSync(cursorRulesPath)) {
+            const content = `## Architecture Orientation
+Before starting work, always run:
+arch-graph code-intel summary
+
+Use surgical reads with exact line ranges from 'get_file_outline'.
+`;
+            await writeFile(cursorRulesPath, content, 'utf8');
+            process.stdout.write(`✓ created .cursorrules\n`);
+        }
+    }
+}
+
 async function ensureGitRepo(repo: string): Promise<void> {
     if (!existsSync(resolve(repo, '.git'))) {
         throw new Error(`not a git repository: ${repo} (no .git directory)`);
