@@ -652,6 +652,20 @@ export async function startMcpServer(opts: { out: string; config?: string }): Pr
     );
 
     server.registerTool(
+        'validate_proposal',
+        {
+            description: 'Validates an architectural proposal (proposed imports/calls) against project guardrails.',
+            inputSchema: {
+                sourceFile: z.string().min(1).describe('The file where the change is proposed.'),
+                sourceKind: z.enum(['class', 'method', 'function', 'dto', 'type', 'field', 'param']).describe('The kind of the proposing symbol.'),
+                proposedImports: z.array(z.string()).describe('List of symbol names or paths to be imported.'),
+                proposedCalls: z.array(z.string()).describe('List of method/function FQNs to be called.'),
+            },
+        },
+        async (proposal) => jsonResult(validateProposal(await loadCodeIntelFn(), proposal)),
+    );
+
+    server.registerTool(
         'explain_data_flow',
         {
             description: 'Compact proof packet for where a parameter flows inside a target function/method.',
