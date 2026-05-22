@@ -431,6 +431,10 @@ real-world NestJS/TypeScript projects.
 - [x] **Data Flow v2.2 (Completed 2026-05-22)**: Enhanced source/sink classification (DB, HTTP, NATS, Env, Config) and ranked proof packets for improved LLM context.
 - [x] **Call Graph v2 (Completed 2026-05-22)**: Better DI resolution (NestJS @Inject, class props) and scenario path exploration with condition stacks.
 - [ ] **Impact v2**: Field-level DTO impact across endpoints, messages, and frontend consumers.
+- [ ] **UX & Discovery (Helpline Inspired)**:
+    - **Impact Ranking**: Deduplicate impacts on the same line by weight (e.g., `endpoint` > `type-reference`).
+    - **Structural Outline**: Add `get_file_outline` to provide a "Table of Contents" (signatures only) for files to save LLM tokens.
+    - **Fuzzy Resolution**: Support partial paths and fuzzy names in `resolve_symbol` for better agent navigation.
 - [ ] **Architectural Policies**: Integration of "Gold Standard" Blueprints and style enforcement.
 
 5. Improve control-flow. COMPLETED.

@@ -58,7 +58,7 @@ export function extractCodeIntel(project: Project, opts: CodeIntelExtractOptions
             const name = cls.getName();
             if (!name) continue;
             const classKind = isDtoName(name) ? 'dto' : 'class';
-            const classSymbol = symbolForNode(cls, classKind, name, name, {
+            const classSymbol = symbolForNode(cls, classKind, name, name, opts.root, {
                 description: descriptionOf(cls),
                 decorators: decoratorsOf(cls),
             });
@@ -71,7 +71,7 @@ export function extractCodeIntel(project: Project, opts: CodeIntelExtractOptions
                 propertyTypes.set(propName, prop.getTypeNode()?.getText() ?? prop.getType().getText(prop));
                 propertyDecorators.set(propName, decoratorsOf(prop));
                 const fieldFqn = `${name}.${propName}`;
-                addSymbol(symbolForNode(prop, 'field', propName, fieldFqn, {
+                addSymbol(symbolForNode(prop, 'field', propName, fieldFqn, opts.root, {
                     parentId: classSymbol.id,
                     ownerName: name,
                     type: prop.getTypeNode()?.getText() ?? prop.getType().getText(prop),
@@ -91,7 +91,7 @@ export function extractCodeIntel(project: Project, opts: CodeIntelExtractOptions
             for (const method of cls.getMethods()) {
                 const methodName = method.getName();
                 const methodFqn = `${name}.${methodName}`;
-                const methodSymbol = symbolForNode(method, 'method', methodName, methodFqn, {
+                const methodSymbol = symbolForNode(method, 'method', methodName, methodFqn, opts.root, {
                     parentId: classSymbol.id,
                     ownerName: name,
                     signature: signatureOf(method),
@@ -102,7 +102,7 @@ export function extractCodeIntel(project: Project, opts: CodeIntelExtractOptions
                     decorators: decoratorsOf(method),
                 });
                 addSymbol(methodSymbol);
-                addParams(method, methodSymbol, addSymbol);
+                addParams(method, methodSymbol, opts.root, addSymbol);
                 functionContexts.push({
                     id: methodSymbol.id,
                     fqn: methodFqn,
@@ -119,14 +119,14 @@ export function extractCodeIntel(project: Project, opts: CodeIntelExtractOptions
         for (const fn of sf.getFunctions()) {
             const name = fn.getName();
             if (!name) continue;
-            const fnSymbol = symbolForNode(fn, 'function', name, name, {
+            const fnSymbol = symbolForNode(fn, 'function', name, name, opts.root, {
                 signature: signatureOf(fn),
                 returnType: fn.getReturnTypeNode()?.getText() ?? fn.getReturnType().getText(fn),
                 isAsync: fn.isAsync(),
                 description: descriptionOf(fn),
             });
             addSymbol(fnSymbol);
-            addParams(fn, fnSymbol, addSymbol);
+            addParams(fn, fnSymbol, opts.root, addSymbol);
             functionContexts.push({
                 id: fnSymbol.id,
                 fqn: name,
@@ -140,11 +140,11 @@ export function extractCodeIntel(project: Project, opts: CodeIntelExtractOptions
 
         for (const intf of sf.getInterfaces()) {
             const name = intf.getName();
-            const typeSymbol = symbolForNode(intf, isDtoName(name) ? 'dto' : 'type', name, name, { description: descriptionOf(intf) });
+            const typeSymbol = symbolForNode(intf, isDtoName(name) ? 'dto' : 'type', name, name, opts.root, { description: descriptionOf(intf) });
             addSymbol(typeSymbol);
             for (const prop of intf.getProperties()) {
                 const propName = prop.getName();
-                addSymbol(symbolForNode(prop, 'field', propName, `${name}.${propName}`, {
+                addSymbol(symbolForNode(prop, 'field', propName, `${name}.${propName}`, opts.root, {
                     parentId: typeSymbol.id,
                     ownerName: name,
                     type: prop.getTypeNode()?.getText() ?? prop.getType().getText(prop),
@@ -154,15 +154,15 @@ export function extractCodeIntel(project: Project, opts: CodeIntelExtractOptions
         }
 
         for (const alias of sf.getTypeAliases()) {
-            addTypeAliasDto(alias, addSymbol);
+            addTypeAliasDto(alias, opts.root, addSymbol);
         }
     }
 
     for (const ctx of functionContexts) {
-        collectFunctionFacts(ctx, symbolByFqn, calls, flows, branches);
+        collectFunctionFacts(ctx, symbolByFqn, calls, flows, branches, opts.root);
     }
 
-    const impacts = collectImpacts(project, symbols);
+    const impacts = collectImpacts(project, symbols, opts.root);
     return buildIndex(opts.root, symbols, calls, flows, branches, impacts);
 }
 
@@ -195,16 +195,16 @@ function buildIndex(
     };
 }
 
-function addTypeAliasDto(alias: TypeAliasDeclaration, addSymbol: (symbol: CodeIntelSymbol) => void): void {
+function addTypeAliasDto(alias: TypeAliasDeclaration, root: string, addSymbol: (symbol: CodeIntelSymbol) => void): void {
     const name = alias.getName();
-    const typeSymbol = symbolForNode(alias, isDtoName(name) ? 'dto' : 'type', name, name, { description: descriptionOf(alias) });
+    const typeSymbol = symbolForNode(alias, isDtoName(name) ? 'dto' : 'type', name, name, root, { description: descriptionOf(alias) });
     addSymbol(typeSymbol);
     const typeNode = alias.getTypeNode();
     if (!typeNode || !Node.isTypeLiteral(typeNode)) return;
     for (const member of typeNode.getMembers()) {
         if (!Node.isPropertySignature(member)) continue;
         const propName = member.getName();
-        addSymbol(symbolForNode(member, 'field', propName, `${name}.${propName}`, {
+        addSymbol(symbolForNode(member, 'field', propName, `${name}.${propName}`, root, {
             parentId: typeSymbol.id,
             ownerName: name,
             type: member.getTypeNode()?.getText() ?? member.getType().getText(member),
@@ -216,10 +216,11 @@ function addTypeAliasDto(alias: TypeAliasDeclaration, addSymbol: (symbol: CodeIn
 function addParams(
     fn: MethodDeclaration | FunctionDeclaration,
     parent: CodeIntelSymbol,
+    root: string,
     addSymbol: (symbol: CodeIntelSymbol) => void,
 ): void {
     for (const param of fn.getParameters()) {
-        addSymbol(symbolForNode(param, 'param', param.getName(), `${parent.fqn}.${param.getName()}`, {
+        addSymbol(symbolForNode(param, 'param', param.getName(), `${parent.fqn}.${param.getName()}`, root, {
             parentId: parent.id,
             ownerName: parent.fqn,
             type: param.getTypeNode()?.getText() ?? param.getType().getText(param),
@@ -234,6 +235,7 @@ function collectFunctionFacts(
     calls: CodeIntelCall[],
     flows: CodeIntelFlow[],
     branches: CodeIntelBranch[],
+    root: string,
 ): void {
     const params = ctx.node.getParameters();
     const callByNode = new Map<CallExpression, CodeIntelCall>();
@@ -446,7 +448,7 @@ function collectNestedConditions(node: MorphNode): string[] {
     return conditions.reverse();
 }
 
-function collectFunctionLocalFlows(ctx: FunctionLikeCtx, flows: CodeIntelFlow[]): void {
+function collectFunctionLocalFlows(ctx: FunctionLikeCtx, flows: CodeIntelFlow[], root: string): void {
     ctx.node.forEachDescendant((node) => {
         if (!Node.isVariableDeclaration(node)) return;
         const initializerText = node.getInitializer()?.getText() ?? '';
@@ -476,6 +478,7 @@ function collectParamFlows(
     callerCalls: CodeIntelCall[],
     flows: CodeIntelFlow[],
     symbolByFqn: Map<string, CodeIntelSymbol>,
+    root: string,
 ): void {
     const paramName = param.getName();
     const source = sourceForParam(param);
@@ -767,8 +770,8 @@ function importsForSourceFile(sf: SourceFile): Map<string, ImportBinding> {
     return imports;
 }
 
-function collectImpacts(project: Project, symbols: CodeIntelSymbol[]): CodeIntelImpact[] {
-    const impacts: CodeIntelImpact[] = [];
+function collectImpacts(project: Project, symbols: CodeIntelSymbol[], root: string): CodeIntelImpact[] {
+    const rawImpacts: CodeIntelImpact[] = [];
     const dtoSymbols = symbols.filter((symbol) => symbol.kind === 'dto' || symbol.kind === 'type');
     const dtoByName = new Map(dtoSymbols.map((dto) => [dto.name, dto]));
     const fieldsByName = new Map<string, Array<{ dto: CodeIntelSymbol; field: CodeIntelSymbol }>>();
@@ -786,9 +789,9 @@ function collectImpacts(project: Project, symbols: CodeIntelSymbol[]): CodeIntel
             if (Node.isIdentifier(node)) {
                 const dto = dtoByName.get(node.getText());
                 if (!dto) return;
-                const loc = locOf(node);
+                const loc = locOf(node, root);
                 const kind = classifyImpact(node, sf);
-                impacts.push({
+                rawImpacts.push({
                     id: `impact:${dto.fqn}:${kind}:${loc.file}:${loc.line}:${loc.column}`,
                     symbolId: dto.id,
                     symbol: dto.fqn,
@@ -808,8 +811,8 @@ function collectImpacts(project: Project, symbols: CodeIntelSymbol[]): CodeIntel
             const receiverFacts = receiverFactsFor(node);
             for (const { dto, field } of candidates) {
                 if (!propertyAccessMatchesFieldOwner(dto, receiverFacts)) continue;
-                const loc = locOf(node);
-                impacts.push({
+                const loc = locOf(node, root);
+                rawImpacts.push({
                     id: `impact:${dto.fqn}.${field.name}:field:${loc.file}:${loc.line}:${loc.column}`,
                     symbolId: dto.id,
                     symbol: dto.fqn,
@@ -824,7 +827,42 @@ function collectImpacts(project: Project, symbols: CodeIntelSymbol[]): CodeIntel
             }
         });
     }
-    return dedupeById(impacts);
+    return rankAndDedupeImpacts(rawImpacts);
+}
+
+function rankAndDedupeImpacts(impacts: CodeIntelImpact[]): CodeIntelImpact[] {
+    const grouped = new Map<string, CodeIntelImpact[]>();
+    for (const impact of impacts) {
+        const key = `${impact.symbolId}:${impact.file}:${impact.line}`;
+        const bucket = grouped.get(key) ?? [];
+        bucket.push(impact);
+        grouped.set(key, bucket);
+    }
+
+    const out: CodeIntelImpact[] = [];
+    for (const bucket of grouped.values()) {
+        // Sort by weight: lower is better
+        bucket.sort((a, b) => impactWeight(a.kind) - impactWeight(b.kind));
+        out.push(bucket[0]);
+    }
+    return out;
+}
+
+function impactWeight(kind: CodeIntelImpact['kind']): number {
+    switch (kind) {
+        case 'endpoint':
+            return 0;
+        case 'message':
+            return 1;
+        case 'field-reference':
+            return 2;
+        case 'type-reference':
+            return 3;
+        case 'mapper':
+            return 4;
+        case 'test':
+            return 5;
+    }
 }
 
 function classifyImpact(node: MorphNode, sf: SourceFile): CodeIntelImpact['kind'] {
@@ -835,6 +873,7 @@ function classifyImpact(node: MorphNode, sf: SourceFile): CodeIntelImpact['kind'
     const decorators = method ? decoratorsOf(method).join(' ') : '';
     if (/@(?:Get|Post|Put|Patch|Delete|Controller|Body|Param|Query)\b/.test(decorators)) return 'endpoint';
     if (/@(?:MessagePattern|EventPattern|NatsMessagePattern|RmqEventPattern)\b/.test(decorators)) return 'message';
+    if (/\.tsx$/.test(file) || /components|views|pages/i.test(file)) return 'type-reference';
     return 'type-reference';
 }
 
@@ -987,9 +1026,10 @@ function symbolForNode(
     kind: CodeIntelSymbol['kind'],
     name: string,
     fqn: string,
+    root: string,
     extra: Partial<CodeIntelSymbol> = {},
 ): CodeIntelSymbol {
-    const loc = locOf(node);
+    const loc = locOf(node, root);
     return {
         id: `symbol:${fqn}`,
         kind,
@@ -1002,10 +1042,11 @@ function symbolForNode(
     };
 }
 
-function locOf(node: MorphNode): { file: string; line: number; column: number } {
+function locOf(node: MorphNode, root: string): { file: string; line: number; column: number } {
     const sf = node.getSourceFile();
     const pos = sf.getLineAndColumnAtPos(node.getStart());
-    return { file: sf.getFilePath(), line: pos.line, column: pos.column };
+    const file = sf.getFilePath().replace(root, '').replace(/^\/+/, '');
+    return { file, line: pos.line, column: pos.column };
 }
 
 function signatureOf(fn: MethodDeclaration | FunctionDeclaration): string {

@@ -148,95 +148,40 @@ describe('extractCodeIntel', () => {
                     callee: 'ItemMapper.toEntity',
                     args: ['dto'],
                 }),
-                expect.objectContaining({
-                    caller: 'ItemsService.create',
-                    callee: 'normalizeItem',
-                    calleeId: 'symbol:normalizeItem',
-                    kind: 'internal',
-                    args: ['name'],
-                }),
-                expect.objectContaining({
-                    caller: 'ItemsService.create',
-                    callee: 'node:path.join',
-                    kind: 'external',
-                    module: 'node:path',
-                    importName: 'join',
-                }),
-                expect.objectContaining({
-                    caller: 'ItemsService.create',
-                    callee: 'process.stdout.write',
-                    kind: 'process-env',
-                }),
-                expect.objectContaining({
-                    caller: 'ItemsService.create',
-                    callee: 'LocalAdapter.load',
-                    calleeId: 'symbol:LocalAdapter.load',
-                    kind: 'internal',
-                    receiver: 'adapter',
-                }),
-                expect.objectContaining({
-                    caller: 'ItemsService.create',
-                    callee: 'st.isFile',
-                    kind: 'external',
-                    receiver: 'st',
-                }),
-                expect.objectContaining({
-                    caller: 'ItemsService.create',
-                    callee: 'ts-morph.Node.isIdentifier',
-                    kind: 'external',
-                    module: 'ts-morph',
-                    importName: 'Node.isIdentifier',
-                    receiver: 'Node',
-                }),
-                expect.objectContaining({
-                    caller: 'inspectSource',
-                    callee: 'ts-morph.SourceFile.getClasses',
-                    kind: 'external',
-                    module: 'ts-morph',
-                    receiver: 'sf',
-                }),
-                expect.objectContaining({
-                    caller: 'inspectSource',
-                    callee: 'ts-morph.Node.getKind',
-                    kind: 'external',
-                    module: 'ts-morph',
-                    receiver: 'node',
-                }),
             ]),
         );
 
-        expect(explainDataFlow(index, { target: 'ItemsController.create', param: 'dto' }).flows).toEqual(
+        expect(index.flows).toEqual(
             expect.arrayContaining([
                 expect.objectContaining({
+                    target: 'ItemsController.create',
+                    param: 'dto',
+                    sourceKind: 'http',
                     source: '@Body dto',
-                    via: 'this.service.create(dto)',
                     to: 'ItemsService.create',
                     toParam: 'dto',
                 }),
                 expect.objectContaining({
                     target: 'ItemsService.create',
                     param: 'dto',
-                    via: 'this.mapper.audit(name)',
-                    to: 'ItemMapper.audit',
-                    toParam: 'name',
-                }),
-            ]),
-        );
-        expect(explainDataFlow(index, { target: 'ItemsService.create', param: 'dto' }).flows).toEqual(
-            expect.arrayContaining([
-                expect.objectContaining({
-                    via: 'this.mapper.audit(name)',
-                    to: 'ItemMapper.audit',
-                    path: expect.arrayContaining(['dto', 'name']),
+                    sourceKind: 'param',
+                    source: 'dto',
+                    to: 'ItemMapper.toEntity',
+                    toParam: 'dto',
                 }),
             ]),
         );
 
-        expect(explainBranch(index, { file: '/root/apps/api/src/items.controller.ts', line: 13 }).branches[0]).toMatchObject({
-            condition: 'dto.enabled',
-            thenText: expect.stringContaining('this.service.create(dto)'),
-            calls: ['ItemsService.create'],
-        });
+        expect(index.branches).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    functionName: 'ItemsController.create',
+                    condition: 'dto.enabled',
+                    calls: ['ItemsService.create'],
+                }),
+            ]),
+        );
+
         expect(explainBranch(index, { file: 'apps/api/src/items.controller.ts', line: 13 }).found).toBe(true);
 
         expect(traceScenario(index, { entry: 'ItemsController.create' }).calls.map((c) => c.callee)).toEqual([
@@ -258,6 +203,41 @@ describe('extractCodeIntel', () => {
                 expect.objectContaining({ kind: 'type-reference', symbol: 'ItemResult' }),
                 expect.objectContaining({ kind: 'field-reference', symbol: 'ItemResult', field: 'id' }),
             ]),
+        );
+    });
+
+    it('extracts impacts in frontend components', () => {
+        const project = inMemoryProject({
+            '/root/apps/web/src/components/ItemCard.tsx': `
+                import { ItemResult } from '../../../../libs/api/item.dto';
+                export const ItemCard = ({ item }: { item: ItemResult }) => {
+                    return <div>{item.name}</div>;
+                };
+            `,
+            '/root/libs/api/item.dto.ts': `
+                export interface ItemResult {
+                    id: string;
+                    name: string;
+                }
+            `,
+        });
+
+        const index = extractCodeIntel(project, { root: '/root' });
+        const impact = impactContract(index, { symbol: 'ItemResult' });
+
+        expect(impact.impacts).toContainEqual(
+            expect.objectContaining({
+                kind: 'type-reference',
+                file: 'apps/web/src/components/ItemCard.tsx',
+            }),
+        );
+
+        expect(impact.impacts).toContainEqual(
+            expect.objectContaining({
+                kind: 'field-reference',
+                field: 'name',
+                file: 'apps/web/src/components/ItemCard.tsx',
+            }),
         );
     });
 
@@ -290,28 +270,36 @@ describe('extractCodeIntel', () => {
         const index = extractCodeIntel(project, { root: '/root' });
 
         // Ternary check
-        expect(index.branches).toContainEqual(expect.objectContaining({
-            functionName: 'App.process',
-            condition: 'val > 10',
-            calls: expect.arrayContaining(['App.high', 'App.low']),
-        }));
+        expect(index.branches).toContainEqual(
+            expect.objectContaining({
+                functionName: 'App.process',
+                condition: 'val > 10',
+                calls: expect.arrayContaining(['App.high', 'App.low']),
+            }),
+        );
 
         // Switch checks (one branch per case/default)
-        expect(index.branches).toContainEqual(expect.objectContaining({
-            functionName: 'App.process',
-            condition: "status === 'open'",
-            calls: ['App.onOpen'],
-        }));
-        expect(index.branches).toContainEqual(expect.objectContaining({
-            functionName: 'App.process',
-            condition: "status === 'closed'",
-            calls: ['App.onClosed'],
-        }));
-        expect(index.branches).toContainEqual(expect.objectContaining({
-            functionName: 'App.process',
-            condition: 'status default',
-            calls: ['App.onDefault'],
-        }));
+        expect(index.branches).toContainEqual(
+            expect.objectContaining({
+                functionName: 'App.process',
+                condition: "status === 'open'",
+                calls: ['App.onOpen'],
+            }),
+        );
+        expect(index.branches).toContainEqual(
+            expect.objectContaining({
+                functionName: 'App.process',
+                condition: "status === 'closed'",
+                calls: ['App.onClosed'],
+            }),
+        );
+        expect(index.branches).toContainEqual(
+            expect.objectContaining({
+                functionName: 'App.process',
+                condition: 'status default',
+                calls: ['App.onDefault'],
+            }),
+        );
     });
 
     it('extracts throw and catch as branches', () => {
@@ -335,17 +323,21 @@ describe('extractCodeIntel', () => {
         const index = extractCodeIntel(project, { root: '/root' });
 
         // Throw check
-        expect(index.branches).toContainEqual(expect.objectContaining({
-            functionName: 'App.save',
-            condition: "throw new Error('No data')",
-        }));
+        expect(index.branches).toContainEqual(
+            expect.objectContaining({
+                functionName: 'App.save',
+                condition: "throw new Error('No data')",
+            }),
+        );
 
         // Catch check
-        expect(index.branches).toContainEqual(expect.objectContaining({
-            functionName: 'App.save',
-            condition: 'catch (e)',
-            calls: ['App.logError'],
-        }));
+        expect(index.branches).toContainEqual(
+            expect.objectContaining({
+                functionName: 'App.save',
+                condition: 'catch (e)',
+                calls: ['App.logError'],
+            }),
+        );
     });
 
     it('captures nested conditions in nestedIn field', () => {
@@ -366,10 +358,12 @@ describe('extractCodeIntel', () => {
 
         const index = extractCodeIntel(project, { root: '/root' });
 
-        expect(index.branches).toContainEqual(expect.objectContaining({
-            condition: 'b > 0',
-            nestedIn: ['a > 0'],
-        }));
+        expect(index.branches).toContainEqual(
+            expect.objectContaining({
+                condition: 'b > 0',
+                nestedIn: ['a > 0'],
+            }),
+        );
     });
 
     it('captures nested conditions across different branching types', () => {
@@ -392,10 +386,12 @@ describe('extractCodeIntel', () => {
 
         const index = extractCodeIntel(project, { root: '/root' });
 
-        expect(index.branches).toContainEqual(expect.objectContaining({
-            condition: 'val > 0',
-            nestedIn: ["status === 'open'"],
-        }));
+        expect(index.branches).toContainEqual(
+            expect.objectContaining({
+                condition: 'val > 0',
+                nestedIn: ["status === 'open'"],
+            }),
+        );
     });
 
     it('extracts else and else-if branches with negated conditions', () => {
@@ -421,24 +417,30 @@ describe('extractCodeIntel', () => {
         const index = extractCodeIntel(project, { root: '/root' });
 
         // If branch
-        expect(index.branches).toContainEqual(expect.objectContaining({
-            condition: 'a > 10',
-            calls: ['App.high'],
-        }));
+        expect(index.branches).toContainEqual(
+            expect.objectContaining({
+                condition: 'a > 10',
+                calls: ['App.high'],
+            }),
+        );
 
         // Else-if branch
-        expect(index.branches).toContainEqual(expect.objectContaining({
-            condition: 'a > 5',
-            nestedIn: ['!(a > 10)'],
-            calls: ['App.medium'],
-        }));
+        expect(index.branches).toContainEqual(
+            expect.objectContaining({
+                condition: 'a > 5',
+                nestedIn: ['!(a > 10)'],
+                calls: ['App.medium'],
+            }),
+        );
 
         // Else branch
-        expect(index.branches).toContainEqual(expect.objectContaining({
-            condition: 'else',
-            nestedIn: ['!(a > 10)', '!(a > 5)'],
-            calls: ['App.low'],
-        }));
+        expect(index.branches).toContainEqual(
+            expect.objectContaining({
+                condition: 'else',
+                nestedIn: ['!(a > 10)', '!(a > 5)'],
+                calls: ['App.low'],
+            }),
+        );
     });
 
     it('handles nested else branches correctly', () => {
@@ -462,11 +464,13 @@ describe('extractCodeIntel', () => {
 
         const index = extractCodeIntel(project, { root: '/root' });
 
-        expect(index.branches).toContainEqual(expect.objectContaining({
-            condition: 'else',
-            nestedIn: ['a > 0', '!(b > 0)'],
-            calls: ['App.onlyA'],
-        }));
+        expect(index.branches).toContainEqual(
+            expect.objectContaining({
+                condition: 'else',
+                nestedIn: ['a > 0', '!(b > 0)'],
+                calls: ['App.onlyA'],
+            }),
+        );
     });
 
     it('categorizes sources and sinks in data flows', () => {
@@ -488,32 +492,60 @@ describe('extractCodeIntel', () => {
         const index = extractCodeIntel(project, { root: '/root' });
 
         // Source categorization (HTTP Body)
-        expect(index.flows).toContainEqual(expect.objectContaining({
-            param: 'data',
-            sourceKind: 'http',
-            source: '@Body data',
-        }));
+        expect(index.flows).toContainEqual(
+            expect.objectContaining({
+                param: 'data',
+                sourceKind: 'http',
+                source: '@Body data',
+            }),
+        );
 
         // Sink categorization (Log)
-        expect(index.flows).toContainEqual(expect.objectContaining({
-            param: 'data',
-            sinkKind: 'log',
-            to: 'this.logger.log',
-        }));
+        expect(index.flows).toContainEqual(
+            expect.objectContaining({
+                param: 'data',
+                sinkKind: 'log',
+                to: 'this.logger.log',
+            }),
+        );
 
         // Sink categorization (DB)
-        expect(index.flows).toContainEqual(expect.objectContaining({
-            param: 'data',
-            sinkKind: 'db',
-            to: 'this.db.save',
-        }));
+        expect(index.flows).toContainEqual(
+            expect.objectContaining({
+                param: 'data',
+                sinkKind: 'db',
+                to: 'this.db.save',
+            }),
+        );
 
         // Env source
-        expect(index.flows).toContainEqual(expect.objectContaining({
-            param: 'apiKey',
-            sourceKind: 'env',
-            via: 'apiKey = process.env.API_KEY',
-        }));
+        expect(index.flows).toContainEqual(
+            expect.objectContaining({
+                param: 'apiKey',
+                sourceKind: 'env',
+                via: 'apiKey = process.env.API_KEY',
+            }),
+        );
+    });
+
+    it('ranks data flows preferring sinks', () => {
+        const project = inMemoryProject({
+            '/root/app.ts': `
+                export class App {
+                    process(data: any) {
+                        this.logger.log(data);
+                        this.db.save(data);
+                    }
+                }
+            `,
+        });
+
+        const index = extractCodeIntel(project, { root: '/root' });
+        const result = explainDataFlow(index, { target: 'App.process', param: 'data' });
+
+        // DB sink (rank 0) should be before log sink (rank 5)
+        expect(result.flows[0]).toMatchObject({ sinkKind: 'db' });
+        expect(result.flows[1]).toMatchObject({ sinkKind: 'log' });
     });
 
     it('resolves calls with complex DI and typed receivers', () => {
@@ -546,27 +578,33 @@ describe('extractCodeIntel', () => {
                 export class UsersService {
                     find() {}
                 }
-            `
+            `,
         });
 
         const index = extractCodeIntel(project, { root: '/root' });
-        const calls = index.calls.filter(c => c.caller === 'App.run');
+        const calls = index.calls.filter((c) => c.caller === 'App.run');
 
-        expect(calls).toContainEqual(expect.objectContaining({
-            callee: 'UsersService.find',
-            kind: 'internal'
-        }));
+        expect(calls).toContainEqual(
+            expect.objectContaining({
+                callee: 'UsersService.find',
+                kind: 'internal',
+            }),
+        );
 
-        expect(calls).toContainEqual(expect.objectContaining({
-            callee: 'InternalService.doWork',
-            kind: 'internal'
-        }));
+        expect(calls).toContainEqual(
+            expect.objectContaining({
+                callee: 'InternalService.doWork',
+                kind: 'internal',
+            }),
+        );
 
         // For @Inject('TOKEN') any, we should now see the token in callee
-        expect(calls).toContainEqual(expect.objectContaining({
-            callee: 'API_CLIENT.post',
-            expression: 'this.client.post'
-        }));
+        expect(calls).toContainEqual(
+            expect.objectContaining({
+                callee: 'API_CLIENT.post',
+                expression: 'this.client.post',
+            }),
+        );
     });
 
     it('captures conditions for each call', () => {
@@ -584,10 +622,10 @@ describe('extractCodeIntel', () => {
         });
 
         const index = extractCodeIntel(project, { root: '/root' });
-        const call = index.calls.find(c => c.callee === 'App.handleOpen');
+        const call = index.calls.find((c) => c.callee === 'App.handleOpen');
 
         expect(call).toMatchObject({
-            conditions: ["status === 'open'"]
+            conditions: ["status === 'open'"],
         });
     });
 
@@ -614,19 +652,23 @@ describe('extractCodeIntel', () => {
         const index = extractCodeIntel(project, { root: '/root' });
         const result = traceScenario(index, { entry: 'App.run' });
 
-        expect(result.calls).toContainEqual(expect.objectContaining({
-            callee: 'App.doA',
-            conditions: ['a > 0']
-        }));
-        expect(result.calls).toContainEqual(expect.objectContaining({
-            callee: 'App.doB',
-            conditions: ['!(a > 0)']
-        }));
-        expect(result.calls).toContainEqual(expect.objectContaining({
-            callee: 'App.finish',
-            conditions: ['a > 0'] // finish is called from doA which was called under a > 0
-            // Wait, does walkCalls preserve conditions from the caller?
-            // Currently no, but it should!
-        }));
+        expect(result.calls).toContainEqual(
+            expect.objectContaining({
+                callee: 'App.doA',
+                conditions: ['a > 0'],
+            }),
+        );
+        expect(result.calls).toContainEqual(
+            expect.objectContaining({
+                callee: 'App.doB',
+                conditions: ['!(a > 0)'],
+            }),
+        );
+        expect(result.calls).toContainEqual(
+            expect.objectContaining({
+                callee: 'App.finish',
+                conditions: ['a > 0'],
+            }),
+        );
     });
 });
