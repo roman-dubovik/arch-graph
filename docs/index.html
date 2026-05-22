@@ -114,9 +114,14 @@
       </div>
 
       <div class="container hero-content">
-        <p class="eyebrow">v0.1.0 · Node ≥ 20 · No build step</p>
+        <p class="eyebrow">v1.0.0 · Node ≥ 20 · No build step</p>
         <h1 class="hero-title"><span class="title-mono">arch-graph</span></h1>
-        <p class="hero-tagline">Static architecture graph for NestJS monorepos.<br><span class="hl-accent">Local multilingual semantic search runs alongside, fully offline.</span><br><span class="hl">Deterministic.</span> <span class="hl">Benchmarked.</span> <span class="hl-accent">Zero LLM tokens on build AND query.</span></p>
+        <p class="hero-tagline">Static architecture graph for NestJS monorepos.<br>
+        Local multilingual semantic search runs alongside, fully offline.<br>
+        The Self-Injected AI Operating System.<br>
+        Deterministic. Benchmarked.<br>
+        <span class="hl-accent">Zero LLM tokens on build AND query.</span><br>
+        <span class="hl-accent">Cuts LLM context costs by up to 90%.</span></p>
 
         <div class="hero-ctas">
           <a class="btn btn-primary" href="#install">
@@ -130,6 +135,10 @@
 
         <ul class="hero-stats" aria-label="Headline benchmark numbers">
           <li>
+            <span class="stat-num">90%</span>
+            <span class="stat-label">token savings via Surgical Reads</span>
+          </li>
+          <li>
             <span class="stat-num">14.3×</span>
             <span class="stat-label">fewer tokens on structural queries</span>
           </li>
@@ -139,11 +148,7 @@
           </li>
           <li>
             <span class="stat-num">0</span>
-            <span class="stat-label">LLM tokens at build</span>
-          </li>
-          <li>
-            <span class="stat-num">0</span>
-            <span class="stat-label">LLM tokens at query</span>
+            <span class="stat-label">LLM tokens to build indexes</span>
           </li>
         </ul>
       </div>
@@ -152,10 +157,13 @@
     <!-- ──────────────────────────────────────────── PROBLEM ─────────── -->
     <section class="section section-problem" id="problem" aria-labelledby="problem-title">
       <div class="container narrow">
-        <p class="section-eyebrow">The problem</p>
+        <p class="section-eyebrow">The challenge</p>
         <h2 id="problem-title" class="section-title">Twelve services in. Nobody knows what depends on what.</h2>
         <p class="prose reveal">
-          You're 12 services into a NestJS monorepo. Who publishes <code>user.created</code>? Which service depends on <code>users_table</code>? What breaks if you rename <code>auth-lib</code>? Each question is a 15-minute grep session — or a 30-second LLM hallucination — or a context-hungry RAG pipeline that bills you per token. arch-graph turns the entire monorepo into a typed graph you can query in milliseconds — exact queries cite <code>file:line</code>, fuzzy or natural-language queries hit a <strong>local multilingual semantic index</strong>. Zero external LLM calls either way.
+          You're 12 services into a NestJS monorepo. Who publishes <code>user.created</code>? Which service depends on <code>users_table</code>? Every question is a 15-minute grep session. But for <strong>AI Agents</strong>, the problem is worse: <strong>Large codebases drown LLMs in context.</strong> Reading full files burns thousands of tokens per turn, and without explicit guidance, the AI guesses your project's "unwritten rules," leading to architectural drift.
+        </p>
+        <p class="prose reveal" style="margin-top: 1.5rem;">
+          <code>arch-graph</code> solves both by providing a <strong>deterministic knowledge sidecar</strong>. Human developers get millisecond answers; AI agents get compressed "Proof Packets" and extracted policies. The result: 100% architectural fidelity with <strong>90% fewer tokens</strong>.
         </p>
       </div>
     </section>
@@ -352,7 +360,218 @@
       </div>
     </section>
 
-    <!-- ──────────────────────────────────────── SEMANTIC LAYER ────────── -->
+    <!-- ──────────────────────────────────────── AI RUNTIME LAYER ────────── -->
+    <section class="section section-ai-layer" id="ai-layer" aria-labelledby="ai-layer-title">
+      <div class="container">
+        <p class="section-eyebrow" style="color: var(--accent-warm);">Level 0 Context Injection</p>
+        <h2 id="ai-layer-title" class="section-title">The Self-Injected AI Operating System.</h2>
+        <p class="section-lead">
+          Stop bloating your LLM prompts with static instructions. <code>arch-graph</code> acts as a native plugin for your AI agents (Claude Code, Cursor, Gemini), automatically waking them up with a perfect mental map of your monorepo and enforcing your project's unique architectural rules.
+        </p>
+
+        <div class="features-grid reveal">
+          <div class="feature-card">
+            <h3 class="feature-title">
+              <span class="feature-badge">0</span>
+              Level 0 Orientation
+            </h3>
+            <p class="feature-text">When you launch an agent, the <code>SessionStart.sh</code> hook automatically feeds it a high-level "Empire Map": apps, libs, index health, and top coding policies. The LLM never starts blind.</p>
+          </div>
+          <div class="feature-card">
+            <h3 class="feature-title">
+              <span class="feature-badge">1</span>
+              Surgical Reads
+            </h3>
+            <p class="feature-text">Instead of reading 1000-line files (10,000 tokens), the LLM uses <code>get_file_outline</code> to get exact <code>line</code> and <code>endLine</code> boundaries. It reads only the 20 lines it needs. <strong>90% token savings.</strong></p>
+          </div>
+          <div class="feature-card">
+            <h3 class="feature-title">
+              <span class="feature-badge">2</span>
+              Gold Standard Blueprints
+            </h3>
+            <p class="feature-text">The engine ranks symbols by quality (JSDocs, tests, decorators). When creating a new feature, the LLM requests a <code>blueprint</code> and mimics your project's absolute best code, not generic boilerplate.</p>
+          </div>
+          <div class="feature-card">
+            <h3 class="feature-title">
+              <span class="feature-badge">3</span>
+              Policy Mining
+            </h3>
+            <p class="feature-text"><code>arch-graph</code> automatically infers your team's unwritten rules (e.g. <em>"@ManyToOne is always paired with @CustomFK"</em>). It feeds these to the LLM as mandatory policies.</p>
+          </div>
+          <div class="feature-card">
+            <h3 class="feature-title">
+              <span class="feature-badge">4</span>
+              Dependency Guardrails
+            </h3>
+            <p class="feature-text">Before the LLM writes code, it runs <code>validate_proposal</code>. If it tries to import a Repository into a Controller, the tool blocks it and demands it route through a Service.</p>
+          </div>
+          <div class="feature-card">
+            <h3 class="feature-title">
+              <span class="feature-badge">5</span>
+              Placement Engine
+            </h3>
+            <p class="feature-text">Monorepos get messy when LLMs guess where files go. The <code>suggest_placement</code> tool analyzes your folder clusters and tells the LLM exactly where a new service should live.</p>
+          </div>
+        </div>
+
+        <!-- Interactive Agent Showcase -->
+        <div class="terminal-showcase reveal" style="margin-top: 4rem;">
+          <div class="terminal-header">
+            <div class="terminal-dot dot-red"></div>
+            <div class="terminal-dot dot-yellow"></div>
+            <div class="terminal-dot dot-green"></div>
+            <div class="terminal-title">AI Layer Workflow: Implementing PromoCode Feature</div>
+          </div>
+          <div class="terminal-body" id="agent-showcase">
+            <div class="agent-bubble is-visible">
+              <div class="bubble-role role-user">User</div>
+              <div class="bubble-content">Implement a new PromoCodeService with a validate() method.</div>
+            </div>
+            <div class="agent-bubble" id="step-orientation">
+              <div class="bubble-role role-agent">Agent</div>
+              <div class="bubble-content">Session start hook. Calling <code>get_orientation()</code>...</div>
+              <div class="tool-output">
+{
+  "projectSummary": "NestJS Monorepo with 5 apps and 12 libs.",
+  "health": { "freshness": "Updated 2m ago", "symbols": 27588 },
+  "topPolicies": [
+    "- DTO naming: *Dto (95% confidence)",
+    "- Entity location: libs/shared/src/db/entities/*.ts"
+  ],
+  "agentHint": "Use 'get_project_policies' for deep rules."
+}
+              </div>
+            </div>
+            <div class="agent-bubble" id="step-policies">
+              <div class="bubble-role role-agent">Agent</div>
+              <div class="bubble-content">Checking project rules. Calling <code>get_project_policies()</code>...</div>
+              <div class="tool-output">
+{
+  "policies": [
+    { "rule": "When using @ManyToOne, also use @CustomFK", "confidence": 1.0 },
+    { "rule": "Controllers must NOT import Repositories", "kind": "guardrail" }
+  ]
+}
+              </div>
+            </div>
+            <div class="agent-bubble" id="step-placement">
+              <div class="bubble-role role-agent">Agent</div>
+              <div class="bubble-content">Finding correct folder. Calling <code>suggest_placement("PromoCodeService", "class")</code>...</div>
+              <div class="tool-output">
+{
+  "suggestions": [{
+    "path": "apps/api/src/modules/promos/PromoCodeService.ts",
+    "reason": "Existing feature services follow this cluster pattern."
+  }]
+}
+              </div>
+            </div>
+            <div class="agent-bubble" id="step-blueprint">
+              <div class="bubble-role role-agent">Agent</div>
+              <div class="bubble-content">Learning from best examples. Calling <code>get_blueprint("class")</code>...</div>
+              <div class="tool-output">
+{
+  "compositeGuide": "Ideal Service: Uses @Injectable, implements BaseService, and pairs @ManyToOne with @CustomFK. See DiscountService.ts:12-45.",
+  "patterns": ["Services 100% located in **/services/*.ts"]
+}
+              </div>
+            </div>
+            <div class="agent-bubble" id="step-final">
+              <div class="bubble-role role-agent">Agent</div>
+              <div class="bubble-content">Strategy ready. I will implement <code>PromoCodeService</code> in <code>apps/api/src/modules/promos/</code> using <code>@CustomFK</code> and <code>BaseService</code> inheritance as per local standards.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ──────────────────────────────────────── CODE INTELLIGENCE ────────── -->
+    <section class="section section-code-intel" id="code-intel" aria-labelledby="code-intel-title" style="background-color: var(--bg-1);">
+      <div class="container">
+        <p class="section-eyebrow">Deterministic Code Analysis</p>
+        <h2 id="code-intel-title" class="section-title">Deep Code-Intel Sidecar.</h2>
+        <p class="section-lead">
+          While semantic search handles fuzzy intent, <code>code-intel</code> provides 100% accurate, deterministic facts. It builds a specialized index of symbols, calls, and data flows that the LLM can query to understand complex execution chains across service boundaries.
+        </p>
+
+        <div class="features-grid reveal" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));">
+          <div class="feature-card">
+            <h3 class="feature-title">Data-Flow facts</h3>
+            <p class="feature-text">Trace parameters from <code>@Body</code>, through mappers, to the Database sink. AST-proven facts, no guessing.</p>
+          </div>
+          <div class="feature-card">
+            <h3 class="feature-title">Cross-Service Flow</h3>
+            <p class="feature-text">Don't stop at boundaries. <code>trace_message_flow</code> links emitters to remote handlers across NATS/RMQ.</p>
+          </div>
+          <div class="feature-card">
+            <h3 class="feature-title">Impact Analysis</h3>
+            <p class="feature-text">Changing a DTO or DB Entity field? <code>impact_contract</code> instantly finds every affected consumer.</p>
+          </div>
+          <div class="feature-card">
+            <h3 class="feature-title">Call Graph Scenarios</h3>
+            <p class="feature-text">Ask "What happens when this is called?". <code>trace_scenario</code> returns internal execution chains, conditions, and bubbling exceptions.</p>
+          </div>
+        </div>
+
+        <div class="terminal-showcase reveal" style="margin-top: 3rem; border-color: var(--accent);">
+          <div class="terminal-header" style="background: var(--bg-2);">
+            <div class="terminal-dot dot-red"></div>
+            <div class="terminal-dot dot-yellow"></div>
+            <div class="terminal-dot dot-green"></div>
+            <div class="terminal-title">Deterministic Query: Trace Scenario</div>
+          </div>
+          <div class="terminal-body" id="code-intel-showcase">
+            <div class="agent-bubble is-visible">
+              <div class="bubble-role role-user">User</div>
+              <div class="bubble-content">What happens exactly when a new order is created? Trace the logic.</div>
+            </div>
+            <div class="agent-bubble">
+              <div class="bubble-role role-agent">Agent</div>
+              <div class="bubble-content">I will trace the execution path. Calling <code>trace_scenario("POST /orders")</code>...</div>
+              <div class="tool-output" style="border-color: var(--accent); background: #08080c;">
+{
+  "entry": "OrdersController.create",
+  "calls": [
+    { "callee": "OrdersService.register", "conditions": ["dto.valid"] },
+    { "callee": "OrderMapper.toEntity", "conditions": ["dto.valid"] },
+    { "callee": "InventoryService.checkStock", "conditions": ["dto.valid"] },
+    { "callee": "TransactionsRepository.save", "conditions": ["dto.valid", "stock > 0"] }
+  ]
+}
+              </div>
+              <div style="color: var(--text-dim); margin-top: 12px; font-size: 13px; font-style: italic;">
+                // Logic branch 'stock > 0' was automatically detected and merged into the trace.
+              </div>
+            </div>
+          </div>        </div>
+
+        <!-- LSP Comparison (Subtle Move) -->
+        <div class="lsp-comparison reveal" style="margin-top: 5rem; border-top: 1px dashed var(--border); padding-top: 3rem;">
+          <div style="text-align: center; margin-bottom: 2rem;">
+            <span class="pill" style="background: rgba(139, 158, 255, 0.1); color: var(--accent); border-color: var(--accent); margin-bottom: 1rem;">Intelligence vs Navigation</span>
+            <h3 class="subsection-title" style="margin-top: 0.5rem;">Why architecture facts beat raw LSP indexing</h3>
+          </div>
+
+          <div class="comparison-grid" style="opacity: 0.9;">
+            <div class="comp-cell comp-header">Legacy LSP (Microscope)</div>
+            <div class="comp-cell comp-header" style="color: var(--accent);">arch-graph (Radar)</div>
+
+            <div class="comp-label">Scope</div>
+            <div class="comp-cell comp-text">Syntax & types in current workspace.</div>
+            <div class="comp-cell comp-text">System-wide intent (NATS, DB, BullMQ).</div>
+
+            <div class="comp-label">Efficiency</div>
+            <div class="comp-cell comp-text">Raw 200+ reference lists.</div>
+            <div class="comp-cell comp-text">Compressed Proof Packets (90% savings).</div>
+
+            <div class="comp-label">Context</div>
+            <div class="comp-cell comp-text">Stops at file boundaries.</div>
+            <div class="comp-cell comp-text">Cross-boundary (NestJS ➔ React).</div>
+          </div>
+        </div>
+
+      </div>
+    </section>
     <section class="section section-bench" id="semantic" aria-labelledby="semantic-title">
       <div class="container">
         <p class="section-eyebrow">Semantic layer</p>
@@ -400,7 +619,7 @@ arch-graph docs-search "how to set up MSSQL agent" # docs bucket only</code></pr
     <section class="section section-bench" id="bench" aria-labelledby="bench-title">
       <div class="container">
         <p class="section-eyebrow">Measured</p>
-        <h2 id="bench-title" class="section-title">Measured on 4 real NestJS monorepos.</h2>
+        <h2 id="bench-title" class="section-title">Measured on 3 real NestJS monorepos.</h2>
         <p class="section-lead">Head-to-head re-run via <code>arch-graph compare</code> on four private reference monorepos. 40 auto-generated questions total (10 per project) sampled from real nodes in each graph. Same compression, same <code>cl100k_base</code> encoder, same questions for both tools. Recall is a substring-presence necessary-condition heuristic, not an end-to-end LLM eval. <strong>This benchmark predates the semantic sidecar</strong> — it measures arch-graph's structural-only retrieval. A fresh post-semantic head-to-head on 103 fuzzy-intent queries with e5-base (2026-05-19) is in <a href="https://github.com/roman-dubovik/arch-graph/blob/main/docs/comparisons/2026-05-19-arch-graph-vs-graphify-eval.md">docs/comparisons/2026-05-19-arch-graph-vs-graphify-eval.md</a> — <strong>on Russian queries arch-graph leads 74.8% vs 20.4%</strong> (multilingual handling matters when 80%+ of queries are non-English); under <strong>apples-to-apples strict scoring on English-keyword queries arch-graph leads by +18.9 pp</strong> at 75.4% vs 56.5% (graphify with full LLM semantic extraction). arch-graph stays at zero LLM tokens on both build and query; graphify uses LLM subagents at build time.</p>
 
         <div class="bench-cards reveal">
@@ -931,28 +1150,55 @@ arch-graph build --strict            # CI gate: exit 3 if recall drops below flo
     <!-- ──────────────────────────────────── RECENT UPDATES ────────────── -->
     <section class="section section-limits" id="recent" aria-labelledby="recent-title">
       <div class="container">
-        <p class="section-eyebrow">May 2026</p>
-        <h2 id="recent-title" class="section-title">5 features shipped.</h2>
+        <h2 id="recent-title" class="section-title">12 features shipped.</h2>
         <ul class="limits-list">
           <li class="reveal">
+            <h3><code>ai-runtime-layer-v1</code></h3>
+            <p>Direct agent integration (Claude, Cursor, Gemini). Includes Orientation hooks, Style Guardians, and Guardrails to ensure AI writes architecturally sound code.</p>
+          </li>
+          <li class="reveal">
+            <h3><code>cross-service-flow-v1</code></h3>
+            <p>Unified trace across NATS/RMQ boundaries. Links emitters to remote handlers for a single, end-to-end event chain.</p>
+          </li>
+          <li class="reveal">
+            <h3><code>member-map-intelligence</code></h3>
+            <p>New <code>get_type_definition</code> tool returns exhaustive member maps (fields, decorators, methods) for any symbol without reading files.</p>
+          </li>
+          <li class="reveal">
+            <h3><code>code-intel-v1</code></h3>
+            <p>Deterministic code intelligence: symbols, deep call traces, and interprocedural data-flow facts extracted directly from AST via <code>ts-morph</code>.</p>
+          </li>
+          <li class="reveal">
+            <h3><code>surgical-reads-v1</code></h3>
+            <p>Symbol range detection (<code>line</code> to <code>endLine</code>). Allows LLMs to read only specific methods instead of full files, saving 90% in token costs.</p>
+          </li>
+          <li class="reveal">
             <h3><code>doc-section-v1</code></h3>
-            <p>Markdown files are now indexed as first-class graph nodes alongside code. Semantic search covers your documentation as well as your source.</p>
+            <p>Markdown files are indexed as graph nodes. Semantic search now covers documentation alongside source code for better high-level intent retrieval.</p>
           </li>
           <li class="reveal">
             <h3><code>code-vs-docs-v1</code></h3>
-            <p>Semantic search splits into <code>code_search</code> and <code>docs_search</code> MCP tools. Eliminates the dilution effect where doc-section nodes crowd out code results (A_find recall: 80% → 30% with mixed bucket → 70% restored with split). Baseline hit-rate across 103 eval queries: 47% → 67% → <strong>75% with e5-base</strong>.</p>
+            <p>Semantic search split into dedicated <code>code_search</code> and <code>docs_search</code> tools to prevent result dilution. Hit-rate up to <strong>75% with e5-base</strong>.</p>
           </li>
           <li class="reveal">
             <h3><code>ui-uplift-v1</code></h3>
-            <p>fe-component embed-text now includes a <code>classes:</code> block of Tailwind tokens and appended i18n strings, improving component-level retrieval accuracy.</p>
+            <p>Frontend component embeddings now include Tailwind tokens and i18n strings for highly precise UI-specific retrieval.</p>
           </li>
           <li class="reveal">
             <h3><code>openapi-enrich-v1</code></h3>
-            <p>OpenAPI YAML route descriptions and parameter summaries are folded into endpoint node embeddings.</p>
+            <p>Swagger/OpenAPI route descriptions and parameter summaries are automatically folded into backend endpoint node metadata.</p>
           </li>
           <li class="reveal">
             <h3><code>fe-i18n-multi-enum-v1</code></h3>
-            <p>Multi-file locale support (<code>locales/&lt;lang&gt;/&lt;feature&gt;.json</code>) and TS enum-member resolution in <code>@Controller</code> path templates.</p>
+            <p>Support for multi-file locales and automated TS enum-member resolution in NestJS <code>@Controller</code> path templates.</p>
+          </li>
+          <li class="reveal">
+            <h3><code>nats-command-resolver-v1</code></h3>
+            <p>NATS subjects now resolve Nest command objects (<code>{ cmd: EAudit.X }</code>) and base-class sender methods expanded through overrides.</p>
+          </li>
+          <li class="reveal">
+            <h3><code>bullmq-types-v1</code></h3>
+            <p>Resolves <code>Job&lt;DataType&gt;</code> generics via <code>ts-morph</code> type-checker. High-fidelity queue data-flow extraction for producers and workers.</p>
           </li>
         </ul>
       </div>
@@ -982,7 +1228,7 @@ arch-graph stats</code></pre>
           <article class="cli-card reveal">
             <p class="three-ways-sub">For MCP-aware clients</p>
             <h3 class="mono">MCP server</h3>
-            <p>Stdio MCP server exposing 15 tools — 12 structural (<code>subject_publishers</code>, <code>queue_consumers</code>, <code>table_users</code>, <code>path</code>, …) and 3 semantic: <code>code_search</code>, <code>docs_search</code>, <code>semantic_search</code>. Wire it into any MCP host.</p>
+            <p>Stdio MCP server exposing 30+ specialized tools — structural (<code>subject_publishers</code>, <code>queue_consumers</code>, <code>table_users</code>, <code>path</code>, …), 3 semantic (<code>code_search</code>, <code>docs_search</code>, <code>semantic_search</code>), and 15 code-intel tools for symbols, members, references, exception traces, and impact. Wire it into any MCP host.</p>
             <div class="code-block">
               <button class="copy-btn" type="button" aria-label="Copy MCP config">Copy</button>
               <pre><code class="lang-json">// ~/.claude/.mcp.json

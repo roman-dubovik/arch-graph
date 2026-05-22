@@ -1,8 +1,8 @@
 import type { SourceLoc } from '../core/types.js';
 
-export const CODE_INTEL_SCHEMA_VERSION = 1;
+export const CODE_INTEL_SCHEMA_VERSION = 2;
 
-export type CodeIntelSymbolKind = 'class' | 'method' | 'function' | 'dto' | 'type' | 'field' | 'param';
+export type CodeIntelSymbolKind = 'class' | 'method' | 'function' | 'dto' | 'type' | 'field' | 'param' | 'db-entity';
 
 export type CodeIntelCallKind =
     | 'internal'

@@ -15,12 +15,25 @@ The graph is the source of truth for these questions; do not grep or guess:
 - "How does service `A` reach service `B`? (NATS, HTTP, BullMQ, DI)"
 - "What changes if I rename / move `libs/foo`?" (ts-import edges incl. CommonJS `require(...)`)
 - "What are the outgoing / incoming dependencies of service `X`?"
-
 ### Prefer CLI query subcommands
 
-The fastest way to answer architecture questions is `arch-graph`'s built-in query subcommands. They read `arch-graph-out/graph.json` directly — no MCP server, no stdio overhead, structured output:
+The fastest way to answer architecture questions is `arch-graph`'s built-in query subcommands. They read `arch-graph-out/graph.json` and `arch-graph-out/code-intel/` directly:
 
 ```sh
+# --- NEW: Code Intelligence (Surgical Reads & Context) ---
+arch-graph code-search "q"      # Semantic search over code
+arch-graph docs-search "q"      # Semantic search over docs
+arch-graph code-intel outline <F> # TOC + line ranges for surgical reads
+arch-graph code-intel get-type-definition <S> # All members/decorators of a type
+arch-graph code-intel find-references <S> # All calls/flows/type-refs project-wide
+arch-graph code-intel resolve-symbol <S> # Locate symbol/path (fuzzy)
+arch-graph code-intel trace-scenario <E> # Full execution trace from endpoint
+arch-graph code-intel trace-message-flow <P> # Cross-service NATS/RMQ trace
+arch-graph code-intel impact-contract <D> # Impact of changing a DTO/Entity
+arch-graph code-intel explain-flow --target <T> --param <P> # Trace parameter mutation
+arch-graph code-intel policies           # Get project style rules (MANDATORY before coding)
+arch-graph code-intel blueprint <K>      # Get best code examples for Service/DTO/etc.
+# --- Legacy: Structural Graph Queries ---
 arch-graph who-publishes <subject>     # NATS publishers
 arch-graph who-subscribes <subject>    # NATS subscribers
 arch-graph queue-producers <queue>     # BullMQ producers
@@ -33,6 +46,13 @@ arch-graph path <from> <to>            # shortest directed path
 arch-graph stats                       # node + edge counts per kind
 ```
 
+**Surgical Context Strategy:**
+1. Use `code-intel policies` to understand local coding norms.
+2. Use `code-intel outline` to find the `line` and `endLine` of a target method.
+3. Use `cat` (or your reading tool) to read ONLY that specific line range.
+This saves 90% of context tokens and avoids hallucinating on unrelated code.
+
+**Fuzzy fallback**: ...
 **Fuzzy fallback**: If a question is imprecise ("how does X work?", "find code about Y") and no structured subcommand fits, use `arch-graph semantic search "<query>"` (or MCP tool `semantic_search`). Requires running `arch-graph semantic build` first to build the semantic index.
 
 Options: `--out <dir>` (default `./arch-graph-out`), `--json` (default), `--table`.

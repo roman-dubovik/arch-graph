@@ -228,7 +228,7 @@ place to write instructions without mutating project memory. When appending to
 ## Block 5.6: FE Diagnose And Recall Hygiene
 
 Status: closed; route/hook recall hygiene and diagnostics noise classification
-extended after target-monorepo and Beribuy validation feedback.
+extended after target-monorepo and project-gamma validation feedback.
 
 ### What changed
 

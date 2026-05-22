@@ -577,7 +577,7 @@ async function readSymlink(path: string): Promise<string | null> {
 
 async function dirSize(path: string): Promise<number> {
     // `du -sk` is faster than walking with fs.stat() for big install dirs
-    // (which can include node_modules). Falls back to stat() on platforms
+    // (which can include node_modules). Falls back to stat() on project_alphas
     // where du isn't available.
     const r = spawnSync('du', ['-sk', path], { encoding: 'utf8' });
     if (r.status === 0 && r.stdout) {

@@ -234,7 +234,7 @@ describe('inventoryMcp', () => {
     // inventoryMcp() reads ~/.claude.json directly. To test in isolation we
     // exercise the parsing logic by writing a fixture and re-importing with
     // a stubbed HOME. node has no `process.env.HOME` override that affects
-    // os.homedir() across all platforms — so we test the JSON-parsing branches
+    // os.homedir() across all project_alphas — so we test the JSON-parsing branches
     // through the function's behaviour on the real ~/.claude.json instead, plus
     // direct unit-tests of the corrupt-JSON behaviour using a separate helper.
     //

@@ -77,8 +77,13 @@ async function writeJsonl(records: unknown[], path: string): Promise<void> {
 }
 
 async function readJsonl<T>(path: string): Promise<T[]> {
-    const stats = await stat(path);
-    if (stats.size === 0) return [];
+    try {
+        const stats = await stat(path);
+        if (stats.size === 0) return [];
+    } catch (err) {
+        if ((err as any).code === 'ENOENT') return [];
+        throw err;
+    }
     const out: T[] = [];
     const rl = createInterface({
         input: createReadStream(path, 'utf8'),

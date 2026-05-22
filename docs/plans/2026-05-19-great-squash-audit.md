@@ -107,7 +107,7 @@ Develop's version is a strict subset; nothing to preserve from develop on these 
 | Group | Files | Rule | Notes |
 |-------|-------|------|-------|
 | 1. Gate triple | `src/core/types.ts`, `src/mcp/server.ts`, `src/output/graph-mermaid.ts` | **Take main** | Pre-verified superset above |
-| 2. Extractors / pipeline | `src/pipeline/build.ts` | Manual merge: main's BullMQ + cron orchestration + develop's semantic-pipeline integration | High risk — verify via Phase C insyra smoke |
+| 2. Extractors / pipeline | `src/pipeline/build.ts` | Manual merge: main's BullMQ + cron orchestration + develop's semantic-pipeline integration | High risk — verify via Phase C project-beta smoke |
 | 3. CLI | `src/cli/init.ts`, `src/cli/init.test.ts`, `src/cli/semantic-commands.ts`, `src/cli/semantic-commands.test.ts` | Take develop where main never touched (semantic), main where develop didn't | |
 | 4. Core config | `src/core/config.ts`, `src/core/config.docs.test.ts` | Manual merge — add new config fields from BOTH sides | |
 | 5. MCP semantic search | `src/mcp/semantic-search.test.ts` | Take develop (code-vs-docs-v1 work) | |
@@ -118,11 +118,11 @@ Develop's version is a strict subset; nothing to preserve from develop on these 
 ## Commit-message leak scan on develop
 
 ```
-git log main..develop --pretty='%H|%s' | grep -iE "insyra|beribuy|platformx|platform_|nightly-quality-check|weekly-retention-cleanup|insyra-like|platform-like|beribuy-?2|\bplatform\b"
+git log main..develop --pretty='%H|%s' | grep -iE "project-beta|project-gamma|project-alphax|project-alpha_|nightly-quality-check|weekly-retention-cleanup|project-beta-like|project-alpha-like|project-gamma-?2|\bproject-alpha\b"
 → 1 commit
 ```
 
-The single hit: `cc149fe` "docs: anonymize remaining platform/i..." — itself an anonymization-documentation commit (like main's `80d5dc5`/`d51d3aa`). It documents the mapping; literal client-names appear by intent. **Squash commit message must consolidate this without literal mentions** (AC2.2). No additional develop-side commit-message rewriting needed for AC2.1+AC2.2 scope.
+The single hit: `cc149fe` "docs: anonymize remaining project-alpha/i..." — itself an anonymization-documentation commit (like main's `80d5dc5`/`d51d3aa`). It documents the mapping; literal client-names appear by intent. **Squash commit message must consolidate this without literal mentions** (AC2.2). No additional develop-side commit-message rewriting needed for AC2.1+AC2.2 scope.
 
 For **AC2.3** (full commit-message history rewrite via filter-repo), main side has ~30 commits flagged in the source plan; develop side adds ~0-1. Combined ~30. Tag→subject map below covers the 7 origin tags that would need re-anchoring post-rewrite.
 

@@ -5,6 +5,8 @@ import { extractCodeIntel } from './extractor.js';
 import {
     explainBranch,
     explainDataFlow,
+    getBlueprint,
+    getFileOutline,
     impactContract,
     resolveSymbol,
     traceScenario,
@@ -182,7 +184,11 @@ describe('extractCodeIntel', () => {
             ]),
         );
 
-        expect(explainBranch(index, { file: 'apps/api/src/items.controller.ts', line: 13 }).found).toBe(true);
+        expect(explainBranch(index, { file: 'apps/api/src/items.controller.ts', line: 13 }).branches[0]).toMatchObject({
+            condition: 'dto.enabled',
+            thenText: expect.stringContaining('this.service.create(dto)'),
+            calls: ['ItemsService.create'],
+        });
 
         expect(traceScenario(index, { entry: 'ItemsController.create' }).calls.map((c) => c.callee)).toEqual([
             'ItemsService.create',
@@ -684,16 +690,122 @@ describe('extractCodeIntel', () => {
         });
 
         const index = extractCodeIntel(project, { root: '/root' });
-        const appClass = index.symbols.find(s => s.name === 'App');
-        const runMethod = index.symbols.find(s => s.name === 'run');
+        const appClass = index.symbols.find((s) => s.name === 'App');
+        const runMethod = index.symbols.find((s) => s.name === 'run');
 
         expect(appClass).toMatchObject({
             line: 2,
-            endLine: 6
+            endLine: 6,
         });
         expect(runMethod).toMatchObject({
             line: 3,
-            endLine: 5
+            endLine: 5,
         });
+    });
+
+    it('P0: provides a complete outline with precise ranges for surgical reads', () => {
+        const project = inMemoryProject({
+            '/root/complex.ts': `
+                import { Injectable } from '@nestjs/common';
+
+                /**
+                 * Main application class.
+                 */
+                @Injectable()
+                export class ComplexApp {
+                    // Property with comment
+                    private state = 1;
+
+                    /**
+                     * Entry point.
+                     */
+                    async run(data: string): Promise<void> {
+                        console.log(data);
+
+                        if (data) {
+                            return this.finish();
+                        }
+                    }
+
+                    private finish() {
+                        return;
+                    }
+                }
+            `,
+        });
+
+        const index = extractCodeIntel(project, { root: '/root' });
+        const outline = getFileOutline(index, { file: 'complex.ts' });
+
+        expect(outline.symbols).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    name: 'ComplexApp',
+                    kind: 'class',
+                    line: 7,
+                    endLine: 26,
+                }),
+                expect.objectContaining({
+                    name: 'run',
+                    kind: 'method',
+                    line: 15,
+                    endLine: 21,
+                }),
+                expect.objectContaining({
+                    name: 'finish',
+                    kind: 'method',
+                    line: 23,
+                    endLine: 25,
+                }),
+                expect.objectContaining({
+                    name: 'state',
+                    kind: 'field',
+                    line: 10,
+                    endLine: 10,
+                }),
+            ]),
+        );
+
+        // Verify ordering
+        const names = outline.symbols.map((s) => s.name);
+        expect(names.indexOf('ComplexApp')).toBeLessThan(names.indexOf('run'));
+        expect(names.indexOf('run')).toBeLessThan(names.indexOf('finish'));
+    });
+
+    it('infers project policies from symbol patterns', () => {
+        const project = inMemoryProject({
+            '/root/src/dto/1.dto.ts': 'export class OneDto {}',
+            '/root/src/dto/2.dto.ts': 'export class TwoDto {}',
+            '/root/src/dto/3.dto.ts': 'export class ThreeDto {}',
+            '/root/src/dto/4.dto.ts': 'export class FourDto {}',
+            '/root/src/dto/5.dto.ts': 'export class FiveDto {}',
+            '/root/src/entities/item.entity.ts': `
+                export class Item {
+                    @ManyToOne() @CustomFK() field1: any;
+                    @ManyToOne() @CustomFK() field2: any;
+                    @ManyToOne() @CustomFK() field3: any;
+                    @ManyToOne() @CustomFK() field4: any;
+                    @ManyToOne() field5: any;
+                }
+            `,
+        });
+
+        const index = extractCodeIntel(project, { root: '/root' });
+
+        // Placement policy
+        expect(index.policies).toContainEqual(
+            expect.objectContaining({
+                kind: 'placement',
+                rule: 'DTO location: src/dto/*.ts',
+            }),
+        );
+
+        // Decorator pairing policy
+        expect(index.policies).toContainEqual(
+            expect.objectContaining({
+                kind: 'decorator-pairing',
+                rule: 'When using @ManyToOne, also use @CustomFK',
+            }),
+        );
     });
 });

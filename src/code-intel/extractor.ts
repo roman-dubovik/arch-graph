@@ -6,7 +6,9 @@ import type {
     CodeIntelFlow,
     CodeIntelImpact,
     CodeIntelIndex,
+    CodeIntelPolicy,
     CodeIntelSymbol,
+    CodeIntelSymbolKind,
 } from './types.js';
 import { CODE_INTEL_SCHEMA_VERSION } from './types.js';
 
@@ -42,13 +44,17 @@ export function extractCodeIntel(project: Project, opts: CodeIntelExtractOptions
     const calls: CodeIntelCall[] = [];
     const flows: CodeIntelFlow[] = [];
     const branches: CodeIntelBranch[] = [];
-    const symbolByFqn = new Map<string, CodeIntelSymbol>();
+    const symbolsByFqn = new Map<string, CodeIntelSymbol[]>();
+    const symbolsById = new Map<string, CodeIntelSymbol>();
     const functionContexts: FunctionLikeCtx[] = [];
 
     const addSymbol = (symbol: CodeIntelSymbol): void => {
-        if (symbolByFqn.has(symbol.fqn)) return;
+        if (symbolsById.has(symbol.id)) return;
         symbols.push(symbol);
-        symbolByFqn.set(symbol.fqn, symbol);
+        symbolsById.set(symbol.id, symbol);
+        const bucket = symbolsByFqn.get(symbol.fqn) ?? [];
+        bucket.push(symbol);
+        symbolsByFqn.set(symbol.fqn, bucket);
     };
 
     for (const sf of project.getSourceFiles()) {
@@ -60,7 +66,7 @@ export function extractCodeIntel(project: Project, opts: CodeIntelExtractOptions
             const decorators = decoratorsOf(cls);
             let classKind: CodeIntelSymbolKind = 'class';
             if (isDtoName(name)) classKind = 'dto';
-            else if (isEntityName(name) || decorators.some(d => d.includes('@Entity'))) classKind = 'db-entity';
+            else if (isEntityName(name) || decorators.some((d) => d.includes('@Entity'))) classKind = 'db-entity';
 
             const classSymbol = symbolForNode(cls, classKind, name, name, opts.root, {
                 description: descriptionOf(cls),
@@ -163,12 +169,44 @@ export function extractCodeIntel(project: Project, opts: CodeIntelExtractOptions
     }
 
     for (const ctx of functionContexts) {
-        collectFunctionFacts(ctx, symbolByFqn, calls, flows, branches, opts.root);
+        collectFunctionFacts(ctx, symbolsByFqn, symbolsById, calls, flows, branches, opts.root);
     }
 
     const impacts = collectImpacts(project, symbols, opts.root);
     const policies = inferPolicies(symbols);
+
     return buildIndex(opts.root, symbols, calls, flows, branches, impacts, policies);
+}
+
+function buildIndex(
+    root: string,
+    symbols: CodeIntelSymbol[],
+    calls: CodeIntelCall[],
+    flows: CodeIntelFlow[],
+    branches: CodeIntelBranch[],
+    impacts: CodeIntelImpact[],
+    policies: CodeIntelPolicy[],
+): CodeIntelIndex {
+    return {
+        manifest: {
+            schemaVersion: CODE_INTEL_SCHEMA_VERSION,
+            builtAt: new Date().toISOString(),
+            root,
+            counts: {
+                symbols: symbols.length,
+                calls: calls.length,
+                flows: flows.length,
+                branches: branches.length,
+                impacts: impacts.length,
+            },
+        },
+        symbols,
+        calls,
+        flows,
+        branches,
+        impacts,
+        policies,
+    };
 }
 
 function inferPolicies(symbols: CodeIntelSymbol[]): CodeIntelPolicy[] {
@@ -184,8 +222,6 @@ function inferPolicies(symbols: CodeIntelSymbol[]): CodeIntelPolicy[] {
         for (const s of kindSymbols) {
             const dir = s.file.split('/').slice(0, -1).join('/');
             if (!dir) continue;
-            // Generalize: apps/api/src/modules/users/dto -> **/modules/*/dto
-            // Generalize: libs/shared/src/dto -> **/src/dto
             const generalized = dir
                 .replace(/^apps\/[^/]+\//, '**/')
                 .replace(/^libs\/[^/]+\//, '**/')
@@ -195,7 +231,7 @@ function inferPolicies(symbols: CodeIntelSymbol[]): CodeIntelPolicy[] {
         }
         for (const [pattern, count] of placements) {
             const confidence = count / kindSymbols.length;
-            if (confidence > 0.3) { // Lowered to 30% for discovery
+            if (confidence > 0.3) {
                 policies.push({
                     id: `policy:placement:${kind}:${pattern}`,
                     kind: 'placement',
@@ -208,14 +244,13 @@ function inferPolicies(symbols: CodeIntelSymbol[]): CodeIntelPolicy[] {
             }
         }
 
-        // 2. Decorator Pairings (for classes and fields)
+        // 2. Decorator Pairings
         if (kind === 'class' || kind === 'field' || kind === 'method' || kind === 'db-entity') {
             const decoratorCounts = new Map<string, number>();
             const pairings = new Map<string, Map<string, number>>();
             for (const s of kindSymbols) {
                 if (!s.decorators || s.decorators.length === 0) continue;
-                // Get unique base names of decorators on this symbol
-                const uniqueDecoNames = Array.from(new Set(s.decorators.map(d => d.split('(')[0].trim())));
+                const uniqueDecoNames = Array.from(new Set(s.decorators.map((d) => d.split('(')[0].trim())));
                 for (const dName of uniqueDecoNames) {
                     decoratorCounts.set(dName, (decoratorCounts.get(dName) ?? 0) + 1);
                     for (const d2Name of uniqueDecoNames) {
@@ -228,12 +263,12 @@ function inferPolicies(symbols: CodeIntelSymbol[]): CodeIntelPolicy[] {
             }
 
             for (const [d1, d1Count] of decoratorCounts) {
-                if (d1Count < 3) continue; // Minimum 3 occurrences to be a "pattern"
+                if (d1Count < 3) continue;
                 const d1Pairings = pairings.get(d1);
                 if (!d1Pairings) continue;
                 for (const [d2, pairCount] of d1Pairings) {
                     const confidence = pairCount / d1Count;
-                    if (confidence > 0.5) { // At least 50% pairing
+                    if (confidence > 0.5) {
                         policies.push({
                             id: `policy:pairing:${kind}:${d1}:${d2}`,
                             kind: 'decorator-pairing',
@@ -275,39 +310,7 @@ function inferPolicies(symbols: CodeIntelSymbol[]): CodeIntelPolicy[] {
             }
         }
     }
-
     return policies;
-}
-
-function buildIndex(
-    root: string,
-    symbols: CodeIntelSymbol[],
-    calls: CodeIntelCall[],
-    flows: CodeIntelFlow[],
-    branches: CodeIntelBranch[],
-    impacts: CodeIntelImpact[],
-    policies: CodeIntelPolicy[],
-): CodeIntelIndex {
-    return {
-        manifest: {
-            schemaVersion: CODE_INTEL_SCHEMA_VERSION,
-            builtAt: new Date().toISOString(),
-            root,
-            counts: {
-                symbols: symbols.length,
-                calls: calls.length,
-                flows: flows.length,
-                branches: branches.length,
-                impacts: impacts.length,
-            },
-        },
-        symbols,
-        calls,
-        flows,
-        branches,
-        impacts,
-        policies,
-    };
 }
 
 function addTypeAliasDto(alias: TypeAliasDeclaration, root: string, addSymbol: (symbol: CodeIntelSymbol) => void): void {
@@ -346,7 +349,8 @@ function addParams(
 
 function collectFunctionFacts(
     ctx: FunctionLikeCtx,
-    symbolByFqn: Map<string, CodeIntelSymbol>,
+    symbolsByFqn: Map<string, CodeIntelSymbol[]>,
+    symbolsById: Map<string, CodeIntelSymbol>,
     calls: CodeIntelCall[],
     flows: CodeIntelFlow[],
     branches: CodeIntelBranch[],
@@ -354,12 +358,12 @@ function collectFunctionFacts(
 ): void {
     const params = ctx.node.getParameters();
     const callByNode = new Map<CallExpression, CodeIntelCall>();
-    const localFacts = collectLocalFacts(ctx, symbolByFqn);
+    const localFacts = collectLocalFacts(ctx, symbolsByFqn, symbolsById);
     ctx.node.forEachDescendant((node) => {
         if (!Node.isCallExpression(node)) return;
         if (node.getFirstAncestorByKind(SyntaxKind.Decorator)) return;
-        const resolved = resolveCall(node, ctx, symbolByFqn, localFacts);
-        const loc = locOf(node);
+        const resolved = resolveCall(node, ctx, symbolsByFqn, symbolsById, localFacts);
+        const loc = locOf(node, root);
         const conditions = collectNestedConditions(node);
         const call: CodeIntelCall = {
             id: `call:${ctx.fqn}:${ctx.callOrder}:${loc.line}:${loc.column}`,
@@ -384,14 +388,14 @@ function collectFunctionFacts(
     });
 
     for (const param of params) {
-        collectParamFlows(ctx, param, calls.filter((call) => call.callerId === ctx.id), flows, symbolByFqn);
+        collectParamFlows(ctx, param, calls.filter((call) => call.callerId === ctx.id), flows, symbolsById, root);
     }
 
-    collectFunctionLocalFlows(ctx, flows);
+    collectFunctionLocalFlows(ctx, flows, root);
 
     ctx.node.forEachDescendant((node) => {
         if (Node.isIfStatement(node)) {
-            const loc = locOf(node.getExpression());
+            const loc = locOf(node.getExpression(), root);
             const nestedIn = collectNestedConditions(node);
             const dominatedCalls = Array.from(callByNode.entries())
                 .filter(([callNode]) => node.getThenStatement().containsRange(callNode.getPos(), callNode.getEnd()))
@@ -411,7 +415,7 @@ function collectFunctionFacts(
 
             const elseStatement = node.getElseStatement();
             if (elseStatement && !Node.isIfStatement(elseStatement)) {
-                const elseLoc = locOf(elseStatement);
+                const elseLoc = locOf(elseStatement, root);
                 const elseNestedIn = collectNestedConditions(elseStatement);
                 const elseCalls = Array.from(callByNode.entries())
                     .filter(([callNode]) => elseStatement.containsRange(callNode.getPos(), callNode.getEnd()))
@@ -430,7 +434,7 @@ function collectFunctionFacts(
                 });
             }
         } else if (Node.isConditionalExpression(node)) {
-            const loc = locOf(node.getCondition());
+            const loc = locOf(node.getCondition(), root);
             const nestedIn = collectNestedConditions(node);
             const dominatedCalls = Array.from(callByNode.entries())
                 .filter(([callNode]) => node.getWhenTrue().containsRange(callNode.getPos(), callNode.getEnd()) ||
@@ -452,7 +456,7 @@ function collectFunctionFacts(
             const switchExpr = node.getExpression().getText();
             const nestedIn = collectNestedConditions(node);
             for (const clause of node.getClauses()) {
-                const loc = locOf(clause);
+                const loc = locOf(clause, root);
                 const isDefault = Node.isDefaultClause(clause);
                 const condition = isDefault ? `${switchExpr} default` : `${switchExpr} === ${clause.getExpression().getText()}`;
                 const dominatedCalls = Array.from(callByNode.entries())
@@ -472,7 +476,7 @@ function collectFunctionFacts(
                 });
             }
         } else if (Node.isThrowStatement(node)) {
-            const loc = locOf(node);
+            const loc = locOf(node, root);
             const nestedIn = collectNestedConditions(node);
             branches.push({
                 id: `branch:${ctx.fqn}:throw:${loc.line}:${loc.column}`,
@@ -489,7 +493,7 @@ function collectFunctionFacts(
         } else if (Node.isTryStatement(node)) {
             const catchClause = node.getCatchClause();
             if (catchClause) {
-                const loc = locOf(catchClause);
+                const loc = locOf(catchClause, root);
                 const nestedIn = collectNestedConditions(catchClause);
                 const dominatedCalls = Array.from(callByNode.entries())
                     .filter(([callNode]) => catchClause.getBlock().containsRange(callNode.getPos(), callNode.getEnd()))
@@ -510,7 +514,7 @@ function collectFunctionFacts(
         } else if (Node.isReturnStatement(node)) {
             const expr = node.getExpression();
             if (expr) {
-                const loc = locOf(node);
+                const loc = locOf(node, root);
                 const nestedIn = collectNestedConditions(node);
                 branches.push({
                     id: `branch:${ctx.fqn}:return:${loc.line}:${loc.column}`,
@@ -569,7 +573,7 @@ function collectFunctionLocalFlows(ctx: FunctionLikeCtx, flows: CodeIntelFlow[],
         const initializerText = node.getInitializer()?.getText() ?? '';
         const sourceKind = classifyValueSourceKind(initializerText);
         if (!sourceKind) return;
-        const loc = locOf(node);
+        const loc = locOf(node, root);
         const name = node.getName();
         flows.push({
             id: `flow:${ctx.fqn}:local-source:${loc.line}:${loc.column}`,
@@ -592,7 +596,7 @@ function collectParamFlows(
     param: ParameterDeclaration,
     callerCalls: CodeIntelCall[],
     flows: CodeIntelFlow[],
-    symbolByFqn: Map<string, CodeIntelSymbol>,
+    symbolsById: Map<string, CodeIntelSymbol>,
     root: string,
 ): void {
     const paramName = param.getName();
@@ -602,7 +606,7 @@ function collectParamFlows(
         const usedAliasesByArg = call.args.map((arg) => Array.from(aliases).filter((alias) => expressionUsesName(arg, alias)));
         const usedAliases = usedAliasesByArg.flat();
         if (usedAliases.length === 0) continue;
-        const calleeParams = paramsForCall(symbolByFqn, call);
+        const calleeParams = paramsForCall(symbolsById, call);
         const firstUsedArgIndex = usedAliasesByArg.findIndex((argAliases) => argAliases.length > 0);
         const toParam = firstUsedArgIndex >= 0 ? calleeParams[firstUsedArgIndex]?.name : undefined;
         flows.push({
@@ -624,7 +628,7 @@ function collectParamFlows(
     }
     ctx.node.forEachDescendant((node) => {
         if (Node.isVariableDeclaration(node) && expressionUsesName(node.getInitializer()?.getText() ?? '', paramName)) {
-            const loc = locOf(node);
+            const loc = locOf(node, root);
             const initializerText = node.getInitializer()?.getText() ?? '';
             const sourceKind = classifyValueSourceKind(initializerText);
             flows.push({
@@ -642,7 +646,7 @@ function collectParamFlows(
             });
         }
         if (Node.isReturnStatement(node) && expressionUsesName(node.getExpression()?.getText() ?? '', paramName)) {
-            const loc = locOf(node);
+            const loc = locOf(node, root);
             flows.push({
                 id: `flow:${ctx.fqn}:${paramName}:return:${loc.line}:${loc.column}`,
                 targetId: ctx.id,
@@ -681,9 +685,9 @@ function classifyValueSourceKind(expression: string): CodeIntelFlow['sourceKind'
     return undefined;
 }
 
-function paramsForCall(symbolByFqn: Map<string, CodeIntelSymbol>, call: CodeIntelCall): CodeIntelSymbol[] {
+function paramsForCall(symbolsById: Map<string, CodeIntelSymbol>, call: CodeIntelCall): CodeIntelSymbol[] {
     if (!call.calleeId) return [];
-    return Array.from(symbolByFqn.values())
+    return Array.from(symbolsById.values())
         .filter((symbol) => symbol.kind === 'param' && symbol.parentId === call.calleeId);
 }
 
@@ -710,7 +714,8 @@ function namesFromBindingName(node: MorphNode): string[] {
 function resolveCall(
     call: CallExpression,
     ctx: FunctionLikeCtx,
-    symbolByFqn: Map<string, CodeIntelSymbol>,
+    symbolsByFqn: Map<string, CodeIntelSymbol[]>,
+    symbolsById: Map<string, CodeIntelSymbol>,
     localFacts: FunctionLocalFacts = emptyLocalFacts(),
 ): { callee: string; calleeId?: string; receiver?: string; kind: NonNullable<CodeIntelCall['kind']>; module?: string; importName?: string } {
     const expr = call.getExpression();
@@ -736,7 +741,17 @@ function resolveCall(
             const typeName = localFacts.variableTypes.get(receiver.getText());
             if (typeName) callee = `${cleanTypeName(typeName)}.${method}`;
         }
-        calleeId = symbolByFqn.get(callee)?.id;
+
+        const candidates = symbolsByFqn.get(callee) ?? [];
+        // Ranking: same file > close quality
+        const best = candidates
+            .sort((a, b) => {
+                const aSameFile = a.file === ctx.node.getSourceFile().getFilePath() ? 0 : 1;
+                const bSameFile = b.file === ctx.node.getSourceFile().getFilePath() ? 0 : 1;
+                return aSameFile - bSameFile || (b.qualityScore ?? 0) - (a.qualityScore ?? 0);
+            })[0];
+
+        calleeId = best?.id;
         const receiverText = receiver.getText();
         const receiverImport = Node.isIdentifier(receiver) ? ctx.imports.get(receiverText) : undefined;
         if (receiverImport?.isExternal) {
@@ -771,7 +786,8 @@ function resolveCall(
         const imported = ctx.imports.get(localName);
         if (imported) {
             const callee = imported.isExternal ? `${imported.module}.${imported.imported}` : imported.imported;
-            const calleeId = symbolByFqn.get(callee)?.id;
+            const candidates = symbolsByFqn.get(callee) ?? [];
+            const calleeId = candidates[0]?.id;
             return {
                 callee,
                 ...(calleeId ? { calleeId } : {}),
@@ -781,7 +797,8 @@ function resolveCall(
             };
         }
         const callee = localName;
-        const calleeId = symbolByFqn.get(callee)?.id;
+        const candidates = symbolsByFqn.get(callee) ?? [];
+        const calleeId = candidates[0]?.id;
         return { callee, ...(calleeId ? { calleeId } : {}), kind: calleeId ? 'internal' : classifyCallKind(callee, '', expr.getText()) };
     }
     return { callee: expr.getText(), kind: classifyCallKind(expr.getText(), '', expr.getText()) };
@@ -789,7 +806,8 @@ function resolveCall(
 
 function collectLocalFacts(
     ctx: FunctionLikeCtx,
-    symbolByFqn: Map<string, CodeIntelSymbol>,
+    symbolsByFqn: Map<string, CodeIntelSymbol[]>,
+    symbolsById: Map<string, CodeIntelSymbol>,
 ): FunctionLocalFacts {
     const facts = emptyLocalFacts();
     for (const param of ctx.node.getParameters()) {
@@ -810,12 +828,12 @@ function collectLocalFacts(
         }
 
         if (!Node.isCallExpression(initializer)) return;
-        const resolved = resolveCall(initializer, ctx, symbolByFqn, facts);
+        const resolved = resolveCall(initializer, ctx, symbolsByFqn, symbolsById, facts);
         if (resolved.kind === 'external' || resolved.kind === 'framework' || resolved.kind === 'built-in') {
             facts.receiverKinds.set(name, resolved.kind);
         }
         if (!resolved.calleeId) return;
-        const callee = symbolById(symbolByFqn, resolved.calleeId);
+        const callee = symbolsById.get(resolved.calleeId);
         const returnType = callee?.returnType ? cleanTypeName(callee.returnType) : undefined;
         if (returnType && returnType !== 'void' && returnType !== 'Promise') {
             facts.variableTypes.set(name, unwrapPromiseType(returnType));
@@ -845,13 +863,6 @@ function unwrapInitializer(node: MorphNode | undefined): MorphNode | undefined {
         current = current.getExpression();
     }
     return current;
-}
-
-function symbolById(symbolByFqn: Map<string, CodeIntelSymbol>, id: string): CodeIntelSymbol | undefined {
-    for (const symbol of symbolByFqn.values()) {
-        if (symbol.id === id) return symbol;
-    }
-    return undefined;
 }
 
 function unwrapPromiseType(typeName: string): string {
@@ -956,7 +967,6 @@ function rankAndDedupeImpacts(impacts: CodeIntelImpact[]): CodeIntelImpact[] {
 
     const out: CodeIntelImpact[] = [];
     for (const bucket of grouped.values()) {
-        // Sort by weight: lower is better
         bucket.sort((a, b) => impactWeight(a.kind) - impactWeight(b.kind));
         out.push(bucket[0]);
     }
@@ -1147,7 +1157,7 @@ function symbolForNode(
     const loc = locOf(node, root);
     const score = computeQualityScore(node, extra);
     return {
-        id: `symbol:${fqn}`,
+        id: `symbol:${loc.file}#${fqn}:${loc.line}:${loc.column}`,
         kind,
         name,
         fqn,
@@ -1162,30 +1172,19 @@ function symbolForNode(
 
 function computeQualityScore(node: MorphNode, extra: Partial<CodeIntelSymbol>): number {
     let score = 0;
-
-    // 1. Penalize "Abstract/Base" templates - we want concrete feature examples
     if (extra.name && /^(Base|Abstract|Internal)/.test(extra.name)) score -= 5;
-
-    // 2. JSDoc is a quality indicator (+2)
     if (extra.description && extra.description.length > 20) score += 2;
-
-    // 3. Decorator richness (+1.5 per unique decorator type)
     if (extra.decorators && extra.decorators.length > 0) {
         const uniqueDecos = new Set(extra.decorators.map((d) => d.split('(')[0])).size;
         score += uniqueDecos * 1.5;
     }
-
-    // 4. Field count richness for DTOs/Classes
     if (Node.isClassDeclaration(node) || Node.isInterfaceDeclaration(node)) {
         const members = Node.isClassDeclaration(node) ? node.getProperties().length : (node as any).getMembers?.().length ?? 0;
-        if (members >= 3 && members <= 15) score += 3; // Sweet spot for a good example
-        if (members > 15) score += 1; // Too big, but still a sample
+        if (members >= 3 && members <= 15) score += 3;
+        if (members > 15) score += 1;
     }
-
-    // 5. Visibility and modern patterns
     if (extra.visibility === 'public') score += 1;
     if (extra.isAsync) score += 0.5;
-
     return score;
 }
 
@@ -1241,17 +1240,6 @@ function cleanTypeName(typeName: string): string {
 
 function compactNodeText(text: string): string {
     return text.replace(/\s+/g, ' ').trim().slice(0, 240);
-}
-
-function dedupeById<T extends { id: string }>(items: T[]): T[] {
-    const seen = new Set<string>();
-    const out: T[] = [];
-    for (const item of items) {
-        if (seen.has(item.id)) continue;
-        seen.add(item.id);
-        out.push(item);
-    }
-    return out;
 }
 
 function withoutUndefined<T extends Record<string, unknown>>(obj: T): Partial<T> {

@@ -52,7 +52,7 @@ The `arch-graph setup-ai` command will allow users to select their preferred env
 
 ## 5. Risk & Benefit Assessment
 
-- **Benefit:** **Massive Token Savings.** By removing static instructions and full-file reads, we save up to 90% of context costs on large repos like `platform`.
+- **Benefit:** **Massive Token Savings.** By removing static instructions and full-file reads, we save up to 90% of context costs on large repos like `project-alpha`.
 - **Benefit:** **Architectural Consistency.** Guardrails and Policies are enforced at the tool level, making them unavoidable for the AI.
 - **Risk:** **Fragmented IDE Support.** 
     - *Mitigation:* The "Pointer Strategy" in `CLAUDE.md` acts as a universal fallback for all agents.

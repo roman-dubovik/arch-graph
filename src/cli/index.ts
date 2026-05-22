@@ -20,6 +20,7 @@ import { installSkill } from './skill.js';
 import { parseQueryArgs, QUERY_CMDS, runQueryCommand } from './query-commands.js';
 import { parseCompareArgs, runCompareCommand } from './compare-command.js';
 import { parseSemanticArgs, runSemanticBuild, runSemanticSearch } from './semantic-commands.js';
+import { parseCodeIntelArgs, runCodeIntelCommand } from '../code-intel/commands.js';
 import {
     tipsForBullmq,
     tipsForDi,
@@ -98,6 +99,8 @@ arch-graph — static architecture graph extractor for NestJS monorepos
 
 Usage:
   arch-graph build      [--config <path>] [--out <dir>] [--only=<extractor>] [--mermaid-slice=<mode>] [--quiet] [--strict] [--with-types]
+  arch-graph code-search "<query>" [--k <n>] [--json|--table]
+  arch-graph docs-search "<query>" [--k <n>] [--json|--table]
   arch-graph diagnose   [--config <path>] [--out <dir>] [--only=<extractor>]
   arch-graph init       [--out <path>]
   arch-graph mcp        [--out <dir>]
@@ -139,6 +142,16 @@ Semantic sidecar (optional — requires 'semantic build' first):
                               [--json|--table] [--kinds k1,k2,...]
                               Cosine kNN search over the semantic sidecar.
                               Exit codes: 0=found, 4=empty results, 1=sidecar missing.
+
+Code intelligence sidecar (optional — deterministic TS/NestJS facts):
+  arch-graph code-intel build [--config <path>] [--out <dir>]
+                              Writes <out>/code-intel/{manifest,symbols,calls,flows,branches,impacts,diagnostics}.
+  arch-graph code-intel resolve-symbol <name>
+  arch-graph code-intel explain-flow --target Class.method --param x
+  arch-graph code-intel explain-branch --file path --line N
+  arch-graph code-intel trace-scenario --entry "Class.method"
+  arch-graph code-intel impact-contract DtoName [--field name]
+  arch-graph code-intel diagnostics [--max-results N]
 
 Graph query subcommands (read arch-graph-out/graph.json):
   arch-graph who-publishes  <subject>      NATS publishers of subject (e.g. user.created)
@@ -796,6 +809,16 @@ async function main(): Promise<void> {
         process.stderr.write(`unknown subcommand: hook ${sub}\n${HELP}`);
         process.exit(1);
     }
+    if (cmd === 'code-search' || cmd === 'docs-search') {
+        const rest = parseSemanticArgs(argv.slice(1));
+        if (cmd === 'code-search') {
+            rest.excludeKinds = ['doc-section'];
+        } else {
+            rest.kinds = ['doc-section'];
+        }
+        return runSemanticSearch({ ...rest, sub: 'search' });
+    }
+
     if (cmd === 'semantic') {
         const { sub, ...rest } = parseSemanticArgs(argv.slice(1));
         if (sub === 'build') return runSemanticBuild({ sub, ...rest });
@@ -806,6 +829,9 @@ async function main(): Promise<void> {
             `         arch-graph semantic search "<query>" [--out <dir>] [--repo <id>] [--k <n>] [--json|--table] [--kinds k1,k2,...]\n`,
         );
         process.exit(1);
+    }
+    if (cmd === 'code-intel') {
+        return runCodeIntelCommand(parseCodeIntelArgs(argv.slice(1)));
     }
     if (cmd === 'install-skill') {
         return installSkill();

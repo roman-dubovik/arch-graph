@@ -1,4 +1,5 @@
 import { join, resolve } from 'node:path';
+import { readFile as readFileGraph } from 'node:fs/promises';
 
 import { Project, ts } from 'ts-morph';
 
@@ -9,22 +10,32 @@ import { readCodeIntelDiagnostics, readCodeIntelIndex, writeCodeIntelDiagnostics
 import {
     explainBranch,
     explainDataFlow,
+    findReferences,
     getBlueprint,
     getFileOutline,
     getOrientation,
     getProjectPolicies,
+    getTypeDefinition,
     impactContract,
     resolveSymbol,
+    selfCheck,
     suggestPlacement,
+    traceExceptions,
+    traceMessageFlow,
     traceScenario,
+    validateProposal,
 } from './queries.js';
 
 export type CodeIntelSubcommand =
     | 'build'
     | 'resolve-symbol'
+    | 'get-type-definition'
+    | 'find-references'
     | 'explain-flow'
     | 'explain-branch'
     | 'trace-scenario'
+    | 'trace-message-flow'
+    | 'trace-exceptions'
     | 'impact-contract'
     | 'outline'
     | 'blueprint'
@@ -57,6 +68,10 @@ export function parseCodeIntelArgs(argv: string[]): CodeIntelArgs {
         out: './arch-graph-out',
         config: './arch-graph.config.ts',
     };
+    if (sub === '--help' || sub === '-h' || (sub === '' && rest.length === 0)) {
+        args.sub = '' as any;
+        return args;
+    }
     const positionals: string[] = [];
     for (let i = 0; i < rest.length; i++) {
         const a = rest[i]!;
@@ -85,15 +100,22 @@ export function parseCodeIntelArgs(argv: string[]): CodeIntelArgs {
         else if (a.startsWith('--max-depth=')) args.maxDepth = Number(a.slice('--max-depth='.length));
         else if (a === '--max-results') args.maxResults = Number(readValue());
         else if (a.startsWith('--max-results=')) args.maxResults = Number(a.slice('--max-results='.length));
+        else if (a === '--kind' || a === '--symbol') args.symbol = readValue();
+        else if (a.startsWith('--kind=')) args.symbol = a.slice('--kind='.length);
+        else if (a.startsWith('--symbol=')) args.symbol = a.slice('--symbol='.length);
         else if (!a.startsWith('-')) positionals.push(a);
     }
     if (args.sub === 'resolve-symbol') args.symbol = positionals[0] ?? args.symbol;
+    if (args.sub === 'get-type-definition') args.symbol = positionals[0] ?? args.symbol;
+    if (args.sub === 'find-references') args.symbol = positionals[0] ?? args.symbol;
     if (args.sub === 'impact-contract') args.symbol = positionals[0] ?? args.symbol;
     if (args.sub === 'outline') args.file = positionals[0] ?? args.file;
     if (args.sub === 'blueprint') args.symbol = positionals[0] ?? args.symbol;
     if (args.sub === 'suggest-placement') args.entry = positionals[0] ?? args.entry;
     if (args.sub === 'validate-proposal') args.file = positionals[0] ?? args.file;
     if (args.sub === 'trace-scenario') args.entry = positionals.join(' ') || args.entry;
+    if (args.sub === 'trace-message-flow') args.entry = positionals.join(' ') || args.entry;
+    if (args.sub === 'trace-exceptions') args.entry = positionals.join(' ') || args.entry;
     return args;
 }
 
@@ -103,6 +125,13 @@ export async function runCodeIntelCommand(args: CodeIntelArgs): Promise<void> {
             return runCodeIntelBuild(args);
         case 'resolve-symbol':
             return emitQuery(args, (index) => resolveSymbol(index, requireString(args.symbol, 'symbol')));
+        case 'get-type-definition':
+            return emitQuery(args, (index) => getTypeDefinition(index, { symbol: requireString(args.symbol, 'symbol') }));
+        case 'find-references':
+            return emitQuery(args, (index) => findReferences(index, {
+                symbol: requireString(args.symbol, 'symbol'),
+                maxResults: args.maxResults,
+            }));
         case 'outline':
             return emitQuery(args, (index) => getFileOutline(index, { file: requireString(args.file, '--file') }));
         case 'blueprint':
@@ -112,7 +141,7 @@ export async function runCodeIntelCommand(args: CodeIntelArgs): Promise<void> {
         case 'suggest-placement':
             return emitQuery(args, (index) => suggestPlacement(index, {
                 name: requireString(args.entry, 'name'),
-                kind: requireString(args.symbol, '--symbol or positional'),
+                kind: requireString(args.symbol, '--kind or positional'),
             }));
         case 'validate-proposal':
             return emitQuery(args, (index) => validateProposal(index, {
@@ -141,6 +170,16 @@ export async function runCodeIntelCommand(args: CodeIntelArgs): Promise<void> {
                 entry: requireString(args.entry, '--entry'),
                 maxDepth: args.maxDepth,
             }));
+        case 'trace-exceptions':
+            return emitQuery(args, (index) => traceExceptions(index, {
+                entry: requireString(args.entry, '--entry'),
+            }));
+        case 'trace-message-flow':
+            return emitQuery(args, async (index) => {
+                const graphPath = join(resolve(args.out), 'graph.json');
+                const graphRaw = await readFileGraph(graphPath, 'utf8');
+                return traceMessageFlow(index, JSON.parse(graphRaw), requireString(args.entry, 'pattern'));
+            });
         case 'impact-contract':
             return emitQuery(args, (index) => impactContract(index, {
                 symbol: requireString(args.symbol, 'symbol'),
@@ -172,10 +211,11 @@ async function emitDiagnostics(args: CodeIntelArgs): Promise<void> {
 
 async function emitQuery(
     args: CodeIntelArgs,
-    run: (index: Awaited<ReturnType<typeof readCodeIntelIndex>>) => unknown,
+    run: (index: Awaited<ReturnType<typeof readCodeIntelIndex>>) => unknown | Promise<unknown>,
 ): Promise<void> {
     const index = await readCodeIntelIndex(join(resolve(args.out), 'code-intel'));
-    process.stdout.write(JSON.stringify(run(index), null, 2) + '\n');
+    const result = await run(index);
+    process.stdout.write(JSON.stringify(result, null, 2) + '\n');
 }
 
 async function runCodeIntelBuild(args: CodeIntelArgs): Promise<void> {
@@ -231,19 +271,28 @@ function requireNumber(value: number | undefined, name: string): number {
 }
 
 function codeIntelUsage(): string {
-    return `unknown code-intel subcommand\n` +
-        `  arch-graph code-intel build [--config <path>] [--out <dir>]\n` +
-        `  arch-graph code-intel resolve-symbol <name> [--out <dir>]\n` +
-        `  arch-graph code-intel outline <file> [--out <dir>]\n` +
-        `  arch-graph code-intel blueprint <kind> [--out <dir>]\n` +
-        `  arch-graph code-intel policies [--out <dir>]\n` +
-        `  arch-graph code-intel suggest-placement <name> --symbol <kind> [--out <dir>]\n` +
-        `  arch-graph code-intel validate-proposal <file> --symbol <kind> --target <imports> [--out <dir>]\n` +
-        `  arch-graph code-intel summary [--out <dir>]\n` +
-        `  arch-graph code-intel self-check [--out <dir>]\n` +
-        `  arch-graph code-intel explain-flow --target Class.method --param x [--out <dir>]\n` +
-        `  arch-graph code-intel explain-branch --file path --line N [--out <dir>]\n` +
-        `  arch-graph code-intel trace-scenario --entry "Class.method" [--out <dir>]\n` +
-        `  arch-graph code-intel impact-contract DtoName [--field name] [--out <dir>]\n` +
-        `  arch-graph code-intel diagnostics [--max-results N] [--out <dir>]\n`;
+    return `Deterministic TypeScript/NestJS Code Intelligence\n` +
+        `Usage: arch-graph code-intel <subcommand> [options]\n\n` +
+        `Stable Commands:\n` +
+        `  build                   Scan project and write sidecar index.\n` +
+        `  resolve-symbol <name>   Find unique symbol(s) by FQN or short name.\n` +
+        `  get-type-definition <q> Get all members/fields/decorators for a type/class.\n` +
+        `  find-references <name>  Find all calls, type-refs, and flows for a symbol.\n` +
+        `  outline <file>          Get symbol map with line ranges for surgical reads.\n` +
+        `  explain-flow            Trace data-flow source/sink for a method parameter.\n` +
+        `  explain-branch          Explain condition logic and return/calls at a line.\n` +
+        `  trace-scenario <entry>  Full internal execution tree for a method.\n` +
+        `  trace-exceptions <e>    Find all possible exceptions bubbling from an entry.\n` +
+        `  trace-message-flow <p>  Cross-service trace for a NATS/RMQ pattern.\n` +
+        `  impact-contract <dto>   Find all affected endpoints/components for a DTO/Entity.\n` +
+        `  summary / self-check    Quick orientation and index health check.\n` +
+        `  diagnostics             Aggregated quality metrics and unresolved gaps.\n\n` +
+        `Experimental Commands:\n` +
+        `  blueprint <kind>        Synthetic guide based on best project patterns.\n` +
+        `  policies                Inferred coding conventions (naming, placement).\n` +
+        `  suggest-placement       Analyze clusters to find where a new file belongs.\n` +
+        `  validate-proposal       Pre-flight check for layer violations / bad imports.\n\n` +
+        `Global Options:\n` +
+        `  --config <path>         Path to arch-graph.config.ts (default: current dir).\n` +
+        `  --out <dir>            Path to output directory (default: ./arch-graph-out).\n`;
 }

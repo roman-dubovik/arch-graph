@@ -10,8 +10,8 @@ Date: 2026-05-20
 
 | Task | Files (exact paths) | Touches |
 |------|---------------------|---------|
-| 1 — gitignore helper + wizard integration | `/Users/romandubovik/Documents/Projects/arch-graph/src/cli/init.ts` | new helper `ensureArchGraphOutGitignored()` + call between semantic-build step and "Next steps" hint |
-| 2 — tests | `/Users/romandubovik/Documents/Projects/arch-graph/src/cli/init.test.ts` | new `describe('ensureArchGraphOutGitignored', ...)` block |
+| 1 — gitignore helper + wizard integration | `<user-home>/Documents/Projects/arch-graph/src/cli/init.ts` | new helper `ensureArchGraphOutGitignored()` + call between semantic-build step and "Next steps" hint |
+| 2 — tests | `<user-home>/Documents/Projects/arch-graph/src/cli/init.test.ts` | new `describe('ensureArchGraphOutGitignored', ...)` block |
 
 No other files. No package.json changes. No README rewrites in this PR (the README's existing reminder line at line 68 stays — it remains accurate when the user declines or runs init in a stripped-down env).
 

@@ -36,7 +36,7 @@ Goal: Unified setup and active context injection for multi-agent ecosystems.
 
 ## 4. Final Validation Suite (Test Projects)
 
-After implementation, run the following benchmark on `platform`, `insyra`, and `beribuy`:
+After implementation, run the following benchmark on `project-alpha`, `project-beta`, and `project-gamma`:
 
 1. **Setup:** `arch-graph setup-ai --all`
 2. **Onboarding:** Call `get_orientation`. Verify it identifies apps/libs correctly.
