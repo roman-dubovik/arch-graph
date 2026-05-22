@@ -205,6 +205,34 @@ export function validateProposal(index: CodeIntelIndex, proposal: CodeIntelPropo
     };
 }
 
+export function selfCheck(index: CodeIntelIndex): CodeIntelHealth {
+    const issues: string[] = [];
+    const suggestions: string[] = [];
+    const now = Date.now();
+    const builtAt = new Date(index.manifest.builtAt).getTime();
+    const ageHours = (now - builtAt) / (1000 * 60 * 60);
+
+    const isFresh = ageHours < 24;
+    if (!isFresh) {
+        issues.push(`Index is stale: built more than 24 hours ago (${Math.round(ageHours)}h).`);
+        suggestions.push('Run "arch-graph code-intel build" to refresh the index.');
+    }
+
+    let isConsistent = true;
+    if (index.symbols.length > 50 && index.calls.length === 0) {
+        isConsistent = false;
+        issues.push(`Index appears broken: ${index.symbols.length} symbols found but 0 calls recorded.`);
+        suggestions.push('Rebuild the index using "arch-graph code-intel build".');
+    }
+
+    return {
+        isHealthy: isConsistent,
+        isFresh,
+        issues,
+        suggestions,
+    };
+}
+
 export function explainDataFlow(index: CodeIntelIndex, args: {
     target: string;
     param: string;

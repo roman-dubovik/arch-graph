@@ -47,6 +47,7 @@ import {
     getProjectPolicies,
     impactContract,
     resolveSymbol,
+    selfCheck,
     suggestPlacement,
     traceScenario,
 } from '../code-intel/queries.js';
@@ -637,6 +638,15 @@ export async function startMcpServer(opts: { out: string; config?: string }): Pr
             inputSchema: {},
         },
         async () => jsonResult(getOrientation(await loadCodeIntelFn())),
+    );
+
+    server.registerTool(
+        'self_check',
+        {
+            description: 'Verifies the health and freshness of the code-intel index. Use this if tools return unexpected empty results.',
+            inputSchema: {},
+        },
+        async () => jsonResult(selfCheck(await loadCodeIntelFn())),
     );
 
     server.registerTool(

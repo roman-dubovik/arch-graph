@@ -29,6 +29,7 @@ export type CodeIntelSubcommand =
     | 'suggest-placement'
     | 'validate-proposal'
     | 'summary'
+    | 'self-check'
     | 'diagnostics';
 
 export interface CodeIntelArgs {
@@ -119,6 +120,8 @@ export async function runCodeIntelCommand(args: CodeIntelArgs): Promise<void> {
             }));
         case 'summary':
             return emitQuery(args, (index) => getOrientation(index));
+        case 'self-check':
+            return emitQuery(args, (index) => selfCheck(index));
         case 'explain-flow':
             return emitQuery(args, (index) => explainDataFlow(index, {
                 target: requireString(args.target, '--target'),
@@ -233,7 +236,9 @@ function codeIntelUsage(): string {
         arch-graph code-intel policies [--out <dir>]
         arch-graph code-intel suggest-placement <name> --symbol <kind> [--out <dir>]
         arch-graph code-intel validate-proposal <file> --symbol <kind> --target <imports> [--out <dir>]
-        arch-graph code-intel summary [--out <dir>]        arch-graph code-intel explain-flow --target Class.method --param x [--out <dir>]        `  arch-graph code-intel explain-branch --file path --line N [--out <dir>]\n` +
+        arch-graph code-intel summary [--out <dir>]
+        arch-graph code-intel self-check [--out <dir>]
+        arch-graph code-intel explain-flow --target Class.method --param x [--out <dir>]        `  arch-graph code-intel explain-branch --file path --line N [--out <dir>]\n` +
         `  arch-graph code-intel trace-scenario --entry "Class.method" [--out <dir>]\n` +
         `  arch-graph code-intel impact-contract DtoName [--field name] [--out <dir>]\n` +
         `  arch-graph code-intel diagnostics [--max-results N] [--out <dir>]\n`;

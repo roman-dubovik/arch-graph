@@ -131,6 +131,13 @@ export interface CodeIntelValidationResult {
     }>;
 }
 
+export interface CodeIntelHealth {
+    isHealthy: boolean;
+    isFresh: boolean;
+    issues: string[];
+    suggestions: string[];
+}
+
 export interface CodeIntelIndex {
     manifest: CodeIntelManifest;
     symbols: CodeIntelSymbol[];
