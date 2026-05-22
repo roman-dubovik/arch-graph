@@ -246,6 +246,8 @@ function collectFunctionFacts(
         collectParamFlows(ctx, param, calls.filter((call) => call.callerId === ctx.id), flows, symbolByFqn);
     }
 
+    collectFunctionLocalFlows(ctx, flows);
+
     ctx.node.forEachDescendant((node) => {
         if (Node.isIfStatement(node)) {
             const loc = locOf(node.getExpression());
@@ -420,6 +422,30 @@ function collectNestedConditions(node: MorphNode): string[] {
     return conditions.reverse();
 }
 
+function collectFunctionLocalFlows(ctx: FunctionLikeCtx, flows: CodeIntelFlow[]): void {
+    ctx.node.forEachDescendant((node) => {
+        if (!Node.isVariableDeclaration(node)) return;
+        const initializerText = node.getInitializer()?.getText() ?? '';
+        const sourceKind = classifyValueSourceKind(initializerText);
+        if (!sourceKind) return;
+        const loc = locOf(node);
+        const name = node.getName();
+        flows.push({
+            id: `flow:${ctx.fqn}:local-source:${loc.line}:${loc.column}`,
+            targetId: ctx.id,
+            target: ctx.fqn,
+            param: name,
+            sourceKind,
+            source: initializerText,
+            via: node.getText(),
+            file: loc.file,
+            line: loc.line,
+            column: loc.column,
+            path: [sourceKind, name],
+        });
+    });
+}
+
 function collectParamFlows(
     ctx: FunctionLikeCtx,
     param: ParameterDeclaration,
@@ -447,6 +473,7 @@ function collectParamFlows(
             via: `${call.expression}(${call.args.join(', ')})`,
             to: call.callee,
             ...(toParam ? { toParam } : {}),
+            sinkKind: classifySinkKind(call.callee, call.receiver ?? '', call.expression),
             file: call.file,
             line: call.line,
             column: call.column,
@@ -456,12 +483,14 @@ function collectParamFlows(
     ctx.node.forEachDescendant((node) => {
         if (Node.isVariableDeclaration(node) && expressionUsesName(node.getInitializer()?.getText() ?? '', paramName)) {
             const loc = locOf(node);
+            const initializerText = node.getInitializer()?.getText() ?? '';
+            const sourceKind = classifyValueSourceKind(initializerText);
             flows.push({
                 id: `flow:${ctx.fqn}:${paramName}:local:${loc.line}:${loc.column}`,
                 targetId: ctx.id,
                 target: ctx.fqn,
                 param: paramName,
-                sourceKind: 'local',
+                sourceKind: sourceKind ?? 'local',
                 source: source.label,
                 via: node.getText(),
                 file: loc.file,
@@ -487,6 +516,27 @@ function collectParamFlows(
             });
         }
     });
+}
+
+function classifySinkKind(callee: string, receiver: string, expression: string): CodeIntelFlow['sinkKind'] {
+    const text = `${receiver} ${callee} ${expression}`.toLowerCase();
+    if (/\b(save|insert|update|delete|remove|upsert|execute|query|persist|create)\b/.test(text) &&
+        /\b(db|repo|repository|manager|entity|database)\b/.test(text)) return 'db';
+    if (/\b(emit|send|publish|dispatch)\b/.test(text) &&
+        /\b(client|nats|broker|bus|event|message|rmq)\b/.test(text)) return 'msg';
+    if (/\b(get|post|put|patch|delete|request|axios|fetch|http)\b/.test(text) &&
+        /\b(http|client|api|request)\b/.test(text)) return 'http';
+    if (/\b(add|addjob|process|execute)\b/.test(text) &&
+        /\b(queue|bull|job|worker)\b/.test(text)) return 'job';
+    if (/\b(log|debug|info|warn|error|audit)\b/.test(text) &&
+        /\b(logger|console)\b/.test(text)) return 'log';
+    return undefined;
+}
+
+function classifyValueSourceKind(expression: string): CodeIntelFlow['sourceKind'] | undefined {
+    if (/\bprocess\.env\b/.test(expression)) return 'env';
+    if (/\bconfigService\.get\b/.test(expression)) return 'config';
+    return undefined;
 }
 
 function paramsForCall(symbolByFqn: Map<string, CodeIntelSymbol>, call: CodeIntelCall): CodeIntelSymbol[] {
@@ -795,10 +845,19 @@ function normalizeName(name: string): string {
 
 function sourceForParam(param: ParameterDeclaration): { kind: CodeIntelFlow['sourceKind']; label: string } {
     const decorators = decoratorsOf(param);
-    const transport = decorators.find((decorator) => /@(Body|Param|Query|Payload|Headers|Req|Request)\b/.test(decorator));
+    const transport = decorators.find((decorator) =>
+        /@(Body|Param|Query|Payload|Headers|Req|Request|UploadedFile|UploadedFiles)\b/.test(decorator),
+    );
     if (!transport) return { kind: 'param', label: param.getName() };
     const match = transport.match(/@([A-Za-z0-9_]+)/);
-    return { kind: 'decorator', label: `${match?.[1] ? `@${match[1]}` : transport} ${param.getName()}` };
+    const decoratorName = match?.[1] ?? transport;
+    let kind: CodeIntelFlow['sourceKind'] = 'decorator';
+    if (/@(?:Body|Param|Query|Headers|Req|Request|UploadedFile|UploadedFiles)\b/.test(transport)) {
+        kind = 'http';
+    } else if (/@(?:Payload|Ctx)\b/.test(transport)) {
+        kind = 'msg';
+    }
+    return { kind, label: `${decoratorName.startsWith('@') ? decoratorName : `@${decoratorName}`} ${param.getName()}` };
 }
 
 function classifyCallKind(callee: string, receiver: string, expression: string): NonNullable<CodeIntelCall['kind']> {

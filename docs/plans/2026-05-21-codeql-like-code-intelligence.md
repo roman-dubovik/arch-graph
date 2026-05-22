@@ -428,7 +428,7 @@ real-world NestJS/TypeScript projects.
 ## Implementation Progress
 
 - [x] **Control Flow v2 (Completed 2026-05-22)**: Full support for switch/case, ternary operators, throw/catch blocks, and else/else-if chains with automated condition negation in `nestedIn`.
-- [ ] **Data Flow v2.2**: Enhanced source/sink classification (DB, HTTP, NATS) and ranked proof packets for improved LLM context.
+- [x] **Data Flow v2.2 (Completed 2026-05-22)**: Enhanced source/sink classification (DB, HTTP, NATS, Env, Config) and ranked proof packets for improved LLM context.
 - [ ] **Call Graph v2**: Better DI resolution, typed receivers, and scenario path exploration.
 - [ ] **Impact v2**: Field-level DTO impact across endpoints, messages, and frontend consumers.
 - [ ] **Architectural Policies**: Integration of "Gold Standard" Blueprints and style enforcement.

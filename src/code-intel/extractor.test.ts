@@ -468,4 +468,71 @@ describe('extractCodeIntel', () => {
             calls: ['App.onlyA'],
         }));
     });
+
+    it('categorizes sources and sinks in data flows', () => {
+        const project = inMemoryProject({
+            '/root/app.ts': `
+                import { Body, Controller, Post } from '@nestjs/common';
+                @Controller()
+                export class App {
+                    @Post()
+                    async save(@Body() data: any) {
+                        const apiKey = process.env.API_KEY;
+                        this.logger.log(data);
+                        await this.db.save(data);
+                    }
+                }
+            `,
+        });
+
+        const index = extractCodeIntel(project, { root: '/root' });
+
+        // Source categorization (HTTP Body)
+        expect(index.flows).toContainEqual(expect.objectContaining({
+            param: 'data',
+            sourceKind: 'http',
+            source: '@Body data',
+        }));
+
+        // Sink categorization (Log)
+        expect(index.flows).toContainEqual(expect.objectContaining({
+            param: 'data',
+            sinkKind: 'log',
+            to: 'this.logger.log',
+        }));
+
+        // Sink categorization (DB)
+        expect(index.flows).toContainEqual(expect.objectContaining({
+            param: 'data',
+            sinkKind: 'db',
+            to: 'this.db.save',
+        }));
+
+        // Env source
+        expect(index.flows).toContainEqual(expect.objectContaining({
+            param: 'apiKey',
+            sourceKind: 'env',
+            via: 'apiKey = process.env.API_KEY',
+        }));
+    });
+
+    it('ranks data flows preferring sinks', () => {
+        const project = inMemoryProject({
+            '/root/app.ts': `
+                export class App {
+                    process(data: any) {
+                        this.logger.log(data);
+                        this.db.save(data);
+                    }
+                }
+            `,
+        });
+
+        const index = extractCodeIntel(project, { root: '/root' });
+        const result = explainDataFlow(index, { target: 'App.process', param: 'data' });
+
+        // DB sink (rank 0) should be before log sink (rank 5)
+        expect(result.flows[0]).toMatchObject({ sinkKind: 'db' });
+        expect(result.flows[1]).toMatchObject({ sinkKind: 'log' });
+    });
 });
