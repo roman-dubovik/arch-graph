@@ -105,6 +105,32 @@ export interface CodeIntelImpact extends SourceLoc {
     risk: 'low' | 'medium' | 'high';
 }
 
+export interface CodeIntelPolicy {
+    id: string;
+    kind: 'placement' | 'decorator-pairing' | 'inheritance' | 'naming' | 'explicit' | 'guardrail';
+    rule: string;
+    description: string;
+    confidence: number;
+    count: number;
+    total: number;
+}
+
+export interface CodeIntelProposal {
+    sourceFile: string;
+    sourceKind: CodeIntelSymbolKind;
+    proposedImports: string[]; // FQNs or file paths
+    proposedCalls: string[];   // FQNs
+}
+
+export interface CodeIntelValidationResult {
+    isValid: boolean;
+    violations: Array<{
+        rule: string;
+        message: string;
+        severity: 'error' | 'warning';
+    }>;
+}
+
 export interface CodeIntelIndex {
     manifest: CodeIntelManifest;
     symbols: CodeIntelSymbol[];
@@ -112,6 +138,7 @@ export interface CodeIntelIndex {
     flows: CodeIntelFlow[];
     branches: CodeIntelBranch[];
     impacts: CodeIntelImpact[];
+    policies?: CodeIntelPolicy[];
 }
 
 export interface CodeIntelDiagnosticsExample extends SourceLoc {

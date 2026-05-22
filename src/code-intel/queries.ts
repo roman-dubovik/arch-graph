@@ -151,6 +151,60 @@ export function getOrientation(index: CodeIntelIndex): {
     };
 }
 
+export function validateProposal(index: CodeIntelIndex, proposal: CodeIntelProposal): CodeIntelValidationResult {
+    const violations: CodeIntelValidationResult['violations'] = [];
+
+    // 1. Enforce Explicit Guardrails from Policies
+    const guardrails = (index.policies ?? []).filter((p) => p.kind === 'guardrail');
+    for (const guardrail of guardrails) {
+        const parts = guardrail.rule.split('->').map((s) => s.trim());
+        if (parts.length !== 2) continue;
+        const [sourceMatch, targetMatch] = parts;
+        const isForbidden = targetMatch.startsWith('!');
+        const targetClean = targetMatch.replace('!', '');
+
+        const sourceMatches =
+            proposal.sourceFile.toLowerCase().includes(sourceMatch.toLowerCase()) ||
+            proposal.sourceKind.toLowerCase().includes(sourceMatch.toLowerCase());
+
+        if (sourceMatches) {
+            for (const imp of proposal.proposedImports) {
+                if (imp.toLowerCase().includes(targetClean.toLowerCase()) && isForbidden) {
+                    violations.push({
+                        rule: guardrail.rule,
+                        message: guardrail.description,
+                        severity: 'error',
+                    });
+                }
+            }
+        }
+    }
+
+    // 2. Default Monorepo Boundary Rules
+    const isApp = proposal.sourceFile.startsWith('apps/');
+    if (isApp) {
+        const sourceApp = proposal.sourceFile.split('/')[1];
+        for (const imp of proposal.proposedImports) {
+            const symbol = index.symbols.find((s) => s.fqn === imp || s.name === imp);
+            if (symbol?.file.startsWith('apps/')) {
+                const targetApp = symbol.file.split('/')[1];
+                if (targetApp !== sourceApp) {
+                    violations.push({
+                        rule: 'Monorepo Isolation',
+                        message: `Cross-app dependency detected: '${sourceApp}' attempted to import from '${targetApp}'. Move shared logic to 'libs/'.`,
+                        severity: 'error',
+                    });
+                }
+            }
+        }
+    }
+
+    return {
+        isValid: violations.length === 0,
+        violations,
+    };
+}
+
 export function explainDataFlow(index: CodeIntelIndex, args: {
     target: string;
     param: string;

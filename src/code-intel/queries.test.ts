@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getBlueprint, getFileOutline, getOrientation, resolveSymbol, suggestPlacement } from './queries.js';
+import { getBlueprint, getFileOutline, getOrientation, resolveSymbol, suggestPlacement, validateProposal } from './queries.js';
 import type { CodeIntelIndex, CodeIntelSymbol } from './types.js';
 
 describe('code-intel queries', () => {
@@ -114,6 +114,89 @@ describe('code-intel queries', () => {
             expect(result.libs).toContain('common');
             expect(result.topPolicies[0]).toBe('DTO naming: *Dto');
             expect(result.projectSummary).toContain('1 apps and 1 libs');
+        });
+    });
+
+    describe('validateProposal', () => {
+        const indexWithGuardrails: CodeIntelIndex = {
+            ...mockIndex,
+            symbols: [
+                { id: 'c1', kind: 'class', name: 'ItemsController', fqn: 'ItemsController', file: 'src/items.controller.ts', line: 1, column: 1 },
+                { id: 's1', kind: 'class', name: 'ItemsService', fqn: 'ItemsService', file: 'src/items.service.ts', line: 1, column: 1 },
+                { id: 'r1', kind: 'class', name: 'ItemsRepository', fqn: 'ItemsRepository', file: 'src/items.repository.ts', line: 1, column: 1 },
+            ],
+            policies: [
+                {
+                    id: 'g1',
+                    kind: 'guardrail',
+                    rule: 'Controller -> !Repository',
+                    description: 'Controllers are not allowed to depend on Repositories directly.',
+                    confidence: 1,
+                    count: 0,
+                    total: 0
+                }
+            ]
+        };
+
+        it('PASS: allows valid layer dependency (Controller -> Service)', () => {
+            const proposal = {
+                sourceFile: 'src/items.controller.ts',
+                sourceKind: 'class' as const,
+                proposedImports: ['ItemsService'],
+                proposedCalls: ['ItemsService.find']
+            };
+            const result = validateProposal(indexWithGuardrails, proposal);
+            expect(result.isValid).toBe(true);
+            expect(result.violations).toHaveLength(0);
+        });
+
+        it('FAIL: blocks invalid layer dependency (Controller -> Repository)', () => {
+            const proposal = {
+                sourceFile: 'src/items.controller.ts',
+                sourceKind: 'class' as const,
+                proposedImports: ['ItemsRepository'],
+                proposedCalls: ['ItemsRepository.save']
+            };
+            const result = validateProposal(indexWithGuardrails, proposal);
+            expect(result.isValid).toBe(false);
+            expect(result.violations[0].message).toContain('Controllers are not allowed to depend on Repositories');
+        });
+
+        it('FAIL: blocks cross-app violation (app A importing from app B)', () => {
+            const crossIndex: CodeIntelIndex = {
+                ...indexWithGuardrails,
+                symbols: [
+                    ...indexWithGuardrails.symbols,
+                    { id: 's2', kind: 'class', name: 'BillingService', fqn: 'BillingService', file: 'apps/billing/src/billing.service.ts', line: 1, column: 1 }
+                ]
+            };
+            const proposal = {
+                sourceFile: 'apps/api/src/items.service.ts',
+                sourceKind: 'class' as const,
+                proposedImports: ['BillingService'],
+                proposedCalls: []
+            };
+            const result = validateProposal(crossIndex, proposal);
+            expect(result.isValid).toBe(false);
+            expect(result.violations[0].message).toContain('Cross-app dependency');
+        });
+
+        it('PASS: allows app importing from lib', () => {
+            const crossIndex: CodeIntelIndex = {
+                ...indexWithGuardrails,
+                symbols: [
+                    ...indexWithGuardrails.symbols,
+                    { id: 'l1', kind: 'class', name: 'CommonLib', fqn: 'CommonLib', file: 'libs/common/src/index.ts', line: 1, column: 1 }
+                ]
+            };
+            const proposal = {
+                sourceFile: 'apps/api/src/items.service.ts',
+                sourceKind: 'class' as const,
+                proposedImports: ['CommonLib'],
+                proposedCalls: []
+            };
+            const result = validateProposal(crossIndex, proposal);
+            expect(result.isValid).toBe(true);
         });
     });
 });
