@@ -11,6 +11,7 @@ export function resolveSymbol(index: CodeIntelIndex, query: string): {
     found: boolean;
     query: string;
     matches: CodeIntelSymbol[];
+    agentHint?: string;
 } {
     const q = query.toLowerCase();
     const exact = index.symbols
@@ -32,7 +33,12 @@ export function resolveSymbol(index: CodeIntelIndex, query: string): {
         .concat(pathMatches)
         .concat(fuzzy)
         .slice(0, 20);
-    return { found: matches.length > 0, query, matches };
+    return { 
+        found: matches.length > 0, 
+        query, 
+        matches,
+        agentHint: matches.length > 0 ? "Use 'get_file_outline' with the returned file path to find exact 'line' and 'endLine' ranges for surgical reading." : undefined
+    };
 }
 
 export function getFileOutline(index: CodeIntelIndex, args: { file: string }): {
@@ -122,6 +128,7 @@ export function getOrientation(index: CodeIntelIndex): {
         };
     };
     topPolicies: string[];
+    agentHint?: string;
 } {
     const apps = Array.from(
         new Set(index.symbols.filter((s) => s.file.startsWith('apps/')).map((s) => s.file.split('/')[1])),
@@ -148,6 +155,7 @@ export function getOrientation(index: CodeIntelIndex): {
             },
         },
         topPolicies,
+        agentHint: "Use 'get_project_policies' for all rules. Use 'get_file_outline' to explore files surgically.",
     };
 }
 

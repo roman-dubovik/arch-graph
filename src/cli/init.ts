@@ -25,6 +25,9 @@ import { registerProject } from './project-registry.js';
 /** Agent-side semantic search strategy stored in the project CLAUDE.md snippet. */
 export type SemanticStrategy = 'both-buckets' | 'fallback';
 
+/** Preferred AI Agent Environment. */
+export type AiEnvironment = 'claude' | 'cursor' | 'gemini' | 'none';
+
 /** Where to write the semantic strategy snippet. */
 export type SnippetTarget = 'append' | 'separate';
 
@@ -38,7 +41,7 @@ interface WizardAnswers {
     natsWrapperClass: string;
     natsWrapperPublishMethods: string[];
     natsWrapperSubscribeMethods: string[];
-    installClaude: boolean;
+    aiEnv: AiEnvironment;
     hookMode: 'pre-commit' | 'post-commit' | 'none';
     /** Strict mode: when true, a comment is emitted and a future `strictMode` field can be toggled. */
     strictMode: boolean;
@@ -476,6 +479,21 @@ export async function askSnippetTarget(rl: Rl): Promise<SnippetTarget> {
     return 'separate'; // default
 }
 
+/** Ask which AI environment to scaffold for. */
+async function askAiEnvironment(rl: Rl): Promise<AiEnvironment> {
+    output.write('\n? Which AI agent do you primarily use for this project?\n');
+    output.write('  1. Claude Code (scaffolds SessionStart hook & CLAUDE.md)\n');
+    output.write('  2. Cursor / Windsurf (scaffolds .cursorrules)\n');
+    output.write('  3. Gemini CLI (scaffolds CLAUDE.md as a pointer)\n');
+    output.write('  4. None / Skip\n');
+    const answer = await rl.question('  Choice [4]: ');
+    const trimmed = answer.trim();
+    if (trimmed === '1') return 'claude';
+    if (trimmed === '2') return 'cursor';
+    if (trimmed === '3') return 'gemini';
+    return 'none';
+}
+
 // ─── .gitignore helpers ───────────────────────────────────────────────────────
 
 async function atomicWrite(path: string, content: string): Promise<void> {
@@ -760,11 +778,7 @@ export async function runInitWizard(target: string): Promise<void> {
     }
 
     // ── Tooling questions ─────────────────────────────────────────────────────
-    const installClaude = await askYesNo(
-        rl,
-        '\n? Install Claude Code integration (./CLAUDE.md + skill)?',
-        true,
-    );
+    const aiEnv = await askAiEnvironment(rl);
 
     const hookMode = await askHookMode(rl);
 
@@ -797,7 +811,7 @@ export async function runInitWizard(target: string): Promise<void> {
         natsWrapperClass,
         natsWrapperPublishMethods,
         natsWrapperSubscribeMethods,
-        installClaude,
+        aiEnv,
         hookMode,
         strictMode,
         runBuild: shouldRunBuild,
@@ -813,9 +827,15 @@ export async function runInitWizard(target: string): Promise<void> {
     await registerProject(dirname(targetPath));
     output.write(`✓ wrote ${targetPath}\n`);
 
-    // ── Claude integration ────────────────────────────────────────────────────
-    if (installClaude) {
+    // ── AI Environment integration ────────────────────────────────────────────
+    let claudeInstalled = false;
+    if (aiEnv === 'claude' || aiEnv === 'gemini') {
         await claudeInstall({ target: resolve('./CLAUDE.md'), installSkill: true });
+        claudeInstalled = true;
+        // NOTE: Later we will scaffold .claude/hooks/SessionStart.sh here
+    } else if (aiEnv === 'cursor') {
+        // NOTE: Later we will scaffold .cursorrules here
+        output.write(`⚠  Cursor scaffolding is planned. Please manually add arch-graph pointer rules to your .cursorrules for now.\n`);
     }
 
     // ── Semantic strategy snippet ─────────────────────────────────────────────
@@ -897,7 +917,7 @@ export async function runInitWizard(target: string): Promise<void> {
     // ── Next steps ────────────────────────────────────────────────────────────
     output.write('\nNext steps:\n');
     const configRel = relative(process.cwd(), targetPath) || targetPath;
-    const claudePart = installClaude ? ' CLAUDE.md' : '';
+    const claudePart = claudeInstalled ? ' CLAUDE.md' : '';
     const snippetRel = relative(process.cwd(), writtenSnippetPath) || writtenSnippetPath;
     const snippetPart = answers.snippetTarget === 'separate' ? ` ${snippetRel}` : '';
     output.write(`  • Commit the config: git add ${configRel}${claudePart}${snippetPart} && git commit\n`);
@@ -909,7 +929,7 @@ export async function runInitWizard(target: string): Promise<void> {
                 : '  • The graph rebuilds automatically after each commit touching .ts files; arch-graph-out/ stays local\n',
         );
     }
-    if (installClaude) {
+    if (claudeInstalled) {
         output.write('  • In Claude Code, the skill triggers on /arch-graph or architecture questions\n');
     }
     output.write('\n');

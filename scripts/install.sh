@@ -101,7 +101,44 @@ else
     npm install
 fi
 
-# ---- 4. symlink onto PATH --------------------------------------------------
+# ---- 4. AI Environment Setup (Global) --------------------------------------
+
+ok "Configuring Global AI Layer (Optional)"
+cat <<EOF
+Which AI agent do you primarily use globally? (You can also set this per-project)
+  1) Claude Code
+  2) Cursor / Windsurf
+  3) Gemini (CLI)
+  4) Skip / None
+EOF
+printf "Select [1-4] (default: 4): "
+read -r ai_choice < /dev/tty || ai_choice="4"
+
+case "$ai_choice" in
+    1)
+        ok "Selected Claude Code. Global hooks will be scaffolded per-project during 'arch-graph init'."
+        ;;
+    2)
+        ok "Selected Cursor. Project-level .cursorrules will be generated during 'arch-graph init'."
+        ;;
+    3)
+        ok "Selected Gemini. Adding global context to ~/.gemini/GEMINI.md"
+        mkdir -p "$HOME/.gemini"
+        if ! grep -q "arch-graph" "$HOME/.gemini/GEMINI.md" 2>/dev/null; then
+            cat << 'EOF' >> "$HOME/.gemini/GEMINI.md"
+
+## Architecture Context (arch-graph)
+When analyzing NestJS projects, ALWAYS run `arch-graph code-intel summary` first to orient yourself. 
+To explore files, use `arch-graph code-intel outline <file>` to get specific line ranges, and read ONLY those lines to save tokens.
+EOF
+        fi
+        ;;
+    *)
+        ok "Skipping global AI setup."
+        ;;
+esac
+
+# ---- 5. symlink onto PATH --------------------------------------------------
 
 WRAPPER="$INSTALL_DIR/bin/arch-graph"
 if [ ! -x "$WRAPPER" ]; then
@@ -133,7 +170,7 @@ if [ "$ON_PATH" -eq 0 ]; then
 EOF
 fi
 
-# ---- 5. offer to initialise here (interactive) -----------------------------
+# ---- 6. offer to initialise here (interactive) -----------------------------
 
 # Print the post-install hint shown when init is skipped or unavailable.
 print_init_hint() {
