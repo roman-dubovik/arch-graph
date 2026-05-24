@@ -678,12 +678,15 @@ export async function startMcpServer(opts: { out: string; config?: string }): Pr
         {
             description:
                 'Verifies the health and freshness of the code-intel index. Returns one of two statuses: ' +
-                '`ok` — the index is COMPLETE and trustworthy; `degraded` — the index has real gaps (files the ' +
-                'extractor could not parse, listed under `warnings.skippedFiles`) and traces may be incomplete. ' +
-                'The optional `info.shortNameCollisions` field counts symbols that share a short name across files ' +
-                '(e.g. two modules both exporting `setup`); this is NORMAL for modular codebases and does NOT affect ' +
-                'status — composite symbol IDs and path-suffix queries in resolve_symbol fully disambiguate. ' +
-                'Use this if other tools return unexpected empty results.',
+                '`ok` — the index is COMPLETE and lookups are unambiguous; `degraded` — there is a real silent-' +
+                'wrong-answer risk: `warnings.skippedFiles` (extractor could not parse some files; trace graph has gaps) ' +
+                'or `warnings.dangerousCollisions` (two class members share the same `<Class>.<method>` FQN, so ' +
+                'find_references / explain_data_flow may return results from the wrong class without warning — ' +
+                'use the symbol `id` (file-qualified) instead of `fqn`, or rename one of the duplicate classes). ' +
+                'The optional `info.nameCollisions` field counts top-level functions/types/params with the same ' +
+                'short name across files (e.g. two modules both exporting `setup`); this is NORMAL omonymy and does ' +
+                'NOT affect status — pass a path suffix in resolve_symbol queries to target a specific file. ' +
+                'Use this if other tools return unexpected or empty results.',
             inputSchema: {},
         },
         async () => jsonResult(selfCheck(await loadCodeIntelFn())),

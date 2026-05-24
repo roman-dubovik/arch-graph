@@ -15,22 +15,29 @@ function withHealthWarning<T>(_index: CodeIntelIndex, data: T): T {
  *
  * Semantics (important for callers, including LLMs):
  *
- *   - `status: 'ok'` means the index is COMPLETE. Traces, references and
- *     impact queries can be trusted end-to-end. A non-empty `info.shortNameCollisions`
- *     does NOT degrade this verdict — short-name omonymy (two files both
- *     defining `setup`/`init`/`build`) is a normal property of any modular
- *     codebase. Symbols carry composite, file-qualified `id`s and
- *     `resolve_symbol` accepts a path suffix to disambiguate.
+ *   - `status: 'ok'` means the index is COMPLETE and downstream lookups
+ *     (`find_references`, `explain_data_flow`, `impact_contract`) are
+ *     unambiguous. A non-empty `info.nameCollisions` does NOT degrade
+ *     this — it only counts top-level functions/types/params that share
+ *     a short name across files (e.g. two modules both exporting
+ *     `setup`). For those, the LLM picks the right one by passing a
+ *     path suffix to `resolve_symbol` — composite, file-qualified `id`s
+ *     do the rest. No silent wrong-answer risk.
  *
- *   - `status: 'degraded'` means the index has REAL GAPS — either some
- *     source files could not be parsed (`warnings.skippedFiles`), or the
- *     manifest's diagnostics envelope is malformed. In both cases traces
- *     and references may be incomplete and the caller should treat results
- *     with care; running `arch-graph code-intel build` usually resolves it.
+ *   - `status: 'degraded'` means the index has REAL problems:
+ *       • `warnings.skippedFiles` — extractor could not parse some files,
+ *         so the trace/reference graph has missing edges.
+ *       • `warnings.dangerousCollisions` — two class members share the
+ *         same `<Class>.<method>` / `<Class>.<field>` FQN. Downstream
+ *         tools currently pick the first match by rank, which can return
+ *         results from the wrong class WITHOUT WARNING. Rename one of
+ *         the colliding classes, or use the symbol `id` (file-qualified)
+ *         instead of `fqn` for those lookups.
+ *       • Manifest envelope malformed — rebuild required.
+ *     Run `arch-graph code-intel build` after fixing the underlying cause.
  *
- *   - `info` is purely informational and never gates behaviour; it exists
- *     so the LLM can see, for transparency, how many short-name collisions
- *     are present and an example list — without misreading them as a fault.
+ *   - `info` is purely informational and never gates behaviour; it lets
+ *     callers see, for transparency, the volume of harmless omonymy.
  */
 export function selfCheck(index: CodeIntelIndex): {
     status: 'ok' | 'degraded' | 'stale' | 'missing';
@@ -39,11 +46,12 @@ export function selfCheck(index: CodeIntelIndex): {
     freshness: string;
     symbols: number;
     warnings?: {
-        skippedFiles: Array<{ file: string; error: string }>;
+        skippedFiles?: Array<{ file: string; error: string }>;
+        dangerousCollisions?: string[];
     };
     info?: {
-        shortNameCollisions: number;
-        shortNameCollisionsSample: string[];
+        nameCollisions: number;
+        nameCollisionsSample: string[];
     };
 } {
     const symbols = index.manifest.counts?.symbols ?? index.symbols.length;
@@ -69,20 +77,57 @@ export function selfCheck(index: CodeIntelIndex): {
     const amb = w?.ambiguousFqns ?? [];
     const skp = w?.skippedFiles ?? [];
 
-    // Skipped files = real index gaps → degraded (the trace graph is missing edges).
-    // Short-name collisions are NOT a gap (composite IDs + path-suffix disambiguation
-    // in resolve_symbol handle them); they appear under `info`, not `warnings`.
-    if (skp.length > 0) {
-        const info = amb.length > 0
-            ? { shortNameCollisions: amb.length, shortNameCollisionsSample: amb.slice(0, 5) }
+    // Partition collisions by symbol kind. A collision is DANGEROUS (real
+    // silent-wrong-answer risk) when ≥2 symbols of a "structural" kind
+    // (class member, class itself, DTO, db-entity) share the same FQN —
+    // e.g. two classes both named `UsersService` each defining `findById`,
+    // so `UsersService.findById` resolves to two real bodies and
+    // `find_references` would silently pick one. Bare-name omonymy
+    // (two top-level functions named `setup`, or their params) is normal
+    // omonymy: the LLM is expected to qualify with a path suffix.
+    const DANGEROUS_KINDS = new Set<CodeIntelSymbol['kind']>(['method', 'field', 'class', 'dto', 'db-entity']);
+    const ambSet = new Set(amb);
+    const buckets = new Map<string, CodeIntelSymbol[]>();
+    if (amb.length > 0) {
+        for (const s of index.symbols) {
+            if (!ambSet.has(s.fqn)) continue;
+            const b = buckets.get(s.fqn) ?? [];
+            b.push(s);
+            buckets.set(s.fqn, b);
+        }
+    }
+    const dangerous = amb.filter((fqn) => {
+        const bucket = buckets.get(fqn) ?? [];
+        return bucket.filter((s) => DANGEROUS_KINDS.has(s.kind)).length > 1;
+    });
+
+    // Degraded branch: any combination of skipped files + dangerous collisions.
+    if (skp.length > 0 || dangerous.length > 0) {
+        const parts: string[] = [];
+        if (skp.length > 0) parts.push(`${skp.length} file${skp.length === 1 ? '' : 's'} could not be parsed`);
+        if (dangerous.length > 0) {
+            parts.push(
+                `${dangerous.length} class-member collision${dangerous.length === 1 ? '' : 's'} (downstream tools may pick the wrong class silently)`,
+            );
+        }
+        const warnings: { skippedFiles?: typeof skp; dangerousCollisions?: string[] } = {};
+        if (skp.length > 0) warnings.skippedFiles = skp;
+        if (dangerous.length > 0) warnings.dangerousCollisions = dangerous;
+        const info = amb.length > dangerous.length
+            ? { nameCollisions: amb.length, nameCollisionsSample: amb.slice(0, 5) }
             : undefined;
         return {
             status: 'degraded',
-            message: `Code-intel index has gaps: ${skp.length} file${skp.length === 1 ? '' : 's'} could not be parsed. Run: arch-graph code-intel build to retry.`,
+            message:
+                `Code-intel index is degraded: ${parts.join('; ')}. ` +
+                (dangerous.length > 0
+                    ? 'For class-member collisions, use the symbol `id` (file-qualified) instead of `fqn`, or rename one of the duplicate classes. '
+                    : '') +
+                'Run: arch-graph code-intel build after fixing.',
             schemaVersion: index.manifest.schemaVersion,
             freshness: index.manifest.builtAt,
             symbols,
-            warnings: { skippedFiles: skp },
+            warnings,
             ...(info ? { info } : {}),
         };
     }
@@ -90,11 +135,11 @@ export function selfCheck(index: CodeIntelIndex): {
     if (amb.length > 0) {
         return {
             status: 'ok',
-            message: `Code-intel index is operational. ${amb.length} short-name collision${amb.length === 1 ? '' : 's'} detected — this is normal; symbols carry composite, file-qualified IDs and resolve_symbol accepts a path suffix to disambiguate.`,
+            message: `Code-intel index is operational. ${amb.length} short-name collision${amb.length === 1 ? '' : 's'} (top-level functions/types with the same name in different files) — normal omonymy; pass a path suffix to resolve_symbol if uncertain which file to target.`,
             schemaVersion: index.manifest.schemaVersion,
             freshness: index.manifest.builtAt,
             symbols,
-            info: { shortNameCollisions: amb.length, shortNameCollisionsSample: amb.slice(0, 5) },
+            info: { nameCollisions: amb.length, nameCollisionsSample: amb.slice(0, 5) },
         };
     }
 

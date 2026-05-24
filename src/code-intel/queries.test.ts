@@ -200,34 +200,97 @@ describe('code-intel queries', () => {
             expect(result.symbols).toBe(4);
         });
 
-        // selfCheck contract (revised): only REAL index gaps degrade status.
-        // Short-name omonymy (two files defining `setup`) is normal — composite
-        // IDs + path-suffix queries resolve it — so it surfaces as `info`,
-        // not `warnings`, and status stays `ok`. Otherwise an LLM seeing
-        // `degraded` on a healthy repo would mistrust the tool.
-        it('stays ok when only short-name collisions exist; reports them under info', () => {
-            const indexWithAmbiguous: CodeIntelIndex = {
+        // selfCheck contract (revised twice): only REAL silent-wrong-answer
+        // risks degrade status.
+        //   • Top-level omonymy (two `setup` functions in different files):
+        //     normal, surfaces under `info`, status stays `ok`.
+        //   • Class-member collisions (two `UsersService.findById` from two
+        //     `UsersService` classes): DANGEROUS — downstream tools pick
+        //     the first match silently. Goes under `warnings.dangerousCollisions`,
+        //     status flips to `degraded`.
+        //   • Skipped files: extractor gaps → degraded.
+        //   • Malformed manifest: degraded + rebuild message.
+
+        it('stays ok when only top-level (function/type) collisions exist; reports them under info', () => {
+            const indexWithBareOmonymy: CodeIntelIndex = {
                 ...mockIndex,
+                symbols: [
+                    // Two top-level functions both called `setup` in different files —
+                    // classic harmless omonymy, NOT a silent-wrong-answer risk.
+                    { id: 'symbol:apps/a/setup.ts#setup:1:1', kind: 'function', name: 'setup', fqn: 'setup', file: 'apps/a/setup.ts', line: 1, column: 1 },
+                    { id: 'symbol:apps/b/setup.ts#setup:1:1', kind: 'function', name: 'setup', fqn: 'setup', file: 'apps/b/setup.ts', line: 1, column: 1 },
+                    { id: 'symbol:apps/a/types.ts#DomainKey:1:1', kind: 'type', name: 'DomainKey', fqn: 'DomainKey', file: 'apps/a/types.ts', line: 1, column: 1 },
+                    { id: 'symbol:apps/b/types.ts#DomainKey:1:1', kind: 'type', name: 'DomainKey', fqn: 'DomainKey', file: 'apps/b/types.ts', line: 1, column: 1 },
+                ],
                 manifest: {
                     ...mockIndex.manifest,
-                    warnings: {
-                        ambiguousFqns: ['setup', 'build', 'init', 'validateConfig', 'site', 'extra'],
-                        skippedFiles: [],
-                    },
+                    warnings: { ambiguousFqns: ['setup', 'DomainKey'], skippedFiles: [] },
                 } as typeof mockIndex.manifest,
             };
-            const result = selfCheck(indexWithAmbiguous);
+            const result = selfCheck(indexWithBareOmonymy);
             expect(result.status).toBe('ok');
             expect(result.warnings).toBeUndefined();
             expect(result.info).toBeDefined();
-            expect(result.info!.shortNameCollisions).toBe(6);
-            expect(result.info!.shortNameCollisionsSample).toHaveLength(5);
-            // Message must reassure the caller this is normal, not a fault.
-            expect(result.message).toMatch(/normal/i);
-            expect(result.message).toMatch(/composite/i);
+            expect(result.info!.nameCollisions).toBe(2);
+            expect(result.info!.nameCollisionsSample).toEqual(['setup', 'DomainKey']);
+            expect(result.message).toMatch(/normal omonymy/i);
+            expect(result.message).toMatch(/path suffix/);
         });
 
-        it('reports degraded only when skippedFiles populated (real gap)', () => {
+        // P0 fix (silent-failure-hunter round 3): class.method collisions are
+        // a REAL silent-wrong-answer class; downstream find_references picks
+        // the first by rank without warning. Must degrade, must list them.
+        it('reports degraded when class members collide (UsersService.findById × 2)', () => {
+            const indexWithClassCollision: CodeIntelIndex = {
+                ...mockIndex,
+                symbols: [
+                    // Two distinct `UsersService` classes, each with `findById`.
+                    // `UsersService.findById` now resolves to two real bodies and
+                    // `find_references` would pick one silently.
+                    { id: 'symbol:apps/api/users.service.ts#UsersService:1:1', kind: 'class', name: 'UsersService', fqn: 'UsersService', file: 'apps/api/users.service.ts', line: 1, column: 1 },
+                    { id: 'symbol:apps/api/users.service.ts#findById:5:5', kind: 'method', name: 'findById', fqn: 'UsersService.findById', file: 'apps/api/users.service.ts', line: 5, column: 5, parentId: 'symbol:apps/api/users.service.ts#UsersService:1:1' },
+                    { id: 'symbol:apps/admin/users.service.ts#UsersService:1:1', kind: 'class', name: 'UsersService', fqn: 'UsersService', file: 'apps/admin/users.service.ts', line: 1, column: 1 },
+                    { id: 'symbol:apps/admin/users.service.ts#findById:5:5', kind: 'method', name: 'findById', fqn: 'UsersService.findById', file: 'apps/admin/users.service.ts', line: 5, column: 5, parentId: 'symbol:apps/admin/users.service.ts#UsersService:1:1' },
+                ],
+                manifest: {
+                    ...mockIndex.manifest,
+                    warnings: { ambiguousFqns: ['UsersService', 'UsersService.findById'], skippedFiles: [] },
+                } as typeof mockIndex.manifest,
+            };
+            const result = selfCheck(indexWithClassCollision);
+            expect(result.status).toBe('degraded');
+            expect(result.warnings).toBeDefined();
+            expect(result.warnings!.dangerousCollisions).toEqual(
+                expect.arrayContaining(['UsersService', 'UsersService.findById']),
+            );
+            expect(result.message).toMatch(/class-member collision/i);
+            expect(result.message).toMatch(/file-qualified|symbol.*id/i);
+        });
+
+        // Parameters of duplicated functions show up in ambiguousFqns as
+        // `<funcName>.<paramName>` — these are NOT dangerous (no consumer
+        // resolves params to bodies). Verify they don't trigger degraded.
+        it('does NOT degrade for function-param collisions (atomicWrite.path × 2)', () => {
+            const indexWithParamCollision: CodeIntelIndex = {
+                ...mockIndex,
+                symbols: [
+                    { id: 'symbol:a.ts#atomicWrite:1:1', kind: 'function', name: 'atomicWrite', fqn: 'atomicWrite', file: 'a.ts', line: 1, column: 1 },
+                    { id: 'symbol:a.ts#path:1:30', kind: 'param', name: 'path', fqn: 'atomicWrite.path', file: 'a.ts', line: 1, column: 30, parentId: 'symbol:a.ts#atomicWrite:1:1' },
+                    { id: 'symbol:b.ts#atomicWrite:1:1', kind: 'function', name: 'atomicWrite', fqn: 'atomicWrite', file: 'b.ts', line: 1, column: 1 },
+                    { id: 'symbol:b.ts#path:1:30', kind: 'param', name: 'path', fqn: 'atomicWrite.path', file: 'b.ts', line: 1, column: 30, parentId: 'symbol:b.ts#atomicWrite:1:1' },
+                ],
+                manifest: {
+                    ...mockIndex.manifest,
+                    warnings: { ambiguousFqns: ['atomicWrite', 'atomicWrite.path'], skippedFiles: [] },
+                } as typeof mockIndex.manifest,
+            };
+            const result = selfCheck(indexWithParamCollision);
+            expect(result.status).toBe('ok');
+            expect(result.warnings).toBeUndefined();
+            expect(result.info!.nameCollisions).toBe(2);
+        });
+
+        it('reports degraded when skippedFiles populated (real gap)', () => {
             const indexWithSkipped: CodeIntelIndex = {
                 ...mockIndex,
                 manifest: {
@@ -239,28 +302,32 @@ describe('code-intel queries', () => {
             expect(result.status).toBe('degraded');
             expect(result.warnings).toBeDefined();
             expect(result.warnings!.skippedFiles).toHaveLength(1);
-            expect(result.message).toMatch(/gaps/i);
+            expect(result.warnings!.dangerousCollisions).toBeUndefined();
+            expect(result.message).toMatch(/could not be parsed/i);
             expect(result.message).toMatch(/arch-graph code-intel build/);
         });
 
-        it('reports degraded for skippedFiles AND keeps collisions in info, not warnings', () => {
+        it('combines skipped + class-collision in one degraded verdict', () => {
             const indexWithBoth: CodeIntelIndex = {
                 ...mockIndex,
+                symbols: [
+                    { id: 'symbol:a.ts#Svc:1:1', kind: 'class', name: 'Svc', fqn: 'Svc', file: 'a.ts', line: 1, column: 1 },
+                    { id: 'symbol:a.ts#m:5:5', kind: 'method', name: 'm', fqn: 'Svc.m', file: 'a.ts', line: 5, column: 5, parentId: 'symbol:a.ts#Svc:1:1' },
+                    { id: 'symbol:b.ts#Svc:1:1', kind: 'class', name: 'Svc', fqn: 'Svc', file: 'b.ts', line: 1, column: 1 },
+                    { id: 'symbol:b.ts#m:5:5', kind: 'method', name: 'm', fqn: 'Svc.m', file: 'b.ts', line: 5, column: 5, parentId: 'symbol:b.ts#Svc:1:1' },
+                ],
                 manifest: {
                     ...mockIndex.manifest,
                     warnings: {
-                        ambiguousFqns: ['setup', 'init'],
+                        ambiguousFqns: ['Svc', 'Svc.m'],
                         skippedFiles: [{ file: 'src/broken.ts', error: 'cyclic' }],
                     },
                 } as typeof mockIndex.manifest,
             };
             const result = selfCheck(indexWithBoth);
             expect(result.status).toBe('degraded');
-            expect(result.warnings).toBeDefined();
             expect(result.warnings!.skippedFiles).toHaveLength(1);
-            // Collisions are info, not warnings — they never trigger degraded by themselves.
-            expect(result.info).toBeDefined();
-            expect(result.info!.shortNameCollisions).toBe(2);
+            expect(result.warnings!.dangerousCollisions).toHaveLength(2);
         });
 
         it('reports ok when warnings exist but are empty', () => {
