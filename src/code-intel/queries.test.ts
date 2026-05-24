@@ -200,27 +200,67 @@ describe('code-intel queries', () => {
             expect(result.symbols).toBe(4);
         });
 
-        // Task E acceptance: when extractor recorded ambiguous FQNs or skipped
-        // files, selfCheck must surface them via a `degraded` status with the
-        // exact lists — otherwise the agent has no way to know its index is
-        // partial / has name collisions.
-        it('reports degraded status when warnings present', () => {
-            const indexWithWarnings: CodeIntelIndex = {
+        // selfCheck contract (revised): only REAL index gaps degrade status.
+        // Short-name omonymy (two files defining `setup`) is normal — composite
+        // IDs + path-suffix queries resolve it — so it surfaces as `info`,
+        // not `warnings`, and status stays `ok`. Otherwise an LLM seeing
+        // `degraded` on a healthy repo would mistrust the tool.
+        it('stays ok when only short-name collisions exist; reports them under info', () => {
+            const indexWithAmbiguous: CodeIntelIndex = {
                 ...mockIndex,
                 manifest: {
                     ...mockIndex.manifest,
                     warnings: {
-                        ambiguousFqns: ['CreateItemDto', 'UsersService.find'],
-                        skippedFiles: [{ file: 'src/broken.ts', error: 'cyclic type' }],
+                        ambiguousFqns: ['setup', 'build', 'init', 'validateConfig', 'site', 'extra'],
+                        skippedFiles: [],
                     },
                 } as typeof mockIndex.manifest,
             };
-            const result = selfCheck(indexWithWarnings);
+            const result = selfCheck(indexWithAmbiguous);
+            expect(result.status).toBe('ok');
+            expect(result.warnings).toBeUndefined();
+            expect(result.info).toBeDefined();
+            expect(result.info!.shortNameCollisions).toBe(6);
+            expect(result.info!.shortNameCollisionsSample).toHaveLength(5);
+            // Message must reassure the caller this is normal, not a fault.
+            expect(result.message).toMatch(/normal/i);
+            expect(result.message).toMatch(/composite/i);
+        });
+
+        it('reports degraded only when skippedFiles populated (real gap)', () => {
+            const indexWithSkipped: CodeIntelIndex = {
+                ...mockIndex,
+                manifest: {
+                    ...mockIndex.manifest,
+                    warnings: { ambiguousFqns: [], skippedFiles: [{ file: 'src/broken.ts', error: 'cyclic type' }] },
+                } as typeof mockIndex.manifest,
+            };
+            const result = selfCheck(indexWithSkipped);
             expect(result.status).toBe('degraded');
             expect(result.warnings).toBeDefined();
-            expect(result.warnings!.ambiguousFqns).toHaveLength(2);
             expect(result.warnings!.skippedFiles).toHaveLength(1);
-            expect(result.message).toMatch(/2 ambiguous FQNs.*1 skipped files/);
+            expect(result.message).toMatch(/gaps/i);
+            expect(result.message).toMatch(/arch-graph code-intel build/);
+        });
+
+        it('reports degraded for skippedFiles AND keeps collisions in info, not warnings', () => {
+            const indexWithBoth: CodeIntelIndex = {
+                ...mockIndex,
+                manifest: {
+                    ...mockIndex.manifest,
+                    warnings: {
+                        ambiguousFqns: ['setup', 'init'],
+                        skippedFiles: [{ file: 'src/broken.ts', error: 'cyclic' }],
+                    },
+                } as typeof mockIndex.manifest,
+            };
+            const result = selfCheck(indexWithBoth);
+            expect(result.status).toBe('degraded');
+            expect(result.warnings).toBeDefined();
+            expect(result.warnings!.skippedFiles).toHaveLength(1);
+            // Collisions are info, not warnings — they never trigger degraded by themselves.
+            expect(result.info).toBeDefined();
+            expect(result.info!.shortNameCollisions).toBe(2);
         });
 
         it('reports ok when warnings exist but are empty', () => {
@@ -233,32 +273,8 @@ describe('code-intel queries', () => {
             };
             const result = selfCheck(indexWithEmptyWarnings);
             expect(result.status).toBe('ok');
-        });
-
-        it('reports degraded when only ambiguousFqns populated', () => {
-            const indexWithAmbiguous: CodeIntelIndex = {
-                ...mockIndex,
-                manifest: {
-                    ...mockIndex.manifest,
-                    warnings: { ambiguousFqns: ['X'], skippedFiles: [] },
-                } as typeof mockIndex.manifest,
-            };
-            const result = selfCheck(indexWithAmbiguous);
-            expect(result.status).toBe('degraded');
-            expect(result.message).toMatch(/1 ambiguous/);
-        });
-
-        it('reports degraded when only skippedFiles populated', () => {
-            const indexWithSkipped: CodeIntelIndex = {
-                ...mockIndex,
-                manifest: {
-                    ...mockIndex.manifest,
-                    warnings: { ambiguousFqns: [], skippedFiles: [{ file: 'a.ts', error: 'X' }] },
-                } as typeof mockIndex.manifest,
-            };
-            const result = selfCheck(indexWithSkipped);
-            expect(result.status).toBe('degraded');
-            expect(result.message).toMatch(/1 skipped/);
+            expect(result.warnings).toBeUndefined();
+            expect(result.info).toBeUndefined();
         });
 
         // Fix round 2: distinguish ABSENT (legacy index, OK) from PRESENT-BUT-MALFORMED

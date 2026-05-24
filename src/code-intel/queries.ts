@@ -10,6 +10,28 @@ function withHealthWarning<T>(_index: CodeIntelIndex, data: T): T {
     return data;
 }
 
+/**
+ * Health verdict for the code-intel sidecar.
+ *
+ * Semantics (important for callers, including LLMs):
+ *
+ *   - `status: 'ok'` means the index is COMPLETE. Traces, references and
+ *     impact queries can be trusted end-to-end. A non-empty `info.shortNameCollisions`
+ *     does NOT degrade this verdict — short-name omonymy (two files both
+ *     defining `setup`/`init`/`build`) is a normal property of any modular
+ *     codebase. Symbols carry composite, file-qualified `id`s and
+ *     `resolve_symbol` accepts a path suffix to disambiguate.
+ *
+ *   - `status: 'degraded'` means the index has REAL GAPS — either some
+ *     source files could not be parsed (`warnings.skippedFiles`), or the
+ *     manifest's diagnostics envelope is malformed. In both cases traces
+ *     and references may be incomplete and the caller should treat results
+ *     with care; running `arch-graph code-intel build` usually resolves it.
+ *
+ *   - `info` is purely informational and never gates behaviour; it exists
+ *     so the LLM can see, for transparency, how many short-name collisions
+ *     are present and an example list — without misreading them as a fault.
+ */
 export function selfCheck(index: CodeIntelIndex): {
     status: 'ok' | 'degraded' | 'stale' | 'missing';
     message: string;
@@ -17,8 +39,11 @@ export function selfCheck(index: CodeIntelIndex): {
     freshness: string;
     symbols: number;
     warnings?: {
-        ambiguousFqns: string[];
         skippedFiles: Array<{ file: string; error: string }>;
+    };
+    info?: {
+        shortNameCollisions: number;
+        shortNameCollisionsSample: string[];
     };
 } {
     const symbols = index.manifest.counts?.symbols ?? index.symbols.length;
@@ -26,7 +51,7 @@ export function selfCheck(index: CodeIntelIndex): {
 
     // Three states for `warnings`:
     //   (a) absent (legacy index, pre-warnings extractor)   → status='ok'
-    //   (b) present and well-formed                         → 'ok' if both empty, else 'degraded' with counts
+    //   (b) present and well-formed                         → see logic below
     //   (c) present but malformed (wrong-type fields, etc.) → 'degraded' with a "rebuild recommended" message
     // The distinction between (a) and (c) matters: a corrupt manifest must
     // not masquerade as a healthy legacy one — that was the exact regression
@@ -38,25 +63,41 @@ export function selfCheck(index: CodeIntelIndex): {
             schemaVersion: index.manifest.schemaVersion,
             freshness: index.manifest.builtAt,
             symbols,
-            warnings: { ambiguousFqns: [], skippedFiles: [] },
         };
     }
 
     const amb = w?.ambiguousFqns ?? [];
     const skp = w?.skippedFiles ?? [];
-    if (amb.length > 0 || skp.length > 0) {
-        const parts: string[] = [];
-        if (amb.length > 0) parts.push(`${amb.length} ambiguous FQNs`);
-        if (skp.length > 0) parts.push(`${skp.length} skipped files`);
+
+    // Skipped files = real index gaps → degraded (the trace graph is missing edges).
+    // Short-name collisions are NOT a gap (composite IDs + path-suffix disambiguation
+    // in resolve_symbol handle them); they appear under `info`, not `warnings`.
+    if (skp.length > 0) {
+        const info = amb.length > 0
+            ? { shortNameCollisions: amb.length, shortNameCollisionsSample: amb.slice(0, 5) }
+            : undefined;
         return {
             status: 'degraded',
-            message: `Code-intel index is degraded: ${parts.join(', ')}.`,
+            message: `Code-intel index has gaps: ${skp.length} file${skp.length === 1 ? '' : 's'} could not be parsed. Run: arch-graph code-intel build to retry.`,
             schemaVersion: index.manifest.schemaVersion,
             freshness: index.manifest.builtAt,
             symbols,
-            warnings: { ambiguousFqns: amb, skippedFiles: skp },
+            warnings: { skippedFiles: skp },
+            ...(info ? { info } : {}),
         };
     }
+
+    if (amb.length > 0) {
+        return {
+            status: 'ok',
+            message: `Code-intel index is operational. ${amb.length} short-name collision${amb.length === 1 ? '' : 's'} detected — this is normal; symbols carry composite, file-qualified IDs and resolve_symbol accepts a path suffix to disambiguate.`,
+            schemaVersion: index.manifest.schemaVersion,
+            freshness: index.manifest.builtAt,
+            symbols,
+            info: { shortNameCollisions: amb.length, shortNameCollisionsSample: amb.slice(0, 5) },
+        };
+    }
+
     return {
         status: 'ok',
         message: 'Code-intel index is operational.',

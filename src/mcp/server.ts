@@ -603,7 +603,13 @@ export async function startMcpServer(opts: { out: string; config?: string }): Pr
     server.registerTool(
         'resolve_symbol',
         {
-            description: 'Code intelligence lookup for classes, DTOs, methods, functions, fields, and params. Supports fuzzy path matching.',
+            description:
+                'Code intelligence lookup for classes, DTOs, methods, functions, fields, and params. ' +
+                'Accepts a short name (e.g. "UsersService"), a dotted name (e.g. "UsersService.findById"), ' +
+                'or a path fragment (e.g. "apps/api/users/users.service.ts"). ' +
+                'When a short name is shared across files (e.g. two modules both export "setup"), ALL matches are returned — ' +
+                'pass a path suffix in the query to narrow to one file. Each match carries a composite, file-qualified `id` ' +
+                'that downstream tools (find_references, get_type_definition, etc.) accept for unambiguous lookup.',
             inputSchema: resolveSymbolInputShape,
         },
         async ({ query }) => jsonResult(resolveSymbol(await loadCodeIntelFn(), query)),
@@ -670,7 +676,14 @@ export async function startMcpServer(opts: { out: string; config?: string }): Pr
     server.registerTool(
         'self_check',
         {
-            description: 'Verifies the health and freshness of the code-intel index. Use this if tools return unexpected empty results.',
+            description:
+                'Verifies the health and freshness of the code-intel index. Returns one of two statuses: ' +
+                '`ok` — the index is COMPLETE and trustworthy; `degraded` — the index has real gaps (files the ' +
+                'extractor could not parse, listed under `warnings.skippedFiles`) and traces may be incomplete. ' +
+                'The optional `info.shortNameCollisions` field counts symbols that share a short name across files ' +
+                '(e.g. two modules both exporting `setup`); this is NORMAL for modular codebases and does NOT affect ' +
+                'status — composite symbol IDs and path-suffix queries in resolve_symbol fully disambiguate. ' +
+                'Use this if other tools return unexpected empty results.',
             inputSchema: {},
         },
         async () => jsonResult(selfCheck(await loadCodeIntelFn())),
