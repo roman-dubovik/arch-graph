@@ -11,13 +11,33 @@ function withHealthWarning<T>(_index: CodeIntelIndex, data: T): T {
 }
 
 export function selfCheck(index: CodeIntelIndex): {
-    status: 'ok' | 'stale' | 'missing';
+    status: 'ok' | 'degraded' | 'stale' | 'missing';
     message: string;
     schemaVersion: number;
     freshness: string;
     symbols: number;
+    warnings?: {
+        ambiguousFqns: string[];
+        skippedFiles: Array<{ file: string; error: string }>;
+    };
 } {
     const symbols = index.manifest.counts?.symbols ?? index.symbols.length;
+    const w = index.manifest.warnings;
+    const hasAmbiguous = (w?.ambiguousFqns.length ?? 0) > 0;
+    const hasSkipped = (w?.skippedFiles.length ?? 0) > 0;
+    if (hasAmbiguous || hasSkipped) {
+        const parts: string[] = [];
+        if (hasAmbiguous) parts.push(`${w!.ambiguousFqns.length} ambiguous FQNs`);
+        if (hasSkipped) parts.push(`${w!.skippedFiles.length} skipped files`);
+        return {
+            status: 'degraded',
+            message: `Code-intel index is degraded: ${parts.join(', ')}.`,
+            schemaVersion: index.manifest.schemaVersion,
+            freshness: index.manifest.builtAt,
+            symbols,
+            warnings: w,
+        };
+    }
     return {
         status: 'ok',
         message: 'Code-intel index is operational.',

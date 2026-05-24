@@ -24,6 +24,10 @@ export interface CodeIntelManifest {
         branches: number;
         impacts: number;
     };
+    warnings?: {
+        ambiguousFqns: string[];
+        skippedFiles: Array<{ file: string; error: string }>;
+    };
 }
 
 export interface CodeIntelSymbol extends SourceLoc {
