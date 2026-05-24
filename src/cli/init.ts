@@ -858,18 +858,30 @@ export async function runInitWizard(target: string): Promise<void> {
     // CLAUDE.md is read-only, hook directory is missing) doesn't leave the
     // wizard mid-state — the config was already written, so we report each
     // env failure and continue with the next one instead of throwing.
+    //
+    // Both `claude` and `gemini` write to CLAUDE.md (gemini reads the same
+    // file), so `claudeInstall` is called at most once even if both envs are
+    // selected; otherwise the user sees a duplicate "wrote arch-graph
+    // section to CLAUDE.md" line and the skill install runs twice.
     let claudeInstalled = false;
+    const wantsClaudeMd = aiEnvs.includes('claude') || aiEnvs.includes('gemini');
+    if (wantsClaudeMd) {
+        try {
+            await claudeInstall({ target: resolve('./CLAUDE.md'), installSkill: true });
+            claudeInstalled = true;
+        } catch (err) {
+            output.write(`! skipped CLAUDE.md install: ${(err as Error).message}\n`);
+        }
+    }
     for (const env of aiEnvs) {
         try {
             if (env === 'claude' || env === 'gemini') {
-                await claudeInstall({ target: resolve('./CLAUDE.md'), installSkill: true });
-                claudeInstalled = true;
                 await hooksModule.agentHookInstall({ repo: resolve('.'), agent: env === 'claude' ? 'claude' : 'gemini' as any });
             } else if (env === 'cursor') {
                 await hooksModule.agentHookInstall({ repo: resolve('.'), agent: 'cursor' });
             }
         } catch (envErr) {
-            output.write(`! skipped ${env} integration: ${(envErr as Error).message}\n`);
+            output.write(`! skipped ${env} hook: ${(envErr as Error).message}\n`);
         }
     }
 
