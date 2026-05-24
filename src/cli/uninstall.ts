@@ -103,6 +103,8 @@ export interface ProjectInventory {
     config: string | null;
     outDir: { path: string; sizeBytes: number } | null;
     claudeMdWithBlock: string | null;
+    cursorRulesWithBlock: string | null;
+    claudeHookWithBlock: string | null;
     hookWithBlock: { path: string; mode: 'pre-commit' | 'post-commit' } | null;
 }
 
@@ -203,7 +205,20 @@ export async function inventoryProject(repo: string): Promise<ProjectInventory> 
     const cmd = resolve(repo, 'CLAUDE.md');
     if (existsSync(cmd)) {
         const body = await readFile(cmd, 'utf8');
-        if (body.includes(CLAUDE_MARK_START)) inv.claudeMdWithBlock = cmd;
+        if (body.includes(CLAUDE_MARK_START) && body.includes(CLAUDE_MARK_END)) inv.claudeMdWithBlock = cmd;
+    }
+
+    const cursor = resolve(repo, '.cursorrules');
+    if (existsSync(cursor)) {
+        const body = await readFile(cursor, 'utf8');
+        if (body.includes(HOOK_MARK_START) && body.includes(HOOK_MARK_END)) inv.cursorRulesWithBlock = cursor;
+    }
+
+    const hookDir = resolve(repo, '.claude', 'hooks');
+    const startHook = resolve(hookDir, 'SessionStart.sh');
+    if (existsSync(startHook)) {
+        const body = await readFile(startHook, 'utf8');
+        if (body.includes(HOOK_MARK_START) && body.includes(HOOK_MARK_END)) inv.claudeHookWithBlock = startHook;
     }
 
     // Hook detection — prefer pre-commit if both somehow have a block (status
@@ -212,7 +227,7 @@ export async function inventoryProject(repo: string): Promise<ProjectInventory> 
         const p = mode === 'pre-commit' ? preCommitHookPath(repo) : postCommitHookPath(repo);
         if (!existsSync(p)) continue;
         const body = await readFile(p, 'utf8');
-        if (body.includes(HOOK_MARK_START)) {
+        if (body.includes(HOOK_MARK_START) && body.includes(HOOK_MARK_END)) {
             inv.hookWithBlock = { path: p, mode };
             break;
         }
@@ -356,50 +371,46 @@ function hasAnyGlobal(g: GlobalInventory): boolean {
 
 // ─── actions ─────────────────────────────────────────────────────────────────
 
-/**
- * Returns `true` if every artefact in the inventory was removed without error,
- * `false` if any single fs operation failed (the error is logged to stderr and
- * subsequent artefacts still attempted). The wizard uses the boolean to set
- * `hadError` — mirrors the contract of `removeMcpRegistrations` /
- * `removeGlobalInstall` so all three scopes route through the same
- * structured exit path instead of escaping as unhandled rejections.
- */
+async function surgicalRemove(filePath: string, start: string, end: string, label: string): Promise<boolean> {
+    try {
+        const body = await readFile(filePath, 'utf8');
+        const stripped = stripMarkedSection(body, start, end);
+        const meaningful = stripped
+            .split('\n')
+            .map((l) => l.trim())
+            .filter((l) => l.length > 0 && !l.startsWith('#'))
+            .join('');
+        if (meaningful.length === 0) {
+            await unlink(filePath);
+            output.write(`✓ removed empty file ${filePath}\n`);
+        } else {
+            await writeFile(filePath, stripped, 'utf8');
+            output.write(`✓ removed arch-graph ${label} from ${filePath}\n`);
+        }
+        return true;
+    } catch (err) {
+        process.stderr.write(`⚠ arch-graph: failed to clean ${filePath}: ${(err as Error).message}\n`);
+        return false;
+    }
+}
+
 export async function removeProjectArtefacts(inv: ProjectInventory): Promise<boolean> {
     let ok = true;
 
     if (inv.claudeMdWithBlock) {
-        try {
-            const body = await readFile(inv.claudeMdWithBlock, 'utf8');
-            const stripped = stripMarkedSection(body, CLAUDE_MARK_START, CLAUDE_MARK_END);
-            await writeFile(inv.claudeMdWithBlock, stripped, 'utf8');
-            output.write(`✓ removed arch-graph section from ${inv.claudeMdWithBlock}\n`);
-        } catch (err) {
-            process.stderr.write(`⚠ arch-graph: failed to clean ${inv.claudeMdWithBlock}: ${(err as Error).message}\n`);
-            ok = false;
-        }
+        if (!(await surgicalRemove(inv.claudeMdWithBlock, CLAUDE_MARK_START, CLAUDE_MARK_END, 'section'))) ok = false;
+    }
+
+    if (inv.cursorRulesWithBlock) {
+        if (!(await surgicalRemove(inv.cursorRulesWithBlock, HOOK_MARK_START, HOOK_MARK_END, 'rules'))) ok = false;
+    }
+
+    if (inv.claudeHookWithBlock) {
+        if (!(await surgicalRemove(inv.claudeHookWithBlock, HOOK_MARK_START, HOOK_MARK_END, 'code'))) ok = false;
     }
 
     if (inv.hookWithBlock) {
-        const { path } = inv.hookWithBlock;
-        try {
-            const body = await readFile(path, 'utf8');
-            const stripped = stripMarkedSection(body, HOOK_MARK_START, HOOK_MARK_END);
-            const meaningful = stripped
-                .split('\n')
-                .map((l) => l.trim())
-                .filter((l) => l.length > 0 && !l.startsWith('#'))
-                .join('');
-            if (meaningful.length === 0) {
-                await unlink(path);
-                output.write(`✓ removed empty hook ${path}\n`);
-            } else {
-                await writeFile(path, stripped, 'utf8');
-                output.write(`✓ removed arch-graph block from ${path}\n`);
-            }
-        } catch (err) {
-            process.stderr.write(`⚠ arch-graph: failed to clean hook ${path}: ${(err as Error).message}\n`);
-            ok = false;
-        }
+        if (!(await surgicalRemove(inv.hookWithBlock.path, HOOK_MARK_START, HOOK_MARK_END, 'block'))) ok = false;
     }
 
     if (inv.config) {

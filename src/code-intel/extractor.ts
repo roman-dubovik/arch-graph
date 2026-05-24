@@ -706,7 +706,12 @@ function aliasesForParam(ctx: FunctionLikeCtx, paramName: string): Set<string> {
 function namesFromBindingName(node: MorphNode): string[] {
     if (Node.isIdentifier(node)) return [node.getText()];
     if (Node.isObjectBindingPattern(node) || Node.isArrayBindingPattern(node)) {
-        return node.getElements().flatMap((element) => namesFromBindingName(element.getNameNode()));
+        return node.getElements().flatMap((element) => {
+            // ArrayBindingPattern can contain OmittedExpression (sparse array holes,
+            // e.g. `const [, b] = x`); skip those rather than crashing on getNameNode.
+            if (!Node.isBindingElement(element)) return [];
+            return namesFromBindingName(element.getNameNode());
+        });
     }
     return [];
 }

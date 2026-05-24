@@ -135,27 +135,49 @@ export async function agentHookInstall(args: { repo: string; agent: 'claude' | '
         const hooksDir = resolve(repo, '.claude/hooks');
         await mkdir(hooksDir, { recursive: true });
         const startHookPath = resolve(hooksDir, 'SessionStart.sh');
-        const content = `#!/bin/sh
-# --- arch-graph orientation hook ---
+        
+        let existing = '';
+        if (existsSync(startHookPath)) {
+            existing = await readFile(startHookPath, 'utf8');
+        }
+
+        const body = `${MARK_START}
 # Automatically orient the agent at the start of a session.
 arch-graph code-intel summary --json
+${MARK_END}
 `;
-        await writeFile(startHookPath, content, { mode: 0o755, encoding: 'utf8' });
+        const next = existing.includes(MARK_START) 
+            ? replaceMarkedSection(existing, MARK_START, MARK_END, body)
+            : existing.length === 0 
+                ? `#!/bin/sh\n${body}` 
+                : appendBlock(existing, body);
+
+        await writeFile(startHookPath, next, { mode: 0o755, encoding: 'utf8' });
         process.stdout.write(`✓ scaffolded .claude/hooks/SessionStart.sh\n`);
     }
 
     if (args.agent === 'cursor' || args.agent === 'all') {
         const cursorRulesPath = resolve(repo, '.cursorrules');
-        if (!existsSync(cursorRulesPath)) {
-            const content = `## Architecture Orientation
+        
+        let existing = '';
+        if (existsSync(cursorRulesPath)) {
+            existing = await readFile(cursorRulesPath, 'utf8');
+        }
+
+        const body = `${MARK_START}
+## Architecture Orientation
 Before starting work, always run:
 arch-graph code-intel summary
 
 Use surgical reads with exact line ranges from 'get_file_outline'.
+${MARK_END}
 `;
-            await writeFile(cursorRulesPath, content, 'utf8');
-            process.stdout.write(`✓ created .cursorrules\n`);
-        }
+        const next = existing.includes(MARK_START) 
+            ? replaceMarkedSection(existing, MARK_START, MARK_END, body)
+            : appendBlock(existing, body);
+
+        await writeFile(cursorRulesPath, next, 'utf8');
+        process.stdout.write(`✓ updated .cursorrules\n`);
     }
 }
 

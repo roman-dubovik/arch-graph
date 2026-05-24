@@ -101,7 +101,51 @@ else
     npm install
 fi
 
-# ---- 4. symlink onto PATH --------------------------------------------------
+# ---- 4. AI Environment Setup (Global) --------------------------------------
+
+ok "Configuring Global AI Layer (Optional)"
+cat <<EOF
+Which AI agent(s) do you primarily use? (You can also set this per-project)
+  1) Claude Code
+  2) Cursor / Windsurf
+  3) Gemini (CLI)
+  4) Skip / None
+
+  (Multiple numbers allowed, e.g. "1,2")
+EOF
+printf "Select [1-4] (default: 4): "
+read -r ai_choices < /dev/tty || ai_choices="4"
+
+# Handle comma/space separated choices
+for choice in $(echo "$ai_choices" | tr ',' ' '); do
+    case "$choice" in
+        1)
+            ok "Added Claude Code to global preferences."
+            ;;
+        2)
+            ok "Added Cursor/Windsurf to global preferences."
+            ;;
+        3)
+            ok "Configuring Gemini global context..."
+            mkdir -p "$HOME/.gemini"
+            if ! grep -q "arch-graph" "$HOME/.gemini/GEMINI.md" 2>/dev/null; then
+                cat << 'EOF' >> "$HOME/.gemini/GEMINI.md"
+
+## Architecture Context (arch-graph)
+When analyzing NestJS projects, ALWAYS run \`arch-graph code-intel summary\` first to orient yourself. 
+To explore files, use \`arch-graph code-intel outline <file>\` to get specific line ranges, and read ONLY those lines to save tokens.
+EOF
+            fi
+            ok "✓ added global context to ~/.gemini/GEMINI.md"
+            ;;
+        4)
+            ok "Skipping further global AI setup."
+            break
+            ;;
+    esac
+done
+
+# ---- 5. symlink onto PATH --------------------------------------------------
 
 WRAPPER="$INSTALL_DIR/bin/arch-graph"
 if [ ! -x "$WRAPPER" ]; then
@@ -133,7 +177,7 @@ if [ "$ON_PATH" -eq 0 ]; then
 EOF
 fi
 
-# ---- 5. offer to initialise here (interactive) -----------------------------
+# ---- 6. offer to initialise here (interactive) -----------------------------
 
 # Print the post-install hint shown when init is skipped or unavailable.
 print_init_hint() {

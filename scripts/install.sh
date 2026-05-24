@@ -105,38 +105,49 @@ fi
 
 ok "Configuring Global AI Layer (Optional)"
 cat <<EOF
-Which AI agent do you primarily use globally? (You can also set this per-project)
+Which AI agent(s) do you primarily use? (You can also set this per-project)
   1) Claude Code
   2) Cursor / Windsurf
   3) Gemini (CLI)
   4) Skip / None
+
+  (Multiple numbers allowed, e.g. "1,2")
 EOF
 printf "Select [1-4] (default: 4): "
-read -r ai_choice < /dev/tty || ai_choice="4"
+if [ -t 0 ]; then
+    read -r ai_choices < /dev/tty || ai_choices="4"
+else
+    read -r ai_choices || ai_choices="4"
+fi
 
-case "$ai_choice" in
-    1)
-        ok "Selected Claude Code. Global hooks will be scaffolded per-project during 'arch-graph init'."
-        ;;
-    2)
-        ok "Selected Cursor. Project-level .cursorrules will be generated during 'arch-graph init'."
-        ;;
-    3)
-        ok "Selected Gemini. Adding global context to ~/.gemini/GEMINI.md"
-        mkdir -p "$HOME/.gemini"
-        if ! grep -q "arch-graph" "$HOME/.gemini/GEMINI.md" 2>/dev/null; then
-            cat << 'EOF' >> "$HOME/.gemini/GEMINI.md"
+# Handle comma/space separated choices
+for choice in $(echo "$ai_choices" | tr ',' ' '); do
+    case "$choice" in
+        1)
+            ok "Added Claude Code to global preferences."
+            ;;
+        2)
+            ok "Added Cursor/Windsurf to global preferences."
+            ;;
+        3)
+            ok "Configuring Gemini global context..."
+            mkdir -p "$HOME/.gemini"
+            if ! grep -q "arch-graph" "$HOME/.gemini/GEMINI.md" 2>/dev/null; then
+                cat << 'EOF' >> "$HOME/.gemini/GEMINI.md"
 
 ## Architecture Context (arch-graph)
-When analyzing NestJS projects, ALWAYS run `arch-graph code-intel summary` first to orient yourself. 
-To explore files, use `arch-graph code-intel outline <file>` to get specific line ranges, and read ONLY those lines to save tokens.
+When analyzing NestJS projects, ALWAYS run \`arch-graph code-intel summary\` first to orient yourself. 
+To explore files, use \`arch-graph code-intel outline <file>\` to get specific line ranges, and read ONLY those lines to save tokens.
 EOF
-        fi
-        ;;
-    *)
-        ok "Skipping global AI setup."
-        ;;
-esac
+            fi
+            ok "✓ added global context to ~/.gemini/GEMINI.md"
+            ;;
+        4)
+            ok "Skipping further global AI setup."
+            break
+            ;;
+    esac
+done
 
 # ---- 5. symlink onto PATH --------------------------------------------------
 

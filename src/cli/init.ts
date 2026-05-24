@@ -480,22 +480,42 @@ export async function askSnippetTarget(rl: Rl): Promise<SnippetTarget> {
 }
 
 /** Ask which AI environment(s) to scaffold for. */
-async function askAiEnvironments(rl: Rl): Promise<AiEnvironment[]> {
-    output.write('\n? Which AI agent(s) do you use for this project? (select all that apply)\n');
+export async function askAiEnvironments(rl: Rl): Promise<AiEnvironment[]> {
+    output.write('\n? Which AI agent(s) do you use for this project?\n');
     output.write('  1. Claude Code (SessionStart hook & CLAUDE.md)\n');
     output.write('  2. Cursor / Windsurf (.cursorrules)\n');
     output.write('  3. Gemini CLI (CLAUDE.md pointer)\n');
     output.write('  4. Done / Skip\n');
+    output.write('\n  (You can enter multiple numbers, e.g. "1,2" or "1 3")\n');
 
     const selected = new Set<AiEnvironment>();
+    const map: Record<string, AiEnvironment> = { '1': 'claude', '2': 'cursor', '3': 'gemini' };
+
     while (true) {
-        const currentStr = selected.size === 0 ? 'none' : Array.from(selected).join(', ');
-        const answer = await rl.question(`  Select [1-4, currently: ${currentStr}]: `);
+        const currentArr = Array.from(selected);
+        const currentStr = currentArr.length === 0 ? 'none' : currentArr.join(', ');
+        const answer = await rl.question(`  Select [currently: ${currentStr}]: `);
         const trimmed = answer.trim();
-        if (trimmed === '1') selected.add('claude');
-        else if (trimmed === '2') selected.add('cursor');
-        else if (trimmed === '3') selected.add('gemini');
-        else break;
+
+        if (trimmed === '4' || (trimmed === '' && selected.size > 0)) break;
+        if (trimmed === '' && selected.size === 0) return [];
+
+        // Support "1,2" or "1 3"
+        const parts = trimmed.split(/[,\s]+/).filter(Boolean);
+        for (const p of parts) {
+            if (map[p]) selected.add(map[p]);
+            else if (p === '4') return Array.from(selected);
+        }
+
+        if (parts.length > 0 && trimmed !== '') {
+            // If they entered something and we processed it, and they didn't explicitly say "done",
+            // we show the updated list and let them add more or press enter to finish.
+            const updatedStr = Array.from(selected).join(', ');
+            output.write(`  Current selection: ${updatedStr} (press Enter to confirm or select more)\n`);
+            // Break on next empty enter if they already have selection
+        } else {
+            break;
+        }
     }
     return Array.from(selected);
 }

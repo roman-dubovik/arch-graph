@@ -1,15 +1,13 @@
-import { CODE_INTEL_SCHEMA_VERSION, type CodeIntelCall, type CodeIntelImpact, type CodeIntelIndex, type CodeIntelSymbol } from './types.js';
+import { CODE_INTEL_SCHEMA_VERSION, type CodeIntelBranch, type CodeIntelCall, type CodeIntelFlow, type CodeIntelImpact, type CodeIntelIndex, type CodeIntelSymbol } from './types.js';
 import type { ArchGraph } from '../core/types.js';
 
 /**
- * All tools return this envelope to handle JIT index health/warning
- * feedback for LLM agents.
+ * Envelope wrapper kept for forward-compatible JIT health/warning signal.
+ * The manifest currently exposes no health field; this is a no-op pass-through
+ * that preserves call-sites while we decide whether to wire health at build.
  */
-function withHealthWarning<T>(index: CodeIntelIndex, data: T): T & { health: CodeIntelIndex['manifest']['health'] } {
-    return {
-        ...data,
-        health: index.manifest.health,
-    };
+function withHealthWarning<T>(_index: CodeIntelIndex, data: T): T {
+    return data;
 }
 
 export function selfCheck(index: CodeIntelIndex): {
@@ -169,10 +167,14 @@ export function explainDataFlow(index: CodeIntelIndex, args: {
 
 export function explainBranch(index: CodeIntelIndex, args: { file: string; line: number }): {
     found: boolean;
-    branch?: CodeIntelBranch;
+    branches: CodeIntelBranch[];
 } {
-    const branch = index.branches.find((b) => matchesFile(b.file, args.file) && b.line === args.line);
-    return withHealthWarning(index, { found: !!branch, branch });
+    // Fuzzy ±2 line window so an agent pointing at the function declaration or
+    // a line off-by-one from the actual predicate still gets useful results.
+    const branches = index.branches
+        .filter((b) => matchesFile(b.file, args.file) && Math.abs(b.line - args.line) <= 2)
+        .sort((a, b) => Math.abs(a.line - args.line) - Math.abs(b.line - args.line));
+    return withHealthWarning(index, { found: branches.length > 0, branches });
 }
 
 export function traceScenario(index: CodeIntelIndex, args: { entry: string; maxDepth?: number }): {
@@ -223,18 +225,22 @@ export function traceMessageFlow(index: CodeIntelIndex, graph: ArchGraph, patter
     const publishers: Array<{ service: string; method: string; file: string; line: number }> = [];
     const subscribers: Array<{ service: string; handler: string; file: string; line: number; trace: ReturnType<typeof traceScenario> }> = [];
 
-    // Find publishers and subscribers in structural graph
+    // Find publishers/producers and subscribers/consumers in the structural graph.
+    // Edge kinds map: nats-publish/nats-request → publishers, nats-subscribe/nats-reply/rmq-subscribe → subscribers,
+    // queue-produce → publishers, queue-consume → subscribers.
+    const PUBLISH_KINDS = new Set(['nats-publish', 'nats-request', 'queue-produce']);
+    const SUBSCRIBE_KINDS = new Set(['nats-subscribe', 'nats-reply', 'rmq-subscribe', 'queue-consume']);
     for (const edge of graph.edges) {
-        if ((edge.kind === 'nats-publish' || edge.kind === 'rmq-emit') && (edge.to.includes(pattern) || pattern.includes(edge.to.replace(/nats:|queue:/, '')))) {
+        if (PUBLISH_KINDS.has(edge.kind) && (edge.to.includes(pattern) || pattern.includes(edge.to.replace(/nats:|queue:/, '')))) {
             publishers.push({
                 service: edge.from,
-                method: edge.meta?.method ?? 'unknown',
+                method: (edge.meta as Record<string, unknown> | undefined)?.method as string ?? 'unknown',
                 file: edge.file ?? '',
                 line: edge.line ?? 0,
             });
         }
-        if ((edge.kind === 'nats-subscribe' || edge.kind === 'rmq-handler') && (edge.from.includes(pattern) || pattern.includes(edge.from.replace(/nats:|queue:/, '')))) {
-            const handlerFqn = edge.meta?.handler ?? edge.to;
+        if (SUBSCRIBE_KINDS.has(edge.kind) && (edge.from.includes(pattern) || pattern.includes(edge.from.replace(/nats:|queue:/, '')))) {
+            const handlerFqn = (edge.meta as Record<string, unknown> | undefined)?.handler as string ?? edge.to;
             subscribers.push({
                 service: edge.to,
                 handler: handlerFqn,
