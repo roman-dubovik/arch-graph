@@ -110,6 +110,49 @@ describe('Lifecycle Integration Tests', () => {
         });
     });
 
+    describe('2.1.1 Legacy Marker Migration (cursor upgrade path)', () => {
+        // Pre-P1-O installs wrote the cursor block with shell-style markers
+        // (`# >>> arch-graph >>>` / `# <<< arch-graph <<<`), the same pair
+        // used for SessionStart.sh. P1-O switched to HTML-comment markers
+        // for cursor only, so re-running install must migrate the old block
+        // — otherwise the user ends up with two coexisting arch-graph blocks.
+        it('strips legacy shell-style cursor block before writing the new HTML-comment block', async () => {
+            const p1 = join(testHome, 'project-legacy-cursor');
+            await mkdir(p1);
+            const cursorRules = join(p1, '.cursorrules');
+
+            const userContent = '## User Custom Rule\nAlways use tabs.';
+            const legacyArchBlock =
+                '\n# >>> arch-graph >>>\narch-graph code-intel summary\n# <<< arch-graph <<<\n';
+            await writeFile(cursorRules, userContent + legacyArchBlock);
+
+            await agentHookInstall({ repo: p1, agent: 'cursor' });
+
+            const finalContent = await readFile(cursorRules, 'utf8');
+            // Legacy block fully removed (no shell-style markers anywhere).
+            expect(finalContent).not.toContain('# >>> arch-graph >>>');
+            expect(finalContent).not.toContain('# <<< arch-graph <<<');
+            // Exactly one new HTML-comment block (no duplicates).
+            const startMatches = finalContent.match(/<!-- arch-graph:cursor -->/g) ?? [];
+            expect(startMatches).toHaveLength(1);
+            // User content survives.
+            expect(finalContent).toContain('## User Custom Rule');
+            expect(finalContent).toContain('Always use tabs.');
+        });
+
+        it('is idempotent on a file that already has the new HTML-comment block', async () => {
+            const p1 = join(testHome, 'project-idempotent-cursor');
+            await mkdir(p1);
+
+            await agentHookInstall({ repo: p1, agent: 'cursor' });
+            await agentHookInstall({ repo: p1, agent: 'cursor' });
+
+            const finalContent = await readFile(join(p1, '.cursorrules'), 'utf8');
+            const startMatches = finalContent.match(/<!-- arch-graph:cursor -->/g) ?? [];
+            expect(startMatches).toHaveLength(1);
+        });
+    });
+
     describe('2.2 Project Uninstall', () => {
         it('should surgically remove all project artifacts and delete files if they become empty', async () => {
             const p1 = join(testHome, 'project-un');

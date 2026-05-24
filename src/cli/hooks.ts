@@ -184,12 +184,26 @@ arch-graph code-intel summary
 Use surgical reads with exact line ranges from 'get_file_outline'.
 ${CURSOR_MARK_END}
 `;
-        const next = existing.includes(CURSOR_MARK_START)
-            ? replaceMarkedSection(existing, CURSOR_MARK_START, CURSOR_MARK_END, body)
-            : appendBlock(existing, body);
+        // Upgrade-from-legacy: pre-P1-O installs wrote the cursor block with
+        // shell-style markers (`# >>> arch-graph >>>`). Without stripping that
+        // first, a re-install would APPEND the new HTML-comment block and the
+        // user would end up with two coexisting arch-graph blocks. uninstall
+        // already handles both pairs; install must too.
+        let upgraded = existing;
+        const hadLegacy = upgraded.includes(MARK_START) && upgraded.includes(MARK_END);
+        if (hadLegacy) {
+            upgraded = stripMarkedSection(upgraded, MARK_START, MARK_END);
+        }
+        const next = upgraded.includes(CURSOR_MARK_START)
+            ? replaceMarkedSection(upgraded, CURSOR_MARK_START, CURSOR_MARK_END, body)
+            : appendBlock(upgraded, body);
 
         await atomicWrite(cursorRulesPath, next);
-        process.stdout.write(`✓ updated .cursorrules\n`);
+        if (hadLegacy) {
+            process.stdout.write(`✓ updated .cursorrules (migrated legacy shell-style markers to HTML comments)\n`);
+        } else {
+            process.stdout.write(`✓ updated .cursorrules\n`);
+        }
     }
 }
 
