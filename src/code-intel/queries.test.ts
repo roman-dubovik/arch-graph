@@ -199,5 +199,40 @@ describe('code-intel queries', () => {
             expect(result.status).toBe('ok');
             expect(result.symbols).toBe(4);
         });
+
+        // Task E acceptance: when extractor recorded ambiguous FQNs or skipped
+        // files, selfCheck must surface them via a `degraded` status with the
+        // exact lists — otherwise the agent has no way to know its index is
+        // partial / has name collisions.
+        it('reports degraded status when warnings present', () => {
+            const indexWithWarnings: CodeIntelIndex = {
+                ...mockIndex,
+                manifest: {
+                    ...mockIndex.manifest,
+                    warnings: {
+                        ambiguousFqns: ['CreateItemDto', 'UsersService.find'],
+                        skippedFiles: [{ file: 'src/broken.ts', error: 'cyclic type' }],
+                    },
+                } as typeof mockIndex.manifest,
+            };
+            const result = selfCheck(indexWithWarnings);
+            expect(result.status).toBe('degraded');
+            expect(result.warnings).toBeDefined();
+            expect(result.warnings!.ambiguousFqns).toHaveLength(2);
+            expect(result.warnings!.skippedFiles).toHaveLength(1);
+            expect(result.message).toMatch(/2 ambiguous|1 skipped/);
+        });
+
+        it('reports ok when warnings exist but are empty', () => {
+            const indexWithEmptyWarnings: CodeIntelIndex = {
+                ...mockIndex,
+                manifest: {
+                    ...mockIndex.manifest,
+                    warnings: { ambiguousFqns: [], skippedFiles: [] },
+                } as typeof mockIndex.manifest,
+            };
+            const result = selfCheck(indexWithEmptyWarnings);
+            expect(result.status).toBe('ok');
+        });
     });
 });
