@@ -70,13 +70,15 @@ export function selfCheck(index: CodeIntelIndex): {
 
     // Partition collisions by symbol kind. A collision is DANGEROUS (real
     // silent-wrong-answer risk) when ≥2 symbols of a "structural" kind
-    // (class member, class itself, DTO, db-entity) share the same FQN —
-    // e.g. two classes both named `UsersService` each defining `findById`,
-    // so `UsersService.findById` resolves to two real bodies and
-    // `find_references` would silently pick one. Bare-name omonymy
-    // (two top-level functions named `setup`, or their params) is normal
-    // omonymy: the LLM is expected to qualify with a path suffix.
-    const DANGEROUS_KINDS = new Set<CodeIntelSymbol['kind']>(['method', 'field', 'class', 'dto', 'db-entity']);
+    // (class member, class itself, DTO, db-entity, type alias / non-DTO
+    // interface) share the same FQN. Downstream consumers — getTypeDefinition,
+    // impactContract, find_references, explain_data_flow — resolve such
+    // names and take the FIRST match by rank, so a duplicate `type Result`
+    // or `UsersService.findById` returns data from the wrong file without
+    // any warning. Bare-name omonymy of functions or function-params is
+    // expected in modular codebases and the LLM is taught (via tool
+    // description) to qualify with a path suffix when it matters.
+    const DANGEROUS_KINDS = new Set<CodeIntelSymbol['kind']>(['method', 'field', 'class', 'dto', 'db-entity', 'type']);
     const ambSet = new Set(amb);
     const buckets = new Map<string, CodeIntelSymbol[]>();
     if (amb.length > 0) {
@@ -98,7 +100,7 @@ export function selfCheck(index: CodeIntelIndex): {
         if (skp.length > 0) parts.push(`${skp.length} file${skp.length === 1 ? '' : 's'} could not be parsed`);
         if (dangerous.length > 0) {
             parts.push(
-                `${dangerous.length} class-member collision${dangerous.length === 1 ? '' : 's'} (downstream tools may pick the wrong class silently)`,
+                `${dangerous.length} structural-name collision${dangerous.length === 1 ? '' : 's'} (two classes/types/DTOs share a name — downstream tools may pick the wrong one silently)`,
             );
         }
         const warnings: { skippedFiles?: typeof skp; dangerousCollisions?: string[] } = {};
@@ -112,7 +114,7 @@ export function selfCheck(index: CodeIntelIndex): {
             message:
                 `Code-intel index is degraded: ${parts.join('; ')}. ` +
                 (dangerous.length > 0
-                    ? 'For class-member collisions, use the symbol `id` (file-qualified) instead of `fqn`, or rename one of the duplicate classes. '
+                    ? 'For structural-name collisions, use the symbol `id` (file-qualified) when looking up specific bodies, or rename one of the duplicates. '
                     : '') +
                 'Run: arch-graph code-intel build after fixing.',
             schemaVersion: index.manifest.schemaVersion,

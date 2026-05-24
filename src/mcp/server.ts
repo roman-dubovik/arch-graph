@@ -680,9 +680,9 @@ export async function startMcpServer(opts: { out: string; config?: string }): Pr
                 'Verifies the health and freshness of the code-intel index. Returns one of two statuses: ' +
                 '`ok` — the index is COMPLETE and lookups are unambiguous; `degraded` — there is a real silent-' +
                 'wrong-answer risk: `warnings.skippedFiles` (extractor could not parse some files; trace graph has gaps) ' +
-                'or `warnings.dangerousCollisions` (two class members share the same `<Class>.<method>` FQN, so ' +
-                'find_references / explain_data_flow may return results from the wrong class without warning — ' +
-                'use the symbol `id` (file-qualified) instead of `fqn`, or rename one of the duplicate classes). ' +
+                'or `warnings.dangerousCollisions` (two structural symbols — class/method/field/DTO/type/db-entity — share ' +
+                'a name, so find_references / get_type_definition / impact_contract may return results from the wrong file ' +
+                'without warning; use the symbol `id` (file-qualified) instead of `fqn`, or rename one of the duplicates). ' +
                 'The optional `info.nameCollisions` field counts top-level functions/types/params with the same ' +
                 'short name across files (e.g. two modules both exporting `setup`); this is NORMAL omonymy and does ' +
                 'NOT affect status — pass a path suffix in resolve_symbol queries to target a specific file. ' +

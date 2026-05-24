@@ -211,20 +211,21 @@ describe('code-intel queries', () => {
         //   • Skipped files: extractor gaps → degraded.
         //   • Malformed manifest: degraded + rebuild message.
 
-        it('stays ok when only top-level (function/type) collisions exist; reports them under info', () => {
+        it('stays ok when only top-level function collisions exist; reports them under info', () => {
             const indexWithBareOmonymy: CodeIntelIndex = {
                 ...mockIndex,
                 symbols: [
-                    // Two top-level functions both called `setup` in different files —
-                    // classic harmless omonymy, NOT a silent-wrong-answer risk.
+                    // Top-level function omonymy is normal modular naming, NOT a
+                    // silent-wrong-answer risk (find_references is expected to
+                    // return all matches; the LLM disambiguates by path suffix).
                     { id: 'symbol:apps/a/setup.ts#setup:1:1', kind: 'function', name: 'setup', fqn: 'setup', file: 'apps/a/setup.ts', line: 1, column: 1 },
                     { id: 'symbol:apps/b/setup.ts#setup:1:1', kind: 'function', name: 'setup', fqn: 'setup', file: 'apps/b/setup.ts', line: 1, column: 1 },
-                    { id: 'symbol:apps/a/types.ts#DomainKey:1:1', kind: 'type', name: 'DomainKey', fqn: 'DomainKey', file: 'apps/a/types.ts', line: 1, column: 1 },
-                    { id: 'symbol:apps/b/types.ts#DomainKey:1:1', kind: 'type', name: 'DomainKey', fqn: 'DomainKey', file: 'apps/b/types.ts', line: 1, column: 1 },
+                    { id: 'symbol:apps/a/init.ts#init:1:1', kind: 'function', name: 'init', fqn: 'init', file: 'apps/a/init.ts', line: 1, column: 1 },
+                    { id: 'symbol:apps/b/init.ts#init:1:1', kind: 'function', name: 'init', fqn: 'init', file: 'apps/b/init.ts', line: 1, column: 1 },
                 ],
                 manifest: {
                     ...mockIndex.manifest,
-                    warnings: { ambiguousFqns: ['setup', 'DomainKey'], skippedFiles: [] },
+                    warnings: { ambiguousFqns: ['setup', 'init'], skippedFiles: [] },
                 } as typeof mockIndex.manifest,
             };
             const result = selfCheck(indexWithBareOmonymy);
@@ -232,7 +233,7 @@ describe('code-intel queries', () => {
             expect(result.warnings).toBeUndefined();
             expect(result.info).toBeDefined();
             expect(result.info!.nameCollisions).toBe(2);
-            expect(result.info!.nameCollisionsSample).toEqual(['setup', 'DomainKey']);
+            expect(result.info!.nameCollisionsSample).toEqual(['setup', 'init']);
             expect(result.message).toMatch(/normal omonymy/i);
             expect(result.message).toMatch(/path suffix/);
         });
@@ -263,8 +264,30 @@ describe('code-intel queries', () => {
             expect(result.warnings!.dangerousCollisions).toEqual(
                 expect.arrayContaining(['UsersService', 'UsersService.findById']),
             );
-            expect(result.message).toMatch(/class-member collision/i);
+            expect(result.message).toMatch(/structural-name collision/i);
             expect(result.message).toMatch(/file-qualified|symbol.*id/i);
+        });
+
+        // silent-failure-hunter round 4: `type` aliases / non-DTO interfaces
+        // also have a silent-wrong-answer path — getTypeDefinition does
+        // `resolved.find(... s.kind === 'type' ...)` and impactContract resolves
+        // by type name. Two files with `type Result = ...` collide → first
+        // match silently wins. Must degrade exactly like the class-member case.
+        it('reports degraded when two type aliases share a name (Result × 2)', () => {
+            const indexWithTypeCollision: CodeIntelIndex = {
+                ...mockIndex,
+                symbols: [
+                    { id: 'symbol:apps/api/types.ts#Result:1:1', kind: 'type', name: 'Result', fqn: 'Result', file: 'apps/api/types.ts', line: 1, column: 1 },
+                    { id: 'symbol:apps/admin/types.ts#Result:1:1', kind: 'type', name: 'Result', fqn: 'Result', file: 'apps/admin/types.ts', line: 1, column: 1 },
+                ],
+                manifest: {
+                    ...mockIndex.manifest,
+                    warnings: { ambiguousFqns: ['Result'], skippedFiles: [] },
+                } as typeof mockIndex.manifest,
+            };
+            const result = selfCheck(indexWithTypeCollision);
+            expect(result.status).toBe('degraded');
+            expect(result.warnings!.dangerousCollisions).toEqual(['Result']);
         });
 
         // Parameters of duplicated functions show up in ambiguousFqns as
