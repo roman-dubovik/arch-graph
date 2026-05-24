@@ -15,6 +15,13 @@
  *   - The temp workDir is cleaned up after the run (even on failure)
  *
  * Mocking strategy:
+ *   - loadConfig/runBuild/writeGraphJson are mocked because runBench's Step 0
+ *     (load config + run the full structural pipeline + write graph.json)
+ *     would otherwise execute the real arch-graph extractor pipeline on this
+ *     very repo — adding seconds of real ts-morph work to every test and
+ *     turning these "unit tests" into accidental integration tests that flake
+ *     past the 5s vitest timeout. With these three mocked we hand runBench a
+ *     stub ArchGraph and skip the heavy work entirely.
  *   - buildSemanticIndexFromArgs is mocked to write a minimal graph.json +
  *     semantic manifest + embeddings.jsonl so semanticSearch can run
  *   - makeEmbedder is mocked to return a fixed zero-vector so no model loads
@@ -79,6 +86,35 @@ afterEach(async () => {
 });
 
 // ---------------------------------------------------------------------------
+// Shared mock helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Mock Step 0 of runBench — load config + run the structural pipeline +
+ * write graph.json. Without this, the test triggers the real arch-graph
+ * extractor pipeline on this repo (3000+ symbols, multiple seconds) and
+ * flakes past the 5s vitest timeout. Returns the same `testDir` the rest
+ * of the mocks expect.
+ */
+async function mockStructuralPipeline(): Promise<void> {
+    const configModule = await import('../core/config.js');
+    vi.spyOn(configModule, 'loadConfig').mockResolvedValue({
+        id: 'test',
+        root: testDir,
+    } as unknown as Awaited<ReturnType<typeof configModule.loadConfig>>);
+
+    const buildModule = await import('../pipeline/build.js');
+    vi.spyOn(buildModule, 'runBuild').mockResolvedValue({
+        graph: { version: 1, buildAt: '2026-01-01T00:00:00.000Z', root: testDir, nodes: [], edges: [] },
+        diagnostics: { unresolved: [] },
+        validation: { errors: [], warnings: [] },
+    } as unknown as Awaited<ReturnType<typeof buildModule.runBuild>>);
+
+    const graphJsonModule = await import('../output/graph-json.js');
+    vi.spyOn(graphJsonModule, 'writeGraphJson').mockResolvedValue();
+}
+
+// ---------------------------------------------------------------------------
 // Stubs
 // ---------------------------------------------------------------------------
 
@@ -107,6 +143,7 @@ const STUB_QUERIES: QuerySpec[] = [
 
 describe('runBench — mocked pipeline (unit test)', () => {
     it('returns BenchResultRow[] tagged with queryId for each search result', async () => {
+        await mockStructuralPipeline();
         // Mock the production modules so no real build or model load happens.
         const commandsModule = await import('../../src/cli/semantic-commands.js');
         const buildSpy = vi.spyOn(commandsModule, 'buildSemanticIndexFromArgs').mockResolvedValue(
@@ -179,6 +216,7 @@ describe('runBench — mocked pipeline (unit test)', () => {
     });
 
     it('build is called with the provided modelAlias', async () => {
+        await mockStructuralPipeline();
         const commandsModule = await import('../../src/cli/semantic-commands.js');
         const buildSpy = vi.spyOn(commandsModule, 'buildSemanticIndexFromArgs').mockResolvedValue(
             { outDir: testDir },
@@ -224,8 +262,9 @@ describe('runBench — mocked pipeline (unit test)', () => {
 // ---------------------------------------------------------------------------
 
 describe('runBench — semanticSearch error paths (P1-I)', () => {
-    /** Set up the full mock stack (build + embedder) and return a spy on semanticSearch. */
+    /** Set up the full mock stack (structural pipeline + semantic build + embedder) and return a spy on semanticSearch. */
     async function setupMockStack() {
+        await mockStructuralPipeline();
         const commandsModule = await import('../../src/cli/semantic-commands.js');
         vi.spyOn(commandsModule, 'buildSemanticIndexFromArgs').mockResolvedValue({ outDir: testDir });
 
