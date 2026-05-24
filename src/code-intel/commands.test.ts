@@ -138,13 +138,14 @@ describe('code-intel CLI — missing sidecar (F2)', () => {
         ).rejects.toThrow(/arch-graph code-intel build/);
     });
 
-    // diagnostics without maxResults writes to stdout/stderr and does NOT throw;
-    // it silently regenerates. Skip the throw assertion for that path.
-    it.skip('diagnostics (no maxResults, ENOENT path) — writes to stdout rather than throwing', () => {
-        // The emitDiagnostics function catches ENOENT and calls readCodeIntelIndex
-        // which DOES throw. However the outer catch only covers readCodeIntelDiagnostics,
-        // not the subsequent readCodeIntelIndex call — so in practice this also throws.
-        // Marked skip to document the intent; covered by the maxResults variant above.
+    // diagnostics without maxResults: emitDiagnostics tries readCodeIntelDiagnostics first,
+    // catches the ENOENT, then falls through to readCodeIntelIndex(dir) — which also throws
+    // REBUILD_HINT on ENOENT (manifest.json missing). The inner readCodeIntelIndex call is
+    // NOT guarded by a try/catch, so the error propagates to the caller.
+    it('diagnostics (no maxResults, ENOENT path) → clear rebuild error', async () => {
+        await expect(
+            runCodeIntelCommand(base('diagnostics', dir)),
+        ).rejects.toThrow(/arch-graph code-intel build/);
     });
 });
 
@@ -215,5 +216,32 @@ describe('code-intel CLI — missing required args (F3)', () => {
         await expect(
             runCodeIntelCommand({ ...base('suggest-placement', dir), entry: 'MyService' }),
         ).rejects.toThrow(/process\.exit\(1\)/);
+    });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// CLI corrupt-sidecar handling
+// Non-ENOENT errors (corrupt manifest.json) must also surface the rebuild hint.
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('CLI corrupt-sidecar handling', () => {
+    let dir: string;
+
+    beforeEach(() => {
+        dir = mkdtempSync(join(tmpdir(), 'ag-cli-corrupt-'));
+    });
+
+    afterEach(() => {
+        rmSync(dir, { recursive: true, force: true });
+    });
+
+    it('corrupt manifest.json → clear rebuild error', async () => {
+        const { mkdir: mkdirAsync, writeFile: writeFileAsync } = await import('node:fs/promises');
+        const sidecarDir = join(dir, 'arch-graph-out', 'code-intel');
+        await mkdirAsync(sidecarDir, { recursive: true });
+        await writeFileAsync(join(sidecarDir, 'manifest.json'), '{broken', 'utf8');
+        await expect(
+            runCodeIntelCommand({ sub: 'summary', out: join(dir, 'arch-graph-out'), config: './arch-graph.config.ts' }),
+        ).rejects.toThrow(/arch-graph code-intel build/);
     });
 });

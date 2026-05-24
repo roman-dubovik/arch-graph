@@ -216,6 +216,13 @@ describe('MCP handler smoke', () => {
         ['traceMessageFlow', () => traceMessageFlow(minIndex, fakeGraph, 'smoke-pattern')],
         ['impactContract', () => impactContract(minIndex, { symbol: 'SmokeClass' })],
     ] as const)('smoke %s', (_name, run) => {
-        expect(() => JSON.stringify(run())).not.toThrow();
+        const result = run();
+        expect(result).toBeDefined();
+        expect(result).not.toBeNull();
+        expect(typeof result).toBe('object');
+        // No top-level `error` key — handlers return data envelopes, not error envelopes
+        expect((result as Record<string, unknown>).error).toBeUndefined();
+        // Must JSON-serialize cleanly
+        expect(() => JSON.stringify(result)).not.toThrow();
     });
 });

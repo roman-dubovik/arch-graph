@@ -23,19 +23,19 @@ export function selfCheck(index: CodeIntelIndex): {
 } {
     const symbols = index.manifest.counts?.symbols ?? index.symbols.length;
     const w = index.manifest.warnings;
-    const hasAmbiguous = (w?.ambiguousFqns.length ?? 0) > 0;
-    const hasSkipped = (w?.skippedFiles.length ?? 0) > 0;
-    if (hasAmbiguous || hasSkipped) {
+    const amb = Array.isArray(w?.ambiguousFqns) ? w!.ambiguousFqns : [];
+    const skp = Array.isArray(w?.skippedFiles) ? w!.skippedFiles : [];
+    if (amb.length > 0 || skp.length > 0) {
         const parts: string[] = [];
-        if (hasAmbiguous) parts.push(`${w!.ambiguousFqns.length} ambiguous FQNs`);
-        if (hasSkipped) parts.push(`${w!.skippedFiles.length} skipped files`);
+        if (amb.length > 0) parts.push(`${amb.length} ambiguous FQNs`);
+        if (skp.length > 0) parts.push(`${skp.length} skipped files`);
         return {
             status: 'degraded',
             message: `Code-intel index is degraded: ${parts.join(', ')}.`,
             schemaVersion: index.manifest.schemaVersion,
             freshness: index.manifest.builtAt,
             symbols,
-            warnings: w,
+            warnings: { ambiguousFqns: amb, skippedFiles: skp },
         };
     }
     return {

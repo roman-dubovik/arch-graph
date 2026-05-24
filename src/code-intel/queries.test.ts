@@ -220,7 +220,7 @@ describe('code-intel queries', () => {
             expect(result.warnings).toBeDefined();
             expect(result.warnings!.ambiguousFqns).toHaveLength(2);
             expect(result.warnings!.skippedFiles).toHaveLength(1);
-            expect(result.message).toMatch(/2 ambiguous|1 skipped/);
+            expect(result.message).toMatch(/2 ambiguous FQNs.*1 skipped files/);
         });
 
         it('reports ok when warnings exist but are empty', () => {
@@ -233,6 +233,40 @@ describe('code-intel queries', () => {
             };
             const result = selfCheck(indexWithEmptyWarnings);
             expect(result.status).toBe('ok');
+        });
+
+        it('reports degraded when only ambiguousFqns populated', () => {
+            const indexWithAmbiguous: CodeIntelIndex = {
+                ...mockIndex,
+                manifest: {
+                    ...mockIndex.manifest,
+                    warnings: { ambiguousFqns: ['X'], skippedFiles: [] },
+                } as typeof mockIndex.manifest,
+            };
+            const result = selfCheck(indexWithAmbiguous);
+            expect(result.status).toBe('degraded');
+            expect(result.message).toMatch(/1 ambiguous/);
+        });
+
+        it('reports degraded when only skippedFiles populated', () => {
+            const indexWithSkipped: CodeIntelIndex = {
+                ...mockIndex,
+                manifest: {
+                    ...mockIndex.manifest,
+                    warnings: { ambiguousFqns: [], skippedFiles: [{ file: 'a.ts', error: 'X' }] },
+                } as typeof mockIndex.manifest,
+            };
+            const result = selfCheck(indexWithSkipped);
+            expect(result.status).toBe('degraded');
+            expect(result.message).toMatch(/1 skipped/);
+        });
+
+        it('reports ok when manifest.warnings is undefined (legacy index)', () => {
+            // mockIndex has no warnings field — simulates a legacy index built before
+            // warnings were tracked.
+            const result = selfCheck(mockIndex);
+            expect(result.status).toBe('ok');
+            expect(result.warnings).toBeUndefined();
         });
     });
 });
