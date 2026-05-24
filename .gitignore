@@ -40,3 +40,7 @@ bench/cache/
 # queries-self-build.json + graphify-responses.jsonl + arch-graph CLI.
 bench/self-build/.*.json
 .playwright-mcp/
+
+# Local-only code-intel bench configs (project paths, real product names)
+bench/code-intel/*.local.*
+.local-plans/

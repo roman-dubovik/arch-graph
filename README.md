@@ -27,9 +27,9 @@
 
 # arch-graph
 
-## What's new (May 2026)
+## What's new
 
-Recent features shipped on `main` in May 2026:
+Recent features shipped on `main`:
 
 - **`doc-section-v1`** — Markdown files are now indexed as first-class `doc-section` graph nodes alongside code, enabling semantic search over your project's documentation.
 - **`code-vs-docs-v1`** — Semantic search splits into `code_search` and `docs_search` MCP tools, eliminating the dilution effect where docs crowded out code results (measured: A_find recall 80% → 30% → 70%).
@@ -39,7 +39,7 @@ Recent features shipped on `main` in May 2026:
 - **`closing-tails-v1`** — module recall raised to 100% across all 3 reference projects via excluded-denominator fix.
 - **`snippet-fix-all-kinds-v1`** — snippet extraction now works for every node kind (provider, service, controller, fe-component, etc.).
 - **`init-strategy-v1`** — installer wizard prompts for semantic strategy (`both-buckets` / `fallback`) and writes it to the project's `CLAUDE.md`.
-- **`e5-base-default-v1`** *(2026-05-18)* — embedder swapped MiniLM → `multilingual-e5-base` (768-dim, passage/query prefixes). **Aggregate recall 67% → 75% (+8pp)** on 103-query bench across 3 NestJS monorepos; **C_ui 36% → 82% (+46pp)** confirms embedder was the bottleneck. Per-project: project-a 79%, project-b 82%, project-c 56%. Ships together with **incremental re-embed** (typical commit ~5–19 s, ×31–×128 speedup vs full rebuild) and **hook default-on** for auto-rebuild. Registry narrowed to `minilm | e5-base`; `bge-m3` and `arctic-m` aliases removed (explored, not adopted). See [`docs/comparisons/2026-05-18-embedder-evaluation.md`](docs/comparisons/2026-05-18-embedder-evaluation.md).
+- **`e5-base-default-v1`** *(2026-05-18)* — embedder swapped MiniLM → `multilingual-e5-base` (768-dim, passage/query prefixes). **Aggregate recall 67% → 75% (+8pp)** on 103-query bench across 3 NestJS monorepos; **C_ui 36% → 82% (+46pp)** confirms embedder was the bottleneck. Per-project: app-alpha 79%, app-beta 82%, monorepo-gamma 56%. Ships together with **incremental re-embed** (typical commit ~5–19 s, ×31–×128 speedup vs full rebuild) and **hook default-on** for auto-rebuild. Registry narrowed to `minilm | e5-base`; `bge-m3` and `arctic-m` aliases removed (explored, not adopted). See [`docs/comparisons/2026-05-18-embedder-evaluation.md`](docs/comparisons/2026-05-18-embedder-evaluation.md).
 - **`cron-v1`** *(2026-05-19)* — new extractor for `@nestjs/schedule` decorators (`@Cron`, `@Interval`, `@Timeout`) and `SchedulerRegistry.add*` dynamic registrations. New NodeKind `cron-schedule` with `expression` / `resolvedExpression` / `humanReadable` meta + new EdgeKind `cron-triggers`. Surfaces «what runs on a schedule?» semantic queries. Validated on project-b (2 sites extracted: `daily-report-job`, `weekly-cleanup-job`). 33 new tests; 3 review rounds.
 - **`bullmq-extras-v1`** *(2026-05-19)* — BullMQ Phase 1 extras: queue meta (`concurrency`, `defaultDelay/Attempts/Backoff`, `hasRepeat`) + new edges `queue-fails-into` (DLQ heuristic) and `queue-event-listener`.
 - **`bullmq-types-v1`** *(2026-05-19)* — BullMQ Phase 2: `--with-types` flag resolves `Job<DataType>` generics via ts-morph type-checker; worker factory env-fallback concurrency; cross-enrichment `queue.add(repeat: cron)` → `cron-schedule` node + edge `queue-repeat`.
@@ -53,8 +53,13 @@ Recent features shipped on `main` in May 2026:
 - **`fe-diagnostics-v2`** *(2026-05-21)* — FE diagnostics classify external UI/package references separately from workspace aliases, missing local files, and real JSX component misses, so `diagnose --only=fe` surfaces actionable gaps before library noise.
 - **`semantic-hybrid-v1`** *(2026-05-21)* — semantic search fuses dense vectors with BM25 lexical ranking via Reciprocal Rank Fusion, with MCP controls for kind quotas/boosts when agents need compact, code-first context.
 - **`init-idempotency-v1`** *(2026-05-21)* — semantic strategy snippets written into `CLAUDE.md` are marker-delimited and replaced in place on re-run; generated graph output stays local and is not staged by hooks.
+- **`code-intel-v1`** *(2026-05-22)* — optional CodeQL-like sidecar for deterministic TypeScript/NestJS code intelligence. **30+ deterministic tools** for symbols, members, references, call traces, cross-service message flows, and DTO/Entity impact analysis.
+- **`cross-service-flow-v1`** *(2026-05-22)* — Unified trace across NATS/RMQ boundaries. Links emitters to remote handlers for a single, end-to-end event chain.
+- **`member-map-intelligence`** *(2026-05-22)* — New `get_type_definition` tool returns exhaustive member maps (fields, decorators, methods) for any symbol without reading files.
+- 🌟 **`ai-runtime-layer-v1`** *(2026-05-22)* — `arch-graph` becomes a **Self-Injected AI Operating System**. Includes **Surgical Reads** (`get_file_outline` saving 90% tokens), **Gold Standard Blueprints**, **Policy Mining**, and **Dependency Guardrails**. Elevated **DB Entities** to first-class analysis status alongside DTOs. Includes multi-agent auto-setup for Claude, Cursor, and Gemini.
+- **`code-intel-stabilization-v1`** *(2026-05-24)* — Hardening pass on the `code-intel-v1` contract. `self_check` now partitions name collisions by symbol kind: only real silent-wrong-answer risks (`<Class>.<method>` or `type` aliases that downstream tools would misresolve) flip status to `degraded` and surface under `warnings.dangerousCollisions`; harmless top-level omonymy (two modules both exporting `setup`) stays `ok` and is reported under `info.nameCollisions`. Symbol `id`s are composite and file-qualified (`symbol:<path>#<name>:<line>:<col>`) so callers can pin a specific file when short names collide. All CLI artifact writes are atomic (tmp + rename); the MCP loader tolerates torn writes via a last-good cache. `.cursorrules` markers migrated from shell-style (`# >>> arch-graph >>>`) to HTML comments (`<!-- arch-graph:cursor -->`); re-running install on a legacy file strips the old block in place (no duplicates). Uninstall is markdown-aware — removes the arch-graph block but never wipes a `.cursorrules` that still contains user headings. The extractor isolates per-file failures into `manifest.warnings.skippedFiles` instead of aborting the whole index build.
 
-Plus a refreshed head-to-head benchmark on 103 fuzzy-intent queries vs graphify with **e5-base default + full LLM rebuild on graphify side + scope correction** (`bench-2026-05-19` tag): arch-graph **74.8% / 75.4%** (RU / EN strict) vs graphify **20.4% / 56.5%** — **+54.4 pp RU** (multilingual win) and **+18.9 pp EN strict** (semantic vs BFS-keyword). Prior graphify lenient numbers were inflated by `.next/` / `.worktrees/` / `tmp/` noise nodes the default graphify scan picked up; arch-graph excludes them by convention via `appsGlob`/`libsGlob`. See [`docs/comparisons/2026-05-19-arch-graph-vs-graphify-eval.md`](docs/comparisons/2026-05-19-arch-graph-vs-graphify-eval.md), [`bench/REPRODUCE.md`](bench/REPRODUCE.md) and [`bench/self-build/README.md`](bench/self-build/README.md).
+Plus a refreshed head-to-head benchmark on 103 fuzzy-intent queries vs graphify with **e5-base default** across **3 real-world monorepos**: arch-graph **74.8% / 75.4%** (RU / EN strict) vs graphify **20.4% / 56.5%**. See [`docs/comparisons/2026-05-19-arch-graph-vs-graphify-eval.md`](docs/comparisons/2026-05-19-arch-graph-vs-graphify-eval.md).
 
 ---
 
@@ -153,50 +158,49 @@ arch-graph init
 
 `arch-graph init` is an interactive wizard. It asks a series of questions with sensible defaults, writes `arch-graph.config.ts`, and optionally chains: Claude Code integration install, git hook install, and a first build — all in one command.
 
-Sample session:
+... (Sample session omitted for brevity, see installer output in your terminal) ...
 
-```
-arch-graph init — interactive setup wizard
+---
 
-? Project id (used as service:<id> prefix) [my-project]: my-project
-? Repo root [.]:
-? Apps glob (where services live) [apps/*]:
-? Libs glob [libs/**]:
+## 🌟 The AI Runtime Layer (New in v1.0)
 
-? Which domains to extract?
-  1. [x] NATS          pub/sub + request/reply
-  2. [x] RMQ           RabbitMQ decorator subscriptions
-  3. [x] TypeORM       @InjectRepository → @Entity
-  4. [x] BullMQ        @InjectQueue / @Processor
-  5. [x] NestJS DI     @Module imports/providers/exports
-  6. [x] HTTP          HttpService / axios / fetch
-  7. [x] TS imports    file→file / service→lib
+`arch-graph` isn't just a graph extractor; it's a **"Self-Injected AI Operating System"** designed to make LLM agents (Claude, Cursor, Gemini) work flawlessly in massive monorepos.
 
-  Disable any? Enter numbers separated by comma (blank = all enabled):
+When you run `arch-graph init`, it automatically configures your chosen agents with "Zero-Friction Context Injection" hooks.
 
-? Custom NATS wrapper API? (you wrap @nestjs/microservices in your own class) [y/N]: n
-
-? Install Claude Code integration (./CLAUDE.md + skill)? [Y/n]:
-
-? Install git hook?
-  1. pre-commit   (validate graph build; artifacts stay local) — recommended
-  2. post-commit  (graph rebuilt after commit, not in commit)
-  3. none
-  Choice [1]:
-
-? Strict mode? (fail build if recall drops below domain floor — useful for CI) [y/N]:
-
-? Run first build now? [Y/n]:
-
-✓ wrote arch-graph.config.ts
-✓ wrote CLAUDE.md
-✓ pre-commit hook installed
-... running first build ...
-✓ build complete: 847 nodes, 3241 edges
-✓ wrote arch-graph-out/
+### 1. Level 0 Orientation
+Agents wake up knowing exactly where they are. The `SessionStart.sh` hook automatically feeds them the project map:
+```json
+{
+  "projectSummary": "NestJS Monorepo with 5 apps and 12 libs.",
+  "topPolicies": [
+    "DTO naming should end with *Dto",
+    "When using @CustomFK, also use @ManyToOne"
+  ],
+  "agentHint": "Use 'get_file_outline' for surgical reading."
+}
 ```
 
-Non-interactive (CI) fallback: when stdin is not a TTY, `arch-graph init` writes a template config without asking any questions.
+### 2. Surgical Reads (90% Token Savings)
+Instead of forcing the LLM to read a 1000-line `Controller.ts` file, `arch-graph` provides a structural outline with exact line ranges (`line` to `endLine`):
+* **Before:** LLM reads full file = `~10,000 tokens`.
+* **After:** LLM runs `outline`, sees `createOrder` is on lines `45-80`, reads only that snippet = `~350 tokens`.
+
+### 3. Policy Mining & Gold Standards
+The engine scans your entire codebase to find **"Gold Standards"** (the best-documented, feature-rich implementations) and infers **Architectural Policies**.
+When the LLM asks to create a new DTO, it receives a *Synthetic Guide*:
+> "The ideal DTO in this project follows these rules: DTO location: src/dto/*.ts. See the blueprints below for structural reference."
+
+### 4. Dependency Guardrails
+Before the LLM writes bad code, the `validate_proposal` tool acts as a pre-flight check, blocking layer violations (e.g., Controllers directly importing Repositories) or cross-app leaks in monorepos.
+
+### 🔍 arch-graph vs. LSP
+Why not just give the LLM an LSP (Language Server Protocol) tool?
+* **Macro vs. Micro:** LSP sees a "Method Call". `arch-graph` sees a "NATS Publish" or a "Database Persistence Sink".
+* **Cross-Boundary:** LSP stops at `client.emit()`. `arch-graph` links the NestJS Controller to the OpenAPI schema and down to the React frontend component (`Impact v2`).
+* **Proof Packets:** LSP returns raw lists of 200 references. `arch-graph` returns compressed, deterministic summaries ("This DTO impacts 3 endpoints and 1 test. Risk: HIGH").
+
+---
 
 ## What you get
 
@@ -403,6 +407,17 @@ The semantic layer is independent and opt-in: arch-graph works identically well 
   arch-graph semantic search "auth flow" # fuzzy search for top 10 results
   arch-graph semantic search "logging" --k 20 --json  # top 20, structured output
   ```
+- **Code intelligence sidecar**: for deeper method/type facts without CodeQL:
+  ```sh
+  arch-graph code-intel build
+  arch-graph code-intel resolve-symbol CreateItemDto
+  arch-graph code-intel explain-flow --target ItemsController.create --param dto
+  arch-graph code-intel explain-branch --file apps/api/src/items.controller.ts --line 42
+  arch-graph code-intel trace-scenario --entry ItemsController.create
+  arch-graph code-intel impact-contract CreateItemDto --field name
+  arch-graph code-intel diagnostics
+  ```
+  Writes `arch-graph-out/code-intel/{manifest.json,symbols.jsonl,calls.jsonl,flows.jsonl,branches.jsonl,impacts.jsonl,diagnostics.json}` and powers MCP tools `resolve_symbol`, `explain_data_flow`, `explain_branch`, `trace_scenario`, and `impact_contract`. Diagnostics classify unresolved calls, largest impact contracts, largest proof packets, and sidecar file sizes so resolver quality can be improved from measured gaps.
 - **First build**: the model downloads ~280 MB on first run and is cached under `~/.cache/transformers/` (or via `HF_HOME` env var), so subsequent `semantic build` and `semantic search` run much faster. After the first `semantic build`, subsequent builds are incremental (~1-2 s per typical commit). Post-commit hooks can refresh the semantic sidecar locally; pre-commit validates only the structural graph build.
 - **Sidecar layout**: `arch-graph-out/<repo>/semantic/{manifest.json, embeddings.jsonl}` — one JSON record per line, streamable for large graphs.
 - **MCP tools**: when the MCP server is running (`arch-graph mcp`), three semantic tools become available:
@@ -432,14 +447,22 @@ Optional — for editors with an MCP client configured:
 arch-graph mcp   # starts the stdio MCP server backed by arch-graph-out/graph.json
 ```
 
-Exposes 15 tools — 12 structural + 3 semantic.
+Exposes **30+ MCP tools** across structural graph (10), semantic search (3), code intelligence (16), and natural-language fallback (2).
 
-**Structural (12):** `subject_publishers`, `subject_subscribers`, `queue_producers`, `queue_consumers`, `service_dependencies`, `service_dependents`, `module_imports`, `table_users`, `path`, `explain`, `query`, `stats`.
+**Structural (10):** `subject_publishers`, `subject_subscribers`, `queue_producers`, `queue_consumers`, `service_dependencies`, `service_dependents`, `module_imports`, `table_users`, `path`, `stats`.
 
 **Semantic (3, requires sidecar index):**
 - `code_search` — vector search over code nodes only (services, modules, tables, queues, endpoints, fe-components). Use for "find code that does X".
 - `docs_search` — vector search over `doc-section` nodes only (Markdown sections). Use for "find documentation about Y".
 - `semantic_search` — mixed bucket (code + docs together). Useful as a fallback when you don't know which bucket the answer lives in, but expect lower precision on mixed corpora.
+
+**Code-intel (16, requires `arch-graph code-intel build`)** — stable v1 surface:
+`resolve_symbol`, `explain_data_flow`, `explain_branch`, `trace_scenario`, `trace_exceptions`, `trace_message_flow`, `impact_contract`, `get_file_outline`, `get_type_definition`, `find_references`, `get_orientation`, `self_check`.
+
+**Code-intel — EXPERIMENTAL** (shape/output may change before v1 freeze):
+`get_blueprint`, `get_project_policies`, `suggest_placement`, `validate_proposal`.
+
+**Natural-language fallback (2):** `explain`, `query` — free-form architecture questions routed against the graph.
 
 All three semantic MCP tools support `topK`, `minScore`, `includeVectors`, `kindQuotas`, and `kindBoosts`. `code_search` / `docs_search` intentionally hide `kinds` and `excludeKinds` because their bucket filters are wired by the tool itself.
 

@@ -10,7 +10,7 @@ Status: complete
 | Primary model | `Xenova/bge-m3` (1024-dim, CLS pooling, L2 normalize) |
 | Baseline model | `Xenova/paraphrase-multilingual-MiniLM-L12-v2` (384-dim) |
 | Fallback invoked | No — `Xenova/bge-m3` loaded successfully via `@xenova/transformers` v2.17.2 |
-| Platform | Darwin arm64 (macOS) |
+| project-alpha | Darwin arm64 (macOS) |
 | Node | v22.13.1 |
 | Date | 2026-05-18 |
 
@@ -116,7 +116,7 @@ After BGE-M3 was aborted, `Xenova/multilingual-e5-base` (768-dim, requires `pass
 
 | Project | Nodes | MiniLM | e5-base | Δ pp | Build (e5-base) |
 |---------|-------|--------|---------|------|-----------------|
-| platform | 29527 | 71% (35/49) | **79% (39/49)** | **+8** ✅ | 41 min |
+| project-alpha | 29527 | 71% (35/49) | **79% (39/49)** | **+8** ✅ | 41 min |
 | project-b | 21541 | 75% (22/29) | **82% (24/29)** | **+7** ✅ | 27 min |
 | project-c | 2065 | 56% (14/25) | 56% (14/25) | 0 | 5 min |
 | **Aggregate** | | **71/103 (69%)** | **77/103 (75%)** | **+6** ✅ | |
@@ -140,7 +140,7 @@ After BGE-M3 was aborted, `Xenova/multilingual-e5-base` (768-dim, requires `pass
 |---|---|---|---|
 | Disk | 135 MB | 560 MB | ~280 MB |
 | Build on 30k nodes | ~25 min | **3+ hours (aborted)** | **41 min** |
-| Accuracy on platform | 71% | n/a | **79%** |
+| Accuracy on project-alpha | 71% | n/a | **79%** |
 | C_ui lift | baseline | n/a (aborted before measurement) | **+46pp** ✅ |
 | Prefix handling | none | none | passage/query (correct) |
 

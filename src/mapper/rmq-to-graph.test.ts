@@ -15,7 +15,11 @@ describe('mapRmqToGraph', () => {
             payloadParamName: 'payload',
             payloadType: 'OrderCreatedDto',
         }];
-        const ownership = new OwnershipRegistry('/repo', [{ id: 'api', rootDir: '/repo/apps/api' }], []);
+        const ownership = new OwnershipRegistry(
+            '/repo',
+            [{ id: 'api', rootDir: '/repo/apps/api', tsconfigPath: '/repo/apps/api/tsconfig.json', entryFile: '/repo/apps/api/src/main.ts' }],
+            [],
+        );
 
         const result = mapRmqToGraph(sites, ownership);
         const diagnostics = buildRmqDiagnostics(sites, result);

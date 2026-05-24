@@ -25,6 +25,9 @@ import { registerProject } from './project-registry.js';
 /** Agent-side semantic search strategy stored in the project CLAUDE.md snippet. */
 export type SemanticStrategy = 'both-buckets' | 'fallback';
 
+/** Preferred AI Agent Environment. */
+export type AiEnvironment = 'claude' | 'cursor' | 'gemini' | 'none';
+
 /** Where to write the semantic strategy snippet. */
 export type SnippetTarget = 'append' | 'separate';
 
@@ -33,12 +36,12 @@ interface WizardAnswers {
     repoRoot: string;
     appsGlob: string;
     libsGlob: string;
-    domains: DomainKey[];
+    domains: WizardDomainKey[];
     natsWrapper: boolean;
     natsWrapperClass: string;
     natsWrapperPublishMethods: string[];
     natsWrapperSubscribeMethods: string[];
-    installClaude: boolean;
+    aiEnvs: AiEnvironment[];
     hookMode: 'pre-commit' | 'post-commit' | 'none';
     /** Strict mode: when true, a comment is emitted and a future `strictMode` field can be toggled. */
     strictMode: boolean;
@@ -53,10 +56,10 @@ interface WizardAnswers {
     snippetTarget: SnippetTarget;
 }
 
-type DomainKey = 'nats' | 'rmq' | 'typeorm' | 'bullmq' | 'di' | 'http' | 'ts-import';
+type WizardDomainKey = 'nats' | 'rmq' | 'typeorm' | 'bullmq' | 'di' | 'http' | 'ts-import';
 
 interface DomainOption {
-    key: DomainKey;
+    key: WizardDomainKey;
     label: string;
     description: string;
 }
@@ -73,7 +76,7 @@ const DOMAIN_OPTIONS: DomainOption[] = [
     { key: 'ts-import', label: 'TS imports', description: 'file→file / service→lib' },
 ];
 
-const ALL_DOMAINS: DomainKey[] = DOMAIN_OPTIONS.map((d) => d.key);
+const ALL_DOMAINS: WizardDomainKey[] = DOMAIN_OPTIONS.map((d) => d.key);
 
 // ─── string escaping ──────────────────────────────────────────────────────────
 
@@ -221,14 +224,14 @@ ${domainsBlock}${natsBlock}${rmqBlock}${importsBlock}${docsBlockStr}${strictComm
 
 // ─── readline helpers ──────────────────────────────────────────────────────────
 
-type Rl = Awaited<ReturnType<typeof createInterface>>;
+type WizardRl = Awaited<ReturnType<typeof createInterface>>;
 
-async function askWithDefault(rl: Rl, prompt: string, defaultValue: string): Promise<string> {
+async function askWithDefault(rl: WizardRl, prompt: string, defaultValue: string): Promise<string> {
     const answer = await rl.question(`${prompt} [${defaultValue}]: `);
     return answer.trim() || defaultValue;
 }
 
-async function askYesNo(rl: Rl, prompt: string, defaultYes = true): Promise<boolean> {
+async function askYesNo(rl: WizardRl, prompt: string, defaultYes = true): Promise<boolean> {
     const hint = defaultYes ? 'Y/n' : 'y/N';
     const answer = await rl.question(`${prompt} [${hint}]: `);
     const trimmed = answer.trim().toLowerCase();
@@ -247,7 +250,7 @@ async function askYesNo(rl: Rl, prompt: string, defaultYes = true): Promise<bool
  * public CLI surface.
  */
 export async function askBuildSemantic(
-    rl: Rl,
+    rl: WizardRl,
     write: (s: string) => void,
 ): Promise<boolean> {
     write(
@@ -308,7 +311,7 @@ export const SEMANTIC_SKIP_HINT =
     '    arch-graph semantic build\n';
 
 // Multi-select: show numbered list, ask which to disable (blank = all enabled).
-async function askMultiSelect(rl: Rl, options: DomainOption[]): Promise<DomainKey[]> {
+async function askMultiSelect(rl: WizardRl, options: DomainOption[]): Promise<WizardDomainKey[]> {
     output.write('\n? Which domains to extract?\n');
     options.forEach((opt, i) => {
         output.write(`  ${i + 1}. [x] ${opt.label.padEnd(12)} ${opt.description}\n`);
@@ -336,7 +339,7 @@ async function askMultiSelect(rl: Rl, options: DomainOption[]): Promise<DomainKe
 
 // ─── hook mode selector ───────────────────────────────────────────────────────
 
-async function askHookMode(rl: Rl): Promise<'pre-commit' | 'post-commit' | 'none'> {
+async function askHookMode(rl: WizardRl): Promise<'pre-commit' | 'post-commit' | 'none'> {
     output.write('\n? Install git hook?\n');
     output.write('  1. pre-commit   (validate graph build; artifacts stay local) — recommended\n');
     output.write('  2. post-commit  (graph rebuilt after commit, not in commit)\n');
@@ -353,7 +356,7 @@ async function askHookMode(rl: Rl): Promise<'pre-commit' | 'post-commit' | 'none
 
 type RerunChoice = 'overwrite' | 'cancel';
 
-async function askRerun(rl: Rl, target: string): Promise<RerunChoice> {
+async function askRerun(rl: WizardRl, target: string): Promise<RerunChoice> {
     output.write(`\n⚠  Config already exists: ${target}\n`);
     output.write('  1. Overwrite — run wizard from scratch and replace it\n');
     output.write('  2. Cancel (default)\n');
@@ -366,7 +369,7 @@ async function askRerun(rl: Rl, target: string): Promise<RerunChoice> {
 
 // ─── NATS wrapper prompts ─────────────────────────────────────────────────────
 
-async function askNatsWrapper(rl: Rl): Promise<{
+async function askNatsWrapper(rl: WizardRl): Promise<{
     enabled: boolean;
     className: string;
     publishMethods: string[];
@@ -436,7 +439,7 @@ async function askDocs(
  *
  * Exported for unit testing (pass a fake rl with a stubbed `.question()`).
  */
-export async function askSemanticStrategy(rl: Rl): Promise<SemanticStrategy> {
+export async function askSemanticStrategy(rl: WizardRl): Promise<SemanticStrategy> {
     output.write('\n? Semantic search strategy\n');
     output.write('  code_search   — searches the code graph (functions, classes, edges).\n');
     output.write('  docs_search   — searches the embedded docs/markdown chunks.\n');
@@ -464,7 +467,7 @@ export async function askSemanticStrategy(rl: Rl): Promise<SemanticStrategy> {
  *
  * Exported for unit testing.
  */
-export async function askSnippetTarget(rl: Rl): Promise<SnippetTarget> {
+export async function askSnippetTarget(rl: WizardRl): Promise<SnippetTarget> {
     output.write('\n⚠  CLAUDE.md already exists in this directory.\n');
     output.write('  The arch-graph semantic strategy snippet can be:\n');
     output.write('  1. Appended to CLAUDE.md\n');
@@ -476,9 +479,50 @@ export async function askSnippetTarget(rl: Rl): Promise<SnippetTarget> {
     return 'separate'; // default
 }
 
+/** Ask which AI environment(s) to scaffold for. */
+export async function askAiEnvironments(rl: WizardRl): Promise<AiEnvironment[]> {
+    output.write('\n? Which AI agent(s) do you use for this project?\n');
+    output.write('  1. Claude Code (SessionStart hook & CLAUDE.md)\n');
+    output.write('  2. Cursor / Windsurf (.cursorrules)\n');
+    output.write('  3. Gemini CLI (CLAUDE.md pointer)\n');
+    output.write('  4. Done / Skip\n');
+    output.write('\n  (You can enter multiple numbers, e.g. "1,2" or "1 3")\n');
+
+    const selected = new Set<AiEnvironment>();
+    const map: Record<string, AiEnvironment> = { '1': 'claude', '2': 'cursor', '3': 'gemini' };
+
+    while (true) {
+        const currentArr = Array.from(selected);
+        const currentStr = currentArr.length === 0 ? 'none' : currentArr.join(', ');
+        const answer = await rl.question(`  Select [currently: ${currentStr}]: `);
+        const trimmed = answer.trim();
+
+        if (trimmed === '4' || (trimmed === '' && selected.size > 0)) break;
+        if (trimmed === '' && selected.size === 0) return [];
+
+        // Support "1,2" or "1 3"
+        const parts = trimmed.split(/[,\s]+/).filter(Boolean);
+        for (const p of parts) {
+            if (map[p]) selected.add(map[p]);
+            else if (p === '4') return Array.from(selected);
+        }
+
+        if (parts.length > 0 && trimmed !== '') {
+            // If they entered something and we processed it, and they didn't explicitly say "done",
+            // we show the updated list and let them add more or press enter to finish.
+            const updatedStr = Array.from(selected).join(', ');
+            output.write(`  Current selection: ${updatedStr} (press Enter to confirm or select more)\n`);
+            // Break on next empty enter if they already have selection
+        } else {
+            break;
+        }
+    }
+    return Array.from(selected);
+}
+
 // ─── .gitignore helpers ───────────────────────────────────────────────────────
 
-async function atomicWrite(path: string, content: string): Promise<void> {
+export async function atomicWrite(path: string, content: string): Promise<void> {
     const tmp = path + '.tmp';
     try {
         await writeFile(tmp, content, 'utf8');
@@ -497,7 +541,7 @@ async function atomicWrite(path: string, content: string): Promise<void> {
     }
 }
 
-async function shouldProceed(nonInteractive: boolean, rl: Rl | undefined, prompt: string): Promise<boolean> {
+async function shouldProceed(nonInteractive: boolean, rl: WizardRl | undefined, prompt: string): Promise<boolean> {
     if (nonInteractive) return true;
     if (!rl) return false;  // safety: nothing to prompt with
     return askYesNo(rl, prompt, true);
@@ -529,7 +573,7 @@ export type GitignoreAction = 'added' | 'created' | 'already-present' | 'decline
  */
 export async function ensureArchGraphOutGitignored(opts: {
     repoRoot: string;
-    rl?: Rl;
+    rl?: WizardRl;
     nonInteractive?: boolean;
     write?: (s: string) => void;
 }): Promise<{ action: GitignoreAction }> {
@@ -642,12 +686,12 @@ export async function writeStrategySnippet(
             const e = err as NodeJS.ErrnoException;
             if (e.code !== 'ENOENT') throw err;
         }
-        await writeFile(claudeMdPath, replaceStrategySnippet(existing, strategy), 'utf8');
+        await atomicWrite(claudeMdPath, replaceStrategySnippet(existing, strategy));
         return claudeMdPath;
     } else {
         const snippet = buildStrategySnippet(strategy);
         const snippetPath = join(dir, 'CLAUDE.md.arch-graph-snippet.md');
-        await writeFile(snippetPath, snippet.trimStart(), 'utf8');
+        await atomicWrite(snippetPath, snippet.trimStart());
         return snippetPath;
     }
 }
@@ -700,7 +744,7 @@ export async function runInitWizard(target: string): Promise<void> {
 
     // ── Non-interactive fallback ──────────────────────────────────────────────
     if (!process.stdin.isTTY) {
-        await writeFile(targetPath, INIT_TEMPLATE, 'utf8');
+        await atomicWrite(targetPath, INIT_TEMPLATE);
         await registerProject(dirname(targetPath));
         process.stdout.write(`wrote ${targetPath}\n`);
         // Non-interactive: default to both-buckets, separate snippet file.
@@ -760,11 +804,7 @@ export async function runInitWizard(target: string): Promise<void> {
     }
 
     // ── Tooling questions ─────────────────────────────────────────────────────
-    const installClaude = await askYesNo(
-        rl,
-        '\n? Install Claude Code integration (./CLAUDE.md + skill)?',
-        true,
-    );
+    const aiEnvs = await askAiEnvironments(rl);
 
     const hookMode = await askHookMode(rl);
 
@@ -797,7 +837,7 @@ export async function runInitWizard(target: string): Promise<void> {
         natsWrapperClass,
         natsWrapperPublishMethods,
         natsWrapperSubscribeMethods,
-        installClaude,
+        aiEnvs,
         hookMode,
         strictMode,
         runBuild: shouldRunBuild,
@@ -809,13 +849,40 @@ export async function runInitWizard(target: string): Promise<void> {
     output.write('\n');
 
     const configContent = buildConfigTemplate(answers);
-    await writeFile(targetPath, configContent, 'utf8');
+    await atomicWrite(targetPath, configContent);
     await registerProject(dirname(targetPath));
     output.write(`✓ wrote ${targetPath}\n`);
 
-    // ── Claude integration ────────────────────────────────────────────────────
-    if (installClaude) {
-        await claudeInstall({ target: resolve('./CLAUDE.md'), installSkill: true });
+    // ── AI Environment integration ────────────────────────────────────────────
+    // Each agent install runs in its own try/catch so a single failure (e.g.
+    // CLAUDE.md is read-only, hook directory is missing) doesn't leave the
+    // wizard mid-state — the config was already written, so we report each
+    // env failure and continue with the next one instead of throwing.
+    //
+    // Both `claude` and `gemini` write to CLAUDE.md (gemini reads the same
+    // file), so `claudeInstall` is called at most once even if both envs are
+    // selected; otherwise the user sees a duplicate "wrote arch-graph
+    // section to CLAUDE.md" line and the skill install runs twice.
+    let claudeInstalled = false;
+    const wantsClaudeMd = aiEnvs.includes('claude') || aiEnvs.includes('gemini');
+    if (wantsClaudeMd) {
+        try {
+            await claudeInstall({ target: resolve('./CLAUDE.md'), installSkill: true });
+            claudeInstalled = true;
+        } catch (err) {
+            output.write(`! skipped CLAUDE.md install: ${(err as Error).message}\n`);
+        }
+    }
+    for (const env of aiEnvs) {
+        try {
+            if (env === 'claude' || env === 'gemini') {
+                await hooksModule.agentHookInstall({ repo: resolve('.'), agent: env === 'claude' ? 'claude' : 'gemini' as any });
+            } else if (env === 'cursor') {
+                await hooksModule.agentHookInstall({ repo: resolve('.'), agent: 'cursor' });
+            }
+        } catch (envErr) {
+            output.write(`! skipped ${env} hook: ${(envErr as Error).message}\n`);
+        }
     }
 
     // ── Semantic strategy snippet ─────────────────────────────────────────────
@@ -897,7 +964,7 @@ export async function runInitWizard(target: string): Promise<void> {
     // ── Next steps ────────────────────────────────────────────────────────────
     output.write('\nNext steps:\n');
     const configRel = relative(process.cwd(), targetPath) || targetPath;
-    const claudePart = installClaude ? ' CLAUDE.md' : '';
+    const claudePart = claudeInstalled ? ' CLAUDE.md' : '';
     const snippetRel = relative(process.cwd(), writtenSnippetPath) || writtenSnippetPath;
     const snippetPart = answers.snippetTarget === 'separate' ? ` ${snippetRel}` : '';
     output.write(`  • Commit the config: git add ${configRel}${claudePart}${snippetPart} && git commit\n`);
@@ -909,7 +976,7 @@ export async function runInitWizard(target: string): Promise<void> {
                 : '  • The graph rebuilds automatically after each commit touching .ts files; arch-graph-out/ stays local\n',
         );
     }
-    if (installClaude) {
+    if (claudeInstalled) {
         output.write('  • In Claude Code, the skill triggers on /arch-graph or architecture questions\n');
     }
     output.write('\n');

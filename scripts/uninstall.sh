@@ -5,6 +5,7 @@
 #   - the ~/.arch-graph (or $ARCH_GRAPH_HOME) install directory
 #   - the ~/.local/bin/arch-graph (or $ARCH_GRAPH_BIN_DIR/arch-graph) symlink
 #   - the global ~/.claude/skills/arch-graph/ directory if present
+#   - the global ~/.gemini/GEMINI.md context if present
 #
 # Does NOT remove per-project artefacts (arch-graph.config.ts,
 # arch-graph-out/, CLAUDE.md sections, git hooks). Run these INSIDE each
@@ -23,6 +24,7 @@ INSTALL_DIR="${ARCH_GRAPH_HOME:-$HOME/.arch-graph}"
 BIN_DIR="${ARCH_GRAPH_BIN_DIR:-$HOME/.local/bin}"
 LINK="$BIN_DIR/arch-graph"
 SKILL_DIR="$HOME/.claude/skills/arch-graph"
+GEMINI_FILE="$HOME/.gemini/GEMINI.md"
 
 err() { echo "arch-graph uninstall: $*" >&2; }
 ok()  { echo "arch-graph uninstall: $*"; }
@@ -56,11 +58,7 @@ EOF
 done
 
 # ---- safety: only operate on a real arch-graph install --------------------
-# Without this guard, a misconfigured ARCH_GRAPH_HOME (e.g. pointing at $HOME
-# or a leaked path from an older layout) would let `rm -rf` run on it.
 if [ -d "$INSTALL_DIR" ]; then
-    # Tolerant of whitespace around the colon — covers `"name":"arch-graph"`,
-    # `"name": "arch-graph"`, and the legal-but-rare `"name" : "arch-graph"`.
     if [ ! -f "$INSTALL_DIR/package.json" ] || ! grep -qE '"name"[[:space:]]*:[[:space:]]*"arch-graph"' "$INSTALL_DIR/package.json" 2>/dev/null; then
         err "$INSTALL_DIR does not look like an arch-graph install (no package.json with name=\"arch-graph\")."
         err "  Refusing to remove. Set ARCH_GRAPH_HOME correctly, or delete the dir manually."
@@ -73,14 +71,12 @@ fi
 INSTALL_PRESENT=0
 LINK_PRESENT=0
 SKILL_PRESENT=0
+GEMINI_PRESENT=0
 LINK_OURS=0
 
 [ -d "$INSTALL_DIR" ] && INSTALL_PRESENT=1
 if [ -L "$LINK" ] || [ -e "$LINK" ]; then
     LINK_PRESENT=1
-    # Only auto-remove the symlink if it points into our install dir —
-    # protects against a user-managed `arch-graph` binary that happens to
-    # share the path.
     TARGET=$(readlink "$LINK" 2>/dev/null || true)
     case "$TARGET" in
         "$INSTALL_DIR"/*) LINK_OURS=1 ;;
@@ -88,10 +84,13 @@ if [ -L "$LINK" ] || [ -e "$LINK" ]; then
     esac
 fi
 [ -d "$SKILL_DIR" ] && SKILL_PRESENT=1
+if [ -f "$GEMINI_FILE" ] && grep -q "Architecture Context (arch-graph)" "$GEMINI_FILE" 2>/dev/null; then
+    GEMINI_PRESENT=1
+fi
 
 # ---- report ----------------------------------------------------------------
 
-if [ "$INSTALL_PRESENT" -eq 0 ] && [ "$LINK_PRESENT" -eq 0 ] && [ "$SKILL_PRESENT" -eq 0 ]; then
+if [ "$INSTALL_PRESENT" -eq 0 ] && [ "$LINK_PRESENT" -eq 0 ] && [ "$SKILL_PRESENT" -eq 0 ] && [ "$GEMINI_PRESENT" -eq 0 ]; then
     ok "nothing to remove — arch-graph is not installed."
     exit 0
 fi
@@ -110,6 +109,9 @@ if [ "$LINK_PRESENT" -eq 1 ]; then
 fi
 if [ "$SKILL_PRESENT" -eq 1 ]; then
     echo "  - $SKILL_DIR  (global Claude Code skill)"
+fi
+if [ "$GEMINI_PRESENT" -eq 1 ]; then
+    echo "  - $GEMINI_FILE  (global Gemini CLI context)"
 fi
 
 cat <<'EOF'
@@ -138,6 +140,14 @@ fi
 if [ "$SKILL_PRESENT" -eq 1 ]; then
     rm -rf "$SKILL_DIR"
     ok "removed $SKILL_DIR"
+fi
+if [ "$GEMINI_PRESENT" -eq 1 ]; then
+    TMP_GEMINI=$(mktemp)
+    # Remove from header to end of file, or until next header if we wanted to be fancy.
+    # But since installer appends to the end, just cutting from our header to the end is safe.
+    sed '/## Architecture Context (arch-graph)/,$d' "$GEMINI_FILE" > "$TMP_GEMINI"
+    mv "$TMP_GEMINI" "$GEMINI_FILE"
+    ok "removed arch-graph context from $GEMINI_FILE"
 fi
 if [ "$INSTALL_PRESENT" -eq 1 ]; then
     rm -rf "$INSTALL_DIR"

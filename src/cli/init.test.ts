@@ -14,6 +14,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import {
+    askAiEnvironments,
     askSemanticStrategy,
     askSnippetTarget,
     askBuildSemantic,
@@ -22,8 +23,6 @@ import {
     runSemanticBuildStep,
     writeStrategySnippet,
     SEMANTIC_SKIP_HINT,
-    type SemanticStrategy,
-    type SnippetTarget,
 } from './init.js';
 
 // ─── Fake readline interface ──────────────────────────────────────────────────
@@ -37,6 +36,44 @@ function makeRl(answers: string[]) {
         },
     };
 }
+
+// ─── askAiEnvironments ───────────────────────────────────────────────────────
+
+describe('askAiEnvironments', () => {
+    it('supports comma-separated selection', async () => {
+        const rl = makeRl(['1,3', '']);
+        const result = await askAiEnvironments(rl as any);
+        expect(result).toContain('claude');
+        expect(result).toContain('gemini');
+        expect(result).not.toContain('cursor');
+    });
+
+    it('supports space-separated selection', async () => {
+        const rl = makeRl(['1 2', '']);
+        const result = await askAiEnvironments(rl as any);
+        expect(result).toContain('claude');
+        expect(result).toContain('cursor');
+    });
+
+    it('supports one-by-one selection via loop', async () => {
+        const rl = makeRl(['1', '2', '']);
+        const result = await askAiEnvironments(rl as any);
+        expect(result).toContain('claude');
+        expect(result).toContain('cursor');
+    });
+
+    it('returns empty array on blank input with no selection', async () => {
+        const rl = makeRl(['']);
+        const result = await askAiEnvironments(rl as any);
+        expect(result).toEqual([]);
+    });
+
+    it('returns selection on Enter if something was selected', async () => {
+        const rl = makeRl(['1', '']);
+        const result = await askAiEnvironments(rl as any);
+        expect(result).toEqual(['claude']);
+    });
+});
 
 // ─── buildStrategySnippet ─────────────────────────────────────────────────────
 

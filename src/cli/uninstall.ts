@@ -24,7 +24,7 @@
 // without Claude Code itself).
 
 import { existsSync, readFileSync } from 'node:fs';
-import { readFile, rm, stat, unlink, writeFile } from 'node:fs/promises';
+import { readFile, rm, stat, unlink } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { createInterface } from 'node:readline/promises';
 import { homedir } from 'node:os';
@@ -32,10 +32,13 @@ import { dirname, resolve } from 'node:path';
 import { stdin as input, stdout as output } from 'node:process';
 import { fileURLToPath } from 'node:url';
 
+import { atomicWrite } from './atomic-write.js';
 import { MARK_START as CLAUDE_MARK_START, MARK_END as CLAUDE_MARK_END } from './claude.js';
 import {
     MARK_START as HOOK_MARK_START,
     MARK_END as HOOK_MARK_END,
+    CURSOR_MARK_START,
+    CURSOR_MARK_END,
     preCommitHookPath,
     postCommitHookPath,
 } from './hooks.js';
@@ -103,6 +106,8 @@ export interface ProjectInventory {
     config: string | null;
     outDir: { path: string; sizeBytes: number } | null;
     claudeMdWithBlock: string | null;
+    cursorRulesWithBlock: string | null;
+    claudeHookWithBlock: string | null;
     hookWithBlock: { path: string; mode: 'pre-commit' | 'post-commit' } | null;
 }
 
@@ -184,6 +189,8 @@ export async function inventoryProject(repo: string): Promise<ProjectInventory> 
         config: null,
         outDir: null,
         claudeMdWithBlock: null,
+        cursorRulesWithBlock: null,
+        claudeHookWithBlock: null,
         hookWithBlock: null,
     };
 
@@ -203,7 +210,28 @@ export async function inventoryProject(repo: string): Promise<ProjectInventory> 
     const cmd = resolve(repo, 'CLAUDE.md');
     if (existsSync(cmd)) {
         const body = await readFile(cmd, 'utf8');
-        if (body.includes(CLAUDE_MARK_START)) inv.claudeMdWithBlock = cmd;
+        if (body.includes(CLAUDE_MARK_START) && body.includes(CLAUDE_MARK_END)) inv.claudeMdWithBlock = cmd;
+    }
+
+    const cursor = resolve(repo, '.cursorrules');
+    if (existsSync(cursor)) {
+        const body = await readFile(cursor, 'utf8');
+        // .cursorrules uses HTML-comment markers (post-P1-O) so the marker
+        // lines don't render as H1 headings inside the rules file. Match the
+        // legacy shell-style markers too, for upgrades from older installs.
+        if (
+            (body.includes(CURSOR_MARK_START) && body.includes(CURSOR_MARK_END)) ||
+            (body.includes(HOOK_MARK_START) && body.includes(HOOK_MARK_END))
+        ) {
+            inv.cursorRulesWithBlock = cursor;
+        }
+    }
+
+    const hookDir = resolve(repo, '.claude', 'hooks');
+    const startHook = resolve(hookDir, 'SessionStart.sh');
+    if (existsSync(startHook)) {
+        const body = await readFile(startHook, 'utf8');
+        if (body.includes(HOOK_MARK_START) && body.includes(HOOK_MARK_END)) inv.claudeHookWithBlock = startHook;
     }
 
     // Hook detection — prefer pre-commit if both somehow have a block (status
@@ -212,7 +240,7 @@ export async function inventoryProject(repo: string): Promise<ProjectInventory> 
         const p = mode === 'pre-commit' ? preCommitHookPath(repo) : postCommitHookPath(repo);
         if (!existsSync(p)) continue;
         const body = await readFile(p, 'utf8');
-        if (body.includes(HOOK_MARK_START)) {
+        if (body.includes(HOOK_MARK_START) && body.includes(HOOK_MARK_END)) {
             inv.hookWithBlock = { path: p, mode };
             break;
         }
@@ -343,11 +371,13 @@ function renderProjectArtefacts(out: string[], p: ProjectInventory, prefix = '  
     if (p.config) out.push(`${prefix}✓ ${p.config}`);
     if (p.outDir) out.push(`${prefix}✓ ${p.outDir.path}  (${humanSize(p.outDir.sizeBytes)})`);
     if (p.claudeMdWithBlock) out.push(`${prefix}✓ ${p.claudeMdWithBlock}  (arch-graph section)`);
+    if (p.cursorRulesWithBlock) out.push(`${prefix}✓ ${p.cursorRulesWithBlock}  (cursor rules block)`);
+    if (p.claudeHookWithBlock) out.push(`${prefix}✓ ${p.claudeHookWithBlock}  (SessionStart hook)`);
     if (p.hookWithBlock) out.push(`${prefix}✓ ${p.hookWithBlock.path}  (${p.hookWithBlock.mode} block)`);
 }
 
 function hasAnyProject(p: ProjectInventory): boolean {
-    return !!(p.config || p.outDir || p.claudeMdWithBlock || p.hookWithBlock);
+    return !!(p.config || p.outDir || p.claudeMdWithBlock || p.cursorRulesWithBlock || p.claudeHookWithBlock || p.hookWithBlock);
 }
 
 function hasAnyGlobal(g: GlobalInventory): boolean {
@@ -356,50 +386,67 @@ function hasAnyGlobal(g: GlobalInventory): boolean {
 
 // ─── actions ─────────────────────────────────────────────────────────────────
 
-/**
- * Returns `true` if every artefact in the inventory was removed without error,
- * `false` if any single fs operation failed (the error is logged to stderr and
- * subsequent artefacts still attempted). The wizard uses the boolean to set
- * `hadError` — mirrors the contract of `removeMcpRegistrations` /
- * `removeGlobalInstall` so all three scopes route through the same
- * structured exit path instead of escaping as unhandled rejections.
- */
+async function surgicalRemove(
+    filePath: string,
+    pairs: Array<{ start: string; end: string }>,
+    label: string,
+): Promise<boolean> {
+    try {
+        let stripped = await readFile(filePath, 'utf8');
+        for (const { start, end } of pairs) {
+            if (stripped.includes(start)) stripped = stripMarkedSection(stripped, start, end);
+        }
+        // Two regimes for "is anything user-owned left?":
+        //   - shell-like (hooks, .sh, .git/hooks/*): '#'-lines are comments → noise.
+        //     If only shebang + comments remain, the file is ours-only → delete.
+        //   - markdown-like (.md, .cursorrules): '#'-lines are headings → user
+        //     content. Only delete when literally nothing non-blank remains.
+        const isMarkdownLike = /\.cursorrules$|\.md$/i.test(filePath);
+        const meaningful = stripped
+            .split('\n')
+            .map((l) => l.trim())
+            .filter((l) => {
+                if (l.length === 0) return false;
+                if (!isMarkdownLike && l.startsWith('#')) return false;
+                return true;
+            })
+            .join('');
+        if (meaningful.length === 0) {
+            await unlink(filePath);
+            output.write(`✓ removed empty file ${filePath}\n`);
+        } else {
+            await atomicWrite(filePath, stripped);
+            output.write(`✓ removed arch-graph ${label} from ${filePath}\n`);
+        }
+        return true;
+    } catch (err) {
+        process.stderr.write(`⚠ arch-graph: failed to clean ${filePath}: ${(err as Error).message}\n`);
+        return false;
+    }
+}
+
 export async function removeProjectArtefacts(inv: ProjectInventory): Promise<boolean> {
     let ok = true;
 
     if (inv.claudeMdWithBlock) {
-        try {
-            const body = await readFile(inv.claudeMdWithBlock, 'utf8');
-            const stripped = stripMarkedSection(body, CLAUDE_MARK_START, CLAUDE_MARK_END);
-            await writeFile(inv.claudeMdWithBlock, stripped, 'utf8');
-            output.write(`✓ removed arch-graph section from ${inv.claudeMdWithBlock}\n`);
-        } catch (err) {
-            process.stderr.write(`⚠ arch-graph: failed to clean ${inv.claudeMdWithBlock}: ${(err as Error).message}\n`);
-            ok = false;
-        }
+        if (!(await surgicalRemove(inv.claudeMdWithBlock, [{ start: CLAUDE_MARK_START, end: CLAUDE_MARK_END }], 'section'))) ok = false;
+    }
+
+    if (inv.cursorRulesWithBlock) {
+        // Try both marker styles: post-P1-O cursor uses HTML comments;
+        // legacy installs may still have the shell-style markers.
+        if (!(await surgicalRemove(inv.cursorRulesWithBlock, [
+            { start: CURSOR_MARK_START, end: CURSOR_MARK_END },
+            { start: HOOK_MARK_START, end: HOOK_MARK_END },
+        ], 'rules'))) ok = false;
+    }
+
+    if (inv.claudeHookWithBlock) {
+        if (!(await surgicalRemove(inv.claudeHookWithBlock, [{ start: HOOK_MARK_START, end: HOOK_MARK_END }], 'code'))) ok = false;
     }
 
     if (inv.hookWithBlock) {
-        const { path } = inv.hookWithBlock;
-        try {
-            const body = await readFile(path, 'utf8');
-            const stripped = stripMarkedSection(body, HOOK_MARK_START, HOOK_MARK_END);
-            const meaningful = stripped
-                .split('\n')
-                .map((l) => l.trim())
-                .filter((l) => l.length > 0 && !l.startsWith('#'))
-                .join('');
-            if (meaningful.length === 0) {
-                await unlink(path);
-                output.write(`✓ removed empty hook ${path}\n`);
-            } else {
-                await writeFile(path, stripped, 'utf8');
-                output.write(`✓ removed arch-graph block from ${path}\n`);
-            }
-        } catch (err) {
-            process.stderr.write(`⚠ arch-graph: failed to clean hook ${path}: ${(err as Error).message}\n`);
-            ok = false;
-        }
+        if (!(await surgicalRemove(inv.hookWithBlock.path, [{ start: HOOK_MARK_START, end: HOOK_MARK_END }], 'block'))) ok = false;
     }
 
     if (inv.config) {
@@ -464,7 +511,7 @@ export async function removeMcpRegistrations(inv: McpInventory): Promise<boolean
     }
 
     try {
-        await writeFile(inv.configPath, JSON.stringify(root, null, 2) + '\n', 'utf8');
+        await atomicWrite(inv.configPath, JSON.stringify(root, null, 2) + '\n');
         return true;
     } catch (err) {
         process.stderr.write(`⚠ arch-graph: failed to update ${inv.configPath}: ${(err as Error).message}\n`);
@@ -577,7 +624,7 @@ async function readSymlink(path: string): Promise<string | null> {
 
 async function dirSize(path: string): Promise<number> {
     // `du -sk` is faster than walking with fs.stat() for big install dirs
-    // (which can include node_modules). Falls back to stat() on platforms
+    // (which can include node_modules). Falls back to stat() on project_alphas
     // where du isn't available.
     const r = spawnSync('du', ['-sk', path], { encoding: 'utf8' });
     if (r.status === 0 && r.stdout) {

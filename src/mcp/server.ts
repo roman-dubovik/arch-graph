@@ -3,13 +3,15 @@
  *
  * The server reads `graph.json` from the configured `out` directory at startup
  * and reloads it on each tool call when the file's mtime changes — so callers
- * can rebuild the graph in another shell without restarting the server.
+ * can rebuild the graph in another shell without restarting the server. The
+ * same lazy-mtime-reload model applies to the code-intel sidecar via
+ * `makeCodeIntelLoader`.
  *
  * All tool answers are token-minimal: only the relevant subset of nodes/edges
  * is returned, never the full graph.
  */
 
-import { readFile, stat } from 'node:fs/promises';
+import { stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -31,20 +33,39 @@ import {
     serviceDependents,
     tableUsers,
 } from './graph-queries.js';
+import { loadGraph } from '../core/io.js';
 import { semanticSearch, MAX_TOP_K } from '../semantic/search.js';
 import { makeEmbedder } from '../semantic/embedder.js';
 import { readEmbeddingsJsonl } from '../semantic/io.js';
 import type { SemanticModelAlias } from '../semantic/types.js';
 import { defaultModelAlias, resolveMinScore } from '../semantic/types.js';
 import { applySemanticDefaults, loadConfig } from '../core/config.js';
+import { readCodeIntelIndex } from '../code-intel/io.js';
+import type { CodeIntelIndex } from '../code-intel/types.js';
+import {
+    explainBranch,
+    explainDataFlow,
+    findReferences,
+    getBlueprint,
+    getFileOutline,
+    getOrientation,
+    getProjectPolicies,
+    getTypeDefinition,
+    impactContract,
+    resolveSymbol,
+    selfCheck,
+    suggestPlacement,
+    traceExceptions,
+    traceMessageFlow,
+    traceScenario,
+    validateProposal,
+} from '../code-intel/queries.js';
 
 const SERVER_NAME = 'arch-graph';
 const SERVER_VERSION = '0.1.0';
 
 // Exhaustiveness gate: `Record<EdgeKind, null>` forces TS to error here when
-// a new `EdgeKind` is added to `src/core/types.ts` but not listed below. Casts
-// (`as [EdgeKind, ...EdgeKind[]]`) silently lose this guarantee — the Record
-// form makes the contract structural.
+// a new `EdgeKind` is added to `src/core/types.ts` but not listed below.
 const EDGE_KIND_CHECK: Record<EdgeKind, null> = {
     'nats-publish': null,
     'nats-request': null,
@@ -85,15 +106,12 @@ const EDGE_KIND_CHECK: Record<EdgeKind, null> = {
 const EDGE_KIND_VALUES = Object.keys(EDGE_KIND_CHECK) as [EdgeKind, ...EdgeKind[]];
 
 const edgeKindSchema = z.enum(EDGE_KIND_VALUES);
-
-// NODE_KIND_VALUES is imported from src/core/types.ts — the authoritative home
-// for NodeKind exhaustiveness. Centralised so CLI + MCP always share the same set.
 const nodeKindSchema = z.enum(NODE_KIND_VALUES);
 
 /**
  * Zod shape for the `semantic_search` tool input — exported so tests can build
  * `z.object(semanticSearchInputShape)` and validate against the exact same
- * constraints that the registered MCP tool enforces.  Avoids schema drift.
+ * constraints that the registered MCP tool enforces. Avoids schema drift.
  */
 export const semanticSearchInputShape = {
     query: z.string().min(1).describe('Query text to search for.'),
@@ -128,7 +146,7 @@ export const semanticSearchInputShape = {
         .optional()
         .describe(
             'Minimum cosine similarity threshold. Results below this value are dropped. ' +
-            'When omitted, the per-model recommended threshold is used (e.g. 0.30 for minilm, 0.55 for e5-base).',
+            'When omitted, the per-model recommended threshold is used (e.g. 0.55 for e5-base).',
         ),
     kindQuotas: z
         .partialRecord(nodeKindSchema, z.number().int().min(0).max(MAX_TOP_K))
@@ -149,20 +167,55 @@ const bucketSearchInputShape = {
     kindBoosts: semanticSearchInputShape.kindBoosts,
 } as const;
 
-/**
- * `code_search` exposes the same shape as `semantic_search` minus `kinds` /
- * `excludeKinds` — those are wired internally to exclude doc-section. Keeping
- * the other ranking controls makes the agent-facing contract identical and
- * eliminates a class of "I forgot to add the kind filter" mistakes.
- */
 export const codeSearchInputShape = bucketSearchInputShape;
-
-/**
- * `docs_search` — same shape as `code_search`, internally restricted to
- * `doc-section` results.  Symmetric with `code_search` so an agent picks one
- * or the other without learning two different schemas.
- */
 export const docsSearchInputShape = codeSearchInputShape;
+
+export const resolveSymbolInputShape = {
+    query: z.string().min(1).describe('Symbol name, partial path, or FQN.'),
+} as const;
+
+export const getFileOutlineInputShape = {
+    file: z.string().min(1).describe('Source file path (relative to root).'),
+} as const;
+
+export const getTypeDefinitionInputShape = {
+    symbol: z.string().min(1).describe('Class, DTO, type, or db-entity name.'),
+} as const;
+
+export const findReferencesInputShape = {
+    symbol: z.string().min(1).describe('Symbol name or FQN to find references to.'),
+    maxResults: z.number().int().min(1).max(200).optional().default(50),
+} as const;
+
+export const explainDataFlowInputShape = {
+    target: z.string().min(1).describe('Function or method FQN, e.g. ItemsController.create.'),
+    param: z.string().min(1).describe('Parameter name inside the target function.'),
+    maxResults: z.number().int().min(1).max(100).optional().default(20),
+} as const;
+
+export const explainBranchInputShape = {
+    file: z.string().min(1).describe('Absolute or graph-recorded source file path.'),
+    line: z.number().int().positive().describe('Line inside or near the branch condition.'),
+} as const;
+
+export const traceScenarioInputShape = {
+    entry: z.string().min(1).describe('Entrypoint symbol/decorator text, e.g. Controller.method or POST /path.'),
+    maxDepth: z.number().int().min(1).max(20).optional().default(5),
+} as const;
+
+export const traceExceptionsInputShape = {
+    entry: z.string().min(1).describe('Entrypoint method/function FQN to walk for throw statements.'),
+} as const;
+
+export const traceMessageFlowInputShape = {
+    pattern: z.string().min(1).describe('NATS subject or RMQ queue name (with or without prefix).'),
+} as const;
+
+export const impactContractInputShape = {
+    symbol: z.string().min(1).describe('DTO/type symbol name, e.g. CreateItemDto.'),
+    field: z.string().min(1).optional().describe('Optional field name to narrow impact.'),
+    maxResults: z.number().int().min(1).max(200).optional().default(50),
+} as const;
 
 interface GraphHandle {
     path: string;
@@ -170,10 +223,8 @@ interface GraphHandle {
     graph: ArchGraph;
 }
 
-async function loadGraph(path: string, mtimeMs: number): Promise<GraphHandle> {
-    const buf = await readFile(path, 'utf8');
-    const graph = JSON.parse(buf) as ArchGraph;
-    return { path, mtimeMs, graph };
+async function loadGraphHandle(path: string, mtimeMs: number): Promise<GraphHandle> {
+    return { path, mtimeMs, graph: await loadGraph(path) };
 }
 
 /**
@@ -182,9 +233,7 @@ async function loadGraph(path: string, mtimeMs: number): Promise<GraphHandle> {
  * Robustness: stat and load are split so a mid-write torn JSON (`JSON.parse`
  * throws on a partial file) does NOT silently keep serving the old cached
  * graph forever. We track the mtime that failed; subsequent ticks at the same
- * mtime suppress the retry log but still continue serving cached data. On the
- * next *successful* write the mtime advances, we retry, and `failedMtime`
- * clears.
+ * mtime suppress the retry log but still continue serving cached data.
  */
 function makeGraphLoader(path: string): () => Promise<ArchGraph> {
     let handle: GraphHandle | null = null;
@@ -194,10 +243,6 @@ function makeGraphLoader(path: string): () => Promise<ArchGraph> {
             const st = await stat(path);
             if (!handle || st.mtimeMs !== handle.mtimeMs) {
                 if (st.mtimeMs === failedMtime) {
-                    // Same broken mtime as last attempt. If we have a previous
-                    // good handle, keep serving it silently (we already logged
-                    // once). If not, surface a useful error — the defensive
-                    // assertion below would otherwise hide the real cause.
                     if (!handle) {
                         throw new Error(
                             `arch-graph mcp: graph file is unreadable at ${path} (last reload error already logged to stderr)`,
@@ -205,30 +250,73 @@ function makeGraphLoader(path: string): () => Promise<ArchGraph> {
                     }
                 } else {
                     try {
-                        handle = await loadGraph(path, st.mtimeMs);
+                        handle = await loadGraphHandle(path, st.mtimeMs);
                         failedMtime = null;
                     } catch (loadErr) {
                         failedMtime = st.mtimeMs;
                         process.stderr.write(
-                            `arch-graph mcp: reload error (corrupt write?): ${(loadErr as Error).message}\n`,
+                            `arch-graph mcp: graph reload error (corrupt write?): ${(loadErr as Error).message}\n`,
                         );
                         if (!handle) throw loadErr;
                     }
                 }
             }
         } catch (err) {
-            // If stat fails but we have a cached copy, keep serving it.
             if (!handle) throw err;
         }
         if (!handle) {
-            // Reachable on the second+ call against a consistently corrupt
-            // file: stat succeeds, mtime equals failedMtime, the silent retry
-            // suppression keeps handle null, and the outer catch does NOT
-            // fire (stat didn't throw). This guard converts that into a clear
-            // error rather than a downstream `undefined.graph` access.
             throw new Error('arch-graph mcp: graph loader returned no handle');
         }
         return handle.graph;
+    };
+}
+
+interface CodeIntelHandle {
+    mtimeMs: number;
+    index: CodeIntelIndex;
+}
+
+/**
+ * Code-intel sidecar loader with mtime-based reload and torn-write tolerance
+ * (P1.3 acceptance: keep serving the last good index if a mid-write rebuild
+ * leaves manifest temporarily unreadable).
+ */
+function makeCodeIntelLoader(outDir: string): () => Promise<CodeIntelIndex> {
+    const dir = resolve(outDir, 'code-intel');
+    const manifestPath = resolve(dir, 'manifest.json');
+    let handle: CodeIntelHandle | null = null;
+    let failedMtime: number | null = null;
+    return async () => {
+        try {
+            const st = await stat(manifestPath);
+            if (!handle || st.mtimeMs !== handle.mtimeMs) {
+                if (st.mtimeMs === failedMtime) {
+                    if (!handle) {
+                        throw new Error(
+                            `arch-graph mcp: code-intel sidecar at ${dir} is unreadable (last reload error already logged to stderr)`,
+                        );
+                    }
+                } else {
+                    try {
+                        const index = await readCodeIntelIndex(dir);
+                        handle = { mtimeMs: st.mtimeMs, index };
+                        failedMtime = null;
+                    } catch (loadErr) {
+                        failedMtime = st.mtimeMs;
+                        process.stderr.write(
+                            `arch-graph mcp: code-intel reload error (corrupt write?): ${(loadErr as Error).message}\n`,
+                        );
+                        if (!handle) throw loadErr;
+                    }
+                }
+            }
+        } catch (err) {
+            if (!handle) throw err;
+        }
+        if (!handle) {
+            throw new Error('arch-graph mcp: code-intel loader returned no handle');
+        }
+        return handle.index;
     };
 }
 
@@ -270,7 +358,6 @@ type RoutedAction =
 
 function routeQuestion(question: string): RoutedAction {
     const q = question.toLowerCase();
-    // Try to extract a quoted or trailing token that looks like an identifier.
     const quoted = question.match(/['"`]([^'"`]+)['"`]/);
     const lastToken = question.split(/\s+/).pop() ?? '';
 
@@ -298,8 +385,6 @@ function routeQuestion(question: string): RoutedAction {
     if (q.includes('module') && (q.includes('import') || q.includes('depend'))) {
         return { tool: 'module_imports', moduleClass: target };
     }
-    // Order matters: the "incoming" wording is more specific and must win over
-    // the generic "depend" check (e.g. "depended on by", "used by").
     if (q.includes('depended') || q.includes('callers') || q.includes('used by') || q.includes('calls')) {
         return { tool: 'service_dependents', serviceId: target };
     }
@@ -319,29 +404,21 @@ function routeQuestion(question: string): RoutedAction {
 export async function startMcpServer(opts: { out: string; config?: string }): Promise<void> {
     const graphPath = resolve(opts.out, 'graph.json');
     const loadGraphFn = makeGraphLoader(graphPath);
-    // Eager load so startup errors surface immediately on stderr instead of on first tool call.
+    const loadCodeIntelFn = makeCodeIntelLoader(opts.out);
     await loadGraphFn();
 
-    // Resolve the embedding model alias from the config file (if supplied), falling back to
-    // the defaultModelAlias ('e5-base') when no config is present.
     let resolvedModelAlias: SemanticModelAlias = defaultModelAlias;
     if (opts.config) {
         try {
             const cfg = await loadConfig(resolve(opts.config));
             resolvedModelAlias = applySemanticDefaults(cfg.semantic).model;
         } catch (err) {
-            // Silently keep the defaultModelAlias ONLY when the config file is
-            // absent.  Any other error (syntax error, invalid alias such as
-            // 'bge-m4') must surface immediately so the operator knows their
-            // config is broken rather than silently running on the wrong model.
             const isConfigMissing =
                 err instanceof Error && err.message.startsWith('config not found:');
             if (!isConfigMissing) throw err;
         }
     }
 
-    // Build a single-text embedder bound to the resolved alias.
-    // Query mode: the user query string must use the query prefix for e5-base.
     const resolvedEmbedderObj = makeEmbedder(resolvedModelAlias);
     const embedOneFn = async (text: string): Promise<number[]> =>
         resolvedEmbedderObj.embedOne(text, 'query');
@@ -351,6 +428,7 @@ export async function startMcpServer(opts: { out: string; config?: string }): Pr
         { capabilities: { tools: {} } },
     );
 
+    // ─────────────────────────────────────────── STRUCTURAL GRAPH TOOLS
     server.registerTool(
         'subject_publishers',
         {
@@ -390,8 +468,7 @@ export async function startMcpServer(opts: { out: string; config?: string }): Pr
     server.registerTool(
         'service_dependencies',
         {
-            description:
-                'Outgoing edges from a service, grouped by kind (nats-publish, http-call, queue-produce, db-access, lib-usage, …).',
+            description: 'Outgoing edges from a service, grouped by kind (nats-publish, http-call, queue-produce, db-access, lib-usage, …).',
             inputSchema: { serviceId: z.string().describe('Service id; `service:` prefix optional.') },
         },
         async ({ serviceId }) => jsonResult(serviceDependencies(await loadGraphFn(), serviceId)),
@@ -431,8 +508,7 @@ export async function startMcpServer(opts: { out: string; config?: string }): Pr
     server.registerTool(
         'path',
         {
-            description:
-                'Shortest directed path between two node ids; returns `{ found: false }` when none under the filter.',
+            description: 'Shortest directed path between two node ids; returns `{ found: false }` when none under the filter.',
             inputSchema: {
                 from: z.string().describe('Source node id (must include prefix, e.g. service:foo).'),
                 to: z.string().describe('Target node id (must include prefix).'),
@@ -451,16 +527,15 @@ export async function startMcpServer(opts: { out: string; config?: string }): Pr
         async ({ nodeId }) => jsonResult(explain(await loadGraphFn(), nodeId)),
     );
 
+    // ─────────────────────────────────────────── SEMANTIC SEARCH TOOLS
     server.registerTool(
         'semantic_search',
         {
             description:
                 'Semantic kNN search over the sidecar index across ALL node kinds (code + docs mixed). ' +
-                'Use `code_search` / `docs_search` instead when you want one bucket — those avoid doc-section dilution of code results.',
+                'Use `code_search` / `docs_search` instead when you want one bucket — those avoid doc-section dilution.',
             inputSchema: semanticSearchInputShape,
         },
-        // Reuse the exported handler factory so the test-accessible path and the
-        // production registration share exactly the same logic.
         makeSemanticSearchHandler({ outDir: opts.out, embedder: embedOneFn, modelAlias: resolvedModelAlias }),
     );
 
@@ -469,11 +544,7 @@ export async function startMcpServer(opts: { out: string; config?: string }): Pr
         {
             description:
                 'Semantic kNN search restricted to CODE nodes (everything except doc-section). ' +
-                'Use for "where is X implemented" — top-K is not diluted by Markdown sections. ' +
-                'RECOMMENDED USAGE: call code_search and docs_search in parallel for every retrieval — ' +
-                'the LLM then sees two labeled top-K lists and picks the more useful one (both-buckets pattern). ' +
-                'Projects that want to halve retrieval cost can override to fallback-only in their CLAUDE.md ' +
-                '("first code_search; only call docs_search if nothing relevant").',
+                'RECOMMENDED USAGE: call code_search and docs_search in parallel for every retrieval.',
             inputSchema: codeSearchInputShape,
         },
         makeSemanticSearchHandler({ outDir: opts.out, embedder: embedOneFn, modelAlias: resolvedModelAlias, baseExcludeKinds: ['doc-section'] }),
@@ -484,10 +555,7 @@ export async function startMcpServer(opts: { out: string; config?: string }): Pr
         {
             description:
                 'Semantic kNN search restricted to DOC nodes (Markdown `doc-section` only). ' +
-                'Use for design rationale, plans, README/ADR content, natural-language explanations. ' +
-                'Docs may contain stale plans or speculative content — pair with code_search when the question is ' +
-                '"what does the code actually do" (the code is authoritative). ' +
-                'RECOMMENDED USAGE: call together with code_search in parallel — see code_search description.',
+                'Use for design rationale, plans, README/ADR content, natural-language explanations.',
             inputSchema: docsSearchInputShape,
         },
         makeSemanticSearchHandler({ outDir: opts.out, embedder: embedOneFn, modelAlias: resolvedModelAlias, lockedKinds: ['doc-section'] }),
@@ -496,8 +564,7 @@ export async function startMcpServer(opts: { out: string; config?: string }): Pr
     server.registerTool(
         'query',
         {
-            description:
-                'Natural-language fallback. Keyword-routes to a structured tool and returns its result; no LLM dependency.',
+            description: 'Natural-language fallback. Keyword-routes to a structured tool and returns its result; no LLM dependency.',
             inputSchema: { question: z.string() },
         },
         async ({ question }) => {
@@ -517,26 +584,195 @@ export async function startMcpServer(opts: { out: string; config?: string }): Pr
                 case 'service_dependents':
                     return jsonResult({ via: action.tool, result: serviceDependents(graph, action.serviceId) });
                 case 'module_imports':
-                    return jsonResult({
-                        via: action.tool,
-                        result: moduleImports(graph, action.moduleClass),
-                    });
+                    return jsonResult({ via: action.tool, result: moduleImports(graph, action.moduleClass) });
                 case 'table_users':
                     return jsonResult({ via: action.tool, result: tableUsers(graph, action.table) });
                 case 'stats':
                     return jsonResult({ via: action.tool, result: graphStats(graph) });
                 case 'unknown':
                     return jsonResult({ via: 'unknown', hint: action.hint });
-                // Exhaustiveness guard: if a new RoutedAction['tool'] variant is added without
-                // a case here, the `const _: never = action` will fail compile. Not dead code —
-                // reachable only when the union grows. The runtime fallback returns 'unknown'
-                // for forward-compat with older clients.
                 default: {
                     const _: never = action;
                     return jsonResult({ via: 'unknown', hint: 'unrouted action' });
                 }
             }
         },
+    );
+
+    // ─────────────────────────────────────────── CODE-INTEL TOOLS
+    server.registerTool(
+        'resolve_symbol',
+        {
+            description:
+                'Code intelligence lookup for classes, DTOs, methods, functions, fields, and params. ' +
+                'Accepts a short name (e.g. "UsersService"), a dotted name (e.g. "UsersService.findById"), ' +
+                'or a path fragment (e.g. "apps/api/users/users.service.ts"). ' +
+                'When a short name is shared across files (e.g. two modules both export "setup"), ALL matches are returned — ' +
+                'pass a path suffix in the query to narrow to one file. Each match carries a composite, file-qualified `id` ' +
+                'that downstream tools (find_references, get_type_definition, etc.) accept for unambiguous lookup.',
+            inputSchema: resolveSymbolInputShape,
+        },
+        async ({ query }) => jsonResult(resolveSymbol(await loadCodeIntelFn(), query)),
+    );
+
+    server.registerTool(
+        'get_file_outline',
+        {
+            description: 'Structural summary of a file (classes, methods, fields) without implementation details.',
+            inputSchema: getFileOutlineInputShape,
+        },
+        async ({ file }) => jsonResult(getFileOutline(await loadCodeIntelFn(), { file })),
+    );
+
+    server.registerTool(
+        'get_type_definition',
+        {
+            description: 'Returns class/DTO/db-entity member list (fields with types, decorators, JSDoc).',
+            inputSchema: getTypeDefinitionInputShape,
+        },
+        async ({ symbol }) => jsonResult(getTypeDefinition(await loadCodeIntelFn(), { symbol })),
+    );
+
+    server.registerTool(
+        'find_references',
+        {
+            description: 'All call/impact/flow references to a symbol across the project.',
+            inputSchema: findReferencesInputShape,
+        },
+        async ({ symbol, maxResults }) =>
+            jsonResult(findReferences(await loadCodeIntelFn(), { symbol, maxResults })),
+    );
+
+    server.registerTool(
+        'get_blueprint',
+        {
+            description: 'Returns the highest quality existing code examples (blueprints) for a given kind. EXPERIMENTAL.',
+            inputSchema: {
+                kind: z.enum(['class', 'method', 'function', 'dto', 'type', 'field', 'param', 'db-entity']).describe('Symbol kind to find blueprints for.'),
+                maxResults: z.number().int().min(1).max(10).optional().default(3),
+            },
+        },
+        async ({ kind, maxResults }) => jsonResult(getBlueprint(await loadCodeIntelFn(), { kind, maxResults })),
+    );
+
+    server.registerTool(
+        'get_project_policies',
+        {
+            description: 'Returns inferred and explicit architectural policies (placement rules, decorator pairings). EXPERIMENTAL.',
+            inputSchema: {},
+        },
+        async () => jsonResult(getProjectPolicies(await loadCodeIntelFn())),
+    );
+
+    server.registerTool(
+        'get_orientation',
+        {
+            description: 'High-level architectural summary of the project (apps, libs, top policies). CALL THIS FIRST.',
+            inputSchema: {},
+        },
+        async () => jsonResult(getOrientation(await loadCodeIntelFn())),
+    );
+
+    server.registerTool(
+        'self_check',
+        {
+            description:
+                'Verifies the health and freshness of the code-intel index. Returns one of two statuses: ' +
+                '`ok` — the index is COMPLETE and lookups are unambiguous; `degraded` — there is a real silent-' +
+                'wrong-answer risk: `warnings.skippedFiles` (extractor could not parse some files; trace graph has gaps) ' +
+                'or `warnings.dangerousCollisions` (two structural symbols — class/method/field/DTO/type/db-entity — share ' +
+                'a name, so find_references / get_type_definition / impact_contract may return results from the wrong file ' +
+                'without warning; use the symbol `id` (file-qualified) instead of `fqn`, or rename one of the duplicates). ' +
+                'The optional `info.nameCollisions` field counts top-level functions/types/params with the same ' +
+                'short name across files (e.g. two modules both exporting `setup`); this is NORMAL omonymy and does ' +
+                'NOT affect status — pass a path suffix in resolve_symbol queries to target a specific file. ' +
+                'Use this if other tools return unexpected or empty results.',
+            inputSchema: {},
+        },
+        async () => jsonResult(selfCheck(await loadCodeIntelFn())),
+    );
+
+    server.registerTool(
+        'suggest_placement',
+        {
+            description: 'Suggests the correct directory path for a new file based on its name and kind. EXPERIMENTAL.',
+            inputSchema: {
+                name: z.string().min(1).describe('The name of the new symbol, e.g. "UsersService".'),
+                kind: z.enum(['class', 'method', 'function', 'dto', 'type', 'field', 'param', 'db-entity']).describe('The kind of the new symbol.'),
+            },
+        },
+        async ({ name, kind }) => jsonResult(suggestPlacement(await loadCodeIntelFn(), { name, kind })),
+    );
+
+    server.registerTool(
+        'validate_proposal',
+        {
+            description: 'Validates an architectural proposal (proposed imports/calls) against project guardrails. EXPERIMENTAL.',
+            inputSchema: {
+                sourceFile: z.string().min(1).describe('The file where the change is proposed.'),
+                sourceKind: z.enum(['class', 'method', 'function', 'dto', 'type', 'field', 'param', 'db-entity']).describe('The kind of the proposing symbol.'),
+                proposedImports: z.array(z.string()).describe('List of symbol names or paths to be imported.'),
+                proposedCalls: z.array(z.string()).describe('List of method/function FQNs to be called.'),
+            },
+        },
+        async (proposal) => jsonResult(validateProposal(await loadCodeIntelFn(), proposal)),
+    );
+
+    server.registerTool(
+        'explain_data_flow',
+        {
+            description: 'Compact proof packet for where a parameter flows inside a target function/method.',
+            inputSchema: explainDataFlowInputShape,
+        },
+        async ({ target, param, maxResults }) =>
+            jsonResult(explainDataFlow(await loadCodeIntelFn(), { target, param, maxResults })),
+    );
+
+    server.registerTool(
+        'explain_branch',
+        {
+            description: 'Branch predicates and dominated calls at a file/line location.',
+            inputSchema: explainBranchInputShape,
+        },
+        async ({ file, line }) => jsonResult(explainBranch(await loadCodeIntelFn(), { file, line })),
+    );
+
+    server.registerTool(
+        'trace_scenario',
+        {
+            description: 'Ordered static call trace from a symbol/decorator entrypoint, depth-limited.',
+            inputSchema: traceScenarioInputShape,
+        },
+        async ({ entry, maxDepth }) => jsonResult(traceScenario(await loadCodeIntelFn(), { entry, maxDepth })),
+    );
+
+    server.registerTool(
+        'trace_exceptions',
+        {
+            description: 'Walk an entrypoint and surface every throw statement that can bubble up.',
+            inputSchema: traceExceptionsInputShape,
+        },
+        async ({ entry }) => jsonResult(traceExceptions(await loadCodeIntelFn(), { entry })),
+    );
+
+    server.registerTool(
+        'trace_message_flow',
+        {
+            description: 'Bridges NATS/RMQ structural edges with code-intel traces for a subject/queue pattern.',
+            inputSchema: traceMessageFlowInputShape,
+        },
+        async ({ pattern }) =>
+            jsonResult(traceMessageFlow(await loadCodeIntelFn(), await loadGraphFn(), pattern)),
+    );
+
+    server.registerTool(
+        'impact_contract',
+        {
+            description: 'DTO/type impact report grouped from endpoint/message/type/test/mapper references.',
+            inputSchema: impactContractInputShape,
+        },
+        async ({ symbol, field, maxResults }) =>
+            jsonResult(impactContract(await loadCodeIntelFn(), { symbol, field, maxResults })),
     );
 
     server.registerTool(
@@ -550,11 +786,9 @@ export async function startMcpServer(opts: { out: string; config?: string }): Pr
 
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    // Note: keep the process alive until stdin closes — `connect()` wires that up.
 }
 
-// Exported for test use — the keyword router is also a pure function and
-// worth exercising directly without round-tripping through the SDK.
+// Exported for test use.
 export { routeQuestion };
 
 // ---------------------------------------------------------------------------
@@ -563,85 +797,24 @@ export { routeQuestion };
 // ---------------------------------------------------------------------------
 
 export interface SemanticSearchHandlerOpts {
-    /** Directory where arch-graph-out lives (contains graph.json + semantic/). */
     outDir: string;
-    /**
-     * Injectable single-text embedder.  In production this is derived from
-     * `makeEmbedder(modelAlias)`.  Tests supply a fake here to avoid real model
-     * downloads.  When omitted, the factory builds a default embedder bound to
-     * `modelAlias` (defaults to `defaultModelAlias`, currently `'e5-base'`).
-     *
-     * **Coupling invariant**: `embedder` must produce vectors whose dimensionality
-     * matches the alias registered in `SEMANTIC_MODELS[modelAlias].dim`.  Passing
-     * a mismatched embedder (wrong dim) with a different `modelAlias` will
-     * cause every search to return `semantic-index-corrupt`.  Always set both
-     * fields together or omit both (production wires them from the same config
-     * lookup; tests use a matching fake).
-     */
     embedder?: (text: string) => Promise<number[]>;
-    /**
-     * Model alias that was used to build the index.  Passed to `semanticSearch`
-     * so it can validate the manifest's model/dim against the expected values.
-     * Defaults to `defaultModelAlias` (`'e5-base'`) when omitted.
-     *
-     * **Must be set together with `embedder`** when overriding either (see
-     * `embedder` coupling invariant above).  Production callers resolve this
-     * from config via `applySemanticDefaults`.
-     */
     modelAlias?: SemanticModelAlias;
-    /**
-     * Locks the handler to this kind-whitelist. Authoritative — overrides any
-     * `kinds` passed in the caller input (and a runtime assert fires if the
-     * caller tries — see implementation). Used by `docs_search` to pin the
-     * tool to `doc-section`.
-     *
-     * The field name encodes the override semantics: this is a *lock*, not
-     * an additive default.
-     */
     lockedKinds?: NodeKind[];
-    /**
-     * Base `excludeKinds` blacklist always applied by this handler. Unlike
-     * `lockedKinds`, this is *additive* — caller-supplied `excludeKinds` are
-     * appended to this list, so callers can drop MORE kinds but never restore
-     * any of these. Used by `code_search` to always exclude `doc-section`.
-     */
     baseExcludeKinds?: NodeKind[];
 }
 
 export interface SemanticSearchHandlerInput {
     query: string;
     topK?: number;
-    /**
-     * Caller-supplied `kinds` whitelist. Ignored when the handler was
-     * factory-constructed with `lockedKinds`; in that case the handler
-     * throws to prevent silent override of the locked bucket.
-     */
     kinds?: NodeKind[];
-    /**
-     * Caller-supplied `excludeKinds` blacklist. Merged additively with
-     * `baseExcludeKinds` if the handler factory set one.
-     */
     excludeKinds?: NodeKind[];
     includeVectors?: boolean;
-    /**
-     * Caller-supplied minimum cosine similarity threshold.
-     * When provided, overrides the per-model `recommendedMinScore`.
-     * When absent, the handler resolves via {@link resolveMinScore}
-     * using the factory-bound `modelAlias`.
-     */
     minScore?: number;
     kindQuotas?: Partial<Record<NodeKind, number>>;
     kindBoosts?: Partial<Record<NodeKind, number>>;
 }
 
-/**
- * Create the `semantic_search` MCP handler as a standalone async function.
- * This is the canonical handler logic — `startMcpServer` calls
- * `server.registerTool(…, handler)` using the same code path.
- *
- * Use this in tests to exercise the full handler (including vector augmentation
- * and error paths) without spinning up the MCP SDK transport.
- */
 export function makeSemanticSearchHandler(handlerOpts: SemanticSearchHandlerOpts) {
     const {
         outDir,
@@ -651,10 +824,6 @@ export function makeSemanticSearchHandler(handlerOpts: SemanticSearchHandlerOpts
         baseExcludeKinds,
     } = handlerOpts;
 
-    // Default single-text embedder: bound to the resolved alias so production
-    // and test paths share the same lazy-loading path.  Tests that supply their
-    // own `embedder` override this entirely.
-    // Query mode: the user query string must use the query prefix for e5-base.
     const effectiveEmbedder =
         embedderFn ??
         (() => {
@@ -674,11 +843,6 @@ export function makeSemanticSearchHandler(handlerOpts: SemanticSearchHandlerOpts
             kindBoosts,
         } = input;
 
-        // Factory `lockedKinds` is authoritative. If the caller tries to pass
-        // `kinds`, that would be a silent contract violation in production —
-        // throw so it surfaces during development. (The MCP Zod boundary
-        // strips this field for external callers, so in practice this guards
-        // in-process consumers like tests and embedders.)
         if (lockedKinds && kinds && kinds.length > 0) {
             throw new Error(
                 `arch-graph semantic_search: handler was constructed with lockedKinds=[${lockedKinds.join(
@@ -687,14 +851,12 @@ export function makeSemanticSearchHandler(handlerOpts: SemanticSearchHandlerOpts
             );
         }
 
-        // Factory `baseExcludeKinds` is additive — caller can extend, never reduce.
         const effectiveKinds = lockedKinds ?? kinds;
         const effectiveExclude =
             baseExcludeKinds && excludeKinds
                 ? [...baseExcludeKinds, ...excludeKinds]
                 : (baseExcludeKinds ?? excludeKinds);
 
-        // Resolve minScore: user value wins; else per-model recommended; else 0.30 fallback.
         const effectiveMinScore = resolveMinScore(modelAlias, userMinScore);
 
         const searchRes = await semanticSearch({

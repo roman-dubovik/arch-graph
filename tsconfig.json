@@ -13,5 +13,12 @@
         "sourceMap": true
     },
     "include": ["src/**/*.ts", "bench/**/*.ts"],
-    "exclude": ["node_modules", "dist", "poc", "arch-graph-out"]
+    "exclude": [
+        "node_modules",
+        "dist",
+        "poc",
+        "arch-graph-out",
+        "src/**/__fixtures__/**",
+        "src/extractors/**/__fixtures__/**"
+    ]
 }

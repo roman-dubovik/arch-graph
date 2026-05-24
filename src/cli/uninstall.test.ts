@@ -81,6 +81,8 @@ describe('inventoryProject', () => {
                 config: null,
                 outDir: null,
                 claudeMdWithBlock: null,
+                cursorRulesWithBlock: null,
+                claudeHookWithBlock: null,
                 hookWithBlock: null,
             });
         } finally {
@@ -234,7 +236,7 @@ describe('inventoryMcp', () => {
     // inventoryMcp() reads ~/.claude.json directly. To test in isolation we
     // exercise the parsing logic by writing a fixture and re-importing with
     // a stubbed HOME. node has no `process.env.HOME` override that affects
-    // os.homedir() across all platforms — so we test the JSON-parsing branches
+    // os.homedir() across all project_alphas — so we test the JSON-parsing branches
     // through the function's behaviour on the real ~/.claude.json instead, plus
     // direct unit-tests of the corrupt-JSON behaviour using a separate helper.
     //
@@ -317,7 +319,7 @@ describe('inventoryMcp', () => {
 // ─── renderInventory ─────────────────────────────────────────────────────────
 
 describe('renderInventory', () => {
-    const emptyProject = () => ({ config: null, outDir: null, claudeMdWithBlock: null, hookWithBlock: null });
+    const emptyProject = () => ({ config: null, outDir: null, claudeMdWithBlock: null, cursorRulesWithBlock: null, claudeHookWithBlock: null, hookWithBlock: null });
     const emptyGlobal = () => ({ installDir: null, symlinkPath: null, symlinkIsOurs: false, symlinkTarget: null as string | null, skillDir: null });
     const emptyMcp = () => ({ configPath: null, projectsWithEntry: [] as string[] });
 
@@ -402,6 +404,8 @@ describe('removeProjectArtefacts', () => {
                 config: null,
                 outDir: null,
                 claudeMdWithBlock: cmdPath,
+                cursorRulesWithBlock: null,
+                claudeHookWithBlock: null,
                 hookWithBlock: null,
             });
             const after = await readFile(cmdPath, 'utf8');
@@ -426,6 +430,8 @@ describe('removeProjectArtefacts', () => {
                 config: null,
                 outDir: null,
                 claudeMdWithBlock: null,
+                cursorRulesWithBlock: null,
+                claudeHookWithBlock: null,
                 hookWithBlock: { path: hookPath, mode: 'pre-commit' },
             });
             expect(existsSync(hookPath)).toBe(false);
@@ -446,6 +452,8 @@ describe('removeProjectArtefacts', () => {
                 config: null,
                 outDir: null,
                 claudeMdWithBlock: null,
+                cursorRulesWithBlock: null,
+                claudeHookWithBlock: null,
                 hookWithBlock: { path: hookPath, mode: 'pre-commit' },
             });
             expect(existsSync(hookPath)).toBe(true);
@@ -470,6 +478,8 @@ describe('removeProjectArtefacts', () => {
                 config: cfg,
                 outDir: { path: out, sizeBytes: 0 },
                 claudeMdWithBlock: null,
+                cursorRulesWithBlock: null,
+                claudeHookWithBlock: null,
                 hookWithBlock: null,
             });
 
@@ -486,6 +496,8 @@ describe('removeProjectArtefacts', () => {
             config: null,
             outDir: null,
             claudeMdWithBlock: null,
+            cursorRulesWithBlock: null,
+            claudeHookWithBlock: null,
             hookWithBlock: null,
         });
     });

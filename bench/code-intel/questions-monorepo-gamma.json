@@ -1,0 +1,26 @@
+[
+  {
+    "id": "MONO-G-CI1",
+    "category": "call-graph",
+    "question": "Call chain from JobController.registerQueueJob to scheduler?",
+    "tool": "trace_scenario",
+    "cli": "arch-graph code-intel trace-scenario --entry JobController.registerQueueJob --max-depth 2",
+    "expectedContains": ["JobController.registerQueueJob", "JobSchedulerService.registerQueueJob", "JobSchedulerService._registerQueueJob"]
+  },
+  {
+    "id": "MONO-G-CI2",
+    "category": "data-flow",
+    "question": "How does @Body data flow through JobController.registerQueueJob?",
+    "tool": "explain_data_flow",
+    "cli": "arch-graph code-intel explain-flow --target JobController.registerQueueJob --param data --max-results 8",
+    "expectedContains": ["@Body data", "JobSchedulerService.registerQueueJob", "jobName", "payload"]
+  },
+  {
+    "id": "MONO-G-CI3",
+    "category": "impact",
+    "question": "Which DTOs depend on BasePaginationQueryDto?",
+    "tool": "impact_contract",
+    "cli": "arch-graph code-intel impact-contract BasePaginationQueryDto --max-results 5",
+    "expectedContains": ["BasePaginationQueryDto", "banner.query.dto.ts", "category.query.dto.ts", "\"kind\": \"type-reference\""]
+  }
+]
