@@ -23,8 +23,27 @@ export function selfCheck(index: CodeIntelIndex): {
 } {
     const symbols = index.manifest.counts?.symbols ?? index.symbols.length;
     const w = index.manifest.warnings;
-    const amb = Array.isArray(w?.ambiguousFqns) ? w!.ambiguousFqns : [];
-    const skp = Array.isArray(w?.skippedFiles) ? w!.skippedFiles : [];
+
+    // Three states for `warnings`:
+    //   (a) absent (legacy index, pre-warnings extractor)   → status='ok'
+    //   (b) present and well-formed                         → 'ok' if both empty, else 'degraded' with counts
+    //   (c) present but malformed (wrong-type fields, etc.) → 'degraded' with a "rebuild recommended" message
+    // The distinction between (a) and (c) matters: a corrupt manifest must
+    // not masquerade as a healthy legacy one — that was the exact regression
+    // FIX-1 introduced, surfaced by silent-failure-hunter round 2.
+    if (w !== undefined && (!Array.isArray(w.ambiguousFqns) || !Array.isArray(w.skippedFiles))) {
+        return {
+            status: 'degraded',
+            message: 'Code-intel manifest.warnings is malformed; rebuild recommended (run: arch-graph code-intel build).',
+            schemaVersion: index.manifest.schemaVersion,
+            freshness: index.manifest.builtAt,
+            symbols,
+            warnings: { ambiguousFqns: [], skippedFiles: [] },
+        };
+    }
+
+    const amb = w?.ambiguousFqns ?? [];
+    const skp = w?.skippedFiles ?? [];
     if (amb.length > 0 || skp.length > 0) {
         const parts: string[] = [];
         if (amb.length > 0) parts.push(`${amb.length} ambiguous FQNs`);

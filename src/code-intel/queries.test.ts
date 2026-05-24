@@ -261,6 +261,23 @@ describe('code-intel queries', () => {
             expect(result.message).toMatch(/1 skipped/);
         });
 
+        // Fix round 2: distinguish ABSENT (legacy index, OK) from PRESENT-BUT-MALFORMED
+        // (corrupt manifest, must surface as degraded — not silently healthy).
+        it('reports degraded when warnings is present but malformed (wrong-type fields)', () => {
+            const indexWithMalformed: CodeIntelIndex = {
+                ...mockIndex,
+                manifest: {
+                    ...mockIndex.manifest,
+                    // Real-world corruption shape: user/external tool wrote a string
+                    // instead of an array, or a number, or omitted the field entirely.
+                    warnings: { ambiguousFqns: 'garbage' as unknown as string[], skippedFiles: 42 as unknown as Array<{ file: string; error: string }> },
+                } as typeof mockIndex.manifest,
+            };
+            const result = selfCheck(indexWithMalformed);
+            expect(result.status).toBe('degraded');
+            expect(result.message).toMatch(/malformed.*rebuild/i);
+        });
+
         it('reports ok when manifest.warnings is undefined (legacy index)', () => {
             // mockIndex has no warnings field — simulates a legacy index built before
             // warnings were tracked.
