@@ -2,15 +2,6 @@ import { CODE_INTEL_SCHEMA_VERSION, type CodeIntelBranch, type CodeIntelCall, ty
 import type { ArchGraph } from '../core/types.js';
 
 /**
- * Envelope wrapper kept for forward-compatible JIT health/warning signal.
- * The manifest currently exposes no health field; this is a no-op pass-through
- * that preserves call-sites while we decide whether to wire health at build.
- */
-function withHealthWarning<T>(_index: CodeIntelIndex, data: T): T {
-    return data;
-}
-
-/**
  * Health verdict for the code-intel sidecar.
  *
  * Semantics (important for callers, including LLMs):
@@ -175,13 +166,13 @@ export function getOrientation(index: CodeIntelIndex): {
         .slice(0, 3)
         .map((p) => p.rule) ?? [];
 
-    return withHealthWarning(index, {
+    return {
         projectSummary: `NestJS monorepo with ${apps.size} apps and ${libs.size} libs.`,
         freshness: index.manifest.builtAt,
         symbols: index.manifest.counts?.symbols ?? symbols.length,
         topPolicies,
         agentHint: "Use 'get_project_policies' for the full list of architectural conventions.",
-    });
+    };
 }
 
 export function resolveSymbol(index: CodeIntelIndex, query: string): {
@@ -193,7 +184,7 @@ export function resolveSymbol(index: CodeIntelIndex, query: string): {
         .sort((a, b) => symbolRank(a) - symbolRank(b) || a.fqn.length - query.length)
         .slice(0, 10);
 
-    return withHealthWarning(index, { query, matches });
+    return { query, matches };
 }
 
 export function getFileOutline(index: CodeIntelIndex, args: { file: string }): {
@@ -211,7 +202,7 @@ export function getFileOutline(index: CodeIntelIndex, args: { file: string }): {
             endLine: s.endLine,
         }));
 
-    return withHealthWarning(index, { file: args.file, symbols });
+    return { file: args.file, symbols };
 }
 
 export function getTypeDefinition(index: CodeIntelIndex, args: { symbol: string }): {
@@ -221,7 +212,7 @@ export function getTypeDefinition(index: CodeIntelIndex, args: { symbol: string 
 } {
     const resolved = resolveSymbol(index, args.symbol).matches;
     const symbol = resolved.find((s) => s.kind === 'class' || s.kind === 'dto' || s.kind === 'type' || s.kind === 'db-entity') ?? resolved[0];
-    if (!symbol) return withHealthWarning(index, { found: false, members: [] });
+    if (!symbol) return { found: false, members: [] };
 
     const members = index.symbols
         .filter((s) => s.parentId === symbol.id)
@@ -234,7 +225,7 @@ export function getTypeDefinition(index: CodeIntelIndex, args: { symbol: string 
             decorators: s.decorators,
         }));
 
-    return withHealthWarning(index, { found: true, symbol, members });
+    return { found: true, symbol, members };
 }
 
 export function findReferences(index: CodeIntelIndex, args: { symbol: string; maxResults?: number }): {
@@ -243,7 +234,7 @@ export function findReferences(index: CodeIntelIndex, args: { symbol: string; ma
     references: Array<{ kind: 'call' | 'impact' | 'flow'; file: string; line: number; context: string }>;
 } {
     const resolved = resolveSymbol(index, args.symbol).matches[0];
-    if (!resolved) return withHealthWarning(index, { query: args.symbol, references: [] });
+    if (!resolved) return { query: args.symbol, references: [] };
 
     const references: Array<{ kind: 'call' | 'impact' | 'flow'; file: string; line: number; context: string }> = [];
 
@@ -262,11 +253,11 @@ export function findReferences(index: CodeIntelIndex, args: { symbol: string; ma
         references.push({ kind: 'flow', file: f.file, line: f.line, context: `Flow via ${f.via}` });
     });
 
-    return withHealthWarning(index, {
+    return {
         query: args.symbol,
         symbol: resolved,
         references: references.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line).slice(0, args.maxResults ?? 50),
-    });
+    };
 }
 
 export function explainDataFlow(index: CodeIntelIndex, args: {
@@ -280,14 +271,14 @@ export function explainDataFlow(index: CodeIntelIndex, args: {
     flows: CodeIntelFlow[];
 } {
     const resolved = resolveSymbol(index, args.target).matches.find((s) => s.kind === 'method' || s.kind === 'function');
-    if (!resolved) return withHealthWarning(index, { found: false, target: args.target, param: args.param, flows: [] });
+    if (!resolved) return { found: false, target: args.target, param: args.param, flows: [] };
 
     const flows = index.flows
         .filter((f) => f.targetId === resolved.id && f.param === args.param)
         .sort((a, b) => (sinkRank(a.sinkKind) - sinkRank(b.sinkKind)) || a.line - b.line)
         .slice(0, args.maxResults ?? 10);
 
-    return withHealthWarning(index, { found: flows.length > 0, target: resolved.fqn, param: args.param, flows });
+    return { found: flows.length > 0, target: resolved.fqn, param: args.param, flows };
 }
 
 export function explainBranch(index: CodeIntelIndex, args: { file: string; line: number }): {
@@ -299,7 +290,7 @@ export function explainBranch(index: CodeIntelIndex, args: { file: string; line:
     const branches = index.branches
         .filter((b) => matchesFile(b.file, args.file) && Math.abs(b.line - args.line) <= 2)
         .sort((a, b) => Math.abs(a.line - args.line) - Math.abs(b.line - args.line));
-    return withHealthWarning(index, { found: branches.length > 0, branches });
+    return { found: branches.length > 0, branches };
 }
 
 export function traceScenario(index: CodeIntelIndex, args: { entry: string; maxDepth?: number }): {
@@ -324,14 +315,14 @@ export function traceScenario(index: CodeIntelIndex, args: { entry: string; maxD
     const start = callableMatch ?? decoratorMatch;
     if (!start) {
         const reason = resolved.length === 0 ? ('entry-not-found' as const) : ('entry-not-callable' as const);
-        return withHealthWarning(index, { found: false, reason, entry: args.entry, calls: [], exceptions: [] });
+        return { found: false, reason, entry: args.entry, calls: [], exceptions: [] };
     }
     const maxDepth = args.maxDepth ?? 5;
     const calls: CodeIntelCall[] = [];
     const exceptions: Array<{ condition: string; file: string; line: number; depth: number }> = [];
     const seen = new Set<string>();
     walkScenario(index, start.id, maxDepth, 0, calls, exceptions, seen, 40);
-    return withHealthWarning(index, { found: true, entry: args.entry, start, calls, exceptions });
+    return { found: true, entry: args.entry, start, calls, exceptions };
 }
 
 export function traceExceptions(index: CodeIntelIndex, args: { entry: string }): {
@@ -340,7 +331,7 @@ export function traceExceptions(index: CodeIntelIndex, args: { entry: string }):
     throws: Array<{ type: string; file: string; line: number; path: string[] }>;
 } {
     const scenario = traceScenario(index, { entry: args.entry, maxDepth: 10 });
-    if (!scenario.found) return withHealthWarning(index, { found: false, entry: args.entry, throws: [] });
+    if (!scenario.found) return { found: false, entry: args.entry, throws: [] };
 
     const throws = scenario.exceptions.map((ex) => ({
         type: ex.condition.replace(/^throw\s+/, ''),
@@ -349,7 +340,7 @@ export function traceExceptions(index: CodeIntelIndex, args: { entry: string }):
         path: [args.entry, `...depth:${ex.depth}`, ex.condition],
     }));
 
-    return withHealthWarning(index, { found: true, entry: args.entry, throws });
+    return { found: true, entry: args.entry, throws };
 }
 
 export function traceMessageFlow(index: CodeIntelIndex, graph: ArchGraph, pattern: string): {
@@ -386,7 +377,7 @@ export function traceMessageFlow(index: CodeIntelIndex, graph: ArchGraph, patter
         }
     }
 
-    return withHealthWarning(index, { pattern, publishers, subscribers });
+    return { pattern, publishers, subscribers };
 }
 
 export function impactContract(index: CodeIntelIndex, args: {
@@ -405,13 +396,13 @@ export function impactContract(index: CodeIntelIndex, args: {
     const symbol = resolved.find((match) => match.kind === 'dto' || match.kind === 'db-entity' || match.kind === 'type') ??
         resolved[0];
     if (!symbol) {
-        return withHealthWarning(index, {
+        return {
             found: false,
             reason: 'symbol-not-found' as const,
             symbol: args.symbol,
             ...(args.field ? { field: args.field } : {}),
             impacts: [],
-        });
+        };
     }
     const impacts = index.impacts
         .filter((impact) => impact.symbolId === symbol.id && (!args.field || impact.field === args.field || impact.detail.includes(args.field)))
@@ -421,20 +412,20 @@ export function impactContract(index: CodeIntelIndex, args: {
     // Always include `subject` so the caller can see what we resolved, even
     // when impacts is empty. `reason` disambiguates "no field with that
     // name on the DTO" from "this DTO has no impacts at all".
-    return withHealthWarning(index, {
+    return {
         found,
         ...(found ? {} : args.field ? { reason: 'no-impacts-for-field' as const } : { reason: 'no-impacts' as const }),
         symbol: symbol.fqn,
         subject: symbol,
         ...(args.field ? { field: args.field } : {}),
         impacts,
-    });
+    };
 }
 
 export function getProjectPolicies(index: CodeIntelIndex): {
     policies: CodeIntelIndex['policies'];
 } {
-    return withHealthWarning(index, { policies: index.policies ?? [] });
+    return { policies: index.policies ?? [] };
 }
 
 export function getBlueprint(index: CodeIntelIndex, args: { kind: string; maxResults?: number }): {
@@ -461,7 +452,7 @@ export function getBlueprint(index: CodeIntelIndex, args: { kind: string; maxRes
         compositeGuide += ` Reference highest-quality implementation: ${examples[0]!.file}:${examples[0]!.line}.`;
     }
 
-    return withHealthWarning(index, { kind, compositeGuide, patterns, topExamples: examples });
+    return { kind, compositeGuide, patterns, topExamples: examples };
 }
 
 export function suggestPlacement(index: CodeIntelIndex, args: { name: string; kind: string }): {
@@ -478,7 +469,7 @@ export function suggestPlacement(index: CodeIntelIndex, args: { name: string; ki
     if (suggestions.length === 0) {
         suggestions.push({ path: 'src/', reason: 'No specific pattern found, using root src/.' });
     }
-    return withHealthWarning(index, { name: args.name, kind, suggestions });
+    return { name: args.name, kind, suggestions };
 }
 
 export function validateProposal(index: CodeIntelIndex, args: {
@@ -505,7 +496,7 @@ export function validateProposal(index: CodeIntelIndex, args: {
         }
     }
 
-    return withHealthWarning(index, { valid: violations.length === 0, violations });
+    return { valid: violations.length === 0, violations };
 }
 
 function walkScenario(
