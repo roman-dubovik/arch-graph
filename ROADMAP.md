@@ -1,6 +1,6 @@
 # arch-graph roadmap
 
-_Last updated: 2026-05-22_
+_Last updated: 2026-05-24_
 
 No ETAs. Order within a section is rough priority, not a commitment.
 
@@ -9,6 +9,14 @@ No ETAs. Order within a section is rough priority, not a commitment.
 A deterministic TypeScript architecture-graph builder for NestJS monorepos with an optional local multilingual semantic sidecar. Pipeline: ts-morph extractors → `graph.json` + (optional) `embeddings.jsonl` + `manifest.json`. **Zero LLM tokens at build and query.**
 
 ## Shipped
+
+### Code-intel hardening (2026-05-24)
+- **`code-intel-stabilization-v1`** — Honest `self_check` verdict: degrades only on real silent-wrong-answer risks (skipped files, class/method or `type` collisions where downstream tools would misresolve). Normal short-name omonymy surfaces under `info.nameCollisions`, status stays `ok`.
+- **Composite file-qualified symbol IDs** — `symbol:<path>#<name>:<line>:<col>`; ambiguous short FQNs return all matches, path-suffix queries pin a specific file.
+- **Atomic CLI writes + torn-write tolerant MCP loader** — every artifact write is tmp-+-rename; MCP server falls back to last-good cache on a corrupt read.
+- **Cursor marker migration** — `.cursorrules` upgrades from shell-style (`# >>> arch-graph >>>`) to HTML comments (`<!-- arch-graph:cursor -->`) automatically on re-install; no duplicate blocks.
+- **Markdown-aware uninstall** — strips the arch-graph block but preserves user content; never wipes a `.cursorrules` that still has user headings.
+- **Per-file extractor isolation** — one unparseable file no longer aborts the build; failures surface in `manifest.warnings.skippedFiles`.
 
 ### Foundation (2026-05-16)
 - **Cycle detection** — Johnson's algorithm across subgraphs.

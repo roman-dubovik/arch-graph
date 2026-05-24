@@ -432,13 +432,14 @@
               <div class="bubble-content">Session start hook. Calling <code>get_orientation()</code>...</div>
               <div class="tool-output">
 {
-  "projectSummary": "NestJS Monorepo with 5 apps and 12 libs.",
-  "health": { "freshness": "Updated 2m ago", "symbols": 27588 },
+  "projectSummary": "NestJS monorepo with 5 apps and 12 libs.",
+  "freshness": "2026-05-22T14:30:00.000Z",
+  "symbols": 27588,
   "topPolicies": [
-    "- DTO naming: *Dto (95% confidence)",
-    "- Entity location: libs/shared/src/db/entities/*.ts"
+    "DTO location: libs/shared/src/dto/*.ts",
+    "Entity location: libs/shared/src/db/entities/*.ts"
   ],
-  "agentHint": "Use 'get_project_policies' for deep rules."
+  "agentHint": "Use 'get_project_policies' for the full list of architectural conventions."
 }
               </div>
             </div>
@@ -1150,8 +1151,12 @@ arch-graph build --strict            # CI gate: exit 3 if recall drops below flo
     <!-- ──────────────────────────────────── RECENT UPDATES ────────────── -->
     <section class="section section-limits" id="recent" aria-labelledby="recent-title">
       <div class="container">
-        <h2 id="recent-title" class="section-title">12 features shipped.</h2>
+        <h2 id="recent-title" class="section-title">13 features shipped.</h2>
         <ul class="limits-list">
+          <li class="reveal">
+            <h3><code>code-intel-stabilization-v1</code></h3>
+            <p>Honest health verdict: <code>self_check</code> degrades only on real silent-wrong-answer risks (skipped files, class/method or <code>type</code> name collisions). Composite file-qualified symbol IDs disambiguate when short names repeat. Atomic CLI writes, torn-write tolerant MCP loader. Cursor markers auto-migrate from legacy on re-install; uninstall is markdown-aware and preserves user content.</p>
+          </li>
           <li class="reveal">
             <h3><code>ai-runtime-layer-v1</code></h3>
             <p>Direct agent integration (Claude, Cursor, Gemini). Includes Orientation hooks, Style Guardians, and Guardrails to ensure AI writes architecturally sound code.</p>
