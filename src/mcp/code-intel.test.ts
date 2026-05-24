@@ -4,6 +4,25 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
+import type { ArchGraph } from '../core/types.js';
+import {
+    explainBranch,
+    explainDataFlow,
+    findReferences,
+    getBlueprint,
+    getFileOutline,
+    getOrientation,
+    getProjectPolicies,
+    getTypeDefinition,
+    impactContract,
+    resolveSymbol,
+    selfCheck,
+    suggestPlacement,
+    traceExceptions,
+    traceMessageFlow,
+    traceScenario,
+    validateProposal,
+} from '../code-intel/queries.js';
 import { CODE_INTEL_SCHEMA_VERSION } from '../code-intel/types.js';
 import { writeCodeIntelIndex } from '../code-intel/io.js';
 import type { CodeIntelIndex, CodeIntelSymbol } from '../code-intel/types.js';
@@ -132,5 +151,71 @@ describe('makeCodeIntelLoader — reload + torn-write tolerance (P1.3)', () => {
         );
         await writeFile(join(sidecar, 'symbols.jsonl'), '{"id":"a","ki', 'utf8');
         await expect(readCodeIntelIndex(sidecar)).rejects.toThrow(/symbols\.jsonl.*line 1/);
+    });
+});
+
+// ============================================================================
+// Task D — MCP handler smoke tests (AC D1-D3)
+// Smoke-invoke each of the 16 code-intel queries.ts functions with a minimal
+// in-memory fixture and assert: no throw + result is JSON-stringifiable.
+// ============================================================================
+
+function makeMinimalIndex(): CodeIntelIndex {
+    return {
+        manifest: {
+            schemaVersion: CODE_INTEL_SCHEMA_VERSION,
+            builtAt: new Date().toISOString(),
+            root: '/smoke',
+            counts: { symbols: 1, calls: 0, flows: 0, branches: 0, impacts: 0 },
+        },
+        symbols: [
+            {
+                id: 'symbol:smoke/app.ts#SmokeClass:1:1',
+                kind: 'class',
+                name: 'SmokeClass',
+                fqn: 'SmokeClass',
+                file: 'smoke/app.ts',
+                line: 1,
+                column: 1,
+            },
+        ],
+        calls: [],
+        flows: [],
+        branches: [],
+        impacts: [],
+        policies: [],
+    };
+}
+
+const fakeGraph: ArchGraph = {
+    version: '1',
+    buildAt: new Date().toISOString(),
+    root: '/smoke',
+    nodes: [],
+    edges: [],
+};
+
+describe('MCP handler smoke', () => {
+    const minIndex = makeMinimalIndex();
+
+    it.each([
+        ['resolveSymbol', () => resolveSymbol(minIndex, 'SmokeClass')],
+        ['getFileOutline', () => getFileOutline(minIndex, { file: 'smoke/app.ts' })],
+        ['getTypeDefinition', () => getTypeDefinition(minIndex, { symbol: 'SmokeClass' })],
+        ['findReferences', () => findReferences(minIndex, { symbol: 'SmokeClass' })],
+        ['getBlueprint', () => getBlueprint(minIndex, { kind: 'class' })],
+        ['getProjectPolicies', () => getProjectPolicies(minIndex)],
+        ['getOrientation', () => getOrientation(minIndex)],
+        ['selfCheck', () => selfCheck(minIndex)],
+        ['suggestPlacement', () => suggestPlacement(minIndex, { name: 'NewService', kind: 'service' })],
+        ['validateProposal', () => validateProposal(minIndex, { sourceFile: 'smoke/new.ts', sourceKind: 'service', proposedImports: [], proposedCalls: [] })],
+        ['explainDataFlow', () => explainDataFlow(minIndex, { target: 'SmokeClass', param: 'x' })],
+        ['explainBranch', () => explainBranch(minIndex, { file: 'smoke/app.ts', line: 1 })],
+        ['traceScenario', () => traceScenario(minIndex, { entry: 'SmokeClass' })],
+        ['traceExceptions', () => traceExceptions(minIndex, { entry: 'SmokeClass' })],
+        ['traceMessageFlow', () => traceMessageFlow(minIndex, fakeGraph, 'smoke-pattern')],
+        ['impactContract', () => impactContract(minIndex, { symbol: 'SmokeClass' })],
+    ] as const)('smoke %s', (_name, run) => {
+        expect(() => JSON.stringify(run())).not.toThrow();
     });
 });
