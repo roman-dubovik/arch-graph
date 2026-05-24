@@ -36,7 +36,7 @@ interface WizardAnswers {
     repoRoot: string;
     appsGlob: string;
     libsGlob: string;
-    domains: DomainKey[];
+    domains: WizardDomainKey[];
     natsWrapper: boolean;
     natsWrapperClass: string;
     natsWrapperPublishMethods: string[];
@@ -56,10 +56,10 @@ interface WizardAnswers {
     snippetTarget: SnippetTarget;
 }
 
-type DomainKey = 'nats' | 'rmq' | 'typeorm' | 'bullmq' | 'di' | 'http' | 'ts-import';
+type WizardDomainKey = 'nats' | 'rmq' | 'typeorm' | 'bullmq' | 'di' | 'http' | 'ts-import';
 
 interface DomainOption {
-    key: DomainKey;
+    key: WizardDomainKey;
     label: string;
     description: string;
 }
@@ -76,7 +76,7 @@ const DOMAIN_OPTIONS: DomainOption[] = [
     { key: 'ts-import', label: 'TS imports', description: 'file→file / service→lib' },
 ];
 
-const ALL_DOMAINS: DomainKey[] = DOMAIN_OPTIONS.map((d) => d.key);
+const ALL_DOMAINS: WizardDomainKey[] = DOMAIN_OPTIONS.map((d) => d.key);
 
 // ─── string escaping ──────────────────────────────────────────────────────────
 
@@ -224,14 +224,14 @@ ${domainsBlock}${natsBlock}${rmqBlock}${importsBlock}${docsBlockStr}${strictComm
 
 // ─── readline helpers ──────────────────────────────────────────────────────────
 
-type Rl = Awaited<ReturnType<typeof createInterface>>;
+type WizardRl = Awaited<ReturnType<typeof createInterface>>;
 
-async function askWithDefault(rl: Rl, prompt: string, defaultValue: string): Promise<string> {
+async function askWithDefault(rl: WizardRl, prompt: string, defaultValue: string): Promise<string> {
     const answer = await rl.question(`${prompt} [${defaultValue}]: `);
     return answer.trim() || defaultValue;
 }
 
-async function askYesNo(rl: Rl, prompt: string, defaultYes = true): Promise<boolean> {
+async function askYesNo(rl: WizardRl, prompt: string, defaultYes = true): Promise<boolean> {
     const hint = defaultYes ? 'Y/n' : 'y/N';
     const answer = await rl.question(`${prompt} [${hint}]: `);
     const trimmed = answer.trim().toLowerCase();
@@ -250,7 +250,7 @@ async function askYesNo(rl: Rl, prompt: string, defaultYes = true): Promise<bool
  * public CLI surface.
  */
 export async function askBuildSemantic(
-    rl: Rl,
+    rl: WizardRl,
     write: (s: string) => void,
 ): Promise<boolean> {
     write(
@@ -311,7 +311,7 @@ export const SEMANTIC_SKIP_HINT =
     '    arch-graph semantic build\n';
 
 // Multi-select: show numbered list, ask which to disable (blank = all enabled).
-async function askMultiSelect(rl: Rl, options: DomainOption[]): Promise<DomainKey[]> {
+async function askMultiSelect(rl: WizardRl, options: DomainOption[]): Promise<WizardDomainKey[]> {
     output.write('\n? Which domains to extract?\n');
     options.forEach((opt, i) => {
         output.write(`  ${i + 1}. [x] ${opt.label.padEnd(12)} ${opt.description}\n`);
@@ -339,7 +339,7 @@ async function askMultiSelect(rl: Rl, options: DomainOption[]): Promise<DomainKe
 
 // ─── hook mode selector ───────────────────────────────────────────────────────
 
-async function askHookMode(rl: Rl): Promise<'pre-commit' | 'post-commit' | 'none'> {
+async function askHookMode(rl: WizardRl): Promise<'pre-commit' | 'post-commit' | 'none'> {
     output.write('\n? Install git hook?\n');
     output.write('  1. pre-commit   (validate graph build; artifacts stay local) — recommended\n');
     output.write('  2. post-commit  (graph rebuilt after commit, not in commit)\n');
@@ -356,7 +356,7 @@ async function askHookMode(rl: Rl): Promise<'pre-commit' | 'post-commit' | 'none
 
 type RerunChoice = 'overwrite' | 'cancel';
 
-async function askRerun(rl: Rl, target: string): Promise<RerunChoice> {
+async function askRerun(rl: WizardRl, target: string): Promise<RerunChoice> {
     output.write(`\n⚠  Config already exists: ${target}\n`);
     output.write('  1. Overwrite — run wizard from scratch and replace it\n');
     output.write('  2. Cancel (default)\n');
@@ -369,7 +369,7 @@ async function askRerun(rl: Rl, target: string): Promise<RerunChoice> {
 
 // ─── NATS wrapper prompts ─────────────────────────────────────────────────────
 
-async function askNatsWrapper(rl: Rl): Promise<{
+async function askNatsWrapper(rl: WizardRl): Promise<{
     enabled: boolean;
     className: string;
     publishMethods: string[];
@@ -439,7 +439,7 @@ async function askDocs(
  *
  * Exported for unit testing (pass a fake rl with a stubbed `.question()`).
  */
-export async function askSemanticStrategy(rl: Rl): Promise<SemanticStrategy> {
+export async function askSemanticStrategy(rl: WizardRl): Promise<SemanticStrategy> {
     output.write('\n? Semantic search strategy\n');
     output.write('  code_search   — searches the code graph (functions, classes, edges).\n');
     output.write('  docs_search   — searches the embedded docs/markdown chunks.\n');
@@ -467,7 +467,7 @@ export async function askSemanticStrategy(rl: Rl): Promise<SemanticStrategy> {
  *
  * Exported for unit testing.
  */
-export async function askSnippetTarget(rl: Rl): Promise<SnippetTarget> {
+export async function askSnippetTarget(rl: WizardRl): Promise<SnippetTarget> {
     output.write('\n⚠  CLAUDE.md already exists in this directory.\n');
     output.write('  The arch-graph semantic strategy snippet can be:\n');
     output.write('  1. Appended to CLAUDE.md\n');
@@ -480,7 +480,7 @@ export async function askSnippetTarget(rl: Rl): Promise<SnippetTarget> {
 }
 
 /** Ask which AI environment(s) to scaffold for. */
-export async function askAiEnvironments(rl: Rl): Promise<AiEnvironment[]> {
+export async function askAiEnvironments(rl: WizardRl): Promise<AiEnvironment[]> {
     output.write('\n? Which AI agent(s) do you use for this project?\n');
     output.write('  1. Claude Code (SessionStart hook & CLAUDE.md)\n');
     output.write('  2. Cursor / Windsurf (.cursorrules)\n');
@@ -541,7 +541,7 @@ export async function atomicWrite(path: string, content: string): Promise<void> 
     }
 }
 
-async function shouldProceed(nonInteractive: boolean, rl: Rl | undefined, prompt: string): Promise<boolean> {
+async function shouldProceed(nonInteractive: boolean, rl: WizardRl | undefined, prompt: string): Promise<boolean> {
     if (nonInteractive) return true;
     if (!rl) return false;  // safety: nothing to prompt with
     return askYesNo(rl, prompt, true);
@@ -573,7 +573,7 @@ export type GitignoreAction = 'added' | 'created' | 'already-present' | 'decline
  */
 export async function ensureArchGraphOutGitignored(opts: {
     repoRoot: string;
-    rl?: Rl;
+    rl?: WizardRl;
     nonInteractive?: boolean;
     write?: (s: string) => void;
 }): Promise<{ action: GitignoreAction }> {

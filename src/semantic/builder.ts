@@ -23,6 +23,7 @@ import type { ArchGraph, GraphNode } from '../core/types.js';
 import { fileSizeBytes, readEmbeddingsJsonl, writeEmbeddingsJsonl, writeManifest } from './io.js';
 import { extractSnippet } from './snippet.js';
 import type { SemanticDiagnostics, SemanticManifest, SemanticModelAlias, SemanticRecord, SkipReason, SkippedNode } from './types.js';
+import type { EmbedFn } from './embedder.js';
 import { SEMANTIC_MODELS, SEMANTIC_SCHEMA_VERSION, SKIPPED_NODES_CAP, defaultModelAlias } from './types.js';
 import type { OpenApiInfo } from '../extractors/openapi/enrich-endpoints.js';
 
@@ -35,9 +36,6 @@ export { SKIPPED_NODES_CAP };
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-/** Injectable embedder function. Tests pass a fake; production passes the real one. */
-export type EmbedFn = (texts: string[]) => Promise<number[][]>;
 
 export interface BuildSemanticOpts {
     /** Assembled graph loaded from graph.json (already parsed). */
