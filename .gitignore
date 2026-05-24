@@ -43,3 +43,4 @@ bench/self-build/.*.json
 
 # Local-only code-intel bench configs (project paths, real product names)
 bench/code-intel/*.local.*
+.local-plans/
