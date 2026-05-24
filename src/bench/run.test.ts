@@ -105,7 +105,7 @@ async function mockStructuralPipeline(): Promise<void> {
 
     const buildModule = await import('../pipeline/build.js');
     vi.spyOn(buildModule, 'runBuild').mockResolvedValue({
-        graph: { version: 1, buildAt: '2026-01-01T00:00:00.000Z', root: testDir, nodes: [], edges: [] },
+        graph: { version: '1', buildAt: '2026-01-01T00:00:00.000Z', root: testDir, nodes: [], edges: [] },
         diagnostics: { unresolved: [] },
         validation: { errors: [], warnings: [] },
     } as unknown as Awaited<ReturnType<typeof buildModule.runBuild>>);
