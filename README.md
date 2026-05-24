@@ -446,16 +446,22 @@ Optional — for editors with an MCP client configured:
 arch-graph mcp   # starts the stdio MCP server backed by arch-graph-out/graph.json
 ```
 
-Exposes 20 tools — 12 structural + 3 semantic + 5 code-intel.
+Exposes **30+ MCP tools** across structural graph (10), semantic search (3), code intelligence (16), and natural-language fallback (2).
 
-**Structural (12):** `subject_publishers`, `subject_subscribers`, `queue_producers`, `queue_consumers`, `service_dependencies`, `service_dependents`, `module_imports`, `table_users`, `path`, `explain`, `query`, `stats`.
+**Structural (10):** `subject_publishers`, `subject_subscribers`, `queue_producers`, `queue_consumers`, `service_dependencies`, `service_dependents`, `module_imports`, `table_users`, `path`, `stats`.
 
 **Semantic (3, requires sidecar index):**
 - `code_search` — vector search over code nodes only (services, modules, tables, queues, endpoints, fe-components). Use for "find code that does X".
 - `docs_search` — vector search over `doc-section` nodes only (Markdown sections). Use for "find documentation about Y".
 - `semantic_search` — mixed bucket (code + docs together). Useful as a fallback when you don't know which bucket the answer lives in, but expect lower precision on mixed corpora.
 
-**Code-intel (5, requires `arch-graph code-intel build`):** `resolve_symbol`, `explain_data_flow`, `explain_branch`, `trace_scenario`, `impact_contract`.
+**Code-intel (16, requires `arch-graph code-intel build`)** — stable v1 surface:
+`resolve_symbol`, `explain_data_flow`, `explain_branch`, `trace_scenario`, `trace_exceptions`, `trace_message_flow`, `impact_contract`, `get_file_outline`, `get_type_definition`, `find_references`, `get_orientation`, `self_check`.
+
+**Code-intel — EXPERIMENTAL** (shape/output may change before v1 freeze):
+`get_blueprint`, `get_project_policies`, `suggest_placement`, `validate_proposal`.
+
+**Natural-language fallback (2):** `explain`, `query` — free-form architecture questions routed against the graph.
 
 All three semantic MCP tools support `topK`, `minScore`, `includeVectors`, `kindQuotas`, and `kindBoosts`. `code_search` / `docs_search` intentionally hide `kinds` and `excludeKinds` because their bucket filters are wired by the tool itself.
 

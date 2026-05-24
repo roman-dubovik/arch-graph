@@ -81,6 +81,8 @@ describe('inventoryProject', () => {
                 config: null,
                 outDir: null,
                 claudeMdWithBlock: null,
+                cursorRulesWithBlock: null,
+                claudeHookWithBlock: null,
                 hookWithBlock: null,
             });
         } finally {

@@ -142,7 +142,11 @@ arch-graph code-intel policies
 
 ### Fallback — MCP server (if installed)
 
-If `arch-graph mcp` is configured, use its tools: `resolve_symbol`, `get_file_outline`, `get_blueprint`, `get_project_policies`, `impact_contract`, `explain_data_flow`, `explain_branch`, `trace_scenario`, `trace_exceptions`, etc.
+If `arch-graph mcp` is configured, use its tools. The server exposes **30+ tools** total — pick by category:
+
+- **Code-intel stable v1:** `resolve_symbol`, `get_file_outline`, `get_type_definition`, `find_references`, `explain_data_flow`, `explain_branch`, `trace_scenario`, `trace_exceptions`, `trace_message_flow`, `impact_contract`, `get_orientation`, `self_check`.
+- **Code-intel EXPERIMENTAL** (output shape may change): `get_blueprint`, `get_project_policies`, `suggest_placement`, `validate_proposal`.
+- **Structural / semantic / natural-language fallback:** see the README MCP server section.
 
 **Surgical Context Strategy:**
 1. Call `get_file_outline` to find the `line` and `endLine` of a target method.

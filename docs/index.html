@@ -592,10 +592,10 @@
             <p class="bench-card-foot"><code>Xenova/multilingual-e5-base</code> via <code>transformers.js</code> with passage/query prefixes. Ranking fuses dense cosine with BM25 lexical hits via Reciprocal Rank Fusion, so exact symbols and table names stay visible. Schema v2 with per-node <code>contentHash</code> enables incremental re-embed. Persisted as <code>arch-graph-out/semantic/embeddings.jsonl</code> + <code>manifest.json</code>.</p>
           </div>
           <div class="bench-card">
-            <p class="bench-card-label">Three MCP tools</p>
+            <p class="bench-card-label">Three semantic MCP tools</p>
             <p class="bench-card-row"><span class="bench-card-tool">code_search</span><span class="bench-card-num mono" style="font-size:0.85em;">code only</span></p>
             <p class="bench-card-row dim"><span class="bench-card-tool">docs_search</span><span class="bench-card-num mono" style="font-size:0.85em;">docs only</span></p>
-            <p class="bench-card-foot"><code>semantic_search</code> covers the union. Split exists because mixing buckets drops A_find recall: 80% → 30%. All three support <code>minScore</code>, <code>kindQuotas</code>, and <code>kindBoosts</code>; bucket filters stay tool-owned. Baseline hit-rate: 47% → 67% → <strong>75% with e5-base</strong>.</p>
+            <p class="bench-card-foot"><code>semantic_search</code> covers the union. Split exists because mixing buckets drops A_find recall: 80% → 30%. All three support <code>minScore</code>, <code>kindQuotas</code>, and <code>kindBoosts</code>; bucket filters stay tool-owned. Baseline hit-rate: 47% → 67% → <strong>75% with e5-base</strong>. Semantic is one of four MCP surfaces — see <strong>30+ tools</strong> in the CLI/MCP section below for the full set.</p>
           </div>
           <div class="bench-card">
             <p class="bench-card-label">vs graphify on the same suite</p>
@@ -1228,7 +1228,7 @@ arch-graph stats</code></pre>
           <article class="cli-card reveal">
             <p class="three-ways-sub">For MCP-aware clients</p>
             <h3 class="mono">MCP server</h3>
-            <p>Stdio MCP server exposing 30+ specialized tools — structural (<code>subject_publishers</code>, <code>queue_consumers</code>, <code>table_users</code>, <code>path</code>, …), 3 semantic (<code>code_search</code>, <code>docs_search</code>, <code>semantic_search</code>), and 15 code-intel tools for symbols, members, references, exception traces, and impact. Wire it into any MCP host.</p>
+            <p>Stdio MCP server exposing 30+ specialized tools — 10 structural (<code>subject_publishers</code>, <code>queue_consumers</code>, <code>table_users</code>, <code>path</code>, …), 3 semantic (<code>code_search</code>, <code>docs_search</code>, <code>semantic_search</code>), 16 code-intel tools for symbols, members, references, exception traces, and impact (4 marked <em>EXPERIMENTAL</em>: <code>get_blueprint</code>, <code>get_project_policies</code>, <code>suggest_placement</code>, <code>validate_proposal</code>), plus 2 natural-language fallback tools (<code>explain</code>, <code>query</code>). Wire it into any MCP host.</p>
             <div class="code-block">
               <button class="copy-btn" type="button" aria-label="Copy MCP config">Copy</button>
               <pre><code class="lang-json">// ~/.claude/.mcp.json

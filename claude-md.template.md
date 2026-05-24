@@ -31,8 +31,10 @@ arch-graph code-intel trace-scenario <E> # Full execution trace from endpoint
 arch-graph code-intel trace-message-flow <P> # Cross-service NATS/RMQ trace
 arch-graph code-intel impact-contract <D> # Impact of changing a DTO/Entity
 arch-graph code-intel explain-flow --target <T> --param <P> # Trace parameter mutation
-arch-graph code-intel policies           # Get project style rules (MANDATORY before coding)
-arch-graph code-intel blueprint <K>      # Get best code examples for Service/DTO/etc.
+arch-graph code-intel policies           # EXPERIMENTAL — get project style rules
+arch-graph code-intel blueprint <K>      # EXPERIMENTAL — get best code examples for Service/DTO/etc.
+arch-graph code-intel suggest-placement <NAME> --kind <K>  # EXPERIMENTAL — propose target file/module
+arch-graph code-intel validate-proposal <FILE>             # EXPERIMENTAL — lint a proposed change
 # --- Legacy: Structural Graph Queries ---
 arch-graph who-publishes <subject>     # NATS publishers
 arch-graph who-subscribes <subject>    # NATS subscribers
@@ -47,7 +49,7 @@ arch-graph stats                       # node + edge counts per kind
 ```
 
 **Surgical Context Strategy:**
-1. Use `code-intel policies` to understand local coding norms.
+1. (Optional, EXPERIMENTAL) Use `code-intel policies` to understand local coding norms.
 2. Use `code-intel outline` to find the `line` and `endLine` of a target method.
 3. Use `cat` (or your reading tool) to read ONLY that specific line range.
 This saves 90% of context tokens and avoids hallucinating on unrelated code.
@@ -55,7 +57,7 @@ This saves 90% of context tokens and avoids hallucinating on unrelated code.
 **Fuzzy fallback**: ...
 **Fuzzy fallback**: If a question is imprecise ("how does X work?", "find code about Y") and no structured subcommand fits, use `arch-graph semantic search "<query>"` (or MCP tool `semantic_search`). Requires running `arch-graph semantic build` first to build the semantic index.
 
-Options: `--out <dir>` (default `./arch-graph-out`), `--json` (default), `--table`.
+Options (structural query subcommands only): `--out <dir>` (default `./arch-graph-out`), `--json` (default), `--table`. Code-intel subcommands always emit JSON.
 Exit codes: `0` = found, `4` = not found.
 
 Sample — find publishers of `user.created`:
@@ -84,7 +86,15 @@ arch-graph who-publishes user.created --json
 
 ### MCP fallback (if installed)
 
-If `arch-graph mcp` is available on PATH and the editor has an MCP client configured, the MCP tools can also answer these queries: `subject_publishers`, `subject_subscribers`, `queue_producers`, `queue_consumers`, `service_dependencies`, `service_dependents`, `module_imports`, `table_users`, `path`, `explain`, `query`, `stats`. For unresolved / dynamic call-sites the extractor couldn't pin down, read `arch-graph-out/diagnostics.json` directly — there is no MCP tool for it.
+If `arch-graph mcp` is available on PATH and the editor has an MCP client configured, the MCP server exposes **30+ tools** across four groups:
+
+- **Structural (10):** `subject_publishers`, `subject_subscribers`, `queue_producers`, `queue_consumers`, `service_dependencies`, `service_dependents`, `module_imports`, `table_users`, `path`, `stats`.
+- **Semantic (3, requires `arch-graph semantic build`):** `code_search`, `docs_search`, `semantic_search`.
+- **Code-intel — stable v1 (requires `arch-graph code-intel build`):** `resolve_symbol`, `explain_data_flow`, `explain_branch`, `trace_scenario`, `trace_exceptions`, `trace_message_flow`, `impact_contract`, `get_file_outline`, `get_type_definition`, `find_references`, `get_orientation`, `self_check`.
+- **Code-intel — EXPERIMENTAL** (shape may change): `get_blueprint`, `get_project_policies`, `suggest_placement`, `validate_proposal`.
+- **Natural-language fallback (2):** `explain`, `query`.
+
+For unresolved / dynamic call-sites the extractor couldn't pin down, read `arch-graph-out/diagnostics.json` directly — there is no MCP tool for it.
 
 ### jq fallback (if CLI unavailable)
 
