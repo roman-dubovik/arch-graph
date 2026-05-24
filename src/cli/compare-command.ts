@@ -288,12 +288,17 @@ function phraseFor(kind: QuestionCategory, bare: string): string {
 function labelsForQuestion(kind: QuestionCategory, node: GraphNode, graph: ArchGraph): string[] {
     const bare = stripPrefix(node.id);
     const dedupe = (xs: string[]) => Array.from(new Set(xs.filter((x) => x.length > 0)));
+    // EdgeAnswerList / ModuleImportResult are { found: false } | { sites/imports: ... }
+    // discriminated unions; we narrow with `'sites' in r` rather than `if (r.found)`
+    // because the function signature is `found?: never` on the populated branch.
+    const sites = <T extends { found: false } | { sites: Array<{ owner: string }> }>(r: T): Array<{ owner: string }> =>
+        'sites' in r ? r.sites : [];
     switch (kind) {
-        case 'nats-publishers': return dedupe(findPublishers(graph, bare).sites.map(s => stripPrefix(s.owner)));
-        case 'nats-subscribers': return dedupe(findSubscribers(graph, bare).sites.map(s => stripPrefix(s.owner)));
-        case 'queue-producers': return dedupe(findQueueProducers(graph, bare).sites.map(s => stripPrefix(s.owner)));
-        case 'queue-consumers': return dedupe(findQueueConsumers(graph, bare).sites.map(s => stripPrefix(s.owner)));
-        case 'table-users': return dedupe(tableUsers(graph, bare).sites.map(s => stripPrefix(s.owner)));
+        case 'nats-publishers': return dedupe(sites(findPublishers(graph, bare)).map(s => stripPrefix(s.owner)));
+        case 'nats-subscribers': return dedupe(sites(findSubscribers(graph, bare)).map(s => stripPrefix(s.owner)));
+        case 'queue-producers': return dedupe(sites(findQueueProducers(graph, bare)).map(s => stripPrefix(s.owner)));
+        case 'queue-consumers': return dedupe(sites(findQueueConsumers(graph, bare)).map(s => stripPrefix(s.owner)));
+        case 'table-users': return dedupe(sites(tableUsers(graph, bare)).map(s => stripPrefix(s.owner)));
         case 'deps-of': {
             const r = serviceDependencies(graph, bare);
             if (!r.found) return [];
@@ -301,7 +306,10 @@ function labelsForQuestion(kind: QuestionCategory, node: GraphNode, graph: ArchG
             for (const entries of Object.values(r.byKind)) for (const e of entries) labels.push(stripPrefix(e.counterpart));
             return dedupe(labels);
         }
-        case 'module-imports': return dedupe(moduleImports(graph, bare).imports);
+        case 'module-imports': {
+            const r = moduleImports(graph, bare);
+            return 'imports' in r ? dedupe(r.imports) : [];
+        }
     }
 }
 

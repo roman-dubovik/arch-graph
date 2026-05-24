@@ -203,7 +203,24 @@ async function emitDiagnostics(args: CodeIntelArgs): Promise<void> {
     }
     try {
         process.stdout.write(JSON.stringify(await readCodeIntelDiagnostics(dir), null, 2) + '\n');
-    } catch {
+    } catch (err) {
+        const code = (err as NodeJS.ErrnoException | undefined)?.code;
+        // ENOENT (no diagnostics.json yet) is the only error we silently
+        // recover from. JSON-parse failures, schemaVersion mismatch ("run:
+        // arch-graph code-intel build"), and permission errors must surface
+        // so the user knows the on-disk artifact is broken — otherwise we
+        // regenerate every invocation and the underlying corruption never
+        // gets fixed.
+        if (code && code !== 'ENOENT') {
+            process.stderr.write(
+                `warning: diagnostics.json unreadable (${(err as Error).message}); regenerating from index\n`,
+            );
+        } else if (!code) {
+            // Non-syscall error (JSON parse / schema mismatch) — surface to stderr.
+            process.stderr.write(
+                `warning: diagnostics.json is stale (${(err as Error).message}); regenerating from index\n`,
+            );
+        }
         const index = await readCodeIntelIndex(dir);
         process.stdout.write(JSON.stringify(await createCodeIntelDiagnostics(index, { sidecarDir: dir, topN: args.maxResults }), null, 2) + '\n');
     }

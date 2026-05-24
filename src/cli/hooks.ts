@@ -12,11 +12,21 @@ import { existsSync } from 'node:fs';
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
+import { atomicWrite } from './atomic-write.js';
 import { appendBlock, replaceMarkedSection, stripMarkedSection } from './marker-block.js';
 import { registerProject } from './project-registry.js';
 
+// Shell-comment markers for files that are sourced or executed as shell.
+// Used in git hooks and SessionStart.sh.
 export const MARK_START = '# >>> arch-graph >>>';
 export const MARK_END = '# <<< arch-graph <<<';
+
+// Markdown/HTML-comment markers for files where '#' would render as a heading
+// (.cursorrules is treated as markdown by Cursor; CLAUDE.md is markdown).
+// Keep them visually distinct from the shell markers above so a quick `grep`
+// over a repo can answer "did arch-graph touch this file as text or as shell?"
+export const CURSOR_MARK_START = '<!-- arch-graph:cursor -->';
+export const CURSOR_MARK_END = '<!-- /arch-graph:cursor -->';
 
 export function preCommitHookPath(repo: string): string {
     return resolve(repo, '.git', 'hooks', 'pre-commit');
@@ -146,37 +156,39 @@ export async function agentHookInstall(args: { repo: string; agent: 'claude' | '
 arch-graph code-intel summary --json
 ${MARK_END}
 `;
-        const next = existing.includes(MARK_START) 
+        const next = existing.includes(MARK_START)
             ? replaceMarkedSection(existing, MARK_START, MARK_END, body)
-            : existing.length === 0 
-                ? `#!/bin/sh\n${body}` 
+            : existing.length === 0
+                ? `#!/bin/sh\n${body}`
                 : appendBlock(existing, body);
 
-        await writeFile(startHookPath, next, { mode: 0o755, encoding: 'utf8' });
+        await atomicWrite(startHookPath, next, 0o755);
         process.stdout.write(`✓ scaffolded .claude/hooks/SessionStart.sh\n`);
     }
 
     if (args.agent === 'cursor' || args.agent === 'all') {
         const cursorRulesPath = resolve(repo, '.cursorrules');
-        
+
         let existing = '';
         if (existsSync(cursorRulesPath)) {
             existing = await readFile(cursorRulesPath, 'utf8');
         }
 
-        const body = `${MARK_START}
+        // Use HTML-comment markers so the marker lines do not render as
+        // visible content (or H1 headings) inside the rules file.
+        const body = `${CURSOR_MARK_START}
 ## Architecture Orientation
 Before starting work, always run:
 arch-graph code-intel summary
 
 Use surgical reads with exact line ranges from 'get_file_outline'.
-${MARK_END}
+${CURSOR_MARK_END}
 `;
-        const next = existing.includes(MARK_START) 
-            ? replaceMarkedSection(existing, MARK_START, MARK_END, body)
+        const next = existing.includes(CURSOR_MARK_START)
+            ? replaceMarkedSection(existing, CURSOR_MARK_START, CURSOR_MARK_END, body)
             : appendBlock(existing, body);
 
-        await writeFile(cursorRulesPath, next, 'utf8');
+        await atomicWrite(cursorRulesPath, next);
         process.stdout.write(`✓ updated .cursorrules\n`);
     }
 }
@@ -189,24 +201,41 @@ async function ensureGitRepo(repo: string): Promise<void> {
 
 /**
  * Remove the arch-graph marker block from `filePath` if present.
- * Deletes the file if it becomes meaningless (shebang + comments only).
+ *
+ * "Meaningful" classification: shell-style hook files (#!/bin/sh + #-comments)
+ * are deleted when only those remain. Markdown files (.cursorrules, .md) are
+ * left in place even if every remaining line starts with '#' — those are user
+ * headings, not noise.
  */
 async function removeMarkerFromFile(filePath: string): Promise<void> {
     if (!existsSync(filePath)) return;
     const body = await readFile(filePath, 'utf8');
-    if (!body.includes(MARK_START)) return;
 
-    const stripped = stripMarkedSection(body, MARK_START, MARK_END);
+    const hasShellMark = body.includes(MARK_START);
+    const hasCursorMark = body.includes(CURSOR_MARK_START);
+    if (!hasShellMark && !hasCursorMark) return;
+
+    let stripped = body;
+    if (hasShellMark) stripped = stripMarkedSection(stripped, MARK_START, MARK_END);
+    if (hasCursorMark) stripped = stripMarkedSection(stripped, CURSOR_MARK_START, CURSOR_MARK_END);
+
+    const isMarkdownLike = /\.cursorrules$|\.md$/i.test(filePath);
     const meaningful = stripped
         .split('\n')
         .map((l) => l.trim())
-        .filter((l) => l.length > 0 && !l.startsWith('#'))
+        .filter((l) => {
+            if (l.length === 0) return false;
+            // In shell hooks, '#'-prefixed lines are comments → noise. In
+            // markdown-like files they are headings → user content; keep.
+            if (!isMarkdownLike && l.startsWith('#')) return false;
+            return true;
+        })
         .join('');
-    if (meaningful.length === 0) {
+    if (meaningful.length === 0 && !isMarkdownLike) {
         const { unlink } = await import('node:fs/promises');
         await unlink(filePath);
     } else {
-        await writeFile(filePath, stripped, 'utf8');
+        await atomicWrite(filePath, stripped);
     }
 }
 
@@ -235,7 +264,7 @@ async function writeHookBlock(filePath: string, hookName: string, body: string):
         if (!next.startsWith('#!')) next = `#!/bin/sh\n${next}`;
     }
 
-    await writeFile(filePath, next, 'utf8');
+    await atomicWrite(filePath, next, 0o755);
     await chmod(filePath, 0o755);
 }
 
@@ -296,7 +325,7 @@ export async function hookUninstall(args: HookArgs): Promise<void> {
             await unlink(p);
             process.stdout.write(`✓ removed empty ${label} hook ${p}\n`);
         } else {
-            await writeFile(p, stripped, 'utf8');
+            await atomicWrite(p, stripped);
             process.stdout.write(`✓ removed arch-graph block from ${p}\n`);
         }
         removed++;

@@ -2,14 +2,50 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
-const outByProject = {
-  project-alpha: '<tmp>/project-alpha',
-  project-beta: '<tmp>/project-beta',
-  project-gamma: '<tmp>/project-gamma',
-};
+// Project sidecar output directories are supplied via env var
+// ARCH_QUALITY_OUT_BY_PROJECT as JSON, or as CLI args of the form
+// `--out=projectName:outDir`. Project names are never hard-coded so that
+// internal product names stay out of the repository.
+//
+// Examples:
+//   ARCH_QUALITY_OUT_BY_PROJECT='{"app-alpha":"/tmp/app-alpha"}' \
+//     node scripts/run-code-intel-quality-eval.js
+//   node scripts/run-code-intel-quality-eval.js \
+//     --out=app-alpha:/tmp/app-alpha --out=app-beta:/tmp/app-beta
+//
+// Override paths with:
+//   --questions=<path>       default: bench/code-intel/quality-questions-projects.json
+//   --output=<path>          default: bench/code-intel/quality-eval-current.md
 
-const questionsPath = 'bench/code-intel/quality-questions-projects.json';
-const outputPath = 'bench/code-intel/quality-eval-2026-05-22-current.md';
+function parseOutByProject() {
+  if (process.env.ARCH_QUALITY_OUT_BY_PROJECT) {
+    return JSON.parse(process.env.ARCH_QUALITY_OUT_BY_PROJECT);
+  }
+  const map = {};
+  for (const arg of process.argv.slice(2)) {
+    if (!arg.startsWith('--out=')) continue;
+    const rest = arg.slice('--out='.length);
+    const colon = rest.indexOf(':');
+    if (colon <= 0) throw new Error(`bad --out arg: ${arg} (expected --out=projectName:outDir)`);
+    map[rest.slice(0, colon)] = rest.slice(colon + 1);
+  }
+  if (Object.keys(map).length === 0) {
+    throw new Error(
+      'no project out dirs supplied. Set ARCH_QUALITY_OUT_BY_PROJECT or pass --out=projectName:outDir args.',
+    );
+  }
+  return map;
+}
+
+function getFlag(name, fallback) {
+  const prefix = `--${name}=`;
+  const found = process.argv.find((a) => a.startsWith(prefix));
+  return found ? found.slice(prefix.length) : fallback;
+}
+
+const outByProject = parseOutByProject();
+const questionsPath = getFlag('questions', 'bench/code-intel/quality-questions-projects.json');
+const outputPath = getFlag('output', 'bench/code-intel/quality-eval-current.md');
 const archBin = resolve('bin/arch-graph');
 const questions = JSON.parse(readFileSync(questionsPath, 'utf8'));
 
@@ -21,6 +57,9 @@ let fail = 0;
 
 for (const question of questions) {
   const outDir = outByProject[question.project];
+  if (!outDir) {
+    throw new Error(`no sidecar out dir configured for project '${question.project}'`);
+  }
   const args = splitCli(question.cli.replace(/^arch-graph\s+/, '')).concat(['--out', outDir]);
   let output = '';
   let error = '';

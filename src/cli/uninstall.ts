@@ -186,6 +186,8 @@ export async function inventoryProject(repo: string): Promise<ProjectInventory> 
         config: null,
         outDir: null,
         claudeMdWithBlock: null,
+        cursorRulesWithBlock: null,
+        claudeHookWithBlock: null,
         hookWithBlock: null,
     };
 

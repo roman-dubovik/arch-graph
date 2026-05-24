@@ -6,6 +6,7 @@ import type {
     CodeIntelFlow,
     CodeIntelImpact,
     CodeIntelIndex,
+    CodeIntelManifest,
     CodeIntelPolicy,
     CodeIntelSymbol,
     CodeIntelSymbolKind,
@@ -47,6 +48,8 @@ export function extractCodeIntel(project: Project, opts: CodeIntelExtractOptions
     const symbolsByFqn = new Map<string, CodeIntelSymbol[]>();
     const symbolsById = new Map<string, CodeIntelSymbol>();
     const functionContexts: FunctionLikeCtx[] = [];
+    const ambiguousFqns = new Set<string>();
+    const skippedFiles: Array<{ file: string; error: string }> = [];
 
     const addSymbol = (symbol: CodeIntelSymbol): void => {
         if (symbolsById.has(symbol.id)) return;
@@ -55,10 +58,16 @@ export function extractCodeIntel(project: Project, opts: CodeIntelExtractOptions
         const bucket = symbolsByFqn.get(symbol.fqn) ?? [];
         bucket.push(symbol);
         symbolsByFqn.set(symbol.fqn, bucket);
+        // P1.2 diagnostic: track FQN collisions so consumers can warn agents
+        // that resolve_symbol / find_references / impact_contract may return
+        // an ambiguous result. The first symbol still wins downstream ranking,
+        // but the conflict is no longer silent.
+        if (bucket.length > 1) ambiguousFqns.add(symbol.fqn);
     };
 
     for (const sf of project.getSourceFiles()) {
         if (sf.isDeclarationFile()) continue;
+        try {
         const imports = importsForSourceFile(sf);
         for (const cls of sf.getClasses()) {
             const name = cls.getName();
@@ -166,16 +175,37 @@ export function extractCodeIntel(project: Project, opts: CodeIntelExtractOptions
         for (const alias of sf.getTypeAliases()) {
             addTypeAliasDto(alias, opts.root, addSymbol);
         }
+        } catch (sfErr) {
+            // ts-morph getType()/getText() can throw on cyclic types, unresolved
+            // .d.ts references, or virtual files; isolate the failure to one file
+            // so the rest of the index still builds. Reported via diagnostics.
+            const msg = sfErr instanceof Error ? sfErr.message : String(sfErr);
+            skippedFiles.push({ file: sf.getFilePath(), error: msg });
+            process.stderr.write(`[code-intel] skipping ${sf.getFilePath()}: ${msg}\n`);
+        }
     }
 
     for (const ctx of functionContexts) {
-        collectFunctionFacts(ctx, symbolsByFqn, symbolsById, calls, flows, branches, opts.root);
+        try {
+            collectFunctionFacts(ctx, symbolsByFqn, symbolsById, calls, flows, branches, opts.root);
+        } catch (ctxErr) {
+            const msg = ctxErr instanceof Error ? ctxErr.message : String(ctxErr);
+            skippedFiles.push({ file: `${ctx.fqn} (function facts)`, error: msg });
+            process.stderr.write(`[code-intel] skipping ${ctx.fqn} facts: ${msg}\n`);
+        }
     }
 
     const impacts = collectImpacts(project, symbols, opts.root);
     const policies = inferPolicies(symbols);
 
-    return buildIndex(opts.root, symbols, calls, flows, branches, impacts, policies);
+    const index = buildIndex(opts.root, symbols, calls, flows, branches, impacts, policies);
+    // P1.2 / P0-E diagnostics: attach as a manifest extension so MCP /
+    // self_check can surface them without changing schemaVersion.
+    (index.manifest as CodeIntelManifest & { warnings?: Record<string, unknown> }).warnings = {
+        ambiguousFqns: Array.from(ambiguousFqns).sort(),
+        skippedFiles,
+    };
+    return index;
 }
 
 function buildIndex(

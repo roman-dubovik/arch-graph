@@ -317,7 +317,7 @@ describe('inventoryMcp', () => {
 // ─── renderInventory ─────────────────────────────────────────────────────────
 
 describe('renderInventory', () => {
-    const emptyProject = () => ({ config: null, outDir: null, claudeMdWithBlock: null, hookWithBlock: null });
+    const emptyProject = () => ({ config: null, outDir: null, claudeMdWithBlock: null, cursorRulesWithBlock: null, claudeHookWithBlock: null, hookWithBlock: null });
     const emptyGlobal = () => ({ installDir: null, symlinkPath: null, symlinkIsOurs: false, symlinkTarget: null as string | null, skillDir: null });
     const emptyMcp = () => ({ configPath: null, projectsWithEntry: [] as string[] });
 
@@ -402,6 +402,8 @@ describe('removeProjectArtefacts', () => {
                 config: null,
                 outDir: null,
                 claudeMdWithBlock: cmdPath,
+                cursorRulesWithBlock: null,
+                claudeHookWithBlock: null,
                 hookWithBlock: null,
             });
             const after = await readFile(cmdPath, 'utf8');
@@ -426,6 +428,8 @@ describe('removeProjectArtefacts', () => {
                 config: null,
                 outDir: null,
                 claudeMdWithBlock: null,
+                cursorRulesWithBlock: null,
+                claudeHookWithBlock: null,
                 hookWithBlock: { path: hookPath, mode: 'pre-commit' },
             });
             expect(existsSync(hookPath)).toBe(false);
@@ -446,6 +450,8 @@ describe('removeProjectArtefacts', () => {
                 config: null,
                 outDir: null,
                 claudeMdWithBlock: null,
+                cursorRulesWithBlock: null,
+                claudeHookWithBlock: null,
                 hookWithBlock: { path: hookPath, mode: 'pre-commit' },
             });
             expect(existsSync(hookPath)).toBe(true);
@@ -470,6 +476,8 @@ describe('removeProjectArtefacts', () => {
                 config: cfg,
                 outDir: { path: out, sizeBytes: 0 },
                 claudeMdWithBlock: null,
+                cursorRulesWithBlock: null,
+                claudeHookWithBlock: null,
                 hookWithBlock: null,
             });
 
@@ -486,6 +494,8 @@ describe('removeProjectArtefacts', () => {
             config: null,
             outDir: null,
             claudeMdWithBlock: null,
+            cursorRulesWithBlock: null,
+            claudeHookWithBlock: null,
             hookWithBlock: null,
         });
     });

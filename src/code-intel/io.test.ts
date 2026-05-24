@@ -1,4 +1,4 @@
-import { mkdir, rm } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -143,5 +143,61 @@ describe('code-intel io', () => {
 
         await writeCodeIntelDiagnostics(diagnostics, join(dir, 'code-intel'));
         await expect(readCodeIntelDiagnostics(join(dir, 'code-intel'))).resolves.toEqual(diagnostics);
+    });
+
+    // P1.1 acceptance: old schemaVersion=1 manifest must surface a clear
+    // "run: arch-graph code-intel build" message rather than a generic
+    // schema-mismatch error.
+    it('rejects schemaVersion=1 manifest with a build instruction', async () => {
+        const sidecar = join(dir, 'code-intel');
+        await mkdir(sidecar, { recursive: true });
+        await writeFile(
+            join(sidecar, 'manifest.json'),
+            JSON.stringify({
+                schemaVersion: 1,
+                builtAt: '2026-04-01T00:00:00.000Z',
+                root: '/repo',
+                counts: { symbols: 0, calls: 0, flows: 0, branches: 0, impacts: 0 },
+            }),
+            'utf8',
+        );
+        await expect(readCodeIntelIndex(sidecar)).rejects.toThrow(
+            /schemaVersion=1.*arch-graph code-intel build/s,
+        );
+    });
+
+    // P1.1 acceptance: ENOENT on manifest.json must report the sidecar location
+    // and the rebuild command, not a raw ENOENT.
+    it('surfaces a clear rebuild message when the sidecar is missing', async () => {
+        await expect(readCodeIntelIndex(join(dir, 'never-built'))).rejects.toThrow(
+            /sidecar not found.*arch-graph code-intel build/s,
+        );
+    });
+
+    // P0-D acceptance: a torn JSONL shard (truncated mid-line) must blame the
+    // shard path and line and recommend rebuild, not throw a bare SyntaxError.
+    it('rejects torn jsonl shards with shard path and line number', async () => {
+        const sidecar = join(dir, 'code-intel');
+        await mkdir(sidecar, { recursive: true });
+        await writeFile(
+            join(sidecar, 'manifest.json'),
+            JSON.stringify({
+                schemaVersion: CODE_INTEL_SCHEMA_VERSION,
+                builtAt: '2026-05-22T00:00:00.000Z',
+                root: '/repo',
+                counts: { symbols: 0, calls: 0, flows: 0, branches: 0, impacts: 0 },
+            }),
+            'utf8',
+        );
+        // First line valid, second line torn (no closing brace) — simulates a
+        // mid-write interruption.
+        await writeFile(
+            join(sidecar, 'symbols.jsonl'),
+            '{"id":"a","kind":"dto","name":"A","fqn":"A","file":"a.ts","line":1,"column":1}\n{"id":"b","ki',
+            'utf8',
+        );
+        await expect(readCodeIntelIndex(sidecar)).rejects.toThrow(
+            /symbols\.jsonl.*line 2.*arch-graph code-intel build/s,
+        );
     });
 });

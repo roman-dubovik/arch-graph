@@ -10,11 +10,11 @@ Latest update, 2026-05-22:
 - Verified fixture flow: `@Body dto -> ItemsService.create(dto) ->
   ItemMapper.audit(name)` is returned by one compact query.
 - Rebuilt fresh reference-project sidecars:
-  - `project-alpha`: ~12s, `25390` symbols, `26756` calls, `18857` flows, `4889`
+  - `app-alpha`: ~12s, `25390` symbols, `26756` calls, `18857` flows, `4889`
     branches, `23716` impacts, project resolved ratio `0.4371`;
-  - `project-beta`: ~11s, `27588` symbols, `42807` calls, `17587` flows, `5857`
+  - `app-beta`: ~11s, `27588` symbols, `42807` calls, `17587` flows, `5857`
     branches, `31455` impacts, project resolved ratio `0.2414`;
-  - `project-gamma-2.0`: ~5-6s, `5909` symbols, `5707` calls, `4362` flows,
+  - `monorepo-gamma-2.0`: ~5-6s, `5909` symbols, `5707` calls, `4362` flows,
     `1009` branches, `7063` impacts, project resolved ratio `0.5728`.
 - Smoke snapshot is `9/9 PASS`.
 - Quality eval moved from `6 PASS / 1 PARTIAL / 1 FAIL` to
@@ -83,11 +83,11 @@ Verification:
   Initial result was `0/9` PASS because several expected symbols in the question
   fixtures did not exist in the current local projects. After aligning fixtures
   to real local scenarios, the current snapshot is `9/9` PASS:
-  - `project-alpha`: `3/3` for `PatientsController.getSummary`,
+  - `app-alpha`: `3/3` for `PatientsController.getSummary`,
     `DashboardQueryDto`, and `TbankWebhookController`;
-  - `project-beta`: `3/3` for cron registration trace,
+  - `app-beta`: `3/3` for cron registration trace,
     `IAddToSuppressionDto`, and `CronSchedulerService.registerNatsCronJob`;
-  - `project-gamma`: `3/3` for cron registration trace, `@Body data` flow, and
+  - `monorepo-gamma`: `3/3` for cron registration trace, `@Body data` flow, and
     `BasePaginationQueryDto` impact.
 - Quality-oriented project eval was added separately from the smoke snapshot:
   - fixtures: `bench/code-intel/quality-questions-projects.json`;
@@ -99,11 +99,11 @@ Verification:
   baseline is `7 PASS`, `0 PARTIAL`, `1 FAIL`:
   - PASS cases cover controller call traces, DTO impact, message handler traces,
     HTTP body destructuring flow, and base DTO inheritance/reference impact;
-  - the previous PARTIAL case, `project-gamma` interprocedural payload flow, now
+  - the previous PARTIAL case, `monorepo-gamma` interprocedural payload flow, now
     proves the private registration method plus persistence/executor/scheduler
     sinks (`Repository.create`, `executeNatsTask`,
     `SchedulerRegistry.addCronJob`);
-  - FAIL case is `project-gamma` control-flow branch lookup for the save-to-db path:
+  - FAIL case is `monorepo-gamma` control-flow branch lookup for the save-to-db path:
     the current branch query returns no branch facts for that line.
 - `arch-graph code-intel diagnostics --max-results 5` verified that diagnostics
   can be recomputed from the sidecar and produces bounded proof-quality metrics.
@@ -121,9 +121,9 @@ not into the target repositories.
 
 | Project | Build Time | Symbols | Calls | Flows | Branches | Impacts |
 |---------|------------|---------|-------|-------|----------|---------|
-| `project-alpha` | ~12s | 25390 | 26756 | 18857 | 4889 | 23716 |
-| `project-beta` | ~11s | 27588 | 42807 | 17587 | 5857 | 31455 |
-| `project-gamma-2.0` | ~5-6s | 5909 | 5707 | 4362 | 1009 | 7063 |
+| `app-alpha` | ~12s | 25390 | 26756 | 18857 | 4889 | 23716 |
+| `app-beta` | ~11s | 27588 | 42807 | 17587 | 5857 | 31455 |
+| `monorepo-gamma-2.0` | ~5-6s | 5909 | 5707 | 4362 | 1009 | 7063 |
 
 Quality fixes made from these runs:
 
@@ -350,9 +350,9 @@ above simple structural extractors because every function body is traversed.
 
 Measured reference-project build times after the impact-pass optimization:
 
-- `project-gamma-2.0`: ~9s.
-- `project-alpha`: ~21s.
-- `project-beta`: ~24s.
+- `monorepo-gamma-2.0`: ~9s.
+- `app-alpha`: ~21s.
+- `app-beta`: ~24s.
 - `arch-graph` self-build: ~3s.
 
 Recommended rollout:
@@ -458,7 +458,7 @@ real-world NestJS/TypeScript projects.
 
 7. Add regression benchmarks.
    - Keep the arch-graph 10-question self-eval.
-   - Add a compact smoke suite for `project-alpha`, `project-beta`, and `project-gamma-2.0`.
+   - Add a compact smoke suite for `app-alpha`, `app-beta`, and `monorepo-gamma-2.0`.
      Done: project fixtures are now aligned with real local scenarios and
      `bench/code-intel/snapshot-2026-05-22-current.md` reports `9/9` PASS.
    - Track build time, counts, resolved-call ratio, and selected query outputs.
@@ -620,7 +620,7 @@ Instead of the LLM reading 5 different Service and Repository files (`cat` / `re
 
 ## Lifecycle & Incremental Updates
 
-To ensure `code-intel` remains performant on large production projects (e.g., `project-alpha`, `project-beta`), the system follows an incremental update model aligned with the existing `arch-graph` workflow.
+To ensure `code-intel` remains performant on large production projects (e.g., `app-alpha`, `app-beta`), the system follows an incremental update model aligned with the existing `arch-graph` workflow.
 
 ### 1. Incremental Fact Extraction (File-Level)
 Instead of a full global rebuild on every commit, the `code-intel build` process uses a hash-based cache:
@@ -662,9 +662,9 @@ To measure the maturity and accuracy of the `code-intel` feature, a multi-projec
 
 ### 1. Evaluation Projects
 The feature is validated against three reference monorepos representing different architectural complexities:
-- **`project-alpha`**: Large NestJS monolith with deep service hierarchies and complex DTOs.
-- **`project-beta`**: High-concurrency microservices communicating via NATS, focusing on cross-service event flows.
-- **`project-gamma-2.0`**: Full-stack E-commerce project where `code-intel` bridges the gap between NestJS backends and React frontends.
+- **`app-alpha`**: Large NestJS monolith with deep service hierarchies and complex DTOs.
+- **`app-beta`**: High-concurrency microservices communicating via NATS, focusing on cross-service event flows.
+- **`monorepo-gamma-2.0`**: Full-stack E-commerce project where `code-intel` bridges the gap between NestJS backends and React frontends.
 
 ### 2. Benchmark Suites
 Specific question sets are stored in `bench/code-intel/questions-<project>.json`. Each question targets one of the four core disciplines:

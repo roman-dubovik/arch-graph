@@ -1,0 +1,26 @@
+[
+  {
+    "id": "APP-B-CI1",
+    "category": "call-graph",
+    "question": "Call chain from JobController.handleRegisterJob to queue registration?",
+    "tool": "trace_scenario",
+    "cli": "arch-graph code-intel trace-scenario --entry JobController.handleRegisterJob --max-depth 2",
+    "expectedContains": ["JobController.handleRegisterJob", "JobSchedulerService.registerQueueJob", "JobSchedulerService.registerQueueJobInternal"]
+  },
+  {
+    "id": "APP-B-CI2",
+    "category": "impact",
+    "question": "Where is the FE contract IAddItemDto used?",
+    "tool": "impact_contract",
+    "cli": "arch-graph code-intel impact-contract IAddItemDto --max-results 5",
+    "expectedContains": ["IAddItemDto", "item-actions.ts", "\"kind\": \"type-reference\""]
+  },
+  {
+    "id": "APP-B-CI3",
+    "category": "symbol",
+    "question": "Where is the JobSchedulerService.registerQueueJob method declared?",
+    "tool": "resolve_symbol",
+    "cli": "arch-graph code-intel resolve-symbol JobSchedulerService.registerQueueJob",
+    "expectedContains": ["JobSchedulerService.registerQueueJob", "registerQueueJobInternal", "job-scheduler.service.ts"]
+  }
+]

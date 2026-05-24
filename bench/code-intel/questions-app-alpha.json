@@ -1,0 +1,26 @@
+[
+  {
+    "id": "APP-A-CI1",
+    "category": "call-graph",
+    "question": "Compact call chain for UsersController.getSummary?",
+    "tool": "trace_scenario",
+    "cli": "arch-graph code-intel trace-scenario --entry UsersController.getSummary --max-depth 2",
+    "expectedContains": ["UsersController.getSummary", "UsersController.findItemIds", "users.controller.ts"]
+  },
+  {
+    "id": "APP-A-CI2",
+    "category": "impact",
+    "question": "Impact of the OverviewQueryDto contract?",
+    "tool": "impact_contract",
+    "cli": "arch-graph code-intel impact-contract OverviewQueryDto --max-results 5",
+    "expectedContains": ["OverviewQueryDto", "overview.controller.ts", "\"kind\": \"endpoint\"", "query.period"]
+  },
+  {
+    "id": "APP-A-CI3",
+    "category": "symbol",
+    "question": "Where is BillingWebhookController declared and what methods does it expose?",
+    "tool": "resolve_symbol",
+    "cli": "arch-graph code-intel resolve-symbol BillingWebhookController",
+    "expectedContains": ["BillingWebhookController", "handleNotification", "BillingNotificationDto", "billing-webhook.controller.ts"]
+  }
+]

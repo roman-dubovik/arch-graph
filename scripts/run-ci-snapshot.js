@@ -2,14 +2,55 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
-const projects = [
-  { name: 'project-alpha', out: '<tmp>/project-alpha', questions: 'bench/code-intel/questions-project-alpha.json' },
-  { name: 'project-beta', out: '<tmp>/project-beta', questions: 'bench/code-intel/questions-project-beta.json' },
-  { name: 'project-gamma', out: '<tmp>/project-gamma', questions: 'bench/code-intel/questions-project-gamma.json' }
-];
+// Project list is supplied via env var ARCH_BENCH_PROJECTS as JSON, or as CLI
+// args of the form `name=outDir:questionsFile`. Project names are never
+// hard-coded so that internal product names stay out of the repository.
+//
+// Example:
+//   ARCH_BENCH_PROJECTS='[{"name":"app-alpha","out":"/tmp/app-alpha","questions":"bench/code-intel/questions-app-alpha.json"}]' \
+//     node scripts/run-ci-snapshot.js
+// Or:
+//   node scripts/run-ci-snapshot.js \
+//     app-alpha=/tmp/app-alpha:bench/code-intel/questions-app-alpha.json
+//
+// Output path defaults to bench/code-intel/snapshot-current.md and can be
+// overridden with --output=<path>.
 
+function parseProjects() {
+  if (process.env.ARCH_BENCH_PROJECTS) {
+    return JSON.parse(process.env.ARCH_BENCH_PROJECTS);
+  }
+  const list = [];
+  for (const arg of process.argv.slice(2)) {
+    if (arg.startsWith('--')) continue;
+    const eq = arg.indexOf('=');
+    const colon = arg.indexOf(':', eq + 1);
+    if (eq <= 0 || colon <= eq) {
+      throw new Error(`bad project arg: ${arg} (expected name=outDir:questionsFile)`);
+    }
+    list.push({
+      name: arg.slice(0, eq),
+      out: arg.slice(eq + 1, colon),
+      questions: arg.slice(colon + 1),
+    });
+  }
+  if (list.length === 0) {
+    throw new Error(
+      'no projects supplied. Set ARCH_BENCH_PROJECTS or pass name=outDir:questionsFile args.',
+    );
+  }
+  return list;
+}
+
+function getOutputPath() {
+  const flag = process.argv.find((a) => a.startsWith('--output='));
+  if (flag) return flag.slice('--output='.length);
+  return 'bench/code-intel/snapshot-current.md';
+}
+
+const projects = parseProjects();
 const archBin = resolve('bin/arch-graph');
-const outputPath = 'bench/code-intel/snapshot-2026-05-22-current.md';
+const outputPath = getOutputPath();
 
 let report = '# Code-Intel Project Questions Snapshot\n\n';
 report += 'Date: ' + new Date().toISOString() + '\n\n';

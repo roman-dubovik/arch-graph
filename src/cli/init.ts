@@ -522,7 +522,7 @@ export async function askAiEnvironments(rl: Rl): Promise<AiEnvironment[]> {
 
 // ─── .gitignore helpers ───────────────────────────────────────────────────────
 
-async function atomicWrite(path: string, content: string): Promise<void> {
+export async function atomicWrite(path: string, content: string): Promise<void> {
     const tmp = path + '.tmp';
     try {
         await writeFile(tmp, content, 'utf8');
@@ -686,12 +686,12 @@ export async function writeStrategySnippet(
             const e = err as NodeJS.ErrnoException;
             if (e.code !== 'ENOENT') throw err;
         }
-        await writeFile(claudeMdPath, replaceStrategySnippet(existing, strategy), 'utf8');
+        await atomicWrite(claudeMdPath, replaceStrategySnippet(existing, strategy));
         return claudeMdPath;
     } else {
         const snippet = buildStrategySnippet(strategy);
         const snippetPath = join(dir, 'CLAUDE.md.arch-graph-snippet.md');
-        await writeFile(snippetPath, snippet.trimStart(), 'utf8');
+        await atomicWrite(snippetPath, snippet.trimStart());
         return snippetPath;
     }
 }
@@ -744,7 +744,7 @@ export async function runInitWizard(target: string): Promise<void> {
 
     // ── Non-interactive fallback ──────────────────────────────────────────────
     if (!process.stdin.isTTY) {
-        await writeFile(targetPath, INIT_TEMPLATE, 'utf8');
+        await atomicWrite(targetPath, INIT_TEMPLATE);
         await registerProject(dirname(targetPath));
         process.stdout.write(`wrote ${targetPath}\n`);
         // Non-interactive: default to both-buckets, separate snippet file.
@@ -849,19 +849,27 @@ export async function runInitWizard(target: string): Promise<void> {
     output.write('\n');
 
     const configContent = buildConfigTemplate(answers);
-    await writeFile(targetPath, configContent, 'utf8');
+    await atomicWrite(targetPath, configContent);
     await registerProject(dirname(targetPath));
     output.write(`✓ wrote ${targetPath}\n`);
 
     // ── AI Environment integration ────────────────────────────────────────────
+    // Each agent install runs in its own try/catch so a single failure (e.g.
+    // CLAUDE.md is read-only, hook directory is missing) doesn't leave the
+    // wizard mid-state — the config was already written, so we report each
+    // env failure and continue with the next one instead of throwing.
     let claudeInstalled = false;
     for (const env of aiEnvs) {
-        if (env === 'claude' || env === 'gemini') {
-            await claudeInstall({ target: resolve('./CLAUDE.md'), installSkill: true });
-            claudeInstalled = true;
-            await hooksModule.agentHookInstall({ repo: resolve('.'), agent: env === 'claude' ? 'claude' : 'gemini' as any });
-        } else if (env === 'cursor') {
-            await hooksModule.agentHookInstall({ repo: resolve('.'), agent: 'cursor' });
+        try {
+            if (env === 'claude' || env === 'gemini') {
+                await claudeInstall({ target: resolve('./CLAUDE.md'), installSkill: true });
+                claudeInstalled = true;
+                await hooksModule.agentHookInstall({ repo: resolve('.'), agent: env === 'claude' ? 'claude' : 'gemini' as any });
+            } else if (env === 'cursor') {
+                await hooksModule.agentHookInstall({ repo: resolve('.'), agent: 'cursor' });
+            }
+        } catch (envErr) {
+            output.write(`! skipped ${env} integration: ${(envErr as Error).message}\n`);
         }
     }
 

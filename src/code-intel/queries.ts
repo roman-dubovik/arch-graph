@@ -179,18 +179,28 @@ export function explainBranch(index: CodeIntelIndex, args: { file: string; line:
 
 export function traceScenario(index: CodeIntelIndex, args: { entry: string; maxDepth?: number }): {
     found: boolean;
+    reason?: 'entry-not-found' | 'entry-not-callable';
     entry: string;
     start?: CodeIntelSymbol;
     calls: CodeIntelCall[];
     exceptions: Array<{ condition: string; file: string; line: number; depth: number }>;
 } {
     const resolved = resolveSymbol(index, args.entry).matches;
-    const start = resolved.find((symbol) => symbol.kind === 'method' || symbol.kind === 'function') ?? resolved[0] ??
-        index.symbols.find((symbol) =>
+    // Prefer method/function; if none match by name, only then fall back to
+    // signature/decorator text lookup. Never accept a param/field as `start`
+    // since walkScenario would silently produce an empty trace with found:true.
+    const callableMatch = resolved.find((symbol) => symbol.kind === 'method' || symbol.kind === 'function');
+    const decoratorMatch = !callableMatch ? index.symbols.find((symbol) =>
+        (symbol.kind === 'method' || symbol.kind === 'function') && (
             symbol.signature?.includes(args.entry) ||
-            symbol.decorators?.some((decorator) => decorator.includes(args.entry)),
-        );
-    if (!start) return withHealthWarning(index, { found: false, entry: args.entry, calls: [], exceptions: [] });
+            symbol.decorators?.some((decorator) => decorator.includes(args.entry))
+        ),
+    ) : undefined;
+    const start = callableMatch ?? decoratorMatch;
+    if (!start) {
+        const reason = resolved.length === 0 ? ('entry-not-found' as const) : ('entry-not-callable' as const);
+        return withHealthWarning(index, { found: false, reason, entry: args.entry, calls: [], exceptions: [] });
+    }
     const maxDepth = args.maxDepth ?? 5;
     const calls: CodeIntelCall[] = [];
     const exceptions: Array<{ condition: string; file: string; line: number; depth: number }> = [];
@@ -260,6 +270,7 @@ export function impactContract(index: CodeIntelIndex, args: {
     maxResults?: number;
 }): {
     found: boolean;
+    reason?: 'symbol-not-found' | 'no-impacts-for-field' | 'no-impacts';
     symbol: string;
     field?: string;
     subject?: CodeIntelSymbol;
@@ -268,13 +279,26 @@ export function impactContract(index: CodeIntelIndex, args: {
     const resolved = resolveSymbol(index, args.symbol).matches;
     const symbol = resolved.find((match) => match.kind === 'dto' || match.kind === 'db-entity' || match.kind === 'type') ??
         resolved[0];
-    if (!symbol) return withHealthWarning(index, { found: false, symbol: args.symbol, ...(args.field ? { field: args.field } : {}), impacts: [] });
+    if (!symbol) {
+        return withHealthWarning(index, {
+            found: false,
+            reason: 'symbol-not-found' as const,
+            symbol: args.symbol,
+            ...(args.field ? { field: args.field } : {}),
+            impacts: [],
+        });
+    }
     const impacts = index.impacts
         .filter((impact) => impact.symbolId === symbol.id && (!args.field || impact.field === args.field || impact.detail.includes(args.field)))
         .sort((a, b) => impactRank(a, Boolean(args.field)) - impactRank(b, Boolean(args.field)) || a.file.localeCompare(b.file) || a.line - b.line)
         .slice(0, args.maxResults ?? 50);
+    const found = impacts.length > 0;
+    // Always include `subject` so the caller can see what we resolved, even
+    // when impacts is empty. `reason` disambiguates "no field with that
+    // name on the DTO" from "this DTO has no impacts at all".
     return withHealthWarning(index, {
-        found: impacts.length > 0,
+        found,
+        ...(found ? {} : args.field ? { reason: 'no-impacts-for-field' as const } : { reason: 'no-impacts' as const }),
         symbol: symbol.fqn,
         subject: symbol,
         ...(args.field ? { field: args.field } : {}),

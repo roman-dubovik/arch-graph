@@ -20,7 +20,6 @@ describe('code-intel queries', () => {
             builtAt: new Date().toISOString(),
             root: '/root',
             counts: { symbols: 4, calls: 0, flows: 0, branches: 0, impacts: 0 },
-            health: { freshness: 'Updated now', symbols: 4 },
         },
         symbols: [
             { id: 's1', kind: 'class', name: 'App', fqn: 'App', file: 'src/app.ts', line: 1, column: 1, endLine: 10 },
@@ -55,6 +54,71 @@ describe('code-intel queries', () => {
             const result = resolveSymbol(mockIndex, 'libs/dto.ts');
             expect(result.matches.length).toBeGreaterThan(0);
             expect(result.matches[0].name).toBe('UserDto');
+        });
+
+        // P1.2 acceptance: two files exporting the same short FQN must both
+        // be returned, not silently deduped. The first symbol still wins
+        // downstream ranking, but the ambiguity is visible to the caller.
+        it('returns all matches when the short FQN is ambiguous across files', () => {
+            const dupIndex: CodeIntelIndex = {
+                ...mockIndex,
+                symbols: [
+                    {
+                        id: 'symbol:apps/api/items/dto.ts#CreateItemDto:1:1',
+                        kind: 'dto',
+                        name: 'CreateItemDto',
+                        fqn: 'CreateItemDto',
+                        file: 'apps/api/items/dto.ts',
+                        line: 1,
+                        column: 1,
+                    },
+                    {
+                        id: 'symbol:apps/admin/items/dto.ts#CreateItemDto:1:1',
+                        kind: 'dto',
+                        name: 'CreateItemDto',
+                        fqn: 'CreateItemDto',
+                        file: 'apps/admin/items/dto.ts',
+                        line: 1,
+                        column: 1,
+                    },
+                ],
+            };
+            const result = resolveSymbol(dupIndex, 'CreateItemDto');
+            // Both file-qualified IDs survive the dedupe (which keys on `id`).
+            expect(result.matches).toHaveLength(2);
+            const files = result.matches.map((m) => m.file).sort();
+            expect(files).toEqual(['apps/admin/items/dto.ts', 'apps/api/items/dto.ts']);
+        });
+
+        // P1.2 acceptance: a path-suffix query must disambiguate so callers
+        // can target one of the duplicates explicitly.
+        it('narrows ambiguous FQN matches with a path suffix in the query', () => {
+            const dupIndex: CodeIntelIndex = {
+                ...mockIndex,
+                symbols: [
+                    {
+                        id: 'symbol:apps/api/items/dto.ts#CreateItemDto:1:1',
+                        kind: 'dto',
+                        name: 'CreateItemDto',
+                        fqn: 'CreateItemDto',
+                        file: 'apps/api/items/dto.ts',
+                        line: 1,
+                        column: 1,
+                    },
+                    {
+                        id: 'symbol:apps/admin/items/dto.ts#CreateItemDto:1:1',
+                        kind: 'dto',
+                        name: 'CreateItemDto',
+                        fqn: 'CreateItemDto',
+                        file: 'apps/admin/items/dto.ts',
+                        line: 1,
+                        column: 1,
+                    },
+                ],
+            };
+            const adminOnly = resolveSymbol(dupIndex, 'admin/items/dto.ts');
+            expect(adminOnly.matches).toHaveLength(1);
+            expect(adminOnly.matches[0]!.file).toBe('apps/admin/items/dto.ts');
         });
     });
 

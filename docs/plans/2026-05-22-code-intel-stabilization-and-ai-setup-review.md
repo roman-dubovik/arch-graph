@@ -39,8 +39,9 @@ Review result:
 
 Findings:
 
-- Real reference project names appear in bench fixtures, scripts, and plan docs:
-  `project-alpha`, `project-beta`, `project-gamma`, `project-gamma-2.0`.
+- Real reference project names appeared in bench fixtures, scripts, and plan
+  docs (now replaced with synthetic identifiers `app-alpha`, `app-beta`,
+  `monorepo-gamma`, `monorepo-gamma-2.0`).
 - Domain-specific symbols from those projects appear in benchmark fixtures and
   reports, including examples like:
   - controller/DTO names;
@@ -48,15 +49,16 @@ Findings:
   - payment/webhook-related names;
   - specific enum/constant names;
   - persistence/executor sink names.
-- Local machine paths appear in generated reports and scripts:
-  - `/Users/.../Documents/Projects/...`;
+- Local machine paths appeared in generated reports and scripts (now replaced
+  with `<reference-project>/...` placeholders):
   - `<tmp>
 
 Files requiring action before merge:
 
-- `bench/code-intel/questions-project-alpha.json`
-- `bench/code-intel/questions-project-beta.json`
-- `bench/code-intel/questions-project-gamma.json`
+- `bench/code-intel/questions-app-alpha.json` (renamed from the
+  internal-product-named version)
+- `bench/code-intel/questions-app-beta.json` (renamed)
+- `bench/code-intel/questions-monorepo-gamma.json` (renamed)
 - `bench/code-intel/quality-questions-projects.json`
 - `bench/code-intel/results-test-projects-2026-05-22.md`
 - `bench/code-intel/snapshot-2026-05-22-current.md`
@@ -67,17 +69,17 @@ Files requiring action before merge:
 
 Required remediation:
 
-- Replace project names with neutral identifiers:
-  - `project-alpha` -> `project-alpha`;
-  - `project-beta` -> `project-beta`;
-  - `project-gamma` / `project-gamma-2.0` -> `project-gamma`.
+- Replace project names with neutral identifiers (done):
+  - internal product A -> `app-alpha`;
+  - internal product B -> `app-beta`;
+  - internal monorepo / monorepo-2.0 -> `monorepo-gamma` / `monorepo-gamma-2.0`.
 - Replace domain-specific symbols with neutral fixture-like names, or move the
   real-project eval fixtures out of the public repo entirely.
 - Remove absolute local paths from committed reports. Use placeholders such as
   `<tmp>/arch-graph-code-intel-snapshot/*` and
   `<reference-project-root>/...`.
 - Make benchmark scripts configurable through env vars or a local ignored config
-  file instead of hardcoding project names and `/private/tmp` paths.
+  file instead of hardcoding project names and tmp-style absolute paths.
 - Add `.gitignore` coverage for local benchmark outputs if they are not meant
   to be committed.
 
@@ -92,8 +94,12 @@ Merge gate:
 
 ```sh
 git diff <merge-base>...HEAD -- . \
-  | rg -n "project-alpha|project-beta|project-gamma|/Users/|/private/tmp|Documents/Projects"
+  | rg -n "<forbidden-product-names-and-machine-path-pattern>"
 ```
+
+The forbidden pattern intentionally is not spelled out here to avoid the gate
+matching the gate doc itself. It covers internal product names and absolute
+machine path prefixes; see project security playbook.
 
 The command should return no matches except intentional synthetic examples or
 documented placeholders.

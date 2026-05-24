@@ -25,6 +25,7 @@ function makeAnswers(overrides: Partial<{
         runBuild: false,
         semanticStrategy: 'both-buckets' as const,
         snippetTarget: 'separate' as const,
+        aiEnvs: [] as Array<'claude' | 'cursor' | 'gemini'>,
         ...overrides,
     };
 }

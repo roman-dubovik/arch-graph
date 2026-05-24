@@ -2,7 +2,7 @@
 
 Status: Design Phase
 Target: Make LLMs write code that perfectly matches local conventions without manual prompting.
-Reference Complexity: `project-gamma-2.0` (Multi-package NestJS + React E-commerce monorepo).
+Reference Complexity: `monorepo-gamma-2.0` (Multi-package NestJS + React E-commerce monorepo).
 
 ## Core Problem
 LLMs write technically correct code that is architecturally wrong for *your* project. They place files in the wrong directories, miss custom decorators (e.g., specific FK macros), and violate layer boundaries (e.g., Controllers talking directly to DBs). 
@@ -36,7 +36,7 @@ This functionality is a "Layer 2" over the code-intel fact set. It cannot be bui
 2. **Directory Clustering Logic:** We need the basic `code-intel build` to correctly record absolute and relative paths for all symbols.
 3. **Shared Extractor (`shared.ts`):** The unified JSDoc/Comment extractor must be functional to feed the "Quality Ranker".
 
-## 3. Walkthrough on `project-gamma-2.0` Complexity...
+## 3. Walkthrough on `monorepo-gamma-2.0` Complexity...
 **Mechanic:** 
 - *Explicit:* Read from `arch-graph.config.ts` (e.g., `policies: { forbidLocalInterfaces: true }`).
 - *Inferred:* Scan the AST. If 99% of `TypeORM` `@ManyToOne` decorators are accompanied by a custom `@DbForeignKey` decorator, surface this as a rule.
@@ -49,7 +49,7 @@ This functionality is a "Layer 2" over the code-intel fact set. It cannot be bui
 **Goal:** Stop LLMs from guessing directory structures.
 **Mechanic:** Analyze the path strings of existing symbols. If the LLM wants to create an `AuthService`, the engine looks at other `*Service` nodes and their domains.
 **TDD Approach:**
-1. *Write Test:* Fixture simulating `project-gamma-2.0` structure (`apps/api/src/modules/orders/services/`, `apps/api/src/modules/users/services/`).
+1. *Write Test:* Fixture simulating `monorepo-gamma-2.0` structure (`apps/api/src/modules/orders/services/`, `apps/api/src/modules/users/services/`).
 2. *Expectation:* `suggestPlacement({ name: 'PaymentService', domain: 'payments' })` MUST return `apps/api/src/modules/payments/services/`.
 3. *Implementation:* Build a clustering algorithm over `node.path` filtered by `kind`.
 
@@ -61,9 +61,9 @@ This functionality is a "Layer 2" over the code-intel fact set. It cannot be bui
 2. *Expectation:* Calling the tool returns `Violation: Controllers must not depend on Repositories directly. Route through a Service.`
 3. *Implementation:* Query the structural `graph.json` to prove that 0 edges currently exist between Controllers and Repositories, enforcing it as a hard rule.
 
-## 2. Walkthrough on `project-gamma-2.0` Complexity
+## 2. Walkthrough on `monorepo-gamma-2.0` Complexity
 
-Imagine an LLM agent is tasked with: *"Add a new Promocode feature to project-gamma."*
+Imagine an LLM agent is tasked with: *"Add a new Promocode feature to monorepo-gamma."*
 
 **Without Policies (Current State):**
 1. LLM creates `src/PromocodeService.ts` (Wrong path).
@@ -76,8 +76,8 @@ Imagine an LLM agent is tasked with: *"Add a new Promocode feature to project-ga
 2. **Agent:** `suggest_placement("PromocodeService", "promocodes")`
    - *arch-graph:* `apps/api/src/modules/promocodes/services/`
 3. **Agent (while planning DB):** Reads active policies from config/inference.
-   - *arch-graph:* "Policy: Always use `@project-gammaRelation` with `@ManyToOne`." "Policy: No local interfaces, put them in `libs/types/`."
-4. **Result:** The LLM writes code that perfectly mimics a senior project-gamma developer on the very first try.
+   - *arch-graph:* "Policy: Always use `@monorepo-gammaRelation` with `@ManyToOne`." "Policy: No local interfaces, put them in `libs/types/`."
+4. **Result:** The LLM writes code that perfectly mimics a senior monorepo-gamma developer on the very first try.
 
 ## 3. Next Steps
 1. Add `policies` configuration block to `arch-graph.config.ts` schema.
