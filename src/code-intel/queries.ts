@@ -309,6 +309,11 @@ export function getTypeDefinition(index: CodeIntelIndex, args: { symbol: string 
         currentClassId = baseClass.extendsClass;
     }
 
+    // F12/G5: if the loop exited because of a visited cycle (not !baseClass), also mark truncated.
+    if (!chainTruncated && currentClassId && visitedClassIds.has(currentClassId)) {
+        chainTruncated = true;
+    }
+
     return { found: true, symbol, members, inheritedMembers, ...(chainTruncated ? { chainTruncated } : {}) };
 }
 

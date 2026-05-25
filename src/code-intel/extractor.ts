@@ -1386,8 +1386,14 @@ function collectPathAliases(
             try {
                 const text = fs.readFileSync(candidate, 'utf8');
                 mergeTsConfigText(candidate, text);
-            } catch {
-                // File doesn't exist — normal, skip silently.
+            } catch (e) {
+                const code = (e as NodeJS.ErrnoException).code;
+                if (code !== 'ENOENT') {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    warnings.push({ file: candidate, error: `readFileSync failed: ${msg}` });
+                    process.stderr.write(`[code-intel] tsconfig read error for ${candidate}: ${msg}\n`);
+                }
+                // ENOENT = file doesn't exist — normal, skip silently.
             }
         }
     }
@@ -1689,7 +1695,11 @@ function extractHeritageForClass(
     const classSymbol = (symbolsByFqn.get(name) ?? []).find(
         (s) => s.kind === 'class' && fileMatches(filePath, s.file),
     );
-    if (!classSymbol) return;
+    if (!classSymbol) {
+        // G4: emit diagnostic so callers can detect entity-classified or mis-classified classes.
+        process.stderr.write(`[code-intel] class symbol not found for ${name} in ${filePath}\n`);
+        return;
+    }
 
     // ── A1: extendsClass + extendsTypeArgs ──────────────────────────────────
     const heritageClause = cls.getHeritageClauseByKind(SyntaxKind.ExtendsKeyword);

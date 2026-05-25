@@ -27,10 +27,17 @@ const ROOT = '/root';
 // ---------------------------------------------------------------------------
 describe('F15-a: cycle guard — class A extends B, class B extends A', () => {
     it('completes without hanging and sets extendsClass on at least one', () => {
+        // A and B form a cycle. C extends A and declares run() so that
+        // findAncestorMethod(A.id, 'run', ...) must walk A→B→A and hit the
+        // cycle guard before returning (without C the walk would have returned
+        // immediately on A.run, never reaching the guard).
         const project = inMemoryProject({
             '/root/src/cycle.ts': `
                 export class A extends B {}
                 export class B extends A {}
+                export class C extends A {
+                    run(): void {}
+                }
             `,
         });
 
@@ -39,11 +46,13 @@ describe('F15-a: cycle guard — class A extends B, class B extends A', () => {
 
         const a = index.symbols.find((s) => s.fqn === 'A');
         const b = index.symbols.find((s) => s.fqn === 'B');
+        const c = index.symbols.find((s) => s.fqn === 'C');
 
         expect(a).toBeDefined();
         expect(b).toBeDefined();
-        // At least one of the two must have extendsClass set (whichever was
-        // resolved first during the heritage pass).
+        expect(c).toBeDefined();
+        // At least one of the two cyclic classes must have extendsClass set
+        // (whichever was resolved first during the heritage pass).
         const atLeastOneResolved =
             a?.extendsClass !== undefined || b?.extendsClass !== undefined;
         expect(atLeastOneResolved).toBe(true);
@@ -146,19 +155,19 @@ describe('F15-c: A4 path-alias method-level inheritsFrom and overrideKind', () =
 // ---------------------------------------------------------------------------
 // F15-d: A7 diagnostic — skippedFiles for broken class
 // ---------------------------------------------------------------------------
-describe('F15-d: A7 diagnostic — skippedFiles entry for unresolvable import', () => {
-    it('records the broken class file in manifest.warnings.skippedFiles', () => {
+describe('F15-d: A7 diagnostic — skippedFiles entry for malformed tsconfig', () => {
+    it('records the malformed tsconfig file in manifest.warnings.skippedFiles', () => {
+        // Provide a tsconfig with invalid JSON so that mergeTsConfigText's
+        // JSON.parse throws and pushes to the skippedFiles warnings array (F2 fix).
+        // This exercises a real code path — deleting the warnings.push(...) line
+        // in extractor.ts would cause this assertion to fail.
         const project = inMemoryProject({
             '/root/src/clean.ts': `
                 export class CleanBase {}
                 export class CleanSub extends CleanBase {}
             `,
-            // This file imports a non-existent module; ts-morph may throw during
-            // type resolution. We verify the extractor doesn't crash and
-            // continues — the BrokenSub class is still in the index.
-            '/root/src/broken.ts': `
-                export class BrokenSub extends (class {} as any) {}
-            `,
+            // Intentionally malformed JSON — JSON.parse will throw a SyntaxError.
+            '/root/tsconfig.base.json': '{ "compilerOptions": { "paths": { INVALID JSON',
         });
 
         const index = extractCodeIntel(project, { root: ROOT });
@@ -168,45 +177,33 @@ describe('F15-d: A7 diagnostic — skippedFiles entry for unresolvable import', 
         const cleanBase = index.symbols.find((s) => s.fqn === 'CleanBase');
         expect(cleanSub?.extendsClass).toBe(cleanBase!.id);
 
-        // BrokenSub still appears as a symbol (A7: class still in index).
-        const brokenSub = index.symbols.find((s) => s.fqn === 'BrokenSub');
-        expect(brokenSub).toBeDefined();
-
-        // The manifest should have a warnings object.
+        // skippedFiles must have at least one entry referencing the bad tsconfig.
         const warnings = (index.manifest as { warnings?: { skippedFiles?: Array<{ file: string; error: string }> } }).warnings;
         expect(warnings).toBeDefined();
-        // skippedFiles may or may not contain an entry depending on whether
-        // ts-morph throws — but the field must exist.
-        expect(Array.isArray(warnings?.skippedFiles)).toBe(true);
+        expect(warnings?.skippedFiles?.length).toBeGreaterThanOrEqual(1);
+        const tsconfigEntry = warnings?.skippedFiles?.find((e) => e.file.includes('tsconfig'));
+        expect(tsconfigEntry).toBeDefined();
+        expect(tsconfigEntry?.error).toMatch(/JSON\.parse failed/);
     });
 
-    it('records the class file in skippedFiles when the import throws', () => {
-        // Use the same fixture as A7 test in extractor.heritage.test.ts.
+    it('continues extraction and keeps clean classes in the index when tsconfig is broken', () => {
+        // Verify the extractor does not crash on a malformed tsconfig.
         const project = inMemoryProject({
             '/root/src/clean.ts': `
                 export class CleanBase {}
                 export class CleanSub extends CleanBase {}
             `,
-            '/root/src/broken.ts': `
-                // @ts-expect-error — intentional
-                import { NonExistentBase } from './does-not-exist';
-                export class BrokenSub extends NonExistentBase {}
-            `,
+            '/root/tsconfig.base.json': '{ NOT VALID JSON }',
         });
 
         const index = extractCodeIntel(project, { root: ROOT });
 
-        const warnings = (index.manifest as { warnings?: { skippedFiles?: Array<{ file: string; error: string }> } }).warnings;
-        expect(Array.isArray(warnings?.skippedFiles)).toBe(true);
-        // The broken file or heritage entry must be represented.
-        // (It may appear as a file-level skip OR as a heritage-level skip.)
-        const allEntries = warnings?.skippedFiles ?? [];
-        const hasBrokenEntry = allEntries.some((e) => e.file.includes('broken'));
-        // We accept either: broken is skipped OR it's fine (import might not throw in ts-morph in-mem).
-        // The important thing is the array exists and the index is not empty.
         const cleanSub = index.symbols.find((s) => s.fqn === 'CleanSub');
         expect(cleanSub).toBeDefined();
-        expect(typeof hasBrokenEntry).toBe('boolean'); // always passes — just validate shape
+
+        const warnings = (index.manifest as { warnings?: { skippedFiles?: Array<{ file: string; error: string }> } }).warnings;
+        // At least the malformed tsconfig must be in skippedFiles.
+        expect(warnings?.skippedFiles?.length).toBeGreaterThanOrEqual(1);
     });
 });
 
@@ -422,12 +419,16 @@ describe('F15-g: F7 field inheritsFrom — subclass redeclaring a base field', (
 });
 
 // ---------------------------------------------------------------------------
-// F15-h: F6 super-call via single close-paren
+// F15-h: F6 super-call via single close-paren (tests flow.via, not call.expression)
 // ---------------------------------------------------------------------------
 describe('F15-h: F6 via field does not double-append args', () => {
-    it('flow via field ends with a single closing paren, not double', () => {
-        // This tests that collectParamFlows uses viaText = call.expression for
-        // super-calls (not call.expression + "(args)").
+    it('flow.via for a super-call ends with a single closing paren, not double', () => {
+        // The F6 fix is in collectParamFlows (extractor.ts): for super-calls, viaText
+        // is set to call.expression (the raw call text) rather than
+        // `${call.expression}(${call.args.join(', ')})`, which would produce "super.run(dto)(dto)".
+        // This test verifies flow.via — call.expression would be "super.run(dto)"
+        // regardless of the bug, but flow.via would have been "super.run(dto)(dto)"
+        // without the fix.
         const project = inMemoryProject({
             '/root/src/x.ts': `
                 export class FooBase {
@@ -443,13 +444,15 @@ describe('F15-h: F6 via field does not double-append args', () => {
 
         const index = extractCodeIntel(project, { root: ROOT });
 
-        // super-call expression stored in calls must be the raw call text,
-        // e.g. "super.run(dto)".
-        const superCall = index.calls.find((c) => c.kind === 'super-call');
-        expect(superCall).toBeDefined();
-        expect(superCall?.expression).toMatch(/super\.run\(dto\)$/);
-        // The expression must end with exactly one closing paren.
-        expect(superCall?.expression.endsWith('))')).toBe(false);
+        // The flow produced by collectParamFlows for the super-call must have
+        // via = "super.run(dto)" (single paren), NOT "super.run(dto)(dto)".
+        const superFlow = index.flows.find((f) => f.via?.includes('super.run'));
+        expect(superFlow).toBeDefined();
+        // Must match the literal call text — single close paren.
+        expect(superFlow?.via).toMatch(/super\.run\(dto\)$/);
+        // Must NOT be the double-paren form that the pre-F6 code would have produced.
+        expect(superFlow?.via?.endsWith('))')).toBe(false);
+        expect(superFlow?.via?.includes('dto)(dto')).toBe(false);
     });
 });
 
