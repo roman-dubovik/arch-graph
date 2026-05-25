@@ -245,6 +245,10 @@ export function getTypeDefinition(index: CodeIntelIndex, args: { symbol: string 
     symbol?: CodeIntelSymbol;
     members: Array<{ kind: string; name: string; type?: string; description?: string; decorators?: string[]; inheritedFrom?: string; overrideKind?: string }>;
     inheritedMembers?: Array<{ kind: string; name: string; type?: string; description?: string; decorators?: string[]; inheritedFrom: string }>;
+    /** F12: true when the chain walk was cut short because a class id was not
+     *  found in the index (as opposed to a chain that reached its natural end
+     *  with extendsClass === undefined). */
+    chainTruncated?: boolean;
 } {
     const resolved = resolveSymbol(index, args.symbol).matches;
     const symbol = resolved.find((s) => s.kind === 'class' || s.kind === 'dto' || s.kind === 'type' || s.kind === 'db-entity') ?? resolved[0];
@@ -277,10 +281,15 @@ export function getTypeDefinition(index: CodeIntelIndex, args: { symbol: string 
 
     let currentClassId: string | undefined = symbol.extendsClass;
     const visitedClassIds = new Set<string>();
+    let chainTruncated = false;
     while (currentClassId && !visitedClassIds.has(currentClassId)) {
         visitedClassIds.add(currentClassId);
         const baseClass = symbolsById.get(currentClassId);
-        if (!baseClass) break;
+        if (!baseClass) {
+            // F12: loop exited because the class id was not found — chain truncated.
+            chainTruncated = true;
+            break;
+        }
 
         const baseMembers = index.symbols.filter((s) => s.parentId === baseClass.id);
         for (const bm of baseMembers) {
@@ -300,7 +309,7 @@ export function getTypeDefinition(index: CodeIntelIndex, args: { symbol: string 
         currentClassId = baseClass.extendsClass;
     }
 
-    return { found: true, symbol, members, inheritedMembers };
+    return { found: true, symbol, members, inheritedMembers, ...(chainTruncated ? { chainTruncated } : {}) };
 }
 
 export function findReferences(index: CodeIntelIndex, args: { symbol: string; maxResults?: number }): {
@@ -537,7 +546,14 @@ export function impactContract(index: CodeIntelIndex, args: {
             if (s.overrideKind !== 'delegation' || !s.inheritsFrom) return false;
             const baseMethod = symbolsById.get(s.inheritsFrom);
             if (!baseMethod) return false;
-            return directImpact.detail.includes(baseMethod.fqn);
+            // F8: word-boundary match to avoid prefix collisions
+            // (e.g. "FooBase.runner(dto)" must NOT match for fqn "FooBase.run").
+            const fqn = baseMethod.fqn;
+            const detail = directImpact.detail;
+            return detail === fqn
+                || detail.startsWith(fqn + '(')
+                || detail.includes(' ' + fqn + '(')
+                || detail.includes(' ' + fqn + ' ');
         });
 
         for (const wrapper of delegationWrappers) {
