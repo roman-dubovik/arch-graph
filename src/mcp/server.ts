@@ -609,7 +609,10 @@ export async function startMcpServer(opts: { out: string; config?: string }): Pr
                 'or a path fragment (e.g. "apps/api/users/users.service.ts"). ' +
                 'When a short name is shared across files (e.g. two modules both export "setup"), ALL matches are returned — ' +
                 'pass a path suffix in the query to narrow to one file. Each match carries a composite, file-qualified `id` ' +
-                'that downstream tools (find_references, get_type_definition, etc.) accept for unambiguous lookup.',
+                'that downstream tools (find_references, get_type_definition, etc.) accept for unambiguous lookup. ' +
+                'For ambiguous class names that appear in multiple services, the composite `id` disambiguates. ' +
+                'When results include both delegation wrappers and real implementations of the same method, real implementations ' +
+                'rank higher; delegation wrappers carry a `note` field pointing at the base method id.',
             inputSchema: resolveSymbolInputShape,
         },
         async ({ query }) => jsonResult(resolveSymbol(await loadCodeIntelFn(), query)),
@@ -627,7 +630,11 @@ export async function startMcpServer(opts: { out: string; config?: string }): Pr
     server.registerTool(
         'get_type_definition',
         {
-            description: 'Returns class/DTO/db-entity member list (fields with types, decorators, JSDoc).',
+            description:
+                'Returns class/DTO/db-entity member list (fields with types, decorators, JSDoc). ' +
+                'Returns both own members and inherited members from base classes (resolved through the `extends` chain). ' +
+                'Inherited members carry an `inheritedFrom` reference, and overridden own members carry `inheritedFrom` + ' +
+                '`overrideKind` (delegation/augmented/replaced).',
             inputSchema: getTypeDefinitionInputShape,
         },
         async ({ symbol }) => jsonResult(getTypeDefinition(await loadCodeIntelFn(), { symbol })),
@@ -636,7 +643,11 @@ export async function startMcpServer(opts: { out: string; config?: string }): Pr
     server.registerTool(
         'find_references',
         {
-            description: 'All call/impact/flow references to a symbol across the project.',
+            description:
+                'All call/impact/flow references to a symbol across the project. ' +
+                'Includes `super-call` sites for base-class members and the routing sites (HTTP/MCP decorator wrappers) ' +
+                'that reach base through subclass delegation. When the queried symbol is itself a delegation wrapper, ' +
+                'the response carries `viaDelegation: true`.',
             inputSchema: findReferencesInputShape,
         },
         async ({ symbol, maxResults }) =>
@@ -686,6 +697,10 @@ export async function startMcpServer(opts: { out: string; config?: string }): Pr
                 'The optional `info.nameCollisions` field counts top-level functions/types/params with the same ' +
                 'short name across files (e.g. two modules both exporting `setup`); this is NORMAL omonymy and does ' +
                 'NOT affect status — pass a path suffix in resolve_symbol queries to target a specific file. ' +
+                'Inheritance-based delegation collisions are filtered automatically: if N duplicate methods all have ' +
+                '`overrideKind: \'delegation\'` pointing to the same base, they are NOT reported as dangerous. ' +
+                'Class-level collisions (two classes with the same name in different microservices) and collisions ' +
+                'where at least one method has `overrideKind: \'augmented\'` or `\'replaced\'` stay flagged. ' +
                 'Use this if other tools return unexpected or empty results.',
             inputSchema: {},
         },
