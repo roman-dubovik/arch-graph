@@ -79,6 +79,8 @@ export function selfCheck(index: CodeIntelIndex): {
     // expected in modular codebases and the LLM is taught (via tool
     // description) to qualify with a path suffix when it matters.
     const DANGEROUS_KINDS = new Set<CodeIntelSymbol['kind']>(['method', 'field', 'class', 'dto', 'db-entity', 'type']);
+    // Class-level (structural) kinds always remain dangerous when colliding.
+    const CLASS_LEVEL_KINDS = new Set<CodeIntelSymbol['kind']>(['class', 'dto', 'db-entity', 'type']);
     const ambSet = new Set(amb);
     const buckets = new Map<string, CodeIntelSymbol[]>();
     if (amb.length > 0) {
@@ -91,7 +93,24 @@ export function selfCheck(index: CodeIntelIndex): {
     }
     const dangerous = amb.filter((fqn) => {
         const bucket = buckets.get(fqn) ?? [];
-        return bucket.filter((s) => DANGEROUS_KINDS.has(s.kind)).length > 1;
+        const structuralDups = bucket.filter((s) => DANGEROUS_KINDS.has(s.kind));
+        if (structuralDups.length <= 1) return false;
+
+        // B8: class-level kinds always stay dangerous
+        const hasClassLevelDup = structuralDups.some((s) => CLASS_LEVEL_KINDS.has(s.kind));
+        if (hasClassLevelDup) return true;
+
+        // Check delegation-only condition
+        const allAreDelegation = structuralDups.every(
+            (s) => s.overrideKind === 'delegation' && s.inheritsFrom !== undefined,
+        );
+        if (!allAreDelegation) return true;
+
+        // All point to the SAME base member?
+        const baseIds = new Set(structuralDups.map((s) => s.inheritsFrom));
+        if (baseIds.size !== 1) return true;
+
+        return false;
     });
 
     // Degraded branch: any combination of skipped files + dangerous collisions.
@@ -179,12 +198,26 @@ export function getOrientation(index: CodeIntelIndex): {
 
 export function resolveSymbol(index: CodeIntelIndex, query: string): {
     query: string;
-    matches: CodeIntelSymbol[];
+    matches: (CodeIntelSymbol & { note?: string })[];
 } {
-    const matches = index.symbols
+    const rawMatches = index.symbols
         .filter((s) => matchesTarget(s.fqn, query) || matchesTarget(s.name, query) || matchesFile(s.file, query))
-        .sort((a, b) => symbolRank(a) - symbolRank(b) || a.fqn.length - query.length)
+        .sort((a, b) => {
+            // B1: rank real impls before delegation wrappers
+            const da = a.overrideKind === 'delegation' ? 1 : 0;
+            const db = b.overrideKind === 'delegation' ? 1 : 0;
+            if (da !== db) return da - db;
+            return symbolRank(a) - symbolRank(b) || a.fqn.length - query.length;
+        })
         .slice(0, 10);
+
+    // B1: Attach delegation note (use a copy, never mutate original)
+    const matches = rawMatches.map((s) => {
+        if (s.overrideKind === 'delegation' && s.inheritsFrom) {
+            return { ...s, note: `decorator wrapper, delegates to ${s.inheritsFrom}` };
+        }
+        return s;
+    });
 
     return { query, matches };
 }
@@ -210,40 +243,94 @@ export function getFileOutline(index: CodeIntelIndex, args: { file: string }): {
 export function getTypeDefinition(index: CodeIntelIndex, args: { symbol: string }): {
     found: boolean;
     symbol?: CodeIntelSymbol;
-    members: Array<{ kind: string; name: string; type?: string; description?: string; decorators?: string[] }>;
+    members: Array<{ kind: string; name: string; type?: string; description?: string; decorators?: string[]; inheritedFrom?: string; overrideKind?: string }>;
+    inheritedMembers?: Array<{ kind: string; name: string; type?: string; description?: string; decorators?: string[]; inheritedFrom: string }>;
 } {
     const resolved = resolveSymbol(index, args.symbol).matches;
     const symbol = resolved.find((s) => s.kind === 'class' || s.kind === 'dto' || s.kind === 'type' || s.kind === 'db-entity') ?? resolved[0];
     if (!symbol) return { found: false, members: [] };
 
-    const members = index.symbols
+    // Own members (direct children)
+    const ownMemberSymbols = index.symbols
         .filter((s) => s.parentId === symbol.id)
-        .sort((a, b) => a.line - b.line)
-        .map((s) => ({
-            kind: s.kind,
-            name: s.name,
-            type: s.type,
-            description: s.description,
-            decorators: s.decorators,
-        }));
+        .sort((a, b) => a.line - b.line);
 
-    return { found: true, symbol, members };
+    const members = ownMemberSymbols.map((s) => ({
+        kind: s.kind,
+        name: s.name,
+        type: s.type,
+        description: s.description,
+        decorators: s.decorators,
+        // B2: annotate overridden members with heritage info
+        ...(s.inheritsFrom !== undefined ? { inheritedFrom: s.inheritsFrom } : {}),
+        ...(s.overrideKind !== undefined ? { overrideKind: s.overrideKind } : {}),
+    }));
+
+    // B2: Collect inherited members by climbing the extendsClass chain
+    const inheritedMembers: Array<{ kind: string; name: string; type?: string; description?: string; decorators?: string[]; inheritedFrom: string }> = [];
+    const ownMemberNames = new Set(ownMemberSymbols.map((s) => s.name));
+
+    const symbolsById = new Map<string, CodeIntelSymbol>();
+    for (const s of index.symbols) {
+        symbolsById.set(s.id, s);
+    }
+
+    let currentClassId: string | undefined = symbol.extendsClass;
+    const visitedClassIds = new Set<string>();
+    while (currentClassId && !visitedClassIds.has(currentClassId)) {
+        visitedClassIds.add(currentClassId);
+        const baseClass = symbolsById.get(currentClassId);
+        if (!baseClass) break;
+
+        const baseMembers = index.symbols.filter((s) => s.parentId === baseClass.id);
+        for (const bm of baseMembers) {
+            if (!ownMemberNames.has(bm.name)) {
+                inheritedMembers.push({
+                    kind: bm.kind,
+                    name: bm.name,
+                    type: bm.type,
+                    description: bm.description,
+                    decorators: bm.decorators,
+                    inheritedFrom: baseClass.id,
+                });
+                ownMemberNames.add(bm.name);
+            }
+        }
+
+        currentClassId = baseClass.extendsClass;
+    }
+
+    return { found: true, symbol, members, inheritedMembers };
 }
 
 export function findReferences(index: CodeIntelIndex, args: { symbol: string; maxResults?: number }): {
     query: string;
     symbol?: CodeIntelSymbol;
     references: Array<{ kind: 'call' | 'impact' | 'flow'; file: string; line: number; context: string }>;
+    viaDelegation?: boolean;
 } {
     const resolved = resolveSymbol(index, args.symbol).matches[0];
     if (!resolved) return { query: args.symbol, references: [] };
 
     const references: Array<{ kind: 'call' | 'impact' | 'flow'; file: string; line: number; context: string }> = [];
 
-    // 1. Calls (where a method is called)
+    // 1. Calls (includes super-call edges — B3)
     index.calls.filter((c) => c.calleeId === resolved.id).forEach((c) => {
         references.push({ kind: 'call', file: c.file, line: c.line, context: c.expression });
     });
+
+    // B3: Surface routing sites from delegation-wrapper subclasses
+    const delegationWrappers = index.symbols.filter(
+        (s) => s.inheritsFrom === resolved.id && s.overrideKind === 'delegation',
+    );
+    for (const wrapper of delegationWrappers) {
+        const decorators = wrapper.decorators ?? [];
+        if (decorators.length > 0) {
+            references.push({ kind: 'call', file: wrapper.file, line: wrapper.line, context: `${wrapper.fqn} [${decorators.join(', ')}]` });
+        } else {
+            references.push({ kind: 'call', file: wrapper.file, line: wrapper.line, context: wrapper.fqn });
+        }
+    }
 
     // 2. Impacts (type references, DTO usages)
     index.impacts.filter((i) => i.symbolId === resolved.id).forEach((i) => {
@@ -255,11 +342,18 @@ export function findReferences(index: CodeIntelIndex, args: { symbol: string; ma
         references.push({ kind: 'flow', file: f.file, line: f.line, context: `Flow via ${f.via}` });
     });
 
-    return {
+    const result: ReturnType<typeof findReferences> = {
         query: args.symbol,
         symbol: resolved,
         references: references.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line).slice(0, args.maxResults ?? 50),
     };
+
+    // B4: Flag delegation wrappers
+    if (resolved.overrideKind === 'delegation') {
+        result.viaDelegation = true;
+    }
+
+    return result;
 }
 
 export function explainDataFlow(index: CodeIntelIndex, args: {
@@ -271,6 +365,7 @@ export function explainDataFlow(index: CodeIntelIndex, args: {
     target: string;
     param: string;
     flows: CodeIntelFlow[];
+    follows?: Array<{ from: string; to: string; via: string }>;
 } {
     const resolved = resolveSymbol(index, args.target).matches.find((s) => s.kind === 'method' || s.kind === 'function');
     if (!resolved) return { found: false, target: args.target, param: args.param, flows: [] };
@@ -280,7 +375,27 @@ export function explainDataFlow(index: CodeIntelIndex, args: {
         .sort((a, b) => (sinkRank(a.sinkKind) - sinkRank(b.sinkKind)) || a.line - b.line)
         .slice(0, args.maxResults ?? 10);
 
-    return { found: flows.length > 0, target: resolved.fqn, param: args.param, flows };
+    const follows: Array<{ from: string; to: string; via: string }> = [];
+    for (const flow of flows) {
+        if (flow.to) {
+            const superCallEdge = index.calls.find(
+                (c) => c.callerId === resolved.id && c.kind === 'super-call' && (c.callee === flow.to || c.calleeId === flow.to),
+            );
+            if (superCallEdge) {
+                follows.push({ from: resolved.fqn, to: flow.to, via: superCallEdge.expression });
+            } else if (flow.via && flow.via.includes('super')) {
+                follows.push({ from: resolved.fqn, to: flow.to, via: flow.via });
+            }
+        }
+    }
+
+    return {
+        found: flows.length > 0,
+        target: resolved.fqn,
+        param: args.param,
+        flows,
+        ...(follows.length > 0 ? { follows } : {}),
+    };
 }
 
 export function explainBranch(index: CodeIntelIndex, args: { file: string; line: number }): {
@@ -406,9 +521,42 @@ export function impactContract(index: CodeIntelIndex, args: {
             impacts: [],
         };
     }
-    const impacts = index.impacts
+    const directImpacts = index.impacts
         .filter((impact) => impact.symbolId === symbol.id && (!args.field || impact.field === args.field || impact.detail.includes(args.field)))
-        .sort((a, b) => impactRank(a, Boolean(args.field)) - impactRank(b, Boolean(args.field)) || a.file.localeCompare(b.file) || a.line - b.line)
+        .sort((a, b) => impactRank(a, Boolean(args.field)) - impactRank(b, Boolean(args.field)) || a.file.localeCompare(b.file) || a.line - b.line);
+
+    // B7: Synthetic impacts for delegation subclasses
+    const syntheticImpacts: CodeIntelImpact[] = [];
+    const symbolsById = new Map<string, CodeIntelSymbol>();
+    for (const s of index.symbols) {
+        symbolsById.set(s.id, s);
+    }
+
+    for (const directImpact of directImpacts) {
+        const delegationWrappers = index.symbols.filter((s) => {
+            if (s.overrideKind !== 'delegation' || !s.inheritsFrom) return false;
+            const baseMethod = symbolsById.get(s.inheritsFrom);
+            if (!baseMethod) return false;
+            return directImpact.detail.includes(baseMethod.fqn);
+        });
+
+        for (const wrapper of delegationWrappers) {
+            const detail = `${wrapper.fqn}(dto: ${symbol.fqn}) [via delegation]`;
+            syntheticImpacts.push({
+                id: `synthetic:${directImpact.id}:${wrapper.id}`,
+                symbolId: symbol.id,
+                symbol: symbol.fqn,
+                kind: directImpact.kind,
+                detail,
+                risk: directImpact.risk,
+                file: wrapper.file,
+                line: wrapper.line,
+                column: wrapper.column ?? 1,
+            });
+        }
+    }
+
+    const impacts = [...directImpacts, ...syntheticImpacts]
         .slice(0, args.maxResults ?? 50);
     const found = impacts.length > 0;
     // Always include `subject` so the caller can see what we resolved, even
@@ -538,7 +686,8 @@ function walkScenario(
 }
 
 function isTraceRelevantCall(call: CodeIntelCall): boolean {
-    return call.kind === undefined || call.kind === 'internal';
+    // B5: allow super-call edges so traceScenario follows inheritance chains
+    return call.kind === undefined || call.kind === 'internal' || call.kind === 'super-call';
 }
 
 function matchesTarget(value: string, target: string): boolean {
