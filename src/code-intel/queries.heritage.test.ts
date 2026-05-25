@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    explainDataFlow,
     findReferences,
     getTypeDefinition,
     impactContract,
@@ -348,7 +349,7 @@ describe('queries — heritage v1 (RED)', () => {
                 path: ['dto', 'super.run(dto)', 'FooBase.run.dto'],
             });
 
-            const flow = explainDataFlowSafely(index, { target: 'FooImpl.run', param: 'dto' });
+            const flow = explainDataFlow(index, { target: 'FooImpl.run', param: 'dto' });
             expect(flow.found).toBe(true);
 
             const followed = flow as unknown as {
@@ -518,14 +519,3 @@ describe('queries — heritage v1 (RED)', () => {
     });
 });
 
-// Wrapper around explainDataFlow that imports lazily — RED-phase guard so the
-// test file compiles cleanly even if Wave 2 hasn't been implemented yet. The
-// import resolves to the existing export; tests fail at runtime on the
-// behaviour assertions, not on import resolution.
-function explainDataFlowSafely(
-    ...args: Parameters<typeof import('./queries.js')['explainDataFlow']>
-): ReturnType<typeof import('./queries.js')['explainDataFlow']> {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const m = require('./queries.js') as typeof import('./queries.js');
-    return m.explainDataFlow(...args);
-}
