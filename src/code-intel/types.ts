@@ -11,7 +11,10 @@ export type CodeIntelCallKind =
     | 'common-object-method'
     | 'process-env'
     | 'framework'
+    | 'super-call'
     | 'unknown';
+
+export type CodeIntelOverrideKind = 'delegation' | 'augmented' | 'replaced';
 
 export interface CodeIntelManifest {
     schemaVersion: number;
@@ -46,6 +49,28 @@ export interface CodeIntelSymbol extends SourceLoc {
     decorators?: string[];
     description?: string;
     qualityScore?: number;
+    /**
+     * For `kind: 'class'` — composite id of the directly extended base class,
+     * resolved through imports / path aliases / workspace packages.
+     * See docs/plans/2026-05-25-code-intel-heritage-v1-design.md §A1.
+     */
+    extendsClass?: string;
+    /**
+     * For `kind: 'class'` — generic type arguments as written in the `extends`
+     * clause, e.g. `['AreaEntity', 'AreaCreateDto']`. See §A1, §A5.
+     */
+    extendsTypeArgs?: string[];
+    /**
+     * For `kind: 'method' | 'field'` — composite id of the base-class member
+     * the subclass redeclares (same name in a class along the `extends` chain).
+     * See §A2.
+     */
+    inheritsFrom?: string;
+    /**
+     * For `kind: 'method'` — classification of how the override interacts with
+     * its base implementation. See §A2 for the three-way contract.
+     */
+    overrideKind?: CodeIntelOverrideKind;
 }
 
 export interface CodeIntelCall extends SourceLoc {
