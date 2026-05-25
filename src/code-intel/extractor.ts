@@ -1,4 +1,4 @@
-import { Node, Project, SyntaxKind, type CallExpression, type FunctionDeclaration, type MethodDeclaration, type Node as MorphNode, type ParameterDeclaration, type PropertyAccessExpression, type SourceFile, type TypeAliasDeclaration } from 'ts-morph';
+import { Node, Project, SyntaxKind, type CallExpression, type ClassDeclaration, type FunctionDeclaration, type MethodDeclaration, type Node as MorphNode, type ParameterDeclaration, type PropertyAccessExpression, type SourceFile, type TypeAliasDeclaration } from 'ts-morph';
 
 import type {
     CodeIntelBranch,
@@ -182,6 +182,23 @@ export function extractCodeIntel(project: Project, opts: CodeIntelExtractOptions
             const msg = sfErr instanceof Error ? sfErr.message : String(sfErr);
             skippedFiles.push({ file: sf.getFilePath(), error: msg });
             process.stderr.write(`[code-intel] skipping ${sf.getFilePath()}: ${msg}\n`);
+        }
+    }
+
+    // Heritage pass: resolve extends chains, classify overrides, emit super-call edges (A1–A7).
+    const pathAliases = collectPathAliases(project, opts.root);
+    for (const sf of project.getSourceFiles()) {
+        if (sf.isDeclarationFile()) continue;
+        const imports = importsForSourceFile(sf);
+        for (const cls of sf.getClasses()) {
+            const name = cls.getName();
+            if (!name) continue;
+            try {
+                extractHeritageForClass(cls, name, sf, imports, project, opts.root, pathAliases, symbolsByFqn, symbolsById, calls);
+            } catch (heritageErr) {
+                const msg = heritageErr instanceof Error ? heritageErr.message : String(heritageErr);
+                skippedFiles.push({ file: `${sf.getFilePath()} (heritage:${name})`, error: msg });
+            }
         }
     }
 
@@ -1283,4 +1300,438 @@ function withoutUndefined<T extends Record<string, unknown>>(obj: T): Partial<T>
 
 function escapeRegExp(s: string): string {
     return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// ─── Heritage pass helpers (A1–A7) ──────────────────────────────────────────
+
+/**
+ * Collect tsconfig path aliases from any tsconfig*.json / tsconfig.base.json
+ * files present in the in-memory project. Returns a map of alias → resolved
+ * absolute file path (the first entry in the `paths` array).
+ *
+ * Only the first path entry per alias is used (barrels always list one target).
+ * Paths are relative to the tsconfig file's directory.
+ */
+function collectPathAliases(project: Project, root: string): Map<string, string> {
+    const aliases = new Map<string, string>();
+    for (const sf of project.getSourceFiles()) {
+        const filePath = sf.getFilePath();
+        if (!/tsconfig.*\.json$/.test(filePath)) continue;
+        let parsed: unknown;
+        try {
+            parsed = JSON.parse(sf.getFullText());
+        } catch {
+            continue;
+        }
+        if (!parsed || typeof parsed !== 'object') continue;
+        const co = (parsed as Record<string, unknown>).compilerOptions;
+        if (!co || typeof co !== 'object') continue;
+        const pathsObj = (co as Record<string, unknown>).paths;
+        if (!pathsObj || typeof pathsObj !== 'object') continue;
+        const tsConfigDir = filePath.replace(/\/[^/]+$/, '');
+        for (const [alias, targets] of Object.entries(pathsObj as Record<string, string[]>)) {
+            if (!Array.isArray(targets) || targets.length === 0) continue;
+            const firstTarget = targets[0];
+            // Resolve relative to the tsconfig dir; normalise to absolute.
+            const absTarget = firstTarget.startsWith('/')
+                ? firstTarget
+                : `${tsConfigDir}/${firstTarget}`;
+            // Strip the `root` prefix so we can compare against symbol files.
+            // Keep as absolute path for resolution later.
+            aliases.set(alias, absTarget);
+        }
+    }
+    return aliases;
+}
+
+/**
+ * Resolve a module specifier to a source file in the project.
+ * Handles: relative imports, tsconfig path aliases.
+ * Returns undefined if the base cannot be located.
+ */
+function resolveImportToSourceFile(
+    moduleSpecifier: string,
+    importingFilePath: string,
+    project: Project,
+    pathAliases: Map<string, string>,
+): SourceFile | undefined {
+    if (moduleSpecifier.startsWith('.')) {
+        // Relative import — resolve from the importing file's directory.
+        const importingDir = importingFilePath.replace(/\/[^/]+$/, '');
+        const candidates = [
+            `${importingDir}/${moduleSpecifier}`,
+            `${importingDir}/${moduleSpecifier}.ts`,
+            `${importingDir}/${moduleSpecifier}/index.ts`,
+        ];
+        for (const candidate of candidates) {
+            const sf = project.getSourceFile(candidate);
+            if (sf) return sf;
+        }
+        return undefined;
+    }
+
+    // Path alias — try exact match first, then prefix match (e.g. `@org/pkg/*`).
+    const exactTarget = pathAliases.get(moduleSpecifier);
+    if (exactTarget) {
+        // The target is a barrel; resolve it directly.
+        const sf = project.getSourceFile(exactTarget);
+        if (sf) return sf;
+        // Also try without extension or with .ts
+        for (const ext of ['', '.ts', '/index.ts']) {
+            const sf2 = project.getSourceFile(exactTarget + ext);
+            if (sf2) return sf2;
+        }
+    }
+
+    // Prefix wildcard aliases, e.g. `@org/pkg/*` → `libs/pkg/src/*`
+    for (const [alias, target] of pathAliases) {
+        if (!alias.endsWith('/*')) continue;
+        const prefix = alias.slice(0, -2); // strip `/*`
+        if (!moduleSpecifier.startsWith(prefix + '/')) continue;
+        const suffix = moduleSpecifier.slice(prefix.length + 1);
+        const baseTarget = target.endsWith('/index.ts')
+            ? target.replace('/index.ts', '')
+            : target.endsWith('/*')
+                ? target.slice(0, -2)
+                : target;
+        const candidates = [
+            `${baseTarget}/${suffix}`,
+            `${baseTarget}/${suffix}.ts`,
+            `${baseTarget}/${suffix}/index.ts`,
+        ];
+        for (const candidate of candidates) {
+            const sf = project.getSourceFile(candidate);
+            if (sf) return sf;
+        }
+    }
+
+    return undefined;
+}
+
+/**
+ * Given a source file (possibly a barrel), resolve the exported name to the
+ * source file that actually declares it. Follows one level of re-exports.
+ */
+function resolveExportedNameToSourceFile(
+    barrelSf: SourceFile,
+    exportedName: string,
+    project: Project,
+    pathAliases: Map<string, string>,
+): SourceFile | undefined {
+    // Check if the name is declared directly in this file.
+    if (barrelSf.getClasses().some((c) => c.getName() === exportedName)) return barrelSf;
+
+    // Look for re-export: `export { FooBase } from './base.controller'`
+    for (const decl of barrelSf.getExportDeclarations()) {
+        const namedExports = decl.getNamedExports();
+        const found = namedExports.find((ne) => {
+            // exported name could be aliased: `export { Foo as FooAlias }`
+            return ne.getAliasNode()?.getText() === exportedName || ne.getName() === exportedName;
+        });
+        if (!found) continue;
+        const moduleSpec = decl.getModuleSpecifierValue();
+        if (!moduleSpec) continue;
+        const nextSf = resolveImportToSourceFile(moduleSpec, barrelSf.getFilePath(), project, pathAliases);
+        if (nextSf) return nextSf;
+    }
+
+    // Also handle `export * from './x'`
+    for (const decl of barrelSf.getExportDeclarations()) {
+        if (decl.getNamedExports().length > 0) continue; // already handled
+        const moduleSpec = decl.getModuleSpecifierValue();
+        if (!moduleSpec) continue;
+        const nextSf = resolveImportToSourceFile(moduleSpec, barrelSf.getFilePath(), project, pathAliases);
+        if (!nextSf) continue;
+        if (nextSf.getClasses().some((c) => c.getName() === exportedName)) return nextSf;
+    }
+
+    return undefined;
+}
+
+/**
+ * Resolve a base class name (as it appears in the extends clause) to the
+ * CodeIntelSymbol for that class.
+ *
+ * Strategy:
+ * 1. Look up the name in the current file's class declarations.
+ * 2. Look up the name in the imports map → resolve the import to a source file
+ *    (relative or path-alias) → find the class in that file.
+ * 3. Fallback: search symbolsByFqn directly (handles cases where the class was
+ *    already indexed from a cross-file source in the same project run).
+ */
+function resolveBaseClassSymbol(
+    baseName: string,
+    currentFilePath: string,
+    imports: Map<string, ImportBinding>,
+    project: Project,
+    pathAliases: Map<string, string>,
+    symbolsByFqn: Map<string, CodeIntelSymbol[]>,
+): CodeIntelSymbol | undefined {
+    // 1. Same-file — direct FQN lookup.
+    const sameFileCandidates = (symbolsByFqn.get(baseName) ?? []).filter(
+        (s) => s.kind === 'class' && s.file === currentFilePath.replace(/^\/+/, '').replace(/^.*?(?=src\/)/, ''),
+    );
+    // More precise: match by absolute path.
+    const absoluteCurrentFile = currentFilePath;
+    const byFilePath = (symbolsByFqn.get(baseName) ?? []).filter((s) => {
+        // s.file is relative (root-stripped); reconstruct absolute path not feasible here.
+        // Instead check imports map first.
+        return s.kind === 'class';
+    });
+
+    // Try imports map first (handles same-file and cross-file).
+    const importBinding = imports.get(baseName);
+    if (importBinding) {
+        if (!importBinding.isExternal) {
+            // Relative import — resolve and find the class in that file.
+            const targetSf = resolveImportToSourceFile(importBinding.module, absoluteCurrentFile, project, pathAliases);
+            if (targetSf) {
+                // First check if the class is directly in this file.
+                let sourceSf = targetSf;
+                if (!targetSf.getClasses().some((c) => c.getName() === baseName)) {
+                    // It's a barrel — follow re-exports.
+                    const deeper = resolveExportedNameToSourceFile(targetSf, baseName, project, pathAliases);
+                    if (deeper) sourceSf = deeper;
+                }
+                const candidates = (symbolsByFqn.get(baseName) ?? []).filter(
+                    (s) => s.kind === 'class' && sourceSf.getClasses().some((c) => c.getName() === baseName),
+                );
+                // Find the symbol whose file path matches the resolved source file.
+                const sfPath = sourceSf.getFilePath();
+                const match = (symbolsByFqn.get(baseName) ?? []).find(
+                    (s) => s.kind === 'class' && sfPath.includes(s.file),
+                );
+                if (match) return match;
+            }
+        } else {
+            // External path alias — look up via path alias map.
+            const targetSf = resolveImportToSourceFile(importBinding.module, absoluteCurrentFile, project, pathAliases);
+            if (targetSf) {
+                let sourceSf = targetSf;
+                if (!targetSf.getClasses().some((c) => c.getName() === baseName)) {
+                    const deeper = resolveExportedNameToSourceFile(targetSf, baseName, project, pathAliases);
+                    if (deeper) sourceSf = deeper;
+                }
+                const sfPath = sourceSf.getFilePath();
+                const match = (symbolsByFqn.get(baseName) ?? []).find(
+                    (s) => s.kind === 'class' && sfPath.includes(s.file),
+                );
+                if (match) return match;
+            }
+        }
+    }
+
+    // 2. Fallback: best match from symbolsByFqn (same-file preference).
+    const allCandidates = (symbolsByFqn.get(baseName) ?? []).filter((s) => s.kind === 'class');
+    if (allCandidates.length === 1) return allCandidates[0];
+    // Prefer the one from the same file.
+    const sameFile = allCandidates.find((s) => absoluteCurrentFile.endsWith(s.file) || absoluteCurrentFile.includes(s.file));
+    return sameFile ?? allCandidates[0];
+}
+
+/**
+ * Given a method node, classify how it interacts with its base implementation.
+ *
+ * delegation — body is exactly `return super.X(args)` or `return await super.X(args)`
+ *              with identity-passthrough (all super call args are bare parameter names,
+ *              same set as the method's own parameters, no transformation).
+ * augmented  — calls super but the body has other statements or transforms args.
+ * replaced   — does not reference super at all.
+ */
+function classifyOverrideKind(method: MethodDeclaration): 'delegation' | 'augmented' | 'replaced' {
+    const body = method.getBody();
+    if (!body) return 'replaced';
+
+    // Collect all super property-access call expressions in the body.
+    const superCalls: CallExpression[] = [];
+    body.forEachDescendant((node) => {
+        if (!Node.isCallExpression(node)) return;
+        const expr = node.getExpression();
+        if (!Node.isPropertyAccessExpression(expr)) return;
+        const obj = expr.getExpression();
+        if (Node.isSuperExpression(obj)) superCalls.push(node);
+    });
+
+    if (superCalls.length === 0) return 'replaced';
+
+    // Check for delegation: body has exactly one statement, which is
+    // `return super.X(...identityArgs)`.
+    const statements = body.getStatements();
+    if (statements.length !== 1) return 'augmented';
+
+    const stmt = statements[0];
+    if (!Node.isReturnStatement(stmt)) return 'augmented';
+
+    const returnExpr = stmt.getExpression();
+    // Unwrap optional `await`.
+    const inner = returnExpr && Node.isAwaitExpression(returnExpr)
+        ? returnExpr.getExpression()
+        : returnExpr;
+
+    if (!inner || !Node.isCallExpression(inner)) return 'augmented';
+    const innerExpr = inner.getExpression();
+    if (!Node.isPropertyAccessExpression(innerExpr)) return 'augmented';
+    if (!Node.isSuperExpression(innerExpr.getExpression())) return 'augmented';
+
+    // Verify identity-passthrough: super call args must be bare identifier names
+    // that match the method's parameter names exactly (same names, no transforms).
+    const methodParamNames = method.getParameters().map((p) => p.getName());
+    const superArgs = inner.getArguments().map((a) => a.getText().trim());
+
+    // All super args must be bare identifiers matching method params.
+    const isIdentityPassthrough = superArgs.every((arg) => {
+        // Must be a simple identifier (no transforms like `{ ...arg }`, `arg.x`, etc.)
+        return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(arg) && methodParamNames.includes(arg);
+    });
+
+    return isIdentityPassthrough ? 'delegation' : 'augmented';
+}
+
+/**
+ * Walk the extends chain (following extendsClass ids through symbolsById) to
+ * find the nearest ancestor class that declares a method named `methodName`.
+ * Returns the symbol for that base method, or undefined if none found.
+ */
+function findAncestorMethod(
+    baseClassId: string | undefined,
+    methodName: string,
+    symbolsById: Map<string, CodeIntelSymbol>,
+    symbolsByFqn: Map<string, CodeIntelSymbol[]>,
+): CodeIntelSymbol | undefined {
+    let currentId = baseClassId;
+    const visited = new Set<string>();
+    while (currentId) {
+        if (visited.has(currentId)) break; // cycle guard
+        visited.add(currentId);
+        const cls = symbolsById.get(currentId);
+        if (!cls) break;
+        // Look for a method with this name under this class.
+        const methodFqn = `${cls.name}.${methodName}`;
+        const candidates = symbolsByFqn.get(methodFqn) ?? [];
+        // Prefer the one belonging to this exact class (file match).
+        const match = candidates.find((s) => (s.kind === 'method' || s.kind === 'field') && s.file === cls.file)
+            ?? candidates.find((s) => s.kind === 'method' || s.kind === 'field');
+        if (match) return match;
+        // Climb to the grandparent.
+        currentId = cls.extendsClass;
+    }
+    return undefined;
+}
+
+/**
+ * Main heritage extraction for one class. Called per-class with its own
+ * try/catch in the caller (A7 isolation).
+ */
+function extractHeritageForClass(
+    cls: ClassDeclaration,
+    name: string,
+    sf: SourceFile,
+    imports: Map<string, ImportBinding>,
+    project: Project,
+    root: string,
+    pathAliases: Map<string, string>,
+    symbolsByFqn: Map<string, CodeIntelSymbol[]>,
+    symbolsById: Map<string, CodeIntelSymbol>,
+    calls: CodeIntelCall[],
+): void {
+    // Find the class's own symbol.
+    const filePath = sf.getFilePath();
+    const classSymbol = (symbolsByFqn.get(name) ?? []).find(
+        (s) => s.kind === 'class' && filePath.includes(s.file),
+    );
+    if (!classSymbol) return;
+
+    // ── A1: extendsClass + extendsTypeArgs ──────────────────────────────────
+    const heritageClause = cls.getHeritageClauseByKind(SyntaxKind.ExtendsKeyword);
+    if (!heritageClause) return; // no extends → nothing to do
+
+    const [heritageType] = heritageClause.getTypeNodes();
+    if (!heritageType) return;
+
+    const baseExpr = heritageType.getExpression();
+    const baseName = baseExpr.getText();
+
+    // Capture type args verbatim.
+    const typeArgs = heritageType.getTypeArguments();
+    if (typeArgs.length > 0) {
+        classSymbol.extendsTypeArgs = typeArgs.map((ta) => ta.getText());
+    }
+
+    // Resolve the base class symbol.
+    const baseClassSymbol = resolveBaseClassSymbol(
+        baseName,
+        filePath,
+        imports,
+        project,
+        pathAliases,
+        symbolsByFqn,
+    );
+    if (baseClassSymbol) {
+        classSymbol.extendsClass = baseClassSymbol.id;
+    }
+
+    // ── A2+A3: methods — inheritsFrom, overrideKind, super-call edges ───────
+    if (!baseClassSymbol) return; // can't resolve — skip method pass (A7: class still in index)
+
+    let superCallOrder = 0;
+    for (const method of cls.getMethods()) {
+        const methodName = method.getName();
+        const methodFqn = `${name}.${methodName}`;
+        const methodSymbol = (symbolsByFqn.get(methodFqn) ?? []).find(
+            (s) => (s.kind === 'method') && filePath.includes(s.file),
+        );
+        if (!methodSymbol) continue;
+
+        // A6: walk the chain to find the nearest ancestor declaring this method.
+        const ancestorMethod = findAncestorMethod(
+            baseClassSymbol.id,
+            methodName,
+            symbolsById,
+            symbolsByFqn,
+        );
+        if (!ancestorMethod) continue; // method only exists in subclass, no inheritsFrom
+
+        methodSymbol.inheritsFrom = ancestorMethod.id;
+        methodSymbol.overrideKind = classifyOverrideKind(method);
+
+        // A3: emit super-call edges for each `super.X(...)` site.
+        const body = method.getBody();
+        if (!body) continue;
+        body.forEachDescendant((node) => {
+            if (!Node.isCallExpression(node)) return;
+            const expr = node.getExpression();
+            if (!Node.isPropertyAccessExpression(expr)) return;
+            const obj = expr.getExpression();
+            if (!Node.isSuperExpression(obj)) return;
+            const superMethodName = expr.getName();
+            // Find the base method being called (may differ from the containing method name).
+            const superMethodFqn = `${baseClassSymbol.name}.${superMethodName}`;
+            // Walk the chain for the super call target too.
+            let targetSymbol: CodeIntelSymbol | undefined = (symbolsByFqn.get(superMethodFqn) ?? []).find(
+                (s) => s.kind === 'method',
+            );
+            if (!targetSymbol) {
+                targetSymbol = findAncestorMethod(baseClassSymbol.id, superMethodName, symbolsById, symbolsByFqn);
+            }
+            if (!targetSymbol) return;
+
+            const loc = locOf(node, root);
+            const superCallId = `call:${methodFqn}:super:${superCallOrder}:${loc.line}:${loc.column}`;
+            superCallOrder++;
+            calls.push({
+                id: superCallId,
+                callerId: methodSymbol.id,
+                caller: methodFqn,
+                callee: targetSymbol.fqn,
+                calleeId: targetSymbol.id,
+                kind: 'super-call',
+                order: superCallOrder,
+                file: loc.file,
+                line: loc.line,
+                column: loc.column,
+                expression: node.getText(),
+                args: node.getArguments().map((a) => a.getText()),
+            });
+        });
+    }
 }
