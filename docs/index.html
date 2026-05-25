@@ -1151,8 +1151,12 @@ arch-graph build --strict            # CI gate: exit 3 if recall drops below flo
     <!-- ──────────────────────────────────── RECENT UPDATES ────────────── -->
     <section class="section section-limits" id="recent" aria-labelledby="recent-title">
       <div class="container">
-        <h2 id="recent-title" class="section-title">13 features shipped.</h2>
+        <h2 id="recent-title" class="section-title">14 features shipped.</h2>
         <ul class="limits-list">
+          <li class="reveal">
+            <h3><code>code-intel-heritage-v1</code></h3>
+            <p>Inheritance-aware code intelligence. The extractor models TypeScript <code>extends</code> chains: class heritage fields, <code>super-call</code> edges, and override classification (<code>delegation</code>/<code>augmented</code>/<code>replaced</code>). <code>get_type_definition</code> returns <code>inheritedMembers</code>; <code>find_references</code> follows super-call edges; <code>self_check</code> filters pure-delegation collisions so only real silent-wrong-answer risks surface.</p>
+          </li>
           <li class="reveal">
             <h3><code>code-intel-stabilization-v1</code></h3>
             <p>Honest health verdict: <code>self_check</code> degrades only on real silent-wrong-answer risks (skipped files, class/method or <code>type</code> name collisions). Composite file-qualified symbol IDs disambiguate when short names repeat. Atomic CLI writes, torn-write tolerant MCP loader. Cursor markers auto-migrate from legacy on re-install; uninstall is markdown-aware and preserves user content.</p>
