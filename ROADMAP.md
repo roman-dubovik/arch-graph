@@ -1,6 +1,6 @@
 # arch-graph roadmap
 
-_Last updated: 2026-05-24_
+_Last updated: 2026-05-25_
 
 No ETAs. Order within a section is rough priority, not a commitment.
 
@@ -9,6 +9,9 @@ No ETAs. Order within a section is rough priority, not a commitment.
 A deterministic TypeScript architecture-graph builder for NestJS monorepos with an optional local multilingual semantic sidecar. Pipeline: ts-morph extractors → `graph.json` + (optional) `embeddings.jsonl` + `manifest.json`. **Zero LLM tokens at build and query.**
 
 ## Shipped
+
+### Code-intel heritage (2026-05-25)
+- **`code-intel-heritage-v1`** — TypeScript `extends`-chain awareness. Classes record `extendsClass` + `extendsTypeArgs`; methods/fields record `inheritsFrom` + `overrideKind` (`delegation`/`augmented`/`replaced`). `super.X(...)` calls emit `super-call` edges. `get_type_definition` returns `inheritedMembers`. `find_references` follows super-call edges and surfaces `viaDelegation: true` for delegation wrappers. `self_check` filters pure-delegation collisions; class-level and augmented/replaced collisions stay flagged. Per-class extraction isolation prevents a single failure from aborting the index build.
 
 ### Code-intel hardening (2026-05-24)
 - **`code-intel-stabilization-v1`** — Honest `self_check` verdict: degrades only on real silent-wrong-answer risks (skipped files, class/method or `type` collisions where downstream tools would misresolve). Normal short-name omonymy surfaces under `info.nameCollisions`, status stays `ok`.
