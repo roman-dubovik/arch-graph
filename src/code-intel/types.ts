@@ -58,6 +58,8 @@ export interface CodeIntelSymbol extends SourceLoc {
     /**
      * For `kind: 'class'` — generic type arguments as written in the `extends`
      * clause, e.g. `['AreaEntity', 'AreaCreateDto']`. See §A1, §A5.
+     *
+     * Reserved for B6 generic substitution; no v1 query consumes this yet.
      */
     extendsTypeArgs?: string[];
     /**
