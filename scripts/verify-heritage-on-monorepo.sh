@@ -1,14 +1,14 @@
 #!/bin/sh
 # verify-heritage-on-monorepo.sh — local smoke test for code-intel-heritage-v1.
 #
-# Builds the code-intel sidecar against a NestJS monorepo (e.g. target-monorepo) and
+# Builds the code-intel sidecar against any TypeScript / NestJS monorepo and
 # verifies the heritage-aware behavior introduced in commit-range:
 #   c98573a..HEAD (feat/code-intel-heritage-v1)
 #
 # Expected outcomes documented inline below. Run with:
 #
 #   ARCH_GRAPH_BIN=/path/to/arch-graph \
-#   TARGET_REPO=/path/to/your-monorepo      \
+#   TARGET_REPO=/path/to/your/monorepo \
 #   scripts/verify-heritage-on-monorepo.sh
 #
 # Defaults: ARCH_GRAPH_BIN = ./bin/arch-graph  (relative to the arch-graph repo)
@@ -22,9 +22,9 @@
 # reports the BEFORE → AFTER deltas that this feature is expected to produce:
 #
 #   1. self_check.warnings.dangerousCollisions count drops sharply on NestJS
-#      monorepos with BaseController-style delegation wrappers (target-monorepo pre-fix:
-#      ~4485; post-fix expected: <100; exact number depends on what fraction of
-#      your collisions are pure-delegation).
+#      monorepos with BaseController-style delegation wrappers (large monorepos
+#      may go from thousands of false-positives to under 100; the exact number
+#      depends on what fraction of your collisions are pure-delegation).
 #   2. resolve_symbol on a known base method returns the base implementation as
 #      the primary match; delegation wrappers carry note: 'decorator wrapper...'.
 #   3. trace_scenario on a known delegation-wrapper method shows a `super-call`
@@ -40,8 +40,8 @@ ARCH_GRAPH_BIN="${ARCH_GRAPH_BIN:-./bin/arch-graph}"
 TARGET_REPO="${TARGET_REPO:-${ARCH_GRAPH_TARGET_REPO:-}}"
 
 if [ -z "${TARGET_REPO}" ]; then
-    err "TARGET_REPO not set (pass a NestJS monorepo path, e.g. target-monorepo)"
-    err "  usage: TARGET_REPO=/path/to/your-monorepo $0"
+    err "TARGET_REPO not set (pass a TypeScript monorepo path)"
+    err "  usage: TARGET_REPO=/path/to/your/monorepo $0"
     exit 2
 fi
 
@@ -69,7 +69,7 @@ echo "==> Building code-intel sidecar against ${TARGET_REPO}"
 echo "==> 1. self_check"
 "${ABS_BIN}" code-intel self-check || true
 echo "(expected: status 'ok' OR 'degraded' with only LEGITIMATE collisions —"
-echo " not the ~4485-collision flood the pre-fix extractor produced on target-monorepo.)"
+echo " not the pre-fix flood of bogus delegation-wrapper collisions.)"
 echo
 
 echo "==> 2. resolve_symbol probe (pass via TARGET_BASE_FQN / TARGET_SUB_FQN)"

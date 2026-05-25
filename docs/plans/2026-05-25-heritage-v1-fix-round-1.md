@@ -14,7 +14,7 @@ Findings consolidated by team-lead via cross-reviewer dedup. **15 actionable ite
 
 **File:** `src/code-intel/extractor.ts` ~line 1311–1357 (`collectPathAliases`).
 
-**Symptom:** In `commands.ts` the Project is seeded only with `**/*.ts` / `**/*.tsx`. `tsconfig*.json` files are never added. The function iterates `project.getSourceFiles()` looking for tsconfigs — finds none → returns empty map. All target-monorepo-style `@workspace/nest-shared` imports fall through to the FQN-substring fallback and silently bind to the wrong class. Tests pass only because `inMemoryProject` adds tsconfig source files explicitly.
+**Symptom:** In `commands.ts` the Project is seeded only with `**/*.ts` / `**/*.tsx`. `tsconfig*.json` files are never added. The function iterates `project.getSourceFiles()` looking for tsconfigs — finds none → returns empty map. All path-alias imports (any `@workspace/<lib>` tsconfig `paths` entry) fall through to the FQN-substring fallback and silently bind to the wrong class. Tests pass only because `inMemoryProject` adds tsconfig source files explicitly.
 
 **Fix shape:**
 1. Replace the body of `collectPathAliases` so that it discovers tsconfig files via `node:fs` starting from `root` (look for `tsconfig.json`, `tsconfig.base.json` in `root` and one level up — common monorepo layouts). Use `node:fs/promises`? No — keep sync since the extractor is sync. Use `fs.readFileSync` + `JSON.parse`. Handle the in-memory case too: ALSO scan `project.getSourceFiles()` for tsconfigs as today (fixture path), but additionally read from disk for production.

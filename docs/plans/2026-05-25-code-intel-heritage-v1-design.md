@@ -6,7 +6,7 @@ Branch: `feat/code-intel-heritage-v1` (to be created in new session)
 
 ## Goal
 
-Make the code-intel sidecar correctly model TypeScript class inheritance. Currently every class is an isolated symbol with no awareness of `extends`. On real NestJS monorepos (target-monorepo codebase: 48741 symbols, 4485 false-positive "dangerous collisions" in `self_check`), this causes:
+Make the code-intel sidecar correctly model TypeScript class inheritance. Currently every class is an isolated symbol with no awareness of `extends`. On real-world NestJS monorepos (a baseline measurement on a ~48k-symbol target produced ~4500 false-positive "dangerous collisions" in `self_check`), this causes:
 
 - `self_check` reports thousands of bogus structural-name collisions for subclass methods that only decorator-wrap `super.X(...)` calls.
 - `find_references('BaseController.createEntity')` returns nothing — `super` calls are not edges in the call graph.
@@ -29,7 +29,7 @@ Before any implementation, the user pastes the output of the data-gathering prom
 
   `.local-plans/2026-05-25-monorepo-heritage-data.md`
 
-That file contains concrete file paths, code snippets, and patterns from the real target-monorepo monorepo. Implementation choices depend on it (path-alias resolution, generic depth, multi-level inheritance presence, `replaced`-override frequency).
+That file contains concrete file paths, code snippets, and patterns from the user-provided target monorepo. Implementation choices depend on it (path-alias resolution, generic depth, multi-level inheritance presence, `replaced`-override frequency).
 
 **If that file is missing when the session starts, STOP and ask the user before proceeding.** Don't guess at edge cases.
 
@@ -60,7 +60,7 @@ That file contains concrete file paths, code snippets, and patterns from the rea
 
 **A6.** Multi-level inheritance: `A extends B extends C` — each subclass points to its direct parent; resolver can climb the chain.
 
-**A7.** Per-class isolation: a heritage-resolution failure on one class goes into `manifest.warnings.skippedFiles` (or new `skippedClasses` if file-level granularity is too coarse — decide based on target-monorepo data) and other classes still extract correctly.
+**A7.** Per-class isolation: a heritage-resolution failure on one class goes into `manifest.warnings.skippedFiles` (or new `skippedClasses` if file-level granularity is too coarse — decide based on monorepo data) and other classes still extract correctly.
 
 ### B — Queries (downstream behavior)
 
@@ -137,7 +137,7 @@ Real collisions (at least one duplicate has `overrideKind: 'augmented' | 'replac
 | 1.4 | sonnet | 2h | A5, A6 — generics resolution + multi-level chains. |
 | 1.5 | haiku | 1h | A7 — per-class try/catch isolation in heritage pass. |
 
-**QG after Wave 1:** tsc green + full suite + real target-monorepo `code-intel build` produces non-empty `extendsClass` / `inheritsFrom` fields on ≥10 sampled symbols (verify with python script over `symbols.jsonl`).
+**QG after Wave 1:** tsc green + full suite + the target monorepo's `code-intel build` produces non-empty `extendsClass` / `inheritsFrom` fields on ≥10 sampled symbols (verify with python script over `symbols.jsonl`).
 
 ### Wave 2 — Query consumers (mostly parallel)
 
@@ -149,7 +149,7 @@ Real collisions (at least one duplicate has `overrideKind: 'augmented' | 'replac
 | 2.4 | haiku | 1h | B1 — `resolveSymbol` rank |
 | 2.5 | haiku | 30min | B8 — `selfCheck` filter |
 
-**QG after Wave 2:** tsc + suite + real target-monorepo `code-intel self-check` returns `status: "ok"` OR `status: "degraded"` with only LEGITIMATE collisions (e.g., truly duplicate `AreaController` across microservices, NOT delegation wrappers).
+**QG after Wave 2:** tsc + suite + the target monorepo's `code-intel self-check` returns `status: "ok"` OR `status: "degraded"` with only LEGITIMATE collisions (e.g., truly duplicate `AreaController` across microservices, NOT delegation wrappers).
 
 ### Wave 3 — Polish
 
@@ -163,13 +163,13 @@ Real collisions (at least one duplicate has `overrideKind: 'augmented' | 'replac
 - **Phase 5:** pr-review-toolkit (code-reviewer + silent-failure-hunter) on full diff. Re-review after any P0/P1 fix.
 - **Phase 6:** fix loop until 0 P0+P1.
 - **Phase 7:** advisor gate before merge.
-- **Phase 8:** real target-monorepo smoke — `code-intel build && self-check && resolve_symbol AreaController.createEntity && trace_scenario AreaController.createEntity` — verify each query returns the expected new behavior (capture before/after diff).
+- **Phase 8:** the target monorepo's smoke — `code-intel build && self-check && resolve_symbol AreaController.createEntity && trace_scenario AreaController.createEntity` — verify each query returns the expected new behavior (capture before/after diff).
 - **Phase 9:** merge to main (with PR or direct push per session-end conversation).
 
 ## Test strategy
 
 ### Unit tests (vitest, fast)
-Per acceptance criterion A1–A7 and B1–B8 — RED test first. Fixtures use synthetic generic names (`FooController`, `BarService`), no real target-monorepo identifiers.
+Per acceptance criterion A1–A7 and B1–B8 — RED test first. Fixtures use synthetic generic names (`FooController`, `BarService`), no the target monorepo's identifiers.
 
 ### Acceptance tests (vitest, full extractor pipeline)
 Build a minimal fixture monorepo at `src/code-intel/__fixtures__/heritage/`:
@@ -196,7 +196,7 @@ __fixtures__/heritage/
 Run real extractor against this fixture, assert resulting symbols/calls match expected heritage shape.
 
 ### Real-repo smoke (manual + scripted)
-After Wave 2, run on real target-monorepo. Document expected diff in a shell script `scripts/verify-heritage-on-monorepo.sh` for anyone with the target-monorepo checkout. Expected outcomes:
+After Wave 2, run on the target monorepo's. Document expected diff in a shell script `scripts/verify-heritage-on-monorepo.sh` for anyone with the monorepo checkout. Expected outcomes:
 - `self_check.warnings.dangerousCollisions.length` drops from ~4485 to <100
 - `resolve_symbol('BaseController.createEntity')` returns the base implementation as primary match
 - `trace_scenario('AreaController.createEntity')` shows the `super-call` edge into base
@@ -210,25 +210,25 @@ After Wave 2, run on real target-monorepo. Document expected diff in a shell scr
 
 3. **`super.X(transformedArg)` classification.** If subclass changes the argument before passing it: decision is `argument identity-passthrough (same param name, no transform) = delegation`; ANY transform / extra statement = `augmented`. Documented in the classifier code.
 
-4. **Cross-package path-alias resolution.** target-monorepo likely uses `@workspace/common-backend` or similar. Resolver must consult `tsconfig.json` `paths`. We already do this in import-graph extractor; reuse that util — don't write a parallel resolver.
+4. **Cross-package path-alias resolution.** Real monorepos often use `@workspace/common-backend` or similar. Resolver must consult `tsconfig.json` `paths`. We already do this in import-graph extractor; reuse that util — don't write a parallel resolver.
 
 5. **Backward compat.** All new symbol fields are optional → existing consumers ignore them. Schema version stays at `2` (no break). Manifest `warnings` shape stays the same; we just filter `dangerousCollisions` differently.
 
-6. **Sanitization regression risk.** Fixtures must NEVER include real target-monorepo class/file names. Sanitization gate (existing) catches this — re-run after fixture creation.
+6. **Sanitization regression risk.** Fixtures must NEVER include the target monorepo's class/file names. Sanitization gate (existing) catches this — re-run after fixture creation.
 
 ## Patterns to follow
 
 - TDD: every change ships with RED tests written **first** by the team-lead, then dispatched to implementation agents.
-- Sanitization: NO real target-monorepo identifiers in tracked code/tests/fixtures.
+- Sanitization: NO the target monorepo's identifiers in tracked code/tests/fixtures.
 - Atomic writes (existing): no change.
 - Per-file isolation (existing): heritage pass also wrapped in per-class try/catch.
 - Composite IDs (existing): all new cross-refs use composite ids, not short fqns.
 
-## Open questions (answered by target-monorepo data file)
+## Open questions (answered by monorepo data file)
 
-1. How does target-monorepo import its base controller? (Path alias? Bare package? Relative?) → `.local-plans/2026-05-25-monorepo-heritage-data.md` §5
-2. Does target-monorepo use multi-level inheritance (`A extends B extends C`)? → §6
-3. Does target-monorepo have `replaced` overrides (no super call)? → §3
+1. How does the target monorepo import its base controller? (Path alias? Bare package? Relative?) → `.local-plans/2026-05-25-monorepo-heritage-data.md` §5
+2. Does the target monorepo use multi-level inheritance (`A extends B extends C`)? → §6
+3. Does the target monorepo have `replaced` overrides (no super call)? → §3
 4. Are there generic-type-arg cases that don't resolve via ts-morph alone? → §7
 5. What's the actual structure of the `*Cmd` static fields shown in `dangerousCollisions`? → §8
 
@@ -238,7 +238,7 @@ These shape Phase A's implementation. Without them, implementation has to guess 
 
 ## Appendix — Data-gathering prompt for the user's LLM
 
-Copy this verbatim into Claude Code / Cursor running on the target-monorepo monorepo. Save the LLM's output as `.local-plans/2026-05-25-monorepo-heritage-data.md` in the arch-graph repo before starting the implementation session.
+Copy this verbatim into Claude Code / Cursor running on the target NestJS monorepo. Save the LLM's output as `.local-plans/2026-05-25-monorepo-heritage-data.md` in the arch-graph repo before starting the implementation session.
 
 ```
 Контекст: я разрабатываю инструмент arch-graph — статический extractor TypeScript-кода в граф для NestJS-монорепов. Хочу добавить осознанность наследования: чтобы инструмент понимал, что AreaController extends BaseController<AreaEntity>, и что метод AreaController.createEntity на самом деле делегирует в BaseController.createEntity.
