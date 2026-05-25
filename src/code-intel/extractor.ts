@@ -1696,7 +1696,17 @@ function extractHeritageForClass(
         (s) => s.kind === 'class' && fileMatches(filePath, s.file),
     );
     if (!classSymbol) {
-        // G4: emit diagnostic so callers can detect entity-classified or mis-classified classes.
+        // A class that was extracted under a non-'class' kind (DTO, db-entity)
+        // is the EXPECTED case for `class FooDto {}` / `@Entity class Bar {}`
+        // declarations — inheritance modelling for these is out of scope.
+        // We silently return without a diagnostic in that case; only the
+        // truly-unexpected absence (no symbol of ANY kind at this fqn from
+        // this file) gets stderr — that signals a file-path normalisation
+        // mismatch between the two extraction passes.
+        const anyMatch = (symbolsByFqn.get(name) ?? []).some(
+            (s) => fileMatches(filePath, s.file),
+        );
+        if (anyMatch) return;
         process.stderr.write(`[code-intel] class symbol not found for ${name} in ${filePath}\n`);
         return;
     }
