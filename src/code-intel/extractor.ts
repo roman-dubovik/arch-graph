@@ -1,7 +1,18 @@
 import * as fs from 'node:fs';
 import * as nodePath from 'node:path';
 
-import { Node, Project, SyntaxKind, type CallExpression, type ClassDeclaration, type FunctionDeclaration, type MethodDeclaration, type Node as MorphNode, type ParameterDeclaration, type PropertyAccessExpression, type SourceFile, type TypeAliasDeclaration } from 'ts-morph';
+import { Node, Project, SyntaxKind, type ArrowFunction, type CallExpression, type ClassDeclaration, type FunctionDeclaration, type FunctionExpression, type MethodDeclaration, type Node as MorphNode, type ParameterDeclaration, type PropertyAccessExpression, type SourceFile, type TypeAliasDeclaration, type VariableDeclaration } from 'ts-morph';
+
+/**
+ * Any TS node that has a function-like body. Used by signatureOf / addParams /
+ * functionContexts so that arrow-const and function-expression exports get the
+ * same treatment as `function foo()` declarations and class methods.
+ */
+type FunctionLikeNode =
+    | MethodDeclaration
+    | FunctionDeclaration
+    | ArrowFunction
+    | FunctionExpression;
 
 import type {
     CodeIntelBranch,
@@ -23,7 +34,7 @@ export interface CodeIntelExtractOptions {
 interface FunctionLikeCtx {
     id: string;
     fqn: string;
-    node: MethodDeclaration | FunctionDeclaration;
+    node: FunctionLikeNode;
     className?: string;
     propertyTypes: Map<string, string>;
     propertyDecorators: Map<string, string[]>;
@@ -158,6 +169,44 @@ export function extractCodeIntel(project: Project, opts: CodeIntelExtractOptions
                 imports,
                 callOrder: 0,
             });
+        }
+
+        // Arrow-const / function-expression exports (free-functions-v1).
+        // `sf.getFunctions()` covers only `function foo() {}` declarations.
+        // The most common modern-TS shape is `export const foo = () => {}` —
+        // a `VariableDeclaration` whose initializer is an ArrowFunction or
+        // FunctionExpression. Treat each such declaration as a free function
+        // and emit a `kind: 'function'` symbol so downstream queries
+        // (resolveSymbol / findReferences / traceScenario / impactContract)
+        // can locate it the same way they locate `function`-keyword declarations.
+        for (const varStmt of sf.getVariableStatements()) {
+            for (const decl of varStmt.getDeclarations()) {
+                const init = decl.getInitializer();
+                if (!init) continue;
+                if (!Node.isArrowFunction(init) && !Node.isFunctionExpression(init)) continue;
+                const name = decl.getName();
+                if (!name) continue;
+                const fnNode = init as ArrowFunction | FunctionExpression;
+                const fnSymbol = symbolForNode(decl, 'function', name, name, opts.root, {
+                    signature: signatureOf(fnNode),
+                    returnType: fnNode.getReturnTypeNode()?.getText() ?? fnNode.getReturnType().getText(fnNode),
+                    isAsync: fnNode.isAsync(),
+                    // JSDoc lives on the VariableStatement, not the
+                    // ArrowFunction/FunctionExpression initializer itself.
+                    description: descriptionOf(varStmt as unknown as MorphNode) ?? descriptionOf(decl as unknown as MorphNode),
+                });
+                addSymbol(fnSymbol);
+                addParams(fnNode, fnSymbol, opts.root, addSymbol);
+                functionContexts.push({
+                    id: fnSymbol.id,
+                    fqn: name,
+                    node: fnNode,
+                    propertyTypes: new Map(),
+                    propertyDecorators: new Map(),
+                    imports,
+                    callOrder: 0,
+                });
+            }
         }
 
         for (const intf of sf.getInterfaces()) {
@@ -385,7 +434,7 @@ function addTypeAliasDto(alias: TypeAliasDeclaration, root: string, addSymbol: (
 }
 
 function addParams(
-    fn: MethodDeclaration | FunctionDeclaration,
+    fn: FunctionLikeNode,
     parent: CodeIntelSymbol,
     root: string,
     addSymbol: (symbol: CodeIntelSymbol) => void,
@@ -1262,7 +1311,7 @@ function endLineOf(node: MorphNode): number {
     return node.getSourceFile().getLineAndColumnAtPos(node.getEnd()).line;
 }
 
-function signatureOf(fn: MethodDeclaration | FunctionDeclaration): string {
+function signatureOf(fn: FunctionLikeNode): string {
     const params = fn.getParameters()
         .map((param) => `${param.getName()}: ${param.getTypeNode()?.getText() ?? param.getType().getText(param)}`)
         .join(', ');
