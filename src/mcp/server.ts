@@ -701,7 +701,13 @@ export async function startMcpServer(opts: { out: string; config?: string }): Pr
                 '`overrideKind: \'delegation\'` pointing to the same base, they are NOT reported as dangerous. ' +
                 'Class-level collisions (two classes with the same name in different microservices) and collisions ' +
                 'where at least one method has `overrideKind: \'augmented\'` or `\'replaced\'` stay flagged. ' +
-                'Use this if other tools return unexpected or empty results.',
+                'Structural NestJS noise is also filtered: `*.logger` fields, `*Cmd` static fields, and audit ' +
+                'fields on DTO/db-entity parents (`id`, `name`, `createdAt`, `updatedAt`, `deletedAt`, `createdBy`, ' +
+                '`updatedBy`) — these are framework conventions, not real disambiguation risks. ' +
+                '`info.collisionBreakdown` partitions the remaining noise: `structuralNoise` (filtered), ' +
+                '`crossServiceDuplicates` (same FQN across different `packages/*/` services — expected fanout), ' +
+                '`intraServiceDuplicates` (same FQN within ONE service — likely real bugs), `classLevel` (bare-name ' +
+                'class/DTO/type collisions). Use this if other tools return unexpected or empty results.',
             inputSchema: {},
         },
         async () => jsonResult(selfCheck(await loadCodeIntelFn())),
