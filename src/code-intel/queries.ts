@@ -112,29 +112,67 @@ export function selfCheck(index: CodeIntelIndex): {
     const symbolsById = new Map<string, CodeIntelSymbol>();
     for (const s of index.symbols) symbolsById.set(s.id, s);
 
+    // E: a file is "generated" if its name matches the codegen convention
+    // `<base>.generated.ts` / `.generated.tsx` / `.generated.js`.
+    const isGeneratedFile = (file: string): boolean => /\.generated\.[tj]sx?$/.test(file);
+
+    // D: React-local Hungarian-I-prefix interface convention (IProps, IFormProps,
+    // IOwnProps, IRouteProps, etc.). These are declared per-component in `.tsx`
+    // files and never imported across files.
+    const isReactLocalInterfaceName = (name: string): boolean => /^I[A-Z]/.test(name);
+    const isTsxFile = (file: string): boolean => /\.tsx$/.test(file);
+
     const isStructuralNoise = (fqn: string, bucket: CodeIntelSymbol[]): boolean => {
         // The check is per-fqn, not per-symbol — we want to drop the collision
         // entirely (all copies share the same name).
-        const structuralDups = bucket.filter((s) => s.kind === 'field' || s.kind === 'method');
-        if (structuralDups.length === 0) return false;
+        const memberDups = bucket.filter((s) => s.kind === 'field' || s.kind === 'method');
+        const typeDups = bucket.filter((s) => s.kind === 'type' || s.kind === 'dto');
 
         const shortName = fqn.includes('.') ? fqn.split('.').pop()! : fqn;
 
         // A1: `.logger` always noise.
-        if (shortName === 'logger') return true;
+        if (memberDups.length > 0 && shortName === 'logger') return true;
 
         // A2: `*Cmd` always noise (NestJS message-routing convention).
-        if (/Cmd$/.test(shortName)) return true;
+        if (memberDups.length > 0 && /Cmd$/.test(shortName)) return true;
 
         // A3: audit fields are noise ONLY when ALL parents are DTO/db-entity.
-        if (DTO_AUDIT_FIELD_NAMES.has(shortName)) {
-            const allParentsAreDto = structuralDups.every((s) => {
+        if (memberDups.length > 0 && DTO_AUDIT_FIELD_NAMES.has(shortName)) {
+            const allParentsAreDto = memberDups.every((s) => {
                 if (s.kind !== 'field') return false;
                 const parent = s.parentId ? symbolsById.get(s.parentId) : undefined;
                 return parent?.kind === 'dto' || parent?.kind === 'db-entity';
             });
             if (allParentsAreDto) return true;
         }
+
+        // D: React-local IProps-style interfaces in .tsx files. Two shapes:
+        //   1. Class-level FQN like `IProps` — bucket has type/dto symbols.
+        //   2. Field-level FQN like `IProps.isLoading` — bucket has field
+        //      symbols whose parent is a Hungarian-I type/dto.
+        if (typeDups.length > 0 && !fqn.includes('.')) {
+            const allLocalReactTypes = bucket.every(
+                (s) => (s.kind === 'type' || s.kind === 'dto')
+                    && isReactLocalInterfaceName(s.name)
+                    && isTsxFile(s.file),
+            );
+            if (allLocalReactTypes) return true;
+        }
+        if (memberDups.length > 0 && fqn.includes('.')) {
+            const allReactLocalFields = memberDups.every((s) => {
+                if (s.kind !== 'field') return false;
+                if (!isTsxFile(s.file)) return false;
+                const parent = s.parentId ? symbolsById.get(s.parentId) : undefined;
+                if (!parent) return false;
+                if (parent.kind !== 'type' && parent.kind !== 'dto') return false;
+                return isReactLocalInterfaceName(parent.name);
+            });
+            if (allReactLocalFields) return true;
+        }
+
+        // E: generated-file collisions — every duplicate copy lives in a
+        // *.generated.<ext> file.
+        if (bucket.length > 0 && bucket.every((s) => isGeneratedFile(s.file))) return true;
 
         return false;
     };
