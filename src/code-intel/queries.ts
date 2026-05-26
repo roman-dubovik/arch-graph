@@ -30,6 +30,17 @@ import type { ArchGraph } from '../core/types.js';
  *   - `info` is purely informational and never gates behaviour; it lets
  *     callers see, for transparency, the volume of harmless omonymy.
  */
+export interface CollisionBreakdown {
+    /** Collisions filtered as noise by `*.logger`/`*Cmd`/DTO-audit-field rules. */
+    structuralNoise: number;
+    /** Member collisions whose duplicate copies live in different `packages/<service>/` dirs. */
+    crossServiceDuplicates: number;
+    /** Member collisions whose duplicate copies live in the SAME `packages/<service>/` dir (likely real bugs). */
+    intraServiceDuplicates: number;
+    /** Bare-name (no-dot) collisions — two classes/types/DTOs share a name. */
+    classLevel: number;
+}
+
 export function selfCheck(index: CodeIntelIndex): {
     status: 'ok' | 'degraded' | 'stale' | 'missing';
     message: string;
@@ -43,6 +54,7 @@ export function selfCheck(index: CodeIntelIndex): {
     info?: {
         nameCollisions: number;
         nameCollisionsSample: string[];
+        collisionBreakdown?: CollisionBreakdown;
     };
 } {
     const symbols = index.manifest.counts?.symbols ?? index.symbols.length;
@@ -91,14 +103,78 @@ export function selfCheck(index: CodeIntelIndex): {
             buckets.set(s.fqn, b);
         }
     }
+    // Noise classification — collisions that look dangerous structurally but
+    // are NOT silent-wrong-answer risks because they're standard NestJS
+    // conventions (every service has `.logger`, every controller has `*Cmd`,
+    // every DTO has `id`/`createdAt`/...). The LLM never disambiguates these
+    // by short FQN — it always qualifies with the parent class.
+    const DTO_AUDIT_FIELD_NAMES = new Set(['id', 'name', 'createdAt', 'updatedAt', 'deletedAt', 'createdBy', 'updatedBy']);
+    const symbolsById = new Map<string, CodeIntelSymbol>();
+    for (const s of index.symbols) symbolsById.set(s.id, s);
+
+    const isStructuralNoise = (fqn: string, bucket: CodeIntelSymbol[]): boolean => {
+        // The check is per-fqn, not per-symbol — we want to drop the collision
+        // entirely (all copies share the same name).
+        const structuralDups = bucket.filter((s) => s.kind === 'field' || s.kind === 'method');
+        if (structuralDups.length === 0) return false;
+
+        const shortName = fqn.includes('.') ? fqn.split('.').pop()! : fqn;
+
+        // A1: `.logger` always noise.
+        if (shortName === 'logger') return true;
+
+        // A2: `*Cmd` always noise (NestJS message-routing convention).
+        if (/Cmd$/.test(shortName)) return true;
+
+        // A3: audit fields are noise ONLY when ALL parents are DTO/db-entity.
+        if (DTO_AUDIT_FIELD_NAMES.has(shortName)) {
+            const allParentsAreDto = structuralDups.every((s) => {
+                if (s.kind !== 'field') return false;
+                const parent = s.parentId ? symbolsById.get(s.parentId) : undefined;
+                return parent?.kind === 'dto' || parent?.kind === 'db-entity';
+            });
+            if (allParentsAreDto) return true;
+        }
+
+        return false;
+    };
+
+    // Service path helper — extract the `packages/<service>/` (or `apps/<service>/`)
+    // prefix so we can split collisions into cross-service vs intra-service.
+    // Returns the prefix or `undefined` if the file isn't in a recognised layout.
+    const servicePrefixOf = (file: string): string | undefined => {
+        const match = file.match(/^(packages|apps|libs)\/([^/]+)\//);
+        return match ? `${match[1]}/${match[2]}` : undefined;
+    };
+
+    let structuralNoiseCount = 0;
+    let crossServiceCount = 0;
+    let intraServiceCount = 0;
+    let classLevelCount = 0;
+
     const dangerous = amb.filter((fqn) => {
         const bucket = buckets.get(fqn) ?? [];
         const structuralDups = bucket.filter((s) => DANGEROUS_KINDS.has(s.kind));
         if (structuralDups.length <= 1) return false;
 
+        // A: noise filters fire BEFORE B8 — drop structural noise from the
+        // dangerous list and bump the breakdown counter.
+        if (isStructuralNoise(fqn, structuralDups)) {
+            structuralNoiseCount++;
+            return false;
+        }
+
         // B8: class-level kinds always stay dangerous
         const hasClassLevelDup = structuralDups.some((s) => CLASS_LEVEL_KINDS.has(s.kind));
-        if (hasClassLevelDup) return true;
+        if (hasClassLevelDup) {
+            classLevelCount++;
+            return true;
+        }
+
+        // Member-level collision — partition by service prefix for the breakdown.
+        const servicePrefixes = new Set(structuralDups.map((s) => servicePrefixOf(s.file)).filter((p): p is string => p !== undefined));
+        if (servicePrefixes.size > 1) crossServiceCount++;
+        else if (servicePrefixes.size === 1 && structuralDups.length > 1) intraServiceCount++;
 
         // Check delegation-only condition
         const allAreDelegation = structuralDups.every(
@@ -113,6 +189,13 @@ export function selfCheck(index: CodeIntelIndex): {
         return false;
     });
 
+    const collisionBreakdown: CollisionBreakdown = {
+        structuralNoise: structuralNoiseCount,
+        crossServiceDuplicates: crossServiceCount,
+        intraServiceDuplicates: intraServiceCount,
+        classLevel: classLevelCount,
+    };
+
     // Degraded branch: any combination of skipped files + dangerous collisions.
     if (skp.length > 0 || dangerous.length > 0) {
         const parts: string[] = [];
@@ -125,9 +208,10 @@ export function selfCheck(index: CodeIntelIndex): {
         const warnings: { skippedFiles?: typeof skp; dangerousCollisions?: string[] } = {};
         if (skp.length > 0) warnings.skippedFiles = skp;
         if (dangerous.length > 0) warnings.dangerousCollisions = dangerous;
-        const info = amb.length > dangerous.length
-            ? { nameCollisions: amb.length, nameCollisionsSample: amb.slice(0, 5) }
-            : undefined;
+        const info: { nameCollisions: number; nameCollisionsSample: string[]; collisionBreakdown?: CollisionBreakdown } | undefined =
+            amb.length > dangerous.length
+                ? { nameCollisions: amb.length, nameCollisionsSample: amb.slice(0, 5), collisionBreakdown }
+                : { nameCollisions: amb.length, nameCollisionsSample: amb.slice(0, 5), collisionBreakdown };
         return {
             status: 'degraded',
             message:
@@ -140,7 +224,7 @@ export function selfCheck(index: CodeIntelIndex): {
             freshness: index.manifest.builtAt,
             symbols,
             warnings,
-            ...(info ? { info } : {}),
+            info,
         };
     }
 
@@ -151,7 +235,7 @@ export function selfCheck(index: CodeIntelIndex): {
             schemaVersion: index.manifest.schemaVersion,
             freshness: index.manifest.builtAt,
             symbols,
-            info: { nameCollisions: amb.length, nameCollisionsSample: amb.slice(0, 5) },
+            info: { nameCollisions: amb.length, nameCollisionsSample: amb.slice(0, 5), collisionBreakdown },
         };
     }
 
