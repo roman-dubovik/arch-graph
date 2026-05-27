@@ -239,41 +239,56 @@ export function selfCheck(index: CodeIntelIndex): {
     let intraServiceCount = 0;
     let classLevelCount = 0;
 
+    // Actionable-status redesign: `dangerous` now contains ONLY intra-service
+    // collisions (two copies in the SAME `packages/<svc>/` or `apps/<svc>/` —
+    // real silent-wrong-answer risk). Cross-service duplicates are EXPECTED
+    // fanout in NestJS-style monorepos (every microservice declares its own
+    // AreaController) and surface via `info.collisionBreakdown` only — they
+    // do NOT degrade status, do NOT scare LLM agents.
     const dangerous = amb.filter((fqn) => {
         const bucket = buckets.get(fqn) ?? [];
         const structuralDups = bucket.filter((s) => DANGEROUS_KINDS.has(s.kind));
         if (structuralDups.length <= 1) return false;
 
-        // A: noise filters fire BEFORE B8 — drop structural noise from the
-        // dangerous list and bump the breakdown counter.
+        // Noise filters (universal F + framework A-E): always drop.
         if (isStructuralNoise(fqn, structuralDups)) {
             structuralNoiseCount++;
             return false;
         }
 
-        // B8: class-level kinds always stay dangerous
-        const hasClassLevelDup = structuralDups.some((s) => CLASS_LEVEL_KINDS.has(s.kind));
-        if (hasClassLevelDup) {
-            classLevelCount++;
-            return true;
-        }
-
-        // Member-level collision — partition by service prefix for the breakdown.
-        const servicePrefixes = new Set(structuralDups.map((s) => servicePrefixOf(s.file)).filter((p): p is string => p !== undefined));
-        if (servicePrefixes.size > 1) crossServiceCount++;
-        else if (servicePrefixes.size === 1 && structuralDups.length > 1) intraServiceCount++;
-
-        // Check delegation-only condition
+        // Heritage delegation-only filter (B8): all-delegation + same base = same
+        // implementation effectively. Drop from dangerous.
         const allAreDelegation = structuralDups.every(
             (s) => s.overrideKind === 'delegation' && s.inheritsFrom !== undefined,
         );
-        if (!allAreDelegation) return true;
+        if (allAreDelegation) {
+            const baseIds = new Set(structuralDups.map((s) => s.inheritsFrom));
+            if (baseIds.size === 1) {
+                structuralNoiseCount++;
+                return false;
+            }
+        }
 
-        // All point to the SAME base member?
-        const baseIds = new Set(structuralDups.map((s) => s.inheritsFrom));
-        if (baseIds.size !== 1) return true;
+        // Partition by service prefix.
+        const servicePrefixes = new Set(
+            structuralDups.map((s) => servicePrefixOf(s.file)).filter((p): p is string => p !== undefined),
+        );
+        const hasClassLevelDup = structuralDups.some((s) => CLASS_LEVEL_KINDS.has(s.kind));
 
-        return false;
+        // Cross-service (different `packages/X/`) → EXPECTED fanout, NOT dangerous.
+        if (servicePrefixes.size > 1) {
+            if (hasClassLevelDup) classLevelCount++;
+            else crossServiceCount++;
+            return false;
+        }
+
+        // Same service (or unrecognised layout): real disambiguation risk.
+        // Counts as intra-service regardless of class-vs-member level since
+        // both shapes equally indicate "two identically-named symbols in the
+        // same package — pick the wrong one silently".
+        intraServiceCount++;
+        if (hasClassLevelDup) classLevelCount++;
+        return true;
     });
 
     const collisionBreakdown: CollisionBreakdown = {
@@ -283,28 +298,32 @@ export function selfCheck(index: CodeIntelIndex): {
         classLevel: classLevelCount,
     };
 
-    // Degraded branch: any combination of skipped files + dangerous collisions.
+    // Status semantics:
+    //   `degraded` ONLY when there are real problems — skipped files or
+    //                     intra-service duplicates (real disambiguation risk).
+    //   `ok` everywhere else, including when there is cross-service fanout
+    //     (every microservice declaring its own AreaController is normal in
+    //     NestJS monorepos and does NOT cause silent-wrong-answer — the LLM
+    //     disambiguates by the file path naturally and via the symbol `id`).
     if (skp.length > 0 || dangerous.length > 0) {
         const parts: string[] = [];
         if (skp.length > 0) parts.push(`${skp.length} file${skp.length === 1 ? '' : 's'} could not be parsed`);
         if (dangerous.length > 0) {
             parts.push(
-                `${dangerous.length} structural-name collision${dangerous.length === 1 ? '' : 's'} (two classes/types/DTOs share a name — downstream tools may pick the wrong one silently)`,
+                `${dangerous.length} intra-service collision${dangerous.length === 1 ? '' : 's'} (same FQN appears twice within ONE package — likely copy-paste leftover; pick the wrong one silently)`,
             );
         }
         const warnings: { skippedFiles?: typeof skp; dangerousCollisions?: string[] } = {};
         if (skp.length > 0) warnings.skippedFiles = skp;
         if (dangerous.length > 0) warnings.dangerousCollisions = dangerous;
-        const info: { nameCollisions: number; nameCollisionsSample: string[]; collisionBreakdown?: CollisionBreakdown } | undefined =
-            amb.length > dangerous.length
-                ? { nameCollisions: amb.length, nameCollisionsSample: amb.slice(0, 5), collisionBreakdown }
-                : { nameCollisions: amb.length, nameCollisionsSample: amb.slice(0, 5), collisionBreakdown };
+        const info: { nameCollisions: number; nameCollisionsSample: string[]; collisionBreakdown?: CollisionBreakdown } =
+            { nameCollisions: amb.length, nameCollisionsSample: amb.slice(0, 5), collisionBreakdown };
         return {
             status: 'degraded',
             message:
                 `Code-intel index is degraded: ${parts.join('; ')}. ` +
                 (dangerous.length > 0
-                    ? 'For structural-name collisions, use the symbol `id` (file-qualified) when looking up specific bodies, or rename one of the duplicates. '
+                    ? 'For intra-service duplicates, use the symbol `id` (file-qualified) when looking up specific bodies, or rename / delete one of the duplicates. '
                     : '') +
                 'Run: arch-graph code-intel build after fixing.',
             schemaVersion: index.manifest.schemaVersion,
@@ -316,9 +335,28 @@ export function selfCheck(index: CodeIntelIndex): {
     }
 
     if (amb.length > 0) {
+        // `ok` with collisions present: explain to the caller that what
+        // remains is expected fanout / normal omonymy, NOT a silent-wrong-
+        // answer risk. The LLM should NOT be afraid to use the tools.
+        const fanoutCount = crossServiceCount + classLevelCount;
+        const messageParts: string[] = ['Code-intel index is operational.'];
+        if (fanoutCount > 0) {
+            messageParts.push(
+                `${fanoutCount} cross-service collision${fanoutCount === 1 ? '' : 's'} present (every microservice has its own ` +
+                `AreaController/etc — normal NestJS-monorepo fanout, NOT a silent-wrong-answer risk).`,
+            );
+        }
+        const shortOmonymy = amb.length - fanoutCount - structuralNoiseCount;
+        if (shortOmonymy > 0) {
+            messageParts.push(
+                `${shortOmonymy} short-name omonym${shortOmonymy === 1 ? '' : 's'} ` +
+                '(top-level functions/types with the same name in different files) — normal omonymy; ' +
+                'pass a path suffix to resolve_symbol if uncertain.',
+            );
+        }
         return {
             status: 'ok',
-            message: `Code-intel index is operational. ${amb.length} short-name collision${amb.length === 1 ? '' : 's'} (top-level functions/types with the same name in different files) — normal omonymy; pass a path suffix to resolve_symbol if uncertain which file to target.`,
+            message: messageParts.join(' '),
             schemaVersion: index.manifest.schemaVersion,
             freshness: index.manifest.builtAt,
             symbols,

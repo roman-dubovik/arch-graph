@@ -238,20 +238,21 @@ describe('code-intel queries', () => {
             expect(result.message).toMatch(/path suffix/);
         });
 
-        // P0 fix (silent-failure-hunter round 3): class.method collisions are
-        // a REAL silent-wrong-answer class; downstream find_references picks
-        // the first by rank without warning. Must degrade, must list them.
-        it('reports degraded when class members collide (UsersService.findById × 2)', () => {
+        // actionable-status-v1 contract: collisions are dangerous ONLY when
+        // BOTH copies live in the same package (`packages/<svc>/` or
+        // `apps/<svc>/`). Cross-service fanout is EXPECTED in NestJS-style
+        // monorepos and surfaces under `info.collisionBreakdown`, not warnings.
+        it('reports degraded when intra-service class members collide (same `apps/api/`)', () => {
             const indexWithClassCollision: CodeIntelIndex = {
                 ...mockIndex,
                 symbols: [
-                    // Two distinct `UsersService` classes, each with `findById`.
-                    // `UsersService.findById` now resolves to two real bodies and
-                    // `find_references` would pick one silently.
+                    // Two distinct `UsersService` in the SAME package — likely
+                    // copy-paste leftover; downstream find_references picks one
+                    // silently → real disambiguation bug.
                     { id: 'symbol:apps/api/users.service.ts#UsersService:1:1', kind: 'class', name: 'UsersService', fqn: 'UsersService', file: 'apps/api/users.service.ts', line: 1, column: 1 },
                     { id: 'symbol:apps/api/users.service.ts#findById:5:5', kind: 'method', name: 'findById', fqn: 'UsersService.findById', file: 'apps/api/users.service.ts', line: 5, column: 5, parentId: 'symbol:apps/api/users.service.ts#UsersService:1:1' },
-                    { id: 'symbol:apps/admin/users.service.ts#UsersService:1:1', kind: 'class', name: 'UsersService', fqn: 'UsersService', file: 'apps/admin/users.service.ts', line: 1, column: 1 },
-                    { id: 'symbol:apps/admin/users.service.ts#findById:5:5', kind: 'method', name: 'findById', fqn: 'UsersService.findById', file: 'apps/admin/users.service.ts', line: 5, column: 5, parentId: 'symbol:apps/admin/users.service.ts#UsersService:1:1' },
+                    { id: 'symbol:apps/api/extra/users.service.ts#UsersService:1:1', kind: 'class', name: 'UsersService', fqn: 'UsersService', file: 'apps/api/extra/users.service.ts', line: 1, column: 1 },
+                    { id: 'symbol:apps/api/extra/users.service.ts#findById:5:5', kind: 'method', name: 'findById', fqn: 'UsersService.findById', file: 'apps/api/extra/users.service.ts', line: 5, column: 5, parentId: 'symbol:apps/api/extra/users.service.ts#UsersService:1:1' },
                 ],
                 manifest: {
                     ...mockIndex.manifest,
@@ -264,21 +265,39 @@ describe('code-intel queries', () => {
             expect(result.warnings!.dangerousCollisions).toEqual(
                 expect.arrayContaining(['UsersService', 'UsersService.findById']),
             );
-            expect(result.message).toMatch(/structural-name collision/i);
+            expect(result.message).toMatch(/intra-service/i);
             expect(result.message).toMatch(/file-qualified|symbol.*id/i);
         });
 
-        // silent-failure-hunter round 4: `type` aliases / non-DTO interfaces
-        // also have a silent-wrong-answer path — getTypeDefinition does
-        // `resolved.find(... s.kind === 'type' ...)` and impactContract resolves
-        // by type name. Two files with `type Result = ...` collide → first
-        // match silently wins. Must degrade exactly like the class-member case.
-        it('reports degraded when two type aliases share a name (Result × 2)', () => {
+        it('stays ok when class members collide ACROSS services (expected fanout)', () => {
+            // Two `UsersService` in different microservices — normal NestJS
+            // monorepo fanout, not a silent-wrong-answer risk. Status: ok.
+            const index: CodeIntelIndex = {
+                ...mockIndex,
+                symbols: [
+                    { id: 'symbol:apps/api/users.service.ts#UsersService:1:1', kind: 'class', name: 'UsersService', fqn: 'UsersService', file: 'apps/api/users.service.ts', line: 1, column: 1 },
+                    { id: 'symbol:apps/admin/users.service.ts#UsersService:1:1', kind: 'class', name: 'UsersService', fqn: 'UsersService', file: 'apps/admin/users.service.ts', line: 1, column: 1 },
+                ],
+                manifest: {
+                    ...mockIndex.manifest,
+                    warnings: { ambiguousFqns: ['UsersService'], skippedFiles: [] },
+                } as typeof mockIndex.manifest,
+            };
+            const result = selfCheck(index);
+            expect(result.status).toBe('ok');
+            expect(result.warnings?.dangerousCollisions ?? []).toEqual([]);
+            // The collision still surfaces in info.collisionBreakdown.
+            expect((result.info as { collisionBreakdown?: { classLevel: number } } | undefined)?.collisionBreakdown?.classLevel).toBeGreaterThanOrEqual(1);
+        });
+
+        // silent-failure-hunter round 4: type aliases / non-DTO interfaces also
+        // have a silent-wrong-answer path when intra-service.
+        it('reports degraded when two type aliases share a name within ONE service (Result × 2 in apps/api)', () => {
             const indexWithTypeCollision: CodeIntelIndex = {
                 ...mockIndex,
                 symbols: [
                     { id: 'symbol:apps/api/types.ts#Result:1:1', kind: 'type', name: 'Result', fqn: 'Result', file: 'apps/api/types.ts', line: 1, column: 1 },
-                    { id: 'symbol:apps/admin/types.ts#Result:1:1', kind: 'type', name: 'Result', fqn: 'Result', file: 'apps/admin/types.ts', line: 1, column: 1 },
+                    { id: 'symbol:apps/api/extra/types.ts#Result:1:1', kind: 'type', name: 'Result', fqn: 'Result', file: 'apps/api/extra/types.ts', line: 1, column: 1 },
                 ],
                 manifest: {
                     ...mockIndex.manifest,
