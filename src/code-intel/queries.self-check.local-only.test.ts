@@ -44,8 +44,8 @@ function typeSym(id: string, name: string, file: string): CodeIntelSymbol {
     return { id, kind: 'type', name, fqn: name, file, line: 1, column: 1 };
 }
 
-function methodSym(id: string, fqn: string, file: string): CodeIntelSymbol {
-    return { id, kind: 'method', name: fqn.split('.').pop()!, fqn, file, line: 1, column: 1 };
+function methodSym(id: string, fqn: string, file: string, parentId?: string): CodeIntelSymbol {
+    return { id, kind: 'method', name: fqn.split('.').pop()!, fqn, file, line: 1, column: 1, parentId };
 }
 
 function call(id: string, callerId: string, calleeId: string, callerFile: string): CodeIntelCall {
@@ -161,8 +161,8 @@ describe('selfCheck — F: universal local-only filter (via calls+impacts)', () 
         const symbols: CodeIntelSymbol[] = [
             { id: 's:l1', kind: 'class', name: 'Logger', fqn: 'Logger', file: 'libs/utils/a.ts', line: 1, column: 1 },
             { id: 's:l2', kind: 'class', name: 'Logger', fqn: 'Logger', file: 'libs/utils/b.ts', line: 1, column: 1 },
-            methodSym('s:l1.log', 'Logger.log', 'libs/utils/a.ts'),
-            methodSym('s:l2.log', 'Logger.log', 'libs/utils/b.ts'),
+            methodSym('s:l1.log', 'Logger.log', 'libs/utils/a.ts', 's:l1'),
+            methodSym('s:l2.log', 'Logger.log', 'libs/utils/b.ts', 's:l2'),
         ];
         const index: CodeIntelIndex = {
             manifest: { ...BASE_MANIFEST, warnings: { ambiguousFqns: ['Logger', 'Logger.log'], skippedFiles: [] } },
@@ -197,6 +197,9 @@ describe('selfCheck — F: universal local-only filter (via calls+impacts)', () 
             symbols,
             calls: [],
             impacts: [
+                // TState same-file usage → "any signal" precondition for F filter
+                impact('i_a', 's:a', 'packages/x/src/foo/slice.ts'),
+                impact('i_b', 's:b', 'packages/x/src/bar/slice.ts'),
                 // RealBug referenced cross-file
                 impact('i1', 's:r1', 'packages/x/src/elsewhere/uses-it.ts'),
             ],

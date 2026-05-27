@@ -112,6 +112,41 @@ export function selfCheck(index: CodeIntelIndex): {
     const symbolsById = new Map<string, CodeIntelSymbol>();
     for (const s of index.symbols) symbolsById.set(s.id, s);
 
+    // F (universal): precompute two sets per symbol id:
+    //   - `symbolsWithAnyRef`        — at least one call/impact references it
+    //                                  (same-file OR cross-file)
+    //   - `crossFileReferencedIds`   — at least one cross-file call/impact
+    // The filter fires only when the bucket has SOME signal (any reference)
+    // AND none of those references is cross-file. The "any signal" precondition
+    // prevents F from over-firing on minimal mock indices that don't seed
+    // calls/impacts at all — those fall through to the framework filters
+    // (A-E) and the existing conservative behaviour.
+    const symbolsWithAnyRef = new Set<string>();
+    const crossFileReferencedIds = new Set<string>();
+    for (const c of index.calls) {
+        if (!c.calleeId) continue;
+        const callee = symbolsById.get(c.calleeId);
+        if (!callee) continue;
+        symbolsWithAnyRef.add(c.calleeId);
+        if (c.file !== callee.file) crossFileReferencedIds.add(c.calleeId);
+    }
+    for (const imp of index.impacts) {
+        const target = symbolsById.get(imp.symbolId);
+        if (!target) continue;
+        symbolsWithAnyRef.add(imp.symbolId);
+        if (imp.file !== target.file) crossFileReferencedIds.add(imp.symbolId);
+    }
+    // Aggregate child signal up to parent: a class with a referenced method
+    // counts as referenced too. Class symbols themselves are rarely directly
+    // "called"; their members are. Without aggregation F would miss
+    // legitimate local-only class-level collisions (e.g., a per-script
+    // `class Logger` whose `Logger.log` is called only inside the same script).
+    for (const s of index.symbols) {
+        if (!s.parentId) continue;
+        if (symbolsWithAnyRef.has(s.id)) symbolsWithAnyRef.add(s.parentId);
+        if (crossFileReferencedIds.has(s.id)) crossFileReferencedIds.add(s.parentId);
+    }
+
     // E: a file is "generated" if its name matches the codegen convention
     // `<base>.generated.ts` / `.generated.tsx` / `.generated.js`.
     const isGeneratedFile = (file: string): boolean => /\.generated\.[tj]sx?$/.test(file);
@@ -129,6 +164,20 @@ export function selfCheck(index: CodeIntelIndex): {
         const typeDups = bucket.filter((s) => s.kind === 'type' || s.kind === 'dto');
 
         const shortName = fqn.includes('.') ? fqn.split('.').pop()! : fqn;
+
+        // F (universal, primary): if the bucket has SOME signal (at least one
+        // symbol referenced anywhere — same-file or cross-file) but NONE of
+        // its symbols is referenced cross-file, the collision is local-only
+        // and cannot cause silent-wrong-answer. The "any signal" precondition
+        // prevents over-firing on minimal indices with no calls/impacts data
+        // — those fall through to framework filters (A-E) below.
+        if (
+            bucket.length > 1
+            && bucket.some((s) => symbolsWithAnyRef.has(s.id))
+            && bucket.every((s) => !crossFileReferencedIds.has(s.id))
+        ) {
+            return true;
+        }
 
         // A1: `.logger` always noise.
         if (memberDups.length > 0 && shortName === 'logger') return true;
