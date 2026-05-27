@@ -74,10 +74,10 @@ describe('selfCheck — noise filters (A) + partition (C)', () => {
     describe('A1: `.logger` field collisions are NOT dangerous', () => {
         it('filters two services both declaring `.logger` field out of dangerousCollisions', () => {
             const symbols: CodeIntelSymbol[] = [
-                classSym('s:audit:AService',    'AService',         'packages/audit/src/a.service.ts'),
-                classSym('s:bff:AService',      'AService',         'packages/bff/src/a.service.ts'),
-                fieldSym('s:audit:AService.logger', 'AService.logger', 'packages/audit/src/a.service.ts'),
-                fieldSym('s:bff:AService.logger',   'AService.logger', 'packages/bff/src/a.service.ts'),
+                classSym('s:audit:AService',    'AService',         'packages/svc1/audit/src/a.service.ts'),
+                classSym('s:bff:AService',      'AService',         'packages/svc1/bff/src/a.service.ts'),
+                fieldSym('s:audit:AService.logger', 'AService.logger', 'packages/svc1/audit/src/a.service.ts'),
+                fieldSym('s:bff:AService.logger',   'AService.logger', 'packages/svc1/bff/src/a.service.ts'),
             ];
             const index: CodeIntelIndex = {
                 manifest: {
@@ -99,10 +99,10 @@ describe('selfCheck — noise filters (A) + partition (C)', () => {
     describe('A2: `*Cmd` static-field collisions are NOT dangerous', () => {
         it('filters createEntityCmd-style collisions out of dangerousCollisions', () => {
             const symbols: CodeIntelSymbol[] = [
-                classSym('s:c1', 'AreaController', 'packages/audit/src/area.controller.ts'),
-                classSym('s:c2', 'AreaController', 'packages/bff/src/area.controller.ts'),
-                fieldSym('s:c1.cmd', 'AreaController.createEntityCmd', 'packages/audit/src/area.controller.ts'),
-                fieldSym('s:c2.cmd', 'AreaController.createEntityCmd', 'packages/bff/src/area.controller.ts'),
+                classSym('s:c1', 'AreaController', 'packages/svc1/audit/src/area.controller.ts'),
+                classSym('s:c2', 'AreaController', 'packages/bff-svc/src/area.controller.ts'),
+                fieldSym('s:c1.cmd', 'AreaController.createEntityCmd', 'packages/svc1/audit/src/area.controller.ts'),
+                fieldSym('s:c2.cmd', 'AreaController.createEntityCmd', 'packages/bff-svc/src/area.controller.ts'),
             ];
             const index: CodeIntelIndex = {
                 manifest: {
@@ -125,12 +125,12 @@ describe('selfCheck — noise filters (A) + partition (C)', () => {
     describe('A3: DTO/db-entity audit fields (createdAt/updatedAt/...) are NOT dangerous', () => {
         it('filters createdAt/updatedAt/deletedAt collisions out for DTO/db-entity parents', () => {
             const symbols: CodeIntelSymbol[] = [
-                { id: 's:dto:Foo', kind: 'dto', name: 'FooDto', fqn: 'FooDto', file: 'packages/audit/src/foo.dto.ts', line: 1, column: 1 },
-                { id: 's:dto:Bar', kind: 'dto', name: 'FooDto', fqn: 'FooDto', file: 'packages/bff/src/foo.dto.ts', line: 1, column: 1 },
-                { id: 's:dto:Foo.id', kind: 'field', name: 'id', fqn: 'FooDto.id', file: 'packages/audit/src/foo.dto.ts', line: 1, column: 1, parentId: 's:dto:Foo', ownerName: 'FooDto' },
-                { id: 's:dto:Bar.id', kind: 'field', name: 'id', fqn: 'FooDto.id', file: 'packages/bff/src/foo.dto.ts', line: 1, column: 1, parentId: 's:dto:Bar', ownerName: 'FooDto' },
-                { id: 's:dto:Foo.createdAt', kind: 'field', name: 'createdAt', fqn: 'FooDto.createdAt', file: 'packages/audit/src/foo.dto.ts', line: 1, column: 1, parentId: 's:dto:Foo', ownerName: 'FooDto' },
-                { id: 's:dto:Bar.createdAt', kind: 'field', name: 'createdAt', fqn: 'FooDto.createdAt', file: 'packages/bff/src/foo.dto.ts', line: 1, column: 1, parentId: 's:dto:Bar', ownerName: 'FooDto' },
+                { id: 's:dto:Foo', kind: 'dto', name: 'FooDto', fqn: 'FooDto', file: 'packages/svc1/audit/src/foo.dto.ts', line: 1, column: 1 },
+                { id: 's:dto:Bar', kind: 'dto', name: 'FooDto', fqn: 'FooDto', file: 'packages/svc1/bff/src/foo.dto.ts', line: 1, column: 1 },
+                { id: 's:dto:Foo.id', kind: 'field', name: 'id', fqn: 'FooDto.id', file: 'packages/svc1/audit/src/foo.dto.ts', line: 1, column: 1, parentId: 's:dto:Foo', ownerName: 'FooDto' },
+                { id: 's:dto:Bar.id', kind: 'field', name: 'id', fqn: 'FooDto.id', file: 'packages/svc1/bff/src/foo.dto.ts', line: 1, column: 1, parentId: 's:dto:Bar', ownerName: 'FooDto' },
+                { id: 's:dto:Foo.createdAt', kind: 'field', name: 'createdAt', fqn: 'FooDto.createdAt', file: 'packages/svc1/audit/src/foo.dto.ts', line: 1, column: 1, parentId: 's:dto:Foo', ownerName: 'FooDto' },
+                { id: 's:dto:Bar.createdAt', kind: 'field', name: 'createdAt', fqn: 'FooDto.createdAt', file: 'packages/svc1/bff/src/foo.dto.ts', line: 1, column: 1, parentId: 's:dto:Bar', ownerName: 'FooDto' },
             ];
             const index: CodeIntelIndex = {
                 manifest: {
@@ -156,10 +156,10 @@ describe('selfCheck — noise filters (A) + partition (C)', () => {
             // A regular service class with an `id` field IS a real disambiguation
             // problem because semantics differ from DTOs. Filter must NOT apply.
             const symbols: CodeIntelSymbol[] = [
-                { id: 's:svc1', kind: 'class', name: 'FooService', fqn: 'FooService', file: 'packages/audit/src/foo.service.ts', line: 1, column: 1 },
-                { id: 's:svc2', kind: 'class', name: 'FooService', fqn: 'FooService', file: 'packages/bff/src/foo.service.ts', line: 1, column: 1 },
-                { id: 's:svc1.id', kind: 'field', name: 'id', fqn: 'FooService.id', file: 'packages/audit/src/foo.service.ts', line: 1, column: 1, parentId: 's:svc1', ownerName: 'FooService' },
-                { id: 's:svc2.id', kind: 'field', name: 'id', fqn: 'FooService.id', file: 'packages/bff/src/foo.service.ts', line: 1, column: 1, parentId: 's:svc2', ownerName: 'FooService' },
+                { id: 's:svc1', kind: 'class', name: 'FooService', fqn: 'FooService', file: 'packages/svc1/audit/src/foo.service.ts', line: 1, column: 1 },
+                { id: 's:svc2', kind: 'class', name: 'FooService', fqn: 'FooService', file: 'packages/svc1/bff/src/foo.service.ts', line: 1, column: 1 },
+                { id: 's:svc1.id', kind: 'field', name: 'id', fqn: 'FooService.id', file: 'packages/svc1/audit/src/foo.service.ts', line: 1, column: 1, parentId: 's:svc1', ownerName: 'FooService' },
+                { id: 's:svc2.id', kind: 'field', name: 'id', fqn: 'FooService.id', file: 'packages/svc1/bff/src/foo.service.ts', line: 1, column: 1, parentId: 's:svc2', ownerName: 'FooService' },
             ];
             const index: CodeIntelIndex = {
                 manifest: {
@@ -179,20 +179,20 @@ describe('selfCheck — noise filters (A) + partition (C)', () => {
         it('partitions collisions into structuralNoise/crossService/intraService/classLevel', () => {
             const symbols: CodeIntelSymbol[] = [
                 // class-level collision: AreaController in 2 packages
-                classSym('s:c1', 'AreaController', 'packages/audit/src/area.controller.ts'),
-                classSym('s:c2', 'AreaController', 'packages/bff/src/area.controller.ts'),
+                classSym('s:c1', 'AreaController', 'packages/svc1/audit/src/area.controller.ts'),
+                classSym('s:c2', 'AreaController', 'packages/bff-svc/src/area.controller.ts'),
 
                 // method-level CROSS-SERVICE collision
-                methodSym('s:c1.create', 'AreaController.create', 'packages/audit/src/area.controller.ts'),
-                methodSym('s:c2.create', 'AreaController.create', 'packages/bff/src/area.controller.ts'),
+                methodSym('s:c1.create', 'AreaController.create', 'packages/svc1/audit/src/area.controller.ts'),
+                methodSym('s:c2.create', 'AreaController.create', 'packages/bff-svc/src/area.controller.ts'),
 
                 // method-level INTRA-SERVICE collision (rare, real bug)
-                methodSym('s:c1.update.a', 'AreaController.update', 'packages/audit/src/area.controller.ts'),
-                methodSym('s:c1.update.b', 'AreaController.update', 'packages/audit/src/area-extra.controller.ts'),
+                methodSym('s:c1.update.a', 'AreaController.update', 'packages/svc1/audit/src/area.controller.ts'),
+                methodSym('s:c1.update.b', 'AreaController.update', 'packages/svc1/audit/src/area-extra.controller.ts'),
 
                 // structural noise — `.logger`
-                fieldSym('s:c1.log', 'AreaController.logger', 'packages/audit/src/area.controller.ts'),
-                fieldSym('s:c2.log', 'AreaController.logger', 'packages/bff/src/area.controller.ts'),
+                fieldSym('s:c1.log', 'AreaController.logger', 'packages/svc1/audit/src/area.controller.ts'),
+                fieldSym('s:c2.log', 'AreaController.logger', 'packages/bff-svc/src/area.controller.ts'),
             ];
             const index: CodeIntelIndex = {
                 manifest: {
@@ -267,20 +267,20 @@ describe('selfCheck — noise filters (A) + partition (C)', () => {
             //   - 1 DTO `id` collision — filtered (noise)
             //   - 1 intra-service collision — stays (real bug)
             const symbols: CodeIntelSymbol[] = [
-                classSym('s:c1', 'AreaController', 'packages/audit/src/area.controller.ts'),
-                classSym('s:c2', 'AreaController', 'packages/bff/src/area.controller.ts'),
-                methodSym('s:c1.create', 'AreaController.createEntity', 'packages/audit/src/area.controller.ts', { overrideKind: 'delegation', inheritsFrom: 'base-A' }),
-                methodSym('s:c2.create', 'AreaController.createEntity', 'packages/bff/src/area.controller.ts',   { overrideKind: 'augmented', inheritsFrom: 'base-B' }),
-                fieldSym('s:c1.log', 'AreaController.logger', 'packages/audit/src/area.controller.ts'),
-                fieldSym('s:c2.log', 'AreaController.logger', 'packages/bff/src/area.controller.ts'),
-                fieldSym('s:c1.cmd', 'AreaController.createEntityCmd', 'packages/audit/src/area.controller.ts'),
-                fieldSym('s:c2.cmd', 'AreaController.createEntityCmd', 'packages/bff/src/area.controller.ts'),
-                { id: 's:dto1', kind: 'dto', name: 'AreaDto', fqn: 'AreaDto', file: 'packages/audit/src/area.dto.ts', line: 1, column: 1 },
-                { id: 's:dto2', kind: 'dto', name: 'AreaDto', fqn: 'AreaDto', file: 'packages/bff/src/area.dto.ts', line: 1, column: 1 },
-                { id: 's:dto1.id', kind: 'field', name: 'id', fqn: 'AreaDto.id', file: 'packages/audit/src/area.dto.ts', line: 1, column: 1, parentId: 's:dto1', ownerName: 'AreaDto' },
-                { id: 's:dto2.id', kind: 'field', name: 'id', fqn: 'AreaDto.id', file: 'packages/bff/src/area.dto.ts', line: 1, column: 1, parentId: 's:dto2', ownerName: 'AreaDto' },
-                methodSym('s:intra.a', 'AreaController.duplicateBug', 'packages/audit/src/area.controller.ts'),
-                methodSym('s:intra.b', 'AreaController.duplicateBug', 'packages/audit/src/area-extra.controller.ts'),
+                classSym('s:c1', 'AreaController', 'packages/svc1/audit/src/area.controller.ts'),
+                classSym('s:c2', 'AreaController', 'packages/bff-svc/src/area.controller.ts'),
+                methodSym('s:c1.create', 'AreaController.createEntity', 'packages/svc1/audit/src/area.controller.ts', { overrideKind: 'delegation', inheritsFrom: 'base-A' }),
+                methodSym('s:c2.create', 'AreaController.createEntity', 'packages/bff-svc/src/area.controller.ts',   { overrideKind: 'augmented', inheritsFrom: 'base-B' }),
+                fieldSym('s:c1.log', 'AreaController.logger', 'packages/svc1/audit/src/area.controller.ts'),
+                fieldSym('s:c2.log', 'AreaController.logger', 'packages/bff-svc/src/area.controller.ts'),
+                fieldSym('s:c1.cmd', 'AreaController.createEntityCmd', 'packages/svc1/audit/src/area.controller.ts'),
+                fieldSym('s:c2.cmd', 'AreaController.createEntityCmd', 'packages/bff-svc/src/area.controller.ts'),
+                { id: 's:dto1', kind: 'dto', name: 'AreaDto', fqn: 'AreaDto', file: 'packages/svc1/audit/src/area.dto.ts', line: 1, column: 1 },
+                { id: 's:dto2', kind: 'dto', name: 'AreaDto', fqn: 'AreaDto', file: 'packages/bff-svc/src/area.dto.ts', line: 1, column: 1 },
+                { id: 's:dto1.id', kind: 'field', name: 'id', fqn: 'AreaDto.id', file: 'packages/svc1/audit/src/area.dto.ts', line: 1, column: 1, parentId: 's:dto1', ownerName: 'AreaDto' },
+                { id: 's:dto2.id', kind: 'field', name: 'id', fqn: 'AreaDto.id', file: 'packages/bff-svc/src/area.dto.ts', line: 1, column: 1, parentId: 's:dto2', ownerName: 'AreaDto' },
+                methodSym('s:intra.a', 'AreaController.duplicateBug', 'packages/svc1/audit/src/area.controller.ts'),
+                methodSym('s:intra.b', 'AreaController.duplicateBug', 'packages/svc1/audit/src/area-extra.controller.ts'),
             ];
             const index: CodeIntelIndex = {
                 manifest: {
@@ -304,11 +304,13 @@ describe('selfCheck — noise filters (A) + partition (C)', () => {
             const sc = selfCheck(index);
             const dangerous = sc.warnings?.dangerousCollisions ?? [];
 
-            // Stays dangerous:
-            expect(dangerous).toContain('AreaController');
-            expect(dangerous).toContain('AreaDto');
-            expect(dangerous).toContain('AreaController.createEntity');
+            // INTRA-service stays dangerous (actionable-status-v1 contract):
             expect(dangerous).toContain('AreaController.duplicateBug');
+
+            // CROSS-service moves to info, NOT dangerous:
+            expect(dangerous).not.toContain('AreaController');
+            expect(dangerous).not.toContain('AreaDto');
+            expect(dangerous).not.toContain('AreaController.createEntity');
 
             // Filtered out (noise):
             expect(dangerous).not.toContain('AreaController.logger');

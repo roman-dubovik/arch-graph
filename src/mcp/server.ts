@@ -688,26 +688,22 @@ export async function startMcpServer(opts: { out: string; config?: string }): Pr
         'self_check',
         {
             description:
-                'Verifies the health and freshness of the code-intel index. Returns one of two statuses: ' +
-                '`ok` — the index is COMPLETE and lookups are unambiguous; `degraded` — there is a real silent-' +
-                'wrong-answer risk: `warnings.skippedFiles` (extractor could not parse some files; trace graph has gaps) ' +
-                'or `warnings.dangerousCollisions` (two structural symbols — class/method/field/DTO/type/db-entity — share ' +
-                'a name, so find_references / get_type_definition / impact_contract may return results from the wrong file ' +
-                'without warning; use the symbol `id` (file-qualified) instead of `fqn`, or rename one of the duplicates). ' +
-                'The optional `info.nameCollisions` field counts top-level functions/types/params with the same ' +
-                'short name across files (e.g. two modules both exporting `setup`); this is NORMAL omonymy and does ' +
-                'NOT affect status — pass a path suffix in resolve_symbol queries to target a specific file. ' +
-                'Inheritance-based delegation collisions are filtered automatically: if N duplicate methods all have ' +
-                '`overrideKind: \'delegation\'` pointing to the same base, they are NOT reported as dangerous. ' +
-                'Class-level collisions (two classes with the same name in different microservices) and collisions ' +
-                'where at least one method has `overrideKind: \'augmented\'` or `\'replaced\'` stay flagged. ' +
-                'Structural NestJS noise is also filtered: `*.logger` fields, `*Cmd` static fields, and audit ' +
-                'fields on DTO/db-entity parents (`id`, `name`, `createdAt`, `updatedAt`, `deletedAt`, `createdBy`, ' +
-                '`updatedBy`) — these are framework conventions, not real disambiguation risks. ' +
-                '`info.collisionBreakdown` partitions the remaining noise: `structuralNoise` (filtered), ' +
-                '`crossServiceDuplicates` (same FQN across different `packages/*/` services — expected fanout), ' +
-                '`intraServiceDuplicates` (same FQN within ONE service — likely real bugs), `classLevel` (bare-name ' +
-                'class/DTO/type collisions). Use this if other tools return unexpected or empty results.',
+                'Verifies the health of the code-intel index. Two statuses: ' +
+                '`ok` — index is healthy, lookups are reliable; `degraded` — extractor parse failures ' +
+                '(`warnings.skippedFiles`) OR intra-service duplicates (`warnings.dangerousCollisions` — ' +
+                'two symbols with the same FQN in the SAME `packages/<svc>/` or `apps/<svc>/`, likely ' +
+                'copy-paste leftover). IMPORTANT FOR LLM AGENTS: `status: ok` is the normal state on NestJS-' +
+                'style monorepos EVEN when many symbols share short names across different microservices ' +
+                '(every service has its own `AreaController`/`UsersService`/etc — this is EXPECTED FANOUT, ' +
+                'NOT a silent-wrong-answer risk). The LLM disambiguates by file path automatically. Use the ' +
+                'tools confidently when status is `ok`. ' +
+                '`info.collisionBreakdown` exposes the breakdown: `structuralNoise` (filtered: NestJS ' +
+                'conventions + universal local-only filter), `crossServiceDuplicates` (expected fanout, NOT ' +
+                'a risk), `intraServiceDuplicates` (real bugs — also in `warnings.dangerousCollisions`), ' +
+                '`classLevel` (class/DTO/type-level collisions count across both buckets). ' +
+                '`info.nameCollisions` counts all short-name collisions — normal omonymy, does NOT affect ' +
+                'status. Inheritance-based delegation collisions (N methods all delegating to the same base) ' +
+                'are filtered automatically as effectively one implementation.',
             inputSchema: {},
         },
         async () => jsonResult(selfCheck(await loadCodeIntelFn())),

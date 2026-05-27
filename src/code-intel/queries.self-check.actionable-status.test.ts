@@ -156,11 +156,12 @@ describe('selfCheck — actionable status (degraded ONLY on real bugs)', () => {
 
         const sc = selfCheck(index);
 
-        // Message must not include scary "silent-wrong-answer" language for
-        // expected-fanout-only situation.
-        expect(sc.message.toLowerCase()).not.toContain('silent');
-        expect(sc.message.toLowerCase()).not.toContain('dangerous');
-        // It must mention cross-service or fanout or normal/expected.
+        // Status must be `ok` so LLM agents don't refuse to use other tools.
+        expect(sc.status).toBe('ok');
+        // Message must mention "normal fanout"-style reassurance.
         expect(sc.message.toLowerCase()).toMatch(/(cross.service|fanout|normal|expected)/);
+        // Must NOT use scary "degraded" / "dangerous" framing for this case.
+        expect(sc.message.toLowerCase()).not.toContain('degraded');
+        expect(sc.message.toLowerCase()).not.toContain('dangerous');
     });
 });

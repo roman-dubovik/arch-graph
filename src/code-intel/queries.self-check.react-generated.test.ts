@@ -60,12 +60,12 @@ describe('selfCheck — React IProps (D) + generated-file (E) filters', () => {
     describe('D: React-local IProps interfaces in .tsx files', () => {
         it('filters IProps.isLoading collision across many .tsx files (all parents are local Hungarian-I types)', () => {
             const symbols: CodeIntelSymbol[] = [
-                typeSym('s:t1', 'IProps', 'packages/fe-host-app/src/app/components/foo.tsx'),
-                typeSym('s:t2', 'IProps', 'packages/fe-host-app/src/app/components/bar.tsx'),
-                typeSym('s:t3', 'IProps', 'packages/fe-host-app/src/app/components/baz.tsx'),
-                fieldSym('s:f1', 'IProps.isLoading', 'packages/fe-host-app/src/app/components/foo.tsx', 's:t1'),
-                fieldSym('s:f2', 'IProps.isLoading', 'packages/fe-host-app/src/app/components/bar.tsx', 's:t2'),
-                fieldSym('s:f3', 'IProps.isLoading', 'packages/fe-host-app/src/app/components/baz.tsx', 's:t3'),
+                typeSym('s:t1', 'IProps', 'packages/svc1/fe-host-app/src/app/components/foo.tsx'),
+                typeSym('s:t2', 'IProps', 'packages/svc1/fe-host-app/src/app/components/bar.tsx'),
+                typeSym('s:t3', 'IProps', 'packages/svc1/fe-host-app/src/app/components/baz.tsx'),
+                fieldSym('s:f1', 'IProps.isLoading', 'packages/svc1/fe-host-app/src/app/components/foo.tsx', 's:t1'),
+                fieldSym('s:f2', 'IProps.isLoading', 'packages/svc1/fe-host-app/src/app/components/bar.tsx', 's:t2'),
+                fieldSym('s:f3', 'IProps.isLoading', 'packages/svc1/fe-host-app/src/app/components/baz.tsx', 's:t3'),
             ];
             const index: CodeIntelIndex = {
                 manifest: { ...BASE_MANIFEST, warnings: { ambiguousFqns: ['IProps', 'IProps.isLoading'], skippedFiles: [] } },
@@ -83,10 +83,10 @@ describe('selfCheck — React IProps (D) + generated-file (E) filters', () => {
 
         it('also filters IFormProps / IOwnProps / IRouteProps (any `I[A-Z]...`)', () => {
             const symbols: CodeIntelSymbol[] = [
-                typeSym('s:t1', 'IFormProps', 'packages/fe-host-app/src/app/components/form-a.tsx'),
-                typeSym('s:t2', 'IFormProps', 'packages/fe-host-app/src/app/components/form-b.tsx'),
-                fieldSym('s:f1', 'IFormProps.onSubmit', 'packages/fe-host-app/src/app/components/form-a.tsx', 's:t1'),
-                fieldSym('s:f2', 'IFormProps.onSubmit', 'packages/fe-host-app/src/app/components/form-b.tsx', 's:t2'),
+                typeSym('s:t1', 'IFormProps', 'packages/svc1/fe-host-app/src/app/components/form-a.tsx'),
+                typeSym('s:t2', 'IFormProps', 'packages/svc1/fe-host-app/src/app/components/form-b.tsx'),
+                fieldSym('s:f1', 'IFormProps.onSubmit', 'packages/svc1/fe-host-app/src/app/components/form-a.tsx', 's:t1'),
+                fieldSym('s:f2', 'IFormProps.onSubmit', 'packages/svc1/fe-host-app/src/app/components/form-b.tsx', 's:t2'),
             ];
             const index: CodeIntelIndex = {
                 manifest: { ...BASE_MANIFEST, warnings: { ambiguousFqns: ['IFormProps', 'IFormProps.onSubmit'], skippedFiles: [] } },
@@ -103,10 +103,10 @@ describe('selfCheck — React IProps (D) + generated-file (E) filters', () => {
             // If one of the copies is a backend `.ts` file, the type might be
             // imported across the codebase — keep it dangerous to be safe.
             const symbols: CodeIntelSymbol[] = [
-                typeSym('s:t1', 'IProps', 'packages/fe-host-app/src/app/components/foo.tsx'),
-                typeSym('s:t2', 'IProps', 'packages/audit/src/internals/props.ts'),
-                fieldSym('s:f1', 'IProps.id', 'packages/fe-host-app/src/app/components/foo.tsx', 's:t1'),
-                fieldSym('s:f2', 'IProps.id', 'packages/audit/src/internals/props.ts', 's:t2'),
+                typeSym('s:t1', 'IProps', 'packages/svc1/fe-host-app/src/app/components/foo.tsx'),
+                typeSym('s:t2', 'IProps', 'packages/svc1/audit/src/internals/props.ts'),
+                fieldSym('s:f1', 'IProps.id', 'packages/svc1/fe-host-app/src/app/components/foo.tsx', 's:t1'),
+                fieldSym('s:f2', 'IProps.id', 'packages/svc1/audit/src/internals/props.ts', 's:t2'),
             ];
             const index: CodeIntelIndex = {
                 manifest: { ...BASE_MANIFEST, warnings: { ambiguousFqns: ['IProps', 'IProps.id'], skippedFiles: [] } },
@@ -121,10 +121,10 @@ describe('selfCheck — React IProps (D) + generated-file (E) filters', () => {
         it('does NOT filter type names that do NOT match the `I[A-Z]` convention', () => {
             // `Props` (no `I` prefix) → could be a real shared type.
             const symbols: CodeIntelSymbol[] = [
-                typeSym('s:t1', 'Props', 'packages/fe-host-app/src/app/components/foo.tsx'),
-                typeSym('s:t2', 'Props', 'packages/fe-host-app/src/app/components/bar.tsx'),
-                fieldSym('s:f1', 'Props.value', 'packages/fe-host-app/src/app/components/foo.tsx', 's:t1'),
-                fieldSym('s:f2', 'Props.value', 'packages/fe-host-app/src/app/components/bar.tsx', 's:t2'),
+                typeSym('s:t1', 'Props', 'packages/svc1/fe-host-app/src/app/components/foo.tsx'),
+                typeSym('s:t2', 'Props', 'packages/svc1/fe-host-app/src/app/components/bar.tsx'),
+                fieldSym('s:f1', 'Props.value', 'packages/svc1/fe-host-app/src/app/components/foo.tsx', 's:t1'),
+                fieldSym('s:f2', 'Props.value', 'packages/svc1/fe-host-app/src/app/components/bar.tsx', 's:t2'),
             ];
             const index: CodeIntelIndex = {
                 manifest: { ...BASE_MANIFEST, warnings: { ambiguousFqns: ['Props', 'Props.value'], skippedFiles: [] } },
@@ -140,10 +140,10 @@ describe('selfCheck — React IProps (D) + generated-file (E) filters', () => {
     describe('E: generated-file collisions', () => {
         it('filters UserDto.id duplicates when ALL copies live in `*.generated.ts` files', () => {
             const symbols: CodeIntelSymbol[] = [
-                dtoSym('s:d1', 'UserDto', 'packages/fe-host-app/src/app/data/api/user-api.generated.ts'),
-                dtoSym('s:d2', 'UserDto', 'packages/fe-host-app/src/app/data/api/orbita-api.generated.ts'),
-                fieldSym('s:f1', 'UserDto.id', 'packages/fe-host-app/src/app/data/api/user-api.generated.ts', 's:d1'),
-                fieldSym('s:f2', 'UserDto.id', 'packages/fe-host-app/src/app/data/api/orbita-api.generated.ts', 's:d2'),
+                dtoSym('s:d1', 'UserDto', 'packages/svc1/fe-host-app/src/app/data/api/user-api.generated.ts'),
+                dtoSym('s:d2', 'UserDto', 'packages/svc1/fe-host-app/src/app/data/api/orbita-api.generated.ts'),
+                fieldSym('s:f1', 'UserDto.id', 'packages/svc1/fe-host-app/src/app/data/api/user-api.generated.ts', 's:d1'),
+                fieldSym('s:f2', 'UserDto.id', 'packages/svc1/fe-host-app/src/app/data/api/orbita-api.generated.ts', 's:d2'),
             ];
             const index: CodeIntelIndex = {
                 manifest: { ...BASE_MANIFEST, warnings: { ambiguousFqns: ['UserDto', 'UserDto.id'], skippedFiles: [] } },
@@ -160,10 +160,10 @@ describe('selfCheck — React IProps (D) + generated-file (E) filters', () => {
 
         it('does NOT filter when at least one copy is in a hand-written file (mixed gen/manual)', () => {
             const symbols: CodeIntelSymbol[] = [
-                dtoSym('s:d1', 'UserDto', 'packages/fe-host-app/src/app/data/api/user-api.generated.ts'),
-                dtoSym('s:d2', 'UserDto', 'packages/user-service/src/dto/user.dto.ts'),
-                fieldSym('s:f1', 'UserDto.id', 'packages/fe-host-app/src/app/data/api/user-api.generated.ts', 's:d1'),
-                fieldSym('s:f2', 'UserDto.id', 'packages/user-service/src/dto/user.dto.ts', 's:d2'),
+                dtoSym('s:d1', 'UserDto', 'packages/svc1/fe-host-app/src/app/data/api/user-api.generated.ts'),
+                dtoSym('s:d2', 'UserDto', 'packages/svc1/user-service/src/dto/user.dto.ts'),
+                fieldSym('s:f1', 'UserDto.id', 'packages/svc1/fe-host-app/src/app/data/api/user-api.generated.ts', 's:d1'),
+                fieldSym('s:f2', 'UserDto.id', 'packages/svc1/user-service/src/dto/user.dto.ts', 's:d2'),
             ];
             const index: CodeIntelIndex = {
                 manifest: { ...BASE_MANIFEST, warnings: { ambiguousFqns: ['UserDto', 'UserDto.id'], skippedFiles: [] } },
@@ -180,18 +180,18 @@ describe('selfCheck — React IProps (D) + generated-file (E) filters', () => {
         it('counts React + generated noise inside `structuralNoise`', () => {
             const symbols: CodeIntelSymbol[] = [
                 // Real intra-service bug (stays)
-                typeSym('s:real1', 'BugType', 'packages/audit/src/x/bug.ts'),
-                typeSym('s:real2', 'BugType', 'packages/audit/src/y/bug.ts'),
+                typeSym('s:real1', 'BugType', 'packages/svc1/audit/src/x/bug.ts'),
+                typeSym('s:real2', 'BugType', 'packages/svc1/audit/src/y/bug.ts'),
                 // React noise (filtered)
-                typeSym('s:r1', 'IProps', 'packages/fe-host-app/src/app/components/foo.tsx'),
-                typeSym('s:r2', 'IProps', 'packages/fe-host-app/src/app/components/bar.tsx'),
-                fieldSym('s:rf1', 'IProps.isLoading', 'packages/fe-host-app/src/app/components/foo.tsx', 's:r1'),
-                fieldSym('s:rf2', 'IProps.isLoading', 'packages/fe-host-app/src/app/components/bar.tsx', 's:r2'),
+                typeSym('s:r1', 'IProps', 'packages/svc1/fe-host-app/src/app/components/foo.tsx'),
+                typeSym('s:r2', 'IProps', 'packages/svc1/fe-host-app/src/app/components/bar.tsx'),
+                fieldSym('s:rf1', 'IProps.isLoading', 'packages/svc1/fe-host-app/src/app/components/foo.tsx', 's:r1'),
+                fieldSym('s:rf2', 'IProps.isLoading', 'packages/svc1/fe-host-app/src/app/components/bar.tsx', 's:r2'),
                 // Generated noise (filtered)
-                dtoSym('s:g1', 'UserDto', 'packages/fe-host-app/src/app/data/api/a.generated.ts'),
-                dtoSym('s:g2', 'UserDto', 'packages/fe-host-app/src/app/data/api/b.generated.ts'),
-                fieldSym('s:gf1', 'UserDto.id', 'packages/fe-host-app/src/app/data/api/a.generated.ts', 's:g1'),
-                fieldSym('s:gf2', 'UserDto.id', 'packages/fe-host-app/src/app/data/api/b.generated.ts', 's:g2'),
+                dtoSym('s:g1', 'UserDto', 'packages/svc1/fe-host-app/src/app/data/api/a.generated.ts'),
+                dtoSym('s:g2', 'UserDto', 'packages/svc1/fe-host-app/src/app/data/api/b.generated.ts'),
+                fieldSym('s:gf1', 'UserDto.id', 'packages/svc1/fe-host-app/src/app/data/api/a.generated.ts', 's:g1'),
+                fieldSym('s:gf2', 'UserDto.id', 'packages/svc1/fe-host-app/src/app/data/api/b.generated.ts', 's:g2'),
             ];
             const index: CodeIntelIndex = {
                 manifest: {
